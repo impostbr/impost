@@ -10,7 +10,7 @@
  * Localização: Novo Progresso, Pará (Amazônia Legal - SUDAM)
  *
  * Changelog v3.3.0 (versão final):
- *   - ETAPA 4: calcularBreakEven() — Break-even LP vs Lucro Real (alerta inteligente)
+ *   - ETAPA 4: (removido comparativo LR — ferramenta exclusiva LP)
  *   - ETAPA 4: gerarCalendarioTributario() — Calendário tributário 12 meses × tributos
  *   - ETAPA 4: Retenções CSRF: CODIGOS_DARF_RETENCAO, ALIQUOTAS_CSRF, saldo PER/DCOMP
  *   - ETAPA 4: calcularPISCOFINSMensal() atualizado com CSRF e indicação PER/DCOMP
@@ -18,7 +18,7 @@
  *   - ETAPA 4: Fix EFD-Contribuições prazo: "15º dia útil" → "10º dia útil" (IN RFB 1.252/2012, Art. 7º)
  *   - ETAPA 4: Adicionada EFD-Reinf: mensal, dia 15 do mês seguinte (IN RFB 2.043/2021)
  *   - ETAPA 4: DIRF com alerta "substituída por EFD-Reinf + eSocial a partir de 2025"
- *   - ETAPA 4: UI: aba Break-Even LP vs LR (alerta inteligente com gráfico)
+ *   - ETAPA 4: UI: foco exclusivo em otimização dentro do Lucro Presumido
  *   - ETAPA 4: UI: aba Calendário Tributário (tabela 12 meses × tributos)
  *
  * Changelog v3.0.0:
@@ -124,34 +124,9 @@ const ALIQUOTA_PIS_CUMULATIVO = 0.0065;
 const ALIQUOTA_COFINS_CUMULATIVO = 0.03;
 
 /**
- * Alíquota do PIS no regime não-cumulativo (Lucro Real).
- * Base Legal: Lei 10.637/2002.
- */
-const ALIQUOTA_PIS_NAO_CUMULATIVO = 0.0165;
-
-/**
- * Alíquota do COFINS no regime não-cumulativo (Lucro Real).
- * Base Legal: Lei 10.833/2003.
- */
-const ALIQUOTA_COFINS_NAO_CUMULATIVO = 0.076;
-
-/**
  * Alíquota patronal do INSS (mesma em todos os regimes).
  */
 const ALIQUOTA_INSS_PATRONAL = 0.20;
-
-/**
- * Percentual máximo de redução do IRPJ via incentivo SUDAM.
- * Base Legal: Lei 12.973/2014 e legislação SUDAM.
- * ATENÇÃO: Compatível APENAS com Lucro Real.
- */
-const PERCENTUAL_INCENTIVO_SUDAM = 0.75;
-
-/**
- * Percentual máximo de compensação de prejuízos fiscais no Lucro Real.
- * Base Legal: RIR/2018.
- */
-const LIMITE_COMPENSACAO_PREJUIZO_LUCRO_REAL = 0.30;
 
 // ── Constantes 2026 (Portaria MPS/MF 13/2026) ──
 
@@ -708,10 +683,6 @@ const CODIGOS_DARF = {
   CSLL_PRESUMIDO: '2372',
   PIS_CUMULATIVO: '8109',
   COFINS_CUMULATIVO: '2172',
-  IRPJ_REAL_ESTIMATIVA: '2362',
-  IRPJ_REAL_TRIMESTRAL: '0220',
-  CSLL_REAL_ESTIMATIVA: '2484',
-  CSLL_REAL_TRIMESTRAL: '6012'
 };
 
 /**
@@ -1577,362 +1548,6 @@ function calcularAnualConsolidado(params) {
 }
 
 
-// ─────────────────────────────────────────────────────────────────────────────
-// SEÇÃO 10: COMPARATIVO DE REGIMES TRIBUTÁRIOS
-// ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * Realiza comparativo completo entre Simples Nacional, Lucro Presumido,
- * Lucro Real e Lucro Real com incentivo SUDAM.
- *
- * @param {Object} params
- * @param {number} params.receitaBrutaAnual - Receita bruta anual
- * @param {number} params.folhaPagamentoAnual - Folha de pagamento anual
- * @param {number} params.despesasOperacionaisAnuais - Total de despesas operacionais
- * @param {string} params.atividadeId - ID da atividade (ex.: 'servicos_gerais')
- * @param {number} [params.aliquotaISS=0.03] - Alíquota de ISS municipal
- * @param {number} [params.aliquotaRAT=0.03]
- * @param {number} [params.aliquotaTerceiros=0.005]
- * @param {number} [params.creditosPISCOFINS=0] - Créditos estimados de PIS/COFINS (Lucro Real)
- * @param {number} [params.aliquotaSimplesEstimada=0.15] - Alíquota efetiva estimada do Simples
- * @param {boolean} [params.areaAtuacaoSUDAM=false] - Se está em área SUDAM
- * @param {boolean} [params.elegivelSimples=false] - Se é elegível para Simples Nacional
- * @param {number} [params.lucroContabilEfetivo=null] - Lucro contábil efetivo apurado
- * @param {number} [params.prejuizosFiscaisAcumulados=0] - Prejuízos para compensar no Lucro Real
- * @returns {Object} Comparativo detalhado entre os regimes
- */
-// Função interna — não exposta ao frontend. Usar calcularBreakEven() como alerta.
-function compararRegimes(params) {
-  const {
-    receitaBrutaAnual,
-    folhaPagamentoAnual,
-    despesasOperacionaisAnuais,
-    atividadeId,
-    aliquotaISS = 0.03,
-    aliquotaRAT = 0.03,
-    aliquotaTerceiros = 0.005,
-    creditosPISCOFINS = 0,
-    aliquotaSimplesEstimada = 0.15,
-    areaAtuacaoSUDAM = false,
-    elegivelSimples = false,
-    lucroContabilEfetivo = null,
-    prejuizosFiscaisAcumulados = 0
-  } = params;
-
-  const atividadeIRPJ = PERCENTUAIS_PRESUNCAO_IRPJ.find(a => a.id === atividadeId);
-  const atividadeCSLL = PERCENTUAIS_PRESUNCAO_CSLL.find(a => a.id === atividadeId);
-
-  if (!atividadeIRPJ || !atividadeCSLL) {
-    throw new Error(`Atividade não encontrada: "${atividadeId}"`);
-  }
-
-  const aliquotaINSSTotal = ALIQUOTA_INSS_PATRONAL + aliquotaRAT + aliquotaTerceiros;
-  const inssPatronal = _arredondar(folhaPagamentoAnual * aliquotaINSSTotal);
-  const lucroReal = receitaBrutaAnual - despesasOperacionaisAnuais;
-
-  // ════════════════════════════════════════════
-  // CENÁRIO 1: SIMPLES NACIONAL
-  // ════════════════════════════════════════════
-  const simples = (() => {
-    const dasTotal = _arredondar(receitaBrutaAnual * aliquotaSimplesEstimada);
-    // INSS patronal parcial incluído no DAS (dependendo do anexo)
-    const inssParcial = _arredondar(folhaPagamentoAnual * aliquotaINSSTotal * 0.5);
-    const cargaTotal = _arredondar(dasTotal + inssParcial);
-    const lucroDistribuivel = _arredondar(Math.max(0, lucroReal - dasTotal));
-
-    return {
-      regime: 'Simples Nacional',
-      elegivel: elegivelSimples,
-      motivoInelegibilidade: !elegivelSimples
-        ? (receitaBrutaAnual > 4_800_000 ? 'Receita bruta superior a R$ 4.800.000,00' : 'Não elegível')
-        : null,
-      tributos: {
-        das: dasTotal,
-        inssAdicional: inssParcial,
-        iss: 0, // Incluído no DAS
-        observacao: 'IRPJ, CSLL, PIS, COFINS e ISS incluídos no DAS.'
-      },
-      cargaTotal,
-      percentualCarga: `${_arredondar((cargaTotal / receitaBrutaAnual) * 100, 2)}%`,
-      lucroDistribuivel,
-      lucroLiquido: _arredondar(receitaBrutaAnual - cargaTotal)
-    };
-  })();
-
-  // ════════════════════════════════════════════
-  // CENÁRIO 2: LUCRO PRESUMIDO
-  // ════════════════════════════════════════════
-  const presumido = (() => {
-    const basePresumidaIRPJ = _arredondar(receitaBrutaAnual * atividadeIRPJ.percentual);
-    const basePresumidaCSLL = _arredondar(receitaBrutaAnual * atividadeCSLL.percentual);
-
-    const irpjNormal = _arredondar(basePresumidaIRPJ * ALIQUOTA_IRPJ);
-    // CORREÇÃO: Adicional IRPJ deve ser calculado TRIMESTRE A TRIMESTRE (RIR/2018, Art. 624)
-    // Limite de R$ 60.000/trimestre. Assumindo receita uniforme nos 4 trimestres:
-    const baseTrimestralIRPJ = basePresumidaIRPJ / 4;
-    let irpjAdicional = 0;
-    for (let t = 0; t < 4; t++) {
-      irpjAdicional += Math.max(0, baseTrimestralIRPJ - LIMITE_ADICIONAL_TRIMESTRAL) * ALIQUOTA_ADICIONAL_IRPJ;
-    }
-    irpjAdicional = _arredondar(irpjAdicional);
-    const irpjTotal = _arredondar(irpjNormal + irpjAdicional);
-
-    const csllTotal = _arredondar(basePresumidaCSLL * ALIQUOTA_CSLL);
-    const pisTotal = _arredondar(receitaBrutaAnual * ALIQUOTA_PIS_CUMULATIVO);
-    const cofinsTotal = _arredondar(receitaBrutaAnual * ALIQUOTA_COFINS_CUMULATIVO);
-    const issTotal = _arredondar(receitaBrutaAnual * aliquotaISS);
-
-    const tributosFederais = _arredondar(irpjTotal + csllTotal + pisTotal + cofinsTotal);
-    const cargaTotal = _arredondar(tributosFederais + issTotal + inssPatronal);
-
-    // Distribuição de lucros — IN RFB 1.700/2017, Art. 238
-    const lucroDistribPresumido = _arredondar(Math.max(0, basePresumidaIRPJ - tributosFederais));
-    let lucroDistribContabil = null;
-    if (lucroContabilEfetivo !== null) {
-      lucroDistribContabil = _arredondar(Math.max(0, lucroContabilEfetivo - tributosFederais));
-    }
-    const lucroDistribuivel = lucroDistribContabil !== null
-      ? Math.max(lucroDistribPresumido, lucroDistribContabil)
-      : lucroDistribPresumido;
-
-    return {
-      regime: 'Lucro Presumido',
-      elegivel: receitaBrutaAnual <= LIMITE_RECEITA_BRUTA_ANUAL,
-      tributos: {
-        irpj: irpjTotal,
-        irpjDetalhe: { normal: irpjNormal, adicional: irpjAdicional },
-        csll: csllTotal,
-        pis: pisTotal,
-        cofins: cofinsTotal,
-        tributosFederais,
-        iss: issTotal,
-        inssPatronal
-      },
-      basePresumidaIRPJ,
-      basePresumidaCSLL,
-      cargaTotal,
-      percentualCarga: `${_arredondar((cargaTotal / receitaBrutaAnual) * 100, 2)}%`,
-      lucroDistribuivel,
-      lucroDistribuidoPresumido: lucroDistribPresumido,
-      lucroDistribuidoContabil: lucroDistribContabil,
-      lucroLiquido: _arredondar(receitaBrutaAnual - cargaTotal)
-    };
-  })();
-
-  // ════════════════════════════════════════════
-  // CENÁRIO 3: LUCRO REAL (SEM INCENTIVOS)
-  // ════════════════════════════════════════════
-  const real = (() => {
-    let baseIRPJ = lucroReal;
-    // Compensação de prejuízos (limite de 30%)
-    const compensacao = Math.min(
-      prejuizosFiscaisAcumulados,
-      baseIRPJ * LIMITE_COMPENSACAO_PREJUIZO_LUCRO_REAL
-    );
-    baseIRPJ = Math.max(0, baseIRPJ - compensacao);
-
-    const irpjNormal = _arredondar(baseIRPJ * ALIQUOTA_IRPJ);
-    // CORREÇÃO: Adicional IRPJ calculado TRIMESTRE A TRIMESTRE (RIR/2018, Art. 624)
-    const baseTrimestralIRPJReal = baseIRPJ / 4;
-    let irpjAdicional = 0;
-    for (let t = 0; t < 4; t++) {
-      irpjAdicional += Math.max(0, baseTrimestralIRPJReal - LIMITE_ADICIONAL_TRIMESTRAL) * ALIQUOTA_ADICIONAL_IRPJ;
-    }
-    irpjAdicional = _arredondar(irpjAdicional);
-    const irpjTotal = _arredondar(irpjNormal + irpjAdicional);
-
-    const csllTotal = _arredondar(baseIRPJ * ALIQUOTA_CSLL);
-
-    const pisBruto = _arredondar(receitaBrutaAnual * ALIQUOTA_PIS_NAO_CUMULATIVO);
-    const cofinsBruta = _arredondar(receitaBrutaAnual * ALIQUOTA_COFINS_NAO_CUMULATIVO);
-    const pisTotal = _arredondar(Math.max(0, pisBruto - creditosPISCOFINS * (ALIQUOTA_PIS_NAO_CUMULATIVO / (ALIQUOTA_PIS_NAO_CUMULATIVO + ALIQUOTA_COFINS_NAO_CUMULATIVO))));
-    const cofinsTotal = _arredondar(Math.max(0, cofinsBruta - creditosPISCOFINS * (ALIQUOTA_COFINS_NAO_CUMULATIVO / (ALIQUOTA_PIS_NAO_CUMULATIVO + ALIQUOTA_COFINS_NAO_CUMULATIVO))));
-
-    const issTotal = _arredondar(receitaBrutaAnual * aliquotaISS);
-    const tributosFederais = _arredondar(irpjTotal + csllTotal + pisTotal + cofinsTotal);
-    const cargaTotal = _arredondar(tributosFederais + issTotal + inssPatronal);
-    const lucroDistribuivel = _arredondar(Math.max(0, lucroReal - tributosFederais));
-
-    return {
-      regime: 'Lucro Real',
-      elegivel: true,
-      tributos: {
-        irpj: irpjTotal,
-        irpjDetalhe: { normal: irpjNormal, adicional: irpjAdicional },
-        csll: csllTotal,
-        pis: pisTotal,
-        cofins: cofinsTotal,
-        tributosFederais,
-        iss: issTotal,
-        inssPatronal,
-        compensacaoPrejuizo: compensacao
-      },
-      baseIRPJ: _arredondar(baseIRPJ),
-      cargaTotal,
-      percentualCarga: `${_arredondar((cargaTotal / receitaBrutaAnual) * 100, 2)}%`,
-      lucroDistribuivel,
-      lucroLiquido: _arredondar(receitaBrutaAnual - cargaTotal)
-    };
-  })();
-
-  // ════════════════════════════════════════════
-  // CENÁRIO 4: LUCRO REAL + INCENTIVO SUDAM 75%
-  // ════════════════════════════════════════════
-  const realSUDAM = (() => {
-    if (!areaAtuacaoSUDAM) {
-      return {
-        regime: 'Lucro Real + SUDAM 75%',
-        elegivel: false,
-        motivoInelegibilidade: 'Empresa não está em área de atuação SUDAM.',
-        cargaTotal: null,
-        percentualCarga: null,
-        lucroDistribuivel: null,
-        lucroLiquido: null
-      };
-    }
-
-    let baseIRPJ = lucroReal;
-    const compensacao = Math.min(
-      prejuizosFiscaisAcumulados,
-      baseIRPJ * LIMITE_COMPENSACAO_PREJUIZO_LUCRO_REAL
-    );
-    baseIRPJ = Math.max(0, baseIRPJ - compensacao);
-
-    const irpjNormalBruto = _arredondar(baseIRPJ * ALIQUOTA_IRPJ);
-    // CORREÇÃO: Adicional IRPJ calculado TRIMESTRE A TRIMESTRE (RIR/2018, Art. 624)
-    const baseTrimestralIRPJSudam = baseIRPJ / 4;
-    let irpjAdicional = 0;
-    for (let t = 0; t < 4; t++) {
-      irpjAdicional += Math.max(0, baseTrimestralIRPJSudam - LIMITE_ADICIONAL_TRIMESTRAL) * ALIQUOTA_ADICIONAL_IRPJ;
-    }
-    irpjAdicional = _arredondar(irpjAdicional);
-
-    // Incentivo SUDAM: redução de 75% sobre o IRPJ normal (não sobre o adicional)
-    const reducaoSUDAM = _arredondar(irpjNormalBruto * PERCENTUAL_INCENTIVO_SUDAM);
-    const irpjNormalLiquido = _arredondar(irpjNormalBruto - reducaoSUDAM);
-    const irpjTotal = _arredondar(irpjNormalLiquido + irpjAdicional);
-
-    const csllTotal = _arredondar(baseIRPJ * ALIQUOTA_CSLL);
-    const pisBruto = _arredondar(receitaBrutaAnual * ALIQUOTA_PIS_NAO_CUMULATIVO);
-    const cofinsBruta = _arredondar(receitaBrutaAnual * ALIQUOTA_COFINS_NAO_CUMULATIVO);
-    const pisTotal = _arredondar(Math.max(0, pisBruto - creditosPISCOFINS * (ALIQUOTA_PIS_NAO_CUMULATIVO / (ALIQUOTA_PIS_NAO_CUMULATIVO + ALIQUOTA_COFINS_NAO_CUMULATIVO))));
-    const cofinsTotal = _arredondar(Math.max(0, cofinsBruta - creditosPISCOFINS * (ALIQUOTA_COFINS_NAO_CUMULATIVO / (ALIQUOTA_PIS_NAO_CUMULATIVO + ALIQUOTA_COFINS_NAO_CUMULATIVO))));
-
-    const issTotal = _arredondar(receitaBrutaAnual * aliquotaISS);
-    const tributosFederais = _arredondar(irpjTotal + csllTotal + pisTotal + cofinsTotal);
-    const cargaTotal = _arredondar(tributosFederais + issTotal + inssPatronal);
-    const lucroDistribuivel = _arredondar(Math.max(0, lucroReal - tributosFederais));
-
-    return {
-      regime: 'Lucro Real + SUDAM 75%',
-      elegivel: true,
-      tributos: {
-        irpj: irpjTotal,
-        irpjDetalhe: {
-          normalBruto: irpjNormalBruto,
-          reducaoSUDAM,
-          normalLiquido: irpjNormalLiquido,
-          adicional: irpjAdicional
-        },
-        csll: csllTotal,
-        pis: pisTotal,
-        cofins: cofinsTotal,
-        tributosFederais,
-        iss: issTotal,
-        inssPatronal,
-        compensacaoPrejuizo: compensacao,
-        economiaSUDAM: reducaoSUDAM
-      },
-      baseIRPJ: _arredondar(baseIRPJ),
-      cargaTotal,
-      percentualCarga: `${_arredondar((cargaTotal / receitaBrutaAnual) * 100, 2)}%`,
-      lucroDistribuivel,
-      lucroLiquido: _arredondar(receitaBrutaAnual - cargaTotal),
-      baseLegalSUDAM: 'Lei 12.973/2014 e legislação SUDAM — Redução de 75% do IRPJ para empresas em área SUDAM.'
-    };
-  })();
-
-  // ════════════════════════════════════════════
-  // RANKING E RECOMENDAÇÃO
-  // ════════════════════════════════════════════
-  const cenarios = [
-    { ...simples, _tipo: 'simples' },
-    { ...presumido, _tipo: 'presumido' },
-    { ...real, _tipo: 'real' },
-    { ...realSUDAM, _tipo: 'realSUDAM' }
-  ].filter(c => c.elegivel && c.cargaTotal !== null);
-
-  cenarios.sort((a, b) => a.cargaTotal - b.cargaTotal);
-
-  const ranking = cenarios.map((c, i) => ({
-    posicao: i + 1,
-    regime: c.regime,
-    cargaTotal: c.cargaTotal,
-    percentualCarga: c.percentualCarga,
-    lucroDistribuivel: c.lucroDistribuivel,
-    lucroLiquido: c.lucroLiquido,
-    economiaVsPior: i === 0 ? 0 : null
-  }));
-
-  if (ranking.length >= 2) {
-    const piorCarga = cenarios[cenarios.length - 1].cargaTotal;
-    ranking.forEach(r => {
-      r.economiaVsPior = _arredondar(piorCarga - r.cargaTotal);
-    });
-  }
-
-  // Recomendação
-  const melhor = cenarios[0];
-  let recomendacao = '';
-  let alertas = [];
-
-  if (melhor._tipo === 'realSUDAM') {
-    recomendacao = `Lucro Real com incentivo SUDAM 75% é o mais vantajoso. Economia de R$ ${_formatarMoeda(ranking[0].economiaVsPior || 0)} em relação ao regime mais caro.`;
-    alertas.push('ATENÇÃO: Incentivo SUDAM exige Lucro Real e projeto aprovado pela SUDAM.');
-    alertas.push('Maior complexidade contábil (LALUR, controle de despesas, etc.).');
-  } else if (melhor._tipo === 'simples') {
-    recomendacao = 'Simples Nacional é o mais vantajoso em carga tributária total.';
-    alertas.push(`Limite de receita: R$ 4.800.000,00/ano.`);
-  } else if (melhor._tipo === 'presumido') {
-    recomendacao = 'Lucro Presumido é o mais vantajoso. Combina carga acessível com simplicidade operacional.';
-    if (areaAtuacaoSUDAM) {
-      alertas.push('ATENÇÃO: Ao optar pelo Presumido, a empresa PERDE o direito ao incentivo SUDAM de 75% do IRPJ.');
-    }
-  } else {
-    recomendacao = 'Lucro Real (sem incentivos) é o mais vantajoso.';
-  }
-
-  return {
-    dadosEntrada: {
-      receitaBrutaAnual,
-      folhaPagamentoAnual,
-      despesasOperacionaisAnuais,
-      lucroReal,
-      margemLucro: `${_arredondar((lucroReal / receitaBrutaAnual) * 100, 2)}%`,
-      atividade: atividadeIRPJ.descricao,
-      atividadeId,
-      areaAtuacaoSUDAM,
-      elegivelSimples
-    },
-
-    cenarios: {
-      simplesNacional: simples,
-      lucroPresumido: presumido,
-      lucroReal: real,
-      lucroRealSUDAM: realSUDAM
-    },
-
-    ranking,
-
-    recomendacao: {
-      melhorRegime: melhor.regime,
-      texto: recomendacao,
-      alertas,
-      economiaAnual: ranking.length >= 2 ? ranking[0].economiaVsPior : 0
-    }
-  };
-}
-
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SEÇÃO 11: VANTAGENS E DESVANTAGENS DO LUCRO PRESUMIDO
@@ -1946,9 +1561,6 @@ function compararRegimes(params) {
  * @param {number} params.receitaBrutaAnual
  * @param {number} params.despesasOperacionaisAnuais
  * @param {string} params.atividadeId
- * @param {boolean} [params.areaAtuacaoSUDAM=false]
- * @param {boolean} [params.temInvestimentosEquipamentos=false]
- * @param {boolean} [params.temPesquisaDesenvolvimento=false]
  * @param {boolean} [params.temReceitasSazonais=false]
  * @returns {Object}
  */
@@ -1957,9 +1569,6 @@ function analisarVantagensDesvantagens(params) {
     receitaBrutaAnual,
     despesasOperacionaisAnuais,
     atividadeId,
-    areaAtuacaoSUDAM = false,
-    temInvestimentosEquipamentos = false,
-    temPesquisaDesenvolvimento = false,
     temReceitasSazonais = false
   } = params;
 
@@ -1977,13 +1586,13 @@ function analisarVantagensDesvantagens(params) {
     },
     {
       titulo: 'Custo Contábil Menor',
-      descricao: 'Economia estimada de R$ 6.000 a R$ 14.400/ano em honorários contábeis em relação ao Lucro Real.',
+      descricao: 'Economia estimada de R$ 6.000 a R$ 14.400/ano em honorários contábeis devido à simplicidade da apuração.',
       impacto: 'medio',
       aplicavel: true
     },
     {
       titulo: 'Não Necessita de LALUR',
-      descricao: 'Dispensa o Livro de Apuração do Lucro Real, reduzindo complexidade e risco de erros.',
+      descricao: 'Dispensa LALUR/LACS e escrituração contábil complexa, reduzindo risco de erros.',
       impacto: 'medio',
       aplicavel: true
     },
@@ -2033,8 +1642,8 @@ function analisarVantagensDesvantagens(params) {
 
   const desvantagens = [
     {
-      titulo: 'Margem Real Inferior à Presunção → Paga Mais Imposto',
-      descricao: `Se a margem de lucro real (${(margemReal * 100).toFixed(1)}%) for inferior à presunção (${(percentualPresuncao * 100).toFixed(1)}%), a empresa paga imposto sobre lucro que não existe.`,
+      titulo: 'Margem Real Inferior à Presunção → Atenção ao Custo',
+      descricao: `Sua margem de lucro real (${(margemReal * 100).toFixed(1)}%) é inferior à presunção (${(percentualPresuncao * 100).toFixed(1)}%). Isso significa que a base de IRPJ/CSLL é maior que o lucro efetivo. Foque em aumentar a margem operacional (reduzir custos, renegociar contratos, otimizar processos) para maximizar o benefício do LP.`,
       impacto: margemReal < percentualPresuncao ? 'critico' : 'baixo',
       aplicavel: margemReal < percentualPresuncao,
       valorImpacto: margemReal < percentualPresuncao
@@ -2042,23 +1651,8 @@ function analisarVantagensDesvantagens(params) {
         : 0
     },
     {
-      titulo: 'NÃO Pode Usar Incentivos SUDAM/SUDENE',
-      descricao: 'Incompatível com redução de 75% do IRPJ via SUDAM. Perda potencial significativa.',
-      impacto: areaAtuacaoSUDAM ? 'critico' : 'nao_aplicavel',
-      aplicavel: areaAtuacaoSUDAM,
-      valorImpacto: areaAtuacaoSUDAM
-        ? _arredondar(receitaBrutaAnual * percentualPresuncao * ALIQUOTA_IRPJ * PERCENTUAL_INCENTIVO_SUDAM)
-        : 0
-    },
-    {
       titulo: 'Não Pode Deduzir Despesas Operacionais',
       descricao: 'Aluguel, telefone, energia, combustível, salários e demais despesas não reduzem a base de IRPJ/CSLL.',
-      impacto: 'alto',
-      aplicavel: true
-    },
-    {
-      titulo: 'Não Pode Compensar Prejuízos Fiscais',
-      descricao: 'Empresa paga IRPJ/CSLL mesmo com prejuízo operacional. No Lucro Real, prejuízos podem ser compensados com lucros futuros (até 30%).',
       impacto: 'alto',
       aplicavel: true
     },
@@ -2069,28 +1663,10 @@ function analisarVantagensDesvantagens(params) {
       aplicavel: true
     },
     {
-      titulo: 'Não Pode Usar JCP para Reduzir Base',
-      descricao: 'Juros sobre Capital Próprio não reduzem a base tributável no Lucro Presumido.',
-      impacto: 'medio',
-      aplicavel: true
-    },
-    {
       titulo: 'Apuração Trimestral Obrigatória',
       descricao: 'Imposto calculado e pago 4 vezes ao ano. Pode impactar fluxo de caixa em receitas sazonais.',
       impacto: temReceitasSazonais ? 'alto' : 'baixo',
       aplicavel: true
-    },
-    {
-      titulo: 'Não Pode Usar Depreciação Acelerada Incentivada',
-      descricao: 'Investimentos em equipamentos não geram benefício fiscal de depreciação acelerada.',
-      impacto: temInvestimentosEquipamentos ? 'alto' : 'baixo',
-      aplicavel: temInvestimentosEquipamentos
-    },
-    {
-      titulo: 'Não Pode Usar Lei do Bem (P&D)',
-      descricao: 'Incentivos de pesquisa e desenvolvimento são incompatíveis com o Lucro Presumido.',
-      impacto: temPesquisaDesenvolvimento ? 'alto' : 'baixo',
-      aplicavel: temPesquisaDesenvolvimento
     },
     {
       titulo: 'Adicional de IRPJ Sobre Base Elevada',
@@ -2196,7 +1772,7 @@ const RISCOS_FISCAIS = [
     titulo: 'Empresa com Prejuízo Operacional Paga Imposto',
     descricao: 'No Lucro Presumido, imposto é calculado sobre base presumida, independentemente de prejuízo real.',
     consequencia: 'Pagamento de imposto mesmo sem lucro. Pode comprometer caixa.',
-    prevencao: 'Monitorar margem de lucro real vs presunção. Considerar Lucro Real se margem cair.',
+    prevencao: 'Monitorar margem de lucro efetiva vs presunção. Se margem cair, avaliar adequação das alíquotas de presunção.',
     gravidade: 'critica'
   },
   {
@@ -2241,56 +1817,6 @@ const TRANSICOES = {
       'PIS/COFINS mudam para regime cumulativo (0,65% + 3%).'
     ],
     baseLegal: 'LC 123/2006, Art. 30 e Lei 9.430/1996, Art. 26'
-  },
-  PRESUMIDO_PARA_REAL: {
-    descricao: 'Transição do Lucro Presumido para Lucro Real',
-    procedimentos: [
-      'Manifestar opção pelo Real com pagamento do 1º DARF de IRPJ/CSLL no novo regime.',
-      'Adicionar à base do 1º período no Real os saldos diferidos (Art. 593 RIR/2018).',
-      'Implementar LALUR (Livro de Apuração do Lucro Real).',
-      'Organizar documentação contábil completa.',
-      'Se aplicável, registrar incentivos SUDAM.'
-    ],
-    alertas: [
-      'Opção é irretratável durante o ano-calendário.',
-      'PIS/COFINS mudam para regime não-cumulativo (1,65% + 7,6%), com direito a créditos.',
-      'Maior complexidade contábil e custo de conformidade.',
-      'Habilita uso de incentivos SUDAM, depreciação acelerada e Lei do Bem.'
-    ],
-    baseLegal: 'RIR/2018, Art. 593 e 594'
-  },
-  REAL_PARA_PRESUMIDO: {
-    descricao: 'Transição do Lucro Real para Lucro Presumido',
-    procedimentos: [
-      'Manifestar opção pelo Presumido com pagamento do 1º DARF.',
-      'Fazer balanço de encerramento do Lucro Real.',
-      'Apurar e recolher tributos finais no Lucro Real.',
-      'Dispensar LALUR.'
-    ],
-    alertas: [
-      'PERDE direito a incentivos SUDAM/SUDENE.',
-      'PERDE direito a depreciação acelerada incentivada.',
-      'PERDE direito a Lei do Bem (P&D).',
-      'PERDE direito a compensar prejuízos fiscais acumulados.',
-      'PIS/COFINS voltam ao regime cumulativo (3,65%).'
-    ],
-    baseLegal: 'RIR/2018, Art. 593 e Lei 9.430/1996, Art. 26'
-  },
-  SIMPLES_PARA_REAL: {
-    descricao: 'Transição do Simples Nacional para Lucro Real',
-    procedimentos: [
-      'Comunicar desenquadramento do Simples à RFB.',
-      'Manifestar opção pelo Real com pagamento do 1º DARF.',
-      'Implementar LALUR e escrituração contábil completa.',
-      'Registrar incentivos SUDAM se aplicável.',
-      'Implementar todas as obrigações acessórias do Lucro Real.'
-    ],
-    alertas: [
-      'Maior complexidade contábil.',
-      'Habilita uso de incentivos SUDAM, compensação de prejuízos, JCP, Lei do Bem.',
-      'PIS/COFINS no regime não-cumulativo (9,25%), com direito a créditos.'
-    ],
-    baseLegal: 'LC 123/2006, Art. 30 e RIR/2018'
   }
 };
 
@@ -3292,14 +2818,14 @@ function _pdfGerarDicas(fd, anual) {
         acao: 'Mantenha o Lucro Presumido enquanto a margem real superar a presuncao.'
       });
     } else {
-      const prejuizoIRPJ = (presuncao - margemReal) * rb * 0.15;
+      const custoExcedente = (presuncao - margemReal) * rb * 0.15;
       dicas.push({
         tipo: 'atencao',
-        titulo: 'Margem Real Inferior a Presuncao',
-        descricao: `Sua margem real (${_pdfFmtPct(margemReal * 100)}) e INFERIOR a presuncao (${_pdfFmtPct(presuncao * 100)}). Voce paga imposto sobre lucro que nao existe de fato.`,
-        economia: 'Possivel economia de ' + _pdfFmtMoeda(prejuizoIRPJ) + '/ano migrando para Lucro Real',
+        titulo: 'Margem Real Inferior a Presuncao — Otimize Custos',
+        descricao: `Sua margem real (${_pdfFmtPct(margemReal * 100)}) e INFERIOR a presuncao (${_pdfFmtPct(presuncao * 100)}). Voce paga imposto sobre uma base maior que o lucro efetivo. Foque em aumentar a margem: renegocie contratos, reduza custos operacionais e otimize processos.`,
+        economia: 'Custo tributario excedente estimado: ' + _pdfFmtMoeda(custoExcedente) + '/ano',
         baseLegal: 'Lei 9.249/95, Art. 15',
-        acao: 'Avalie a migracao para Lucro Real com seu contador.'
+        acao: 'Revise despesas operacionais com seu contador para elevar a margem acima da presuncao.'
       });
     }
   }
@@ -3361,9 +2887,9 @@ function _pdfGerarDicas(fd, anual) {
   dicas.push({
     tipo: 'info',
     titulo: 'PIS/COFINS Cumulativo — Simplicidade como Vantagem',
-    descricao: 'No Lucro Presumido, PIS/COFINS e cumulativo (3,65%). No Lucro Real seria 9,25% menos creditos. A simplicidade reduz custos contabeis estimados em R$ 6.000 a R$ 14.400/ano.',
+    descricao: 'No Lucro Presumido, PIS/COFINS e cumulativo com aliquota combinada de 3,65%. A simplicidade reduz custos contabeis estimados em R$ 6.000 a R$ 14.400/ano em relacao a regimes com creditos.',
     baseLegal: 'Lei 10.637/2002 e Lei 10.833/2003',
-    acao: 'Compare o custo contabil adicional do Lucro Real antes de migrar.'
+    acao: 'Aproveite a simplicidade do cumulativo para focar em gestao e crescimento.'
   });
 
   // 7. Regime de Caixa
@@ -3375,20 +2901,7 @@ function _pdfGerarDicas(fd, anual) {
     acao: 'Consulte seu contador sobre a opcao pelo Regime de Caixa na apuracao.'
   });
 
-  // 8. Incentivo SUDAM
-  if (fd.areaAtuacaoSUDAM) {
-    const econSUDAM = rb * presuncao * 0.15 * 0.75;
-    dicas.push({
-      tipo: 'atencao',
-      titulo: 'Incentivo SUDAM — Perda ao Optar pelo Presumido',
-      descricao: `Ao optar pelo Lucro Presumido, a empresa PERDE o direito ao incentivo SUDAM de 75% de reducao do IRPJ. No Lucro Real com SUDAM, a economia seria de aproximadamente ${_pdfFmtMoeda(econSUDAM)}/ano.`,
-      economia: _pdfFmtMoeda(econSUDAM) + '/ano (no Lucro Real com SUDAM)',
-      baseLegal: 'Lei 12.973/2014 e legislacao SUDAM',
-      acao: 'Avalie seriamente a migracao para Lucro Real se elegivel ao incentivo SUDAM.'
-    });
-  }
-
-  // 9. Atividades Mistas
+  // 8. Atividades Mistas
   if (fd.receitas && fd.receitas.length > 1) {
     const ativIds = [...new Set(fd.receitas.map(r => r.atividadeId))];
     if (ativIds.length > 1) {
@@ -3408,9 +2921,9 @@ function _pdfGerarDicas(fd, anual) {
     dicas.push({
       tipo: 'atencao',
       titulo: 'Proximidade do Limite de Elegibilidade',
-      descricao: `Sua receita esta a ${pctLimite}% do limite de R$ 78 milhoes. Monitore de perto para evitar migracao obrigatoria ao Lucro Real no exercicio seguinte.`,
+      descricao: `Sua receita esta a ${pctLimite}% do limite de R$ 78 milhoes. Monitore de perto para garantir permanencia no Lucro Presumido no exercicio seguinte.`,
       baseLegal: 'Lei 9.718/1998, Art. 13',
-      acao: 'Planeje a transicao com antecedencia caso haja risco de ultrapassar o limite.'
+      acao: 'Planeje com antecedencia caso haja risco de ultrapassar o limite de elegibilidade.'
     });
   }
 
@@ -3589,7 +3102,7 @@ function _pdfParametros(doc, fd) {
     ['Equipamentos (Depreciacao)', fd.temEquipamentos ? 'Sim' : 'Nao'],
     ['Investimentos P&D', fd.temPD ? 'Sim' : 'Nao'],
     ['Receita Sazonal', fd.receitaSazonal ? 'Sim' : 'Nao'],
-    ['Area SUDAM', fd.areaAtuacaoSUDAM ? 'Sim' : 'Nao'],
+
     ['Elegivel Simples', fd.elegivelSimples ? 'Sim' : 'Nao'],
     ['Devolucoes', _pdfFmtMoeda(fd.devolucoes)],
     ['Cancelamentos', _pdfFmtMoeda(fd.cancelamentos)],
@@ -4154,189 +3667,6 @@ function calcularBeneficioECD(params) {
 }
 
 
-// ─────────────────────────────────────────────────────────────────────────────
-// SEÇÃO 16E: BREAK-EVEN LP vs LUCRO REAL (Etapa 4)
-// ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * Calcula o ponto de equilíbrio (break-even) entre Lucro Presumido e Lucro Real.
- * Itera margens de 1% a 100% para encontrar onde a carga LR = carga LP.
- *
- * NÃO é um comparador de regimes completo — é um ALERTA INTELIGENTE para
- * empresas no LP que podem estar pagando mais do que deveriam.
- *
- * No LR considera: IRPJ/CSLL sobre lucro real, PIS 1,65% + COFINS 7,6%
- * não-cumulativo com créditos estimados (30% das despesas operacionais).
- *
- * Base Legal: Análise comparativa — Lei 9.249/95 (LP) e RIR/2018 (LR).
- *
- * @param {Object} params
- * @param {number} params.receitaBrutaAnual - Receita bruta anual
- * @param {string} params.atividadeId - ID da atividade (para percentual presunção)
- * @param {number} params.folhaPagamentoAnual - Folha de pagamento anual (dedutível no LR)
- * @param {number} params.despesasOperacionaisAnuais - Total de despesas operacionais
- * @param {number} [params.aliquotaISS=0.03] - Alíquota de ISS
- * @param {number} [params.creditosPISCOFINSEstimados=0] - Créditos PIS/COFINS no LR
- * @returns {Object} breakEvenMargem, cargaLP, margens[], recomendação
- */
-function calcularBreakEven(params) {
-  const {
-    receitaBrutaAnual,
-    atividadeId,
-    folhaPagamentoAnual = 0,
-    despesasOperacionaisAnuais = 0,
-    aliquotaISS = 0.03,
-    creditosPISCOFINSEstimados = 0
-  } = params;
-
-  const atividadeIRPJ = PERCENTUAIS_PRESUNCAO_IRPJ.find(a => a.id === atividadeId);
-  const atividadeCSLL = PERCENTUAIS_PRESUNCAO_CSLL.find(a => a.id === atividadeId);
-
-  if (!atividadeIRPJ || !atividadeCSLL) {
-    throw new Error(`Atividade nao encontrada: "${atividadeId}"`);
-  }
-
-  const percIRPJ = atividadeIRPJ.percentual;
-  const percCSLL = atividadeCSLL.percentual;
-
-  // ═══ CARGA NO LUCRO PRESUMIDO (fixa — não depende da margem real) ═══
-  const baseLPIRPJ = receitaBrutaAnual * percIRPJ;
-  const baseLPCSLL = receitaBrutaAnual * percCSLL;
-
-  // Adicional IRPJ trimestral: calcular por trimestre (receita uniforme)
-  const baseTrimIRPJ = baseLPIRPJ / 4;
-  let adicionalIRPJLP = 0;
-  for (let t = 0; t < 4; t++) {
-    adicionalIRPJLP += Math.max(0, baseTrimIRPJ - LIMITE_ADICIONAL_TRIMESTRAL) * ALIQUOTA_ADICIONAL_IRPJ;
-  }
-
-  const irpjLP = _arredondar(baseLPIRPJ * ALIQUOTA_IRPJ + adicionalIRPJLP);
-  const csllLP = _arredondar(baseLPCSLL * ALIQUOTA_CSLL);
-  const pisLP = _arredondar(receitaBrutaAnual * ALIQUOTA_PIS_CUMULATIVO);
-  const cofinsLP = _arredondar(receitaBrutaAnual * ALIQUOTA_COFINS_CUMULATIVO);
-  const issLP = _arredondar(receitaBrutaAnual * aliquotaISS);
-  const cargaLP = _arredondar(irpjLP + csllLP + pisLP + cofinsLP + issLP);
-
-  // ═══ CARGA NO LUCRO REAL POR MARGEM ═══
-  // Créditos PIS/COFINS estimados: se não informado, estimar como 30% das despesas
-  const creditosPC = creditosPISCOFINSEstimados > 0
-    ? creditosPISCOFINSEstimados
-    : _arredondar(despesasOperacionaisAnuais * 0.30 * (ALIQUOTA_PIS_NAO_CUMULATIVO + ALIQUOTA_COFINS_NAO_CUMULATIVO));
-
-  const margens = [];
-
-  for (let m = 1; m <= 100; m++) {
-    const margem = m / 100;
-    const lucroReal = receitaBrutaAnual * margem;
-
-    // IRPJ sobre lucro real
-    const baseTrimLR = lucroReal / 4;
-    let adicionalLR = 0;
-    for (let t = 0; t < 4; t++) {
-      adicionalLR += Math.max(0, baseTrimLR - LIMITE_ADICIONAL_TRIMESTRAL) * ALIQUOTA_ADICIONAL_IRPJ;
-    }
-    const irpjLR = _arredondar(lucroReal * ALIQUOTA_IRPJ + adicionalLR);
-    const csllLR = _arredondar(lucroReal * ALIQUOTA_CSLL);
-
-    // PIS/COFINS não-cumulativo com créditos
-    const pisBrutoLR = receitaBrutaAnual * ALIQUOTA_PIS_NAO_CUMULATIVO;
-    const cofinsBrutaLR = receitaBrutaAnual * ALIQUOTA_COFINS_NAO_CUMULATIVO;
-    const propPIS = ALIQUOTA_PIS_NAO_CUMULATIVO / (ALIQUOTA_PIS_NAO_CUMULATIVO + ALIQUOTA_COFINS_NAO_CUMULATIVO);
-    const pisLR = _arredondar(Math.max(0, pisBrutoLR - creditosPC * propPIS));
-    const cofinsLR = _arredondar(Math.max(0, cofinsBrutaLR - creditosPC * (1 - propPIS)));
-    const issLR = _arredondar(receitaBrutaAnual * aliquotaISS);
-    const cargaLR = _arredondar(irpjLR + csllLR + pisLR + cofinsLR + issLR);
-
-    margens.push({
-      margem: m,
-      cargaLP: cargaLP,
-      cargaLR: cargaLR,
-      diferencaLPvsLR: _arredondar(cargaLP - cargaLR),
-      lrMaisBarato: cargaLR < cargaLP
-    });
-  }
-
-  // ═══ ENCONTRAR PONTO DE CRUZAMENTO (break-even real) ═══
-  // cargaLP é fixa; cargaLR cresce com a margem.
-  // Break-even = margem onde as curvas se cruzam (LR passa de mais barato para mais caro).
-  // Abaixo do break-even: LR é mais barato. Acima: LP é mais vantajoso.
-  let breakEvenMargem = null;
-  const lrMaisBaratoEm1 = margens[0].lrMaisBarato;
-  const lrMaisBaratoEm100 = margens[99].lrMaisBarato;
-
-  if (lrMaisBaratoEm1 || lrMaisBaratoEm100) {
-    // Há pelo menos uma margem onde LR é mais barato — encontrar o cruzamento
-    for (let i = 0; i < 99; i++) {
-      if (margens[i].lrMaisBarato && !margens[i + 1].lrMaisBarato) {
-        // Cruzamento: LR era mais barato em m, LP passa a ser mais barato em m+1
-        breakEvenMargem = margens[i + 1].margem; // inteiro (ex: 21 para 21%)
-        break;
-      }
-    }
-    // Se LR é mais barato em TODAS as margens (sem cruzamento)
-    if (breakEvenMargem === null && lrMaisBaratoEm100) {
-      breakEvenMargem = null; // LR sempre mais barato, não há break-even
-    }
-  }
-  // Se LP é mais barato em todas (LR nunca mais barato), breakEvenMargem fica null
-
-  // Determinar qual regime vence em cada faixa
-  const lpSempreVantajoso = !lrMaisBaratoEm1 && !lrMaisBaratoEm100;
-  const lrSempreVantajoso = lrMaisBaratoEm1 && lrMaisBaratoEm100 && breakEvenMargem === null;
-
-  // Margem real atual (se despesas informadas)
-  const margemRealAtual = receitaBrutaAnual > 0
-    ? _arredondar(((receitaBrutaAnual - despesasOperacionaisAnuais) / receitaBrutaAnual) * 100, 1)
-    : null;
-
-  // Cenário na margem real (se disponível)
-  let cenarioMargemReal = null;
-  if (margemRealAtual !== null && margemRealAtual > 0 && margemRealAtual <= 100) {
-    const idx = Math.min(99, Math.max(0, Math.round(margemRealAtual) - 1));
-    cenarioMargemReal = margens[idx] || null;
-  }
-
-  // ═══ RECOMENDAÇÃO E ALERTA ═══
-  let recomendacao, alerta = null;
-
-  if (lpSempreVantajoso) {
-    recomendacao = `Lucro Presumido e vantajoso em TODAS as margens simuladas (1% a 100%). Carga fixa: R$ ${cargaLP.toLocaleString('pt-BR', {minimumFractionDigits: 2})}.`;
-  } else if (lrSempreVantajoso) {
-    recomendacao = `Lucro Real e mais barato em TODAS as margens simuladas (1% a 100%). Considere migrar para Lucro Real. Carga no LP: R$ ${cargaLP.toLocaleString('pt-BR', {minimumFractionDigits: 2})}.`;
-    alerta = 'ATENCAO: Lucro Real e mais barato que LP em todas as faixas de margem. Avalie com seu contador a migração.';
-  } else if (breakEvenMargem !== null) {
-    recomendacao = `Break-even em ${breakEvenMargem}%: abaixo dessa margem, Lucro Real e mais barato. Acima de ${breakEvenMargem}%, Lucro Presumido e vantajoso. Carga fixa no LP: R$ ${cargaLP.toLocaleString('pt-BR', {minimumFractionDigits: 2})}.`;
-    // Alerta se a margem real está abaixo do break-even (empresa deveria considerar LR)
-    if (margemRealAtual !== null && margemRealAtual < breakEvenMargem) {
-      alerta = `ATENCAO: Sua margem real estimada (${margemRealAtual}%) esta ABAIXO do break-even (${breakEvenMargem}%). Nessa faixa, Lucro Real pode ser mais economico. Consulte seu contador.`;
-    }
-  } else {
-    recomendacao = 'Lucro Presumido e vantajoso em todas as margens simuladas (1% a 100%).';
-  }
-
-  return {
-    presuncaoIRPJ: percIRPJ,
-    presuncaoCSLL: percCSLL,
-    cargaTributariaLP: cargaLP,
-    detalheLP: {
-      irpj: irpjLP,
-      csll: csllLP,
-      pis: pisLP,
-      cofins: cofinsLP,
-      iss: issLP
-    },
-    breakEvenMargem: breakEvenMargem,
-    lpSempreVantajoso: lpSempreVantajoso,
-    lrSempreVantajoso: lrSempreVantajoso,
-    margemRealAtual: margemRealAtual,
-    cenarioMargemReal: cenarioMargemReal,
-    margens: margens,
-    recomendacao: recomendacao,
-    alerta: alerta,
-    baseLegal: 'Analise comparativa: Lei 9.249/95 (LP) e RIR/2018 (LR). PIS/COFINS: Lei 10.637/2002 e Lei 10.833/2003.'
-  };
-}
-
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SEÇÃO 16F: FLUXO DE CAIXA TRIBUTÁRIO / CALENDÁRIO (Etapa 4)
@@ -4571,10 +3901,7 @@ const LucroPresumido = {
   ALIQUOTA_CSLL,
   ALIQUOTA_PIS_CUMULATIVO,
   ALIQUOTA_COFINS_CUMULATIVO,
-  ALIQUOTA_PIS_NAO_CUMULATIVO,
-  ALIQUOTA_COFINS_NAO_CUMULATIVO,
   ALIQUOTA_INSS_PATRONAL,
-  PERCENTUAL_INCENTIVO_SUDAM,
   LIMITE_ADICIONAL_TRIMESTRAL,
   LIMITE_ADICIONAL_MENSAL,
 
@@ -4629,7 +3956,6 @@ const LucroPresumido = {
   calcularBeneficioECD,
 
   // ── Funções de Otimização (Etapa 4) ──
-  calcularBreakEven,
   gerarCalendarioTributario,
 
   // ── Constantes CSRF (Etapa 4) ──
@@ -4862,23 +4188,8 @@ function _executarDemonstracao() {
   console.log(`  Benefício líquido: R$ ${_formatarMoeda(simECD.beneficioLiquido)}`);
   console.log(`  ${simECD.recomendacao}`);
 
-  // ── 14. ETAPA 4: Break-Even LP vs Lucro Real ──
-  console.log('\n\n▸ 14. ETAPA 4: BREAK-EVEN LP vs LUCRO REAL');
-  console.log('─'.repeat(55));
-  const simBE = calcularBreakEven({
-    receitaBrutaAnual: 2350000,
-    atividadeId: 'servicos_gerais',
-    folhaPagamentoAnual: 1000000,
-    despesasOperacionaisAnuais: 1800000,
-    aliquotaISS: 0.03
-  });
-  console.log(`  Presunção atividade: ${(simBE.presuncaoAtividade * 100).toFixed(1)}%`);
-  console.log(`  Carga tributária LP: R$ ${_formatarMoeda(simBE.cargaTributariaLP)}`);
-  console.log(`  Break-even margem: ${simBE.breakEvenMargem ? (simBE.breakEvenMargem * 100).toFixed(1) + '%' : 'N/A'}`);
-  console.log(`  ${simBE.recomendacao}`);
-
-  // ── 15. ETAPA 4: Calendário Tributário ──
-  console.log('\n\n▸ 15. ETAPA 4: CALENDÁRIO TRIBUTÁRIO (resumo)');
+  // ── 14. ETAPA 4: Calendário Tributário ──
+  console.log('\n\n▸ 14. ETAPA 4: CALENDÁRIO TRIBUTÁRIO (resumo)');
   console.log('─'.repeat(55));
   const cal = gerarCalendarioTributario({
     anoCalendario: 2026,
