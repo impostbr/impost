@@ -86,6 +86,18 @@
     ECF:    "Escrituração Contábil Fiscal",
     SPED:   "Sistema Público de Escrituração Digital",
     RIR:    "Regulamento do Imposto de Renda",
+    SUDAM:  "Superintendência de Desenvolvimento da Amazônia",
+    SUDENE: "Superintendência de Desenvolvimento do Nordeste",
+    CSRF:   "Contribuições Sociais Retidas na Fonte",
+    MEP:    "Método de Equivalência Patrimonial",
+    AVP:    "Ajuste a Valor Presente",
+    PER:    "Pedido Eletrônico de Restituição",
+    DCOMP:  "Declaração de Compensação",
+    CND:    "Certidão Negativa de Débitos",
+    CPEN:   "Certidão Positiva com Efeitos de Negativa",
+    BASA:   "Banco da Amazônia S.A.",
+    BNB:    "Banco do Nordeste do Brasil",
+    SCP:    "Sociedade em Conta de Participação",
   };
 
   /**
@@ -876,6 +888,36 @@
       _field("ehFinanceira", "É instituição financeira?", "checkbox")
     );
 
+    // ── Diagnóstico Avançado (campos para funções do mapeamento) ──
+    h += _sectionTitle("Informações Complementares para Diagnóstico Avançado");
+    h += _infoBox(
+      "Estas informações alimentam o diagnóstico avançado de obrigatoriedade, subcapitalização, operações no exterior e regime cambial.",
+      "wz-info-default"
+    );
+    h += _field("ehInstituicaoFinanceira", "É instituição financeira (banco, seguradora, financeira)?", "checkbox", {
+      tip: "Altera alíquota CSLL para 15% (vs 9% geral) e torna o Lucro Real obrigatório (Art. 257, II)",
+    });
+    h += _field("temLucroExterior", "Possui lucros, rendimentos ou ganhos de capital do exterior?", "checkbox", {
+      tip: "Torna o Lucro Real obrigatório (Art. 257, III). Dados usados em LR.calcular.avancado.calcularLucrosExterior()",
+    });
+    h += _field("temBeneficioFiscalIsencao", "Possui benefício fiscal de isenção ou redução (ex: SUDAM/SUDENE)?", "checkbox", {
+      tip: "Torna o Lucro Real obrigatório (Art. 257, IV)",
+    });
+    h += _row(
+      _field("ehFactoring", "Atividade de factoring ou assessoria creditícia?", "checkbox", {
+        tip: "Torna o Lucro Real obrigatório (Art. 257, VI)",
+      }) +
+      _field("ehSecuritizadora", "Securitizadora de créditos?", "checkbox", {
+        tip: "Torna o Lucro Real obrigatório (Art. 257, VII)",
+      })
+    );
+    h += _field("regimeCambial", "Regime de variação cambial", "select", {
+      tip: "Regime padrão é Caixa. Opção por Competência deve ser exercida em janeiro (Art. 407)",
+      options:
+        '<option value="CAIXA" ' + ((!dadosEmpresa.regimeCambial || dadosEmpresa.regimeCambial === "CAIXA") ? "selected" : "") + '>Caixa (padrão)</option>' +
+        '<option value="COMPETENCIA" ' + (dadosEmpresa.regimeCambial === "COMPETENCIA" ? "selected" : "") + '>Competência</option>',
+    });
+
     h += '<div id="alertaObrigatoriedade"></div>';
     return h;
   }
@@ -1167,6 +1209,48 @@
     h += "</div>";
 
     h += _autoCalcBox("calcTotalExclusoes");
+
+    // ── Despesas Condicionais e Limites Legais ──
+    h += _sectionTitle("Despesas Condicionais e Limites Legais");
+    h += _infoBox(
+      "Despesas sujeitas a limites legais de dedutibilidade. Valores que excedam os limites serão automaticamente adicionados ao LALUR como indedutíveis.",
+      "wz-info-warning"
+    );
+    h += _row(
+      _field("doacoesOperacionais", "Doações a entidades civis (operacionais)", "money", {
+        tip: "Limite: 2% do lucro operacional (Art. 377)",
+      }) +
+      _field("doacoesOSCIP", "Doações a OSCIPs", "money", {
+        tip: "Limite: 2% do lucro operacional (Art. 377, §1º)",
+      })
+    );
+    h += _field("doacoesEntidadesEnsino", "Doações a entidades de ensino/pesquisa", "money", {
+      tip: "Limite: 1,5% do lucro operacional (Art. 385)",
+    });
+    h += _field("previdenciaComplementarPatronal", "Contribuição patronal à previdência complementar", "money", {
+      tip: "Limite: 20% da folha salarial anual (Art. 369, §1º)",
+    });
+    h += _field("royaltiesPagos", "Royalties e assistência técnica pagos", "money", {
+      tip: "Limite: 5% da receita líquida (Art. 365)",
+    });
+    h += _row(
+      _field("provisoesContingencias", "Provisões para contingências (trabalhistas, cíveis, fiscais)", "money", {
+        tip: "NÃO dedutível — gera adição ao LALUR. Reversão futura gera exclusão. (Art. 340)",
+      }) +
+      _field("provisoesGarantias", "Provisões para garantia de produtos", "money", {
+        tip: "NÃO dedutível (Art. 340)",
+      })
+    );
+    h += _field("despesasBrindes", "Despesas com brindes", "money", {
+      tip: "100% indedutível (Art. 13, VII Lei 9.249)",
+    });
+    h += _field("multas", "Multas por infrações fiscais (punitivas)", "money", {
+      tip: "Indedutíveis (Art. 311, §5º). Multas compensatórias são dedutíveis.",
+    });
+    h += _field("jurosVinculadasExterior", "Juros pagos a pessoa vinculada no exterior", "money", {
+      tip: "Sujeito a regras de subcapitalização (Art. 249-251)",
+    });
+
     h += _autoCalcBox("calcCustos");
     return h;
   }
@@ -1299,6 +1383,59 @@
       );
     }
 
+    // ── Subcapitalização e Operações Vinculadas ──
+    h += _sectionTitle("Subcapitalização e Operações Vinculadas");
+    h += _infoBox(
+      "Dívidas com pessoas vinculadas estão sujeitas a limites de dedutibilidade de juros (Art. 249-251 RIR/2018). Juros que excederem os limites são indedutíveis.",
+      "wz-info-warning"
+    );
+    h += _row(
+      _field("dividaVinculadaComParticipacao", "Dívida com vinculada que tem participação no PL", "money", {
+        tip: "Limite: 2× participação da vinculada no PL (Art. 250)",
+      }) +
+      _field("participacaoVinculadaNoPL", "Participação da vinculada no PL", "money")
+    );
+    h += _field("dividaParaisoFiscal", "Dívida com entidade em paraíso fiscal", "money", {
+      tip: "Limite: 30% do PL (Art. 251)",
+    });
+    h += _row(
+      _field("prejuizoNaoOperacional", "Prejuízo não-operacional acumulado (alienação ativo)", "money", {
+        tip: "Só compensa com lucro de mesma natureza (Art. 581-582)",
+      }) +
+      _field("lucroNaoOperacional", "Lucro na alienação de ativo imobilizado/investimento (ano corrente)", "money", {
+        tip: "Compensável com prejuízo não-operacional acumulado",
+      })
+    );
+    h += _field("atividadeRural", "Empresa tem atividade rural (permite compensação integral sem trava de 30%)", "checkbox", {
+      tip: "Art. 583 — Prejuízo de atividade rural pode ser compensado integralmente, sem a trava de 30%",
+    });
+
+    // ── Vedações à Compensação ──
+    h += _sectionTitle("Vedações à Compensação");
+    h += _infoBox(
+      "Situações que podem VEDAR ou LIMITAR a compensação de prejuízos fiscais. Preencha para diagnóstico de riscos.",
+      "wz-info-warning"
+    );
+    h += _row(
+      _field("houveMudancaControle", "Houve mudança de controle societário?", "checkbox", {
+        tip: "Combinada com mudança de ramo, VEDA compensação (Art. 584)",
+      }) +
+      _field("houveMudancaRamo", "Houve mudança de ramo de atividade?", "checkbox", {
+        tip: "Art. 584 — Vedada compensação se cumulada com mudança de controle",
+      })
+    );
+    h += _field("tipoReorganizacaoVedacao", "Reorganização societária no período?", "select", {
+      tip: "Incorporação/fusão/cisão podem limitar compensação de prejuízos (Art. 585)",
+      options:
+        '<option value="NENHUMA" ' + ((!dadosEmpresa.tipoReorganizacaoVedacao || dadosEmpresa.tipoReorganizacaoVedacao === "NENHUMA") ? "selected" : "") + '>Nenhuma</option>' +
+        '<option value="INCORPORACAO" ' + (dadosEmpresa.tipoReorganizacaoVedacao === "INCORPORACAO" ? "selected" : "") + '>Incorporação</option>' +
+        '<option value="FUSAO" ' + (dadosEmpresa.tipoReorganizacaoVedacao === "FUSAO" ? "selected" : "") + '>Fusão</option>' +
+        '<option value="CISAO" ' + (dadosEmpresa.tipoReorganizacaoVedacao === "CISAO" ? "selected" : "") + '>Cisão</option>',
+    });
+    h += _field("ehSCP", "É Sociedade em Conta de Participação (SCP)?", "checkbox", {
+      tip: "Prejuízos de SCP não compensam com ostensivo e vice-versa (Art. 586)",
+    });
+
     return h;
   }
 
@@ -1347,6 +1484,26 @@
     );
 
     h += _autoCalcBox("calcRetencoes");
+
+    // ── Retenções Detalhadas por Tipo ──
+    h += _sectionTitle("Retenções Detalhadas por Tipo");
+    h += _infoBox(
+      "Detalhamento das retenções por categoria de serviço. Permite cálculo preciso de saldos a compensar por tipo de tributo.",
+      "wz-info-default"
+    );
+    h += _field("irrfServicosLimpeza", "IRRF — Serviços de limpeza/segurança/vigilância (1%)", "money", {
+      tip: "Art. 716 — Retenção de 1% sobre serviços de limpeza, segurança e vigilância",
+    });
+    h += _field("irrfComissoes", "IRRF — Comissões e representação (1,5%)", "money", {
+      tip: "Art. 718 — Retenção sobre comissões e corretagens",
+    });
+    h += _field("recebeDeAdmPublica", "Presta serviços para órgãos públicos?", "checkbox", {
+      tip: "Se sim, sujeito a retenção unificada de 9,45% (IRPJ+CSLL+PIS+COFINS)",
+    });
+    h += _field("irrfAdmPublica", "IRRF — Serviços prestados à Administração Pública (4,8%)", "money", {
+      condition: "recebeDeAdmPublica",
+      tip: "Art. 720 + IN RFB 1.234/12 — Retenção unificada sobre pagamentos de órgãos públicos",
+    });
 
     // ── CPRB — Desoneração da Folha ──
     h += _sectionTitle("Desoneração da Folha (CPRB)");
@@ -1585,6 +1742,42 @@
     });
 
     h += _autoCalcBox("calcDepreciacao");
+
+    // ── Método de Avaliação de Estoques ──
+    h += _sectionTitle("Método de Avaliação de Estoques");
+    h += _infoBox(
+      "O método de avaliação de estoque afeta o custo das mercadorias vendidas e, consequentemente, o lucro tributável. O método deve ser consistente ano a ano. UEPS é vedado.",
+      ""
+    );
+    h += _field("metodoEstoque", "Método de avaliação de estoque", "select", {
+      tip: "Método deve ser consistente ano a ano. UEPS é vedado. (Art. 307)",
+      options:
+        '<option value="" ' + (!dadosEmpresa.metodoEstoque ? "selected" : "") + '>Selecione...</option>' +
+        '<option value="CUSTO_MEDIO" ' + (dadosEmpresa.metodoEstoque === "CUSTO_MEDIO" ? "selected" : "") + '>Custo Médio Ponderado (Art. 307)</option>' +
+        '<option value="PEPS" ' + (dadosEmpresa.metodoEstoque === "PEPS" ? "selected" : "") + '>PEPS/FIFO — Primeiro a Entrar, Primeiro a Sair (Art. 307)</option>' +
+        '<option value="PRECO_VENDA_MARGEM" ' + (dadosEmpresa.metodoEstoque === "PRECO_VENDA_MARGEM" ? "selected" : "") + '>Preço de Venda menos Margem (Art. 307)</option>' +
+        '<option value="MERCADO_RURAL" ' + (dadosEmpresa.metodoEstoque === "MERCADO_RURAL" ? "selected" : "") + '>Preços Correntes de Mercado — Rural (Art. 309)</option>',
+    });
+    h += _field("valorEstoqueFinal", "Valor do estoque final do período", "money", {
+      tip: "Usado para validação do método e cálculo do CMV integrado",
+    });
+
+    // ── Amortização e Exaustão ──
+    h += _sectionTitle("Amortização e Exaustão");
+    h += _infoBox(
+      "Goodwill, recursos naturais e despesas pré-operacionais geram deduções por amortização ou exaustão, reduzindo a base tributável ao longo do tempo.",
+      ""
+    );
+    h += _field("valorGoodwill", "Goodwill (ágio por expectativa de rentabilidade)", "money", {
+      tip: "Amortizável em 1/60 avos/mês = 20% ao ano (Lei 12.973, Arts. 20-22)",
+    });
+    h += _field("valorRecursosNaturais", "Custo de direitos minerais/florestais para exaustão", "money", {
+      tip: "Art. 334-337 do RIR/2018",
+    });
+    h += _field("despesasPreOperacionais", "Despesas pré-operacionais (em amortização)", "money", {
+      tip: "Amortização diferida — mínimo de 5 anos (Art. 11 Lei 12.973)",
+    });
+
     return h;
   }
 
@@ -2472,6 +2665,92 @@
     };
 
     // ═══════════════════════════════════════════════════════════════════════
+    //  PASSO 3A — Validação de Despesas com Limites Legais
+    // ═══════════════════════════════════════════════════════════════════════
+    var lucroOperacional = lucroLiquido;
+    var receitaLiquida = receitaBruta;
+    var validacaoDespesasLimites = { doacoes: null, previdencia: null, royalties: null };
+    if (LR.calcular.avancado && LR.calcular.avancado.calcularLimiteDoacoes) {
+      try {
+        validacaoDespesasLimites.doacoes = LR.calcular.avancado.calcularLimiteDoacoes({
+          lucroOperacional: lucroOperacional,
+          doacoesOperacionais: _n(d.doacoesOperacionais),
+          doacoesOSCIP: _n(d.doacoesOSCIP),
+          doacoesEntidadesEnsino: _n(d.doacoesEntidadesEnsino)
+        });
+      } catch(e) {}
+    }
+    if (LR.calcular.avancado && LR.calcular.avancado.calcularLimitePrevidenciaComplementar) {
+      try {
+        validacaoDespesasLimites.previdencia = LR.calcular.avancado.calcularLimitePrevidenciaComplementar({
+          folhaSalarial: dre.folhaPagamento,
+          contribuicaoPatronal: _n(d.previdenciaComplementarPatronal)
+        });
+      } catch(e) {}
+    }
+    if (LR.calcular.avancado && LR.calcular.avancado.calcularLimiteRoyaltiesAssistencia) {
+      try {
+        validacaoDespesasLimites.royalties = LR.calcular.avancado.calcularLimiteRoyaltiesAssistencia({
+          receitaLiquida: receitaLiquida,
+          royaltiesPagos: _n(d.royaltiesPagos)
+        });
+      } catch(e) {}
+    }
+
+    // Se algum limite foi excedido, somar o EXCESSO como ADIÇÃO ao LALUR
+    var excessoDespesasLimites = 0;
+    if (validacaoDespesasLimites.doacoes && validacaoDespesasLimites.doacoes.excesso > 0) {
+      excessoDespesasLimites += validacaoDespesasLimites.doacoes.excesso;
+      adicoesDetalhe.push({ desc: "Excesso de doações acima do limite legal", valor: validacaoDespesasLimites.doacoes.excesso, artigo: "Art. 377-385", tipo: "D" });
+    }
+    if (validacaoDespesasLimites.previdencia && validacaoDespesasLimites.previdencia.excesso > 0) {
+      excessoDespesasLimites += validacaoDespesasLimites.previdencia.excesso;
+      adicoesDetalhe.push({ desc: "Excesso de previdência complementar acima do limite", valor: validacaoDespesasLimites.previdencia.excesso, artigo: "Art. 369, §1º", tipo: "D" });
+    }
+    if (validacaoDespesasLimites.royalties && validacaoDespesasLimites.royalties.excesso > 0) {
+      excessoDespesasLimites += validacaoDespesasLimites.royalties.excesso;
+      adicoesDetalhe.push({ desc: "Excesso de royalties acima do limite legal", valor: validacaoDespesasLimites.royalties.excesso, artigo: "Art. 365", tipo: "D" });
+    }
+    if (excessoDespesasLimites > 0) {
+      totalAdicoes = _r(totalAdicoes + excessoDespesasLimites);
+      lucroAjustado = _r(lucroLiquido + totalAdicoes - totalExclusoes);
+      lalur.totalAdicoes = totalAdicoes;
+      lalur.lucroAjustado = lucroAjustado;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  PASSO 3B — Despesas Indedutíveis Automáticas
+    // ═══════════════════════════════════════════════════════════════════════
+    var despesasIndedutivelDetalhe = [];
+    var totalIndedutivelAuto = 0;
+    if (_n(d.despesasBrindes) > 0) {
+      despesasIndedutivelDetalhe.push({ desc: "Brindes", valor: _n(d.despesasBrindes), artigo: "Art. 13, VII Lei 9.249" });
+      totalIndedutivelAuto += _n(d.despesasBrindes);
+    }
+    if (_n(d.multas) > 0) {
+      despesasIndedutivelDetalhe.push({ desc: "Multas punitivas", valor: _n(d.multas), artigo: "Art. 311, §5º" });
+      totalIndedutivelAuto += _n(d.multas);
+    }
+    if (_n(d.provisoesContingencias) > 0) {
+      despesasIndedutivelDetalhe.push({ desc: "Provisões para contingências", valor: _n(d.provisoesContingencias), artigo: "Art. 340" });
+      totalIndedutivelAuto += _n(d.provisoesContingencias);
+    }
+    if (_n(d.provisoesGarantias) > 0) {
+      despesasIndedutivelDetalhe.push({ desc: "Provisões para garantia de produtos", valor: _n(d.provisoesGarantias), artigo: "Art. 340" });
+      totalIndedutivelAuto += _n(d.provisoesGarantias);
+    }
+    if (_n(d.gratificacoesAdm) > 0) {
+      despesasIndedutivelDetalhe.push({ desc: "Gratificações a administradores", valor: _n(d.gratificacoesAdm), artigo: "Art. 358, §1º" });
+      // Já contabilizado nas adições existentes, não somar novamente
+    }
+    if (totalIndedutivelAuto > 0) {
+      totalAdicoes = _r(totalAdicoes + totalIndedutivelAuto);
+      lucroAjustado = _r(lucroLiquido + totalAdicoes - totalExclusoes);
+      lalur.totalAdicoes = totalAdicoes;
+      lalur.lucroAjustado = lucroAjustado;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
     //  PASSO 4 — Compensação de prejuízos → LR.calcular.compensarIntegrado()
     // ═══════════════════════════════════════════════════════════════════════
     var prejuizoFiscal = _n(d.prejuizoFiscal);
@@ -2500,7 +2779,10 @@
           adicoes: totalAdicoes,
           exclusoes: totalExclusoes,
           saldoPrejuizoOperacional: prejuizoFiscal,
+          saldoPrejuizoNaoOperacional: _n(d.prejuizoNaoOperacional),
           saldoBaseNegativaCSLL: baseNegCSLL,
+          lucroNaoOperacional: _n(d.lucroNaoOperacional),
+          atividadeRural: d.atividadeRural === true || d.atividadeRural === "true",
           trimestral: d.apuracaoLR === "trimestral"
         });
       } catch (e) {
@@ -2597,6 +2879,26 @@
     var irpjAposReducao = _r(Math.max(irpjAntesReducao - reducaoSUDAM, 0));
 
     // ═══════════════════════════════════════════════════════════════════════
+    //  PASSO 6A — Subcapitalização
+    // ═══════════════════════════════════════════════════════════════════════
+    var subcapResult = null;
+    if (LR.validar && LR.validar.subcapitalizacao && (_n(d.dividaVinculadaComParticipacao) > 0 || _n(d.dividaParaisoFiscal) > 0)) {
+      try {
+        subcapResult = LR.validar.subcapitalizacao({
+          patrimonioLiquido: plVal,
+          dividaVinculadaComParticipacao: _n(d.dividaVinculadaComParticipacao),
+          participacaoVinculadaNoPL: _n(d.participacaoVinculadaNoPL),
+          dividaParaisoFiscal: _n(d.dividaParaisoFiscal),
+          jurosIndedutiveis: _n(d.jurosVinculadasExterior)
+        });
+      } catch(e) {}
+    }
+    // Se subcapitalização excedeu, somar juros indedutíveis como adição ao IRPJ
+    if (subcapResult && subcapResult.excedeu === true && subcapResult.jurosIndedutiveis > 0) {
+      irpjAposReducao = _r(irpjAposReducao + _r(subcapResult.jurosIndedutiveis * 0.25));
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
     //  PASSO 7 — CSLL → LR.calcular.csll()
     // ═══════════════════════════════════════════════════════════════════════
     var csllResult = LR.calcular.csll({
@@ -2607,6 +2909,23 @@
       financeira: ehFinanceira,
       tipoAtividade: d.tipoAtividade || ""
     });
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  PASSO 7A — Verificação de Omissão de Receita
+    // ═══════════════════════════════════════════════════════════════════════
+    var omissaoResult = null;
+    if (LR.validar && LR.validar.omissaoReceita) {
+      try {
+        omissaoResult = LR.validar.omissaoReceita({
+          receitaBruta: receitaBruta,
+          custos: custosTotais,
+          despesas: despesasTotais,
+          lucroLiquido: lucroLiquido,
+          saldoCaixa: _n(d.saldoCaixa),
+          depositosBancarios: _n(d.depositosBancarios)
+        });
+      } catch(e) {}
+    }
 
     // ═══════════════════════════════════════════════════════════════════════
     //  PASSO 8 — PIS/COFINS → LR.calcular.pisCofins()
@@ -2749,8 +3068,27 @@
     // sudamResult já foi calculado acima
 
     // ═══════════════════════════════════════════════════════════════════════
+    //  PASSO 12A — Lucro da Exploração (para incentivos SUDAM/SUDENE)
+    // ═══════════════════════════════════════════════════════════════════════
+    var lucroExploracaoResult = null;
+    if ((isSUDAM || isSUDENE) && LR.calcular.lucroExploracao) {
+      try {
+        lucroExploracaoResult = LR.calcular.lucroExploracao({
+          lucroLiquidoContabil: lucroLiquido,
+          receitasFinanceirasLiquidas: _n(d.receitasFinanceiras) - _n(d.despesasFinanceiras),
+          resultadoMEP: _n(d.resultadoMEP),
+          resultadoNaoOperacional: _n(d.lucroNaoOperacional),
+          receitasExercicioAnterior: 0,
+          csllDevida: csllResult ? csllResult.csllDevida : 0
+        });
+      } catch(e) {}
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
     //  PASSO 13 — Depreciação → LR.calcular.depreciacaoCompleta()
     // ═══════════════════════════════════════════════════════════════════════
+    var depreciacaoResult = { bens: [], total: 0, economiaFiscal: 0 };
+    var bensParaCalculo = [];
     var bensConfig = [
       { campo: "valorVeiculos", tipo: "VEICULOS", taxa: 0.20 },
       { campo: "valorMaquinas", tipo: "MAQUINAS", taxa: 0.10 },
@@ -2763,39 +3101,124 @@
       { campo: "valorInstalacoes", tipo: "INSTALACOES", taxa: 0.10 },
       { campo: "valorOutrosBens", tipo: "OUTROS", taxa: 0.10 }
     ];
-    var depreciacaoDetalhe = [];
-    var totalDepNormal = 0;
-    var totalDepAcelerada = 0;
-    bensConfig.forEach(function (bc) {
+    bensConfig.forEach(function(bc) {
       var valor = _n(d[bc.campo]);
-      if (valor > 0) {
-        var depN = _r(valor * bc.taxa);
+      if (valor > 0) bensParaCalculo.push({ tipo: bc.tipo, valor: valor, taxa: bc.taxa });
+    });
+
+    if (LR.calcular.depreciacaoCompleta && bensParaCalculo.length > 0) {
+      try {
+        depreciacaoResult = LR.calcular.depreciacaoCompleta({
+          bens: bensParaCalculo,
+          turnos: turnos,
+          bensSmallValue: _n(d.bensSmallValue),
+          valorBensNovos: (isSUDAM || isSUDENE) ? _n(d.valorBensNovos) : 0,
+          ehSUDAM: isSUDAM,
+          ehSUDENE: isSUDENE
+        });
+      } catch(e) {
+        // fallback: manter cálculo manual
+        var depreciacaoDetalhe = [];
+        var totalDepNormal = 0;
+        var totalDepAcelerada = 0;
+        bensParaCalculo.forEach(function (bc) {
+          var depN = _r(bc.valor * bc.taxa);
+          var depA = _r(depN * multTurnos);
+          totalDepNormal += depN;
+          totalDepAcelerada += depA;
+          depreciacaoDetalhe.push({
+            tipo: bc.tipo, valorOriginal: bc.valor, taxa: bc.taxa,
+            depreciaNormal: depN, depreciaAcelerada: depA, turnos: turnos
+          });
+        });
+        var depBensNovos = 0;
+        if ((isSUDAM || isSUDENE) && _n(d.valorBensNovos) > 0) {
+          depBensNovos = _n(d.valorBensNovos);
+        }
+        var depBensSmall = _n(d.bensSmallValue);
+        var depreciacaoTotal = _r(totalDepAcelerada + depBensNovos + depBensSmall);
+        depreciacaoResult = {
+          bens: depreciacaoDetalhe,
+          depreciaNormal: totalDepNormal,
+          depreciaAcelerada: totalDepAcelerada,
+          depBensNovos: depBensNovos,
+          depBensSmall: depBensSmall,
+          total: depreciacaoTotal,
+          economiaFiscal: _r(depreciacaoTotal * 0.34),
+          turnos: turnos,
+          multiplicador: multTurnos
+        };
+      }
+    } else if (bensParaCalculo.length > 0) {
+      // fallback sem motor disponível
+      var depreciacaoDetalhe2 = [];
+      var totalDepNormal2 = 0;
+      var totalDepAcelerada2 = 0;
+      bensParaCalculo.forEach(function (bc) {
+        var depN = _r(bc.valor * bc.taxa);
         var depA = _r(depN * multTurnos);
-        totalDepNormal += depN;
-        totalDepAcelerada += depA;
-        depreciacaoDetalhe.push({
-          tipo: bc.tipo, valorOriginal: valor, taxa: bc.taxa,
+        totalDepNormal2 += depN;
+        totalDepAcelerada2 += depA;
+        depreciacaoDetalhe2.push({
+          tipo: bc.tipo, valorOriginal: bc.valor, taxa: bc.taxa,
           depreciaNormal: depN, depreciaAcelerada: depA, turnos: turnos
         });
+      });
+      var depBensNovos2 = 0;
+      if ((isSUDAM || isSUDENE) && _n(d.valorBensNovos) > 0) {
+        depBensNovos2 = _n(d.valorBensNovos);
       }
-    });
-    var depBensNovos = 0;
-    if ((isSUDAM || isSUDENE) && _n(d.valorBensNovos) > 0) {
-      depBensNovos = _n(d.valorBensNovos);
+      var depBensSmall2 = _n(d.bensSmallValue);
+      var depreciacaoTotal2 = _r(totalDepAcelerada2 + depBensNovos2 + depBensSmall2);
+      depreciacaoResult = {
+        bens: depreciacaoDetalhe2,
+        depreciaNormal: totalDepNormal2,
+        depreciaAcelerada: totalDepAcelerada2,
+        depBensNovos: depBensNovos2,
+        depBensSmall: depBensSmall2,
+        total: depreciacaoTotal2,
+        economiaFiscal: _r(depreciacaoTotal2 * 0.34),
+        turnos: turnos,
+        multiplicador: multTurnos
+      };
     }
-    var depBensSmall = _n(d.bensSmallValue);
-    var depreciacaoTotal = _r(totalDepAcelerada + depBensNovos + depBensSmall);
-    var depreciacaoResult = {
-      bens: depreciacaoDetalhe,
-      depreciaNormal: totalDepNormal,
-      depreciaAcelerada: totalDepAcelerada,
-      depBensNovos: depBensNovos,
-      depBensSmall: depBensSmall,
-      total: depreciacaoTotal,
-      economiaFiscal: _r(depreciacaoTotal * 0.34),
-      turnos: turnos,
-      multiplicador: multTurnos
-    };
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  PASSO 13A — Amortização de Goodwill
+    // ═══════════════════════════════════════════════════════════════════════
+    var goodwillResult = null;
+    if (_n(d.valorGoodwill) > 0 && LR.calcular.avancado && LR.calcular.avancado.calcularAmortizacaoGoodwill) {
+      try {
+        goodwillResult = LR.calcular.avancado.calcularAmortizacaoGoodwill({
+          valorGoodwill: _n(d.valorGoodwill),
+          mesesNoAno: 12
+        });
+      } catch(e) {}
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  PASSO 13B — Exaustão de Recursos Naturais
+    // ═══════════════════════════════════════════════════════════════════════
+    var exaustaoResult = null;
+    if (_n(d.valorRecursosNaturais) > 0 && LR.calcular.avancado && LR.calcular.avancado.calcularExaustao) {
+      try {
+        exaustaoResult = LR.calcular.avancado.calcularExaustao({
+          custoAquisicao: _n(d.valorRecursosNaturais)
+        });
+      } catch(e) {}
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  PASSO 13C — Despesas Pré-Operacionais
+    // ═══════════════════════════════════════════════════════════════════════
+    var preOperacionalResult = null;
+    if (_n(d.despesasPreOperacionais) > 0 && LR.calcular.avancado && LR.calcular.avancado.calcularDespesasPreOperacionais) {
+      try {
+        preOperacionalResult = LR.calcular.avancado.calcularDespesasPreOperacionais({
+          valorTotal: _n(d.despesasPreOperacionais)
+        });
+      } catch(e) {}
+    }
 
     // ═══════════════════════════════════════════════════════════════════════
     //  PASSO 14 — Retenções compensáveis → LR.calcular.compensarRetencoes()
@@ -2854,6 +3277,25 @@
     //  PASSO 19 — Recomendação de melhor forma de apuração
     // ═══════════════════════════════════════════════════════════════════════
     var recomendacao = _recomendarApuracao(simTrimestral, simAnual, simSuspensao, d);
+
+    // Recomendação de regime via motor (complementar)
+    var recomendacaoRegime = null;
+    if (LR.calcular.recomendarRegime) {
+      try {
+        recomendacaoRegime = LR.calcular.recomendarRegime({
+          lucroAjustado: lucroAjustado,
+          prejuizoFiscal: _n(d.prejuizoFiscal),
+          baseNegativaCSLL: _n(d.baseNegativaCSLL),
+          receitaBruta: receitaBruta,
+          sazonalidade: d.preencherMesAMes === true || d.preencherMesAMes === "true",
+          mesesReceita: (function() {
+            var arr = [];
+            for (var m = 1; m <= 12; m++) arr.push(_n(d["receitaMes" + m]));
+            return arr;
+          })()
+        });
+      } catch(e) {}
+    }
 
     // ═══════════════════════════════════════════════════════════════════════
     //  PRÉ-CÁLCULO — Totais de economia (necessário para projeção)
@@ -2937,6 +3379,83 @@
     var fluxoCaixa = _gerarFluxoCaixaMensal(d, receitaBruta, receitaServicos, issAliquota, irpjAposReducao, csllResult.csllDevida, pisCofinsResult);
 
     // ═══════════════════════════════════════════════════════════════════════
+    //  PASSO 22A — Relatório Consolidado (PARTE 5)
+    // ═══════════════════════════════════════════════════════════════════════
+    var relatorioConsolidado = null;
+    if (LR.calcular.avancado && LR.calcular.avancado.gerarRelatorioConsolidado) {
+      try {
+        relatorioConsolidado = LR.calcular.avancado.gerarRelatorioConsolidado({
+          irpj: irpjResult, csll: csllResult, pisCofins: pisCofinsResult,
+          jcp: jcpResult, compensacao: compensacao, depreciacao: depreciacaoResult,
+          incentivos: incentivosFiscais, retencoes: retencoesResult,
+          sudam: sudamResult, saldoNegativo: saldoNegResult
+        });
+      } catch(e) {}
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  PASSO 22B — Árvore de Decisão de Otimização (PARTE 5)
+    // ═══════════════════════════════════════════════════════════════════════
+    var arvoreDecisao = null;
+    if (LR.calcular.avancado && LR.calcular.avancado.arvoreDecisaoOtimizacao) {
+      try {
+        arvoreDecisao = LR.calcular.avancado.arvoreDecisaoOtimizacao({
+          receitaBruta: receitaBruta,
+          lucroLiquido: lucroLiquido,
+          patrimonioLiquido: plVal,
+          folhaPagamento: dre.folhaPagamento,
+          uf: uf,
+          tipoAtividade: d.tipoAtividade,
+          ehFinanceira: ehFinanceira,
+          temProjetoSUDAM: temProjetoSUDAM,
+          isSUDAM: isSUDAM,
+          isSUDENE: isSUDENE
+        });
+      } catch(e) {}
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  PASSO 22C — Verificar Elegibilidade de Incentivos Regionais (PARTE 5)
+    // ═══════════════════════════════════════════════════════════════════════
+    var elegibilidade = null;
+    if (LR.calcular.avancado && LR.calcular.avancado.verificarElegibilidade) {
+      try {
+        elegibilidade = LR.calcular.avancado.verificarElegibilidade({
+          uf: uf, cnae: d.cnaePrincipal, receitaBruta: receitaBruta
+        });
+      } catch(e) {}
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  PASSO 22D — Simulação de Retenções Anuais (PARTE 5)
+    // ═══════════════════════════════════════════════════════════════════════
+    var retencoesAnuais = null;
+    if (LR.calcular.avancado && LR.calcular.avancado.simularRetencoesAnuais) {
+      try {
+        retencoesAnuais = LR.calcular.avancado.simularRetencoesAnuais({
+          receitaServicos: receitaServicos,
+          recebeDeAdmPublica: d.recebeDeAdmPublica === true || d.recebeDeAdmPublica === "true",
+          aliquotaISS: _n(d.issAliquota)
+        });
+      } catch(e) {}
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  PASSO 22E — Comparativo Simples vs Lucro Real SUDAM (PARTE 5)
+    // ═══════════════════════════════════════════════════════════════════════
+    var comparativoSUDAM = null;
+    if (isSUDAM && LR.calcular.avancado && LR.calcular.avancado.compararSimplesVsLucroRealSUDAM) {
+      try {
+        comparativoSUDAM = LR.calcular.avancado.compararSimplesVsLucroRealSUDAM({
+          receitaBruta: receitaBruta,
+          lucroLiquido: lucroLiquido,
+          folhaPagamento: dre.folhaPagamento,
+          tipoAtividade: d.tipoAtividade
+        });
+      } catch(e) {}
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
     //  PASSO 23 — Detector de oportunidades
     // ═══════════════════════════════════════════════════════════════════════
     var oportunidades = _detectarOportunidades(d, {
@@ -2964,7 +3483,21 @@
       isSUDENE: isSUDENE,
       temProjetoSUDAM: temProjetoSUDAM,
       ehFinanceira: ehFinanceira,
-      despesasIncentivos: despesasIncentivos
+      despesasIncentivos: despesasIncentivos,
+      receitaBruta: receitaBruta,
+      folhaPagamento: dre.folhaPagamento,
+      custosTotais: custosTotais,
+      despesasTotais: despesasTotais,
+      validacaoDespesasLimites: validacaoDespesasLimites,
+      subcapResult: subcapResult,
+      omissaoResult: omissaoResult,
+      lucroExploracaoResult: lucroExploracaoResult,
+      goodwillResult: goodwillResult,
+      exaustaoResult: exaustaoResult,
+      preOperacionalResult: preOperacionalResult,
+      recomendacaoRegime: recomendacaoRegime,
+      lucroOperacional: lucroOperacional,
+      receitaLiquida: receitaLiquida
     });
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -3104,7 +3637,25 @@
       obrigatoriedade: obrigatoriedade,
       obrigacoes: obrigacoes,
       darfs: darfs,
-      alertas: alertas
+      alertas: alertas,
+
+      // Novos resultados — PARTE 2
+      validacaoDespesasLimites: validacaoDespesasLimites,
+      despesasIndedutivelDetalhe: despesasIndedutivelDetalhe,
+      subcapResult: subcapResult,
+      omissaoResult: omissaoResult,
+      lucroExploracaoResult: lucroExploracaoResult,
+      goodwillResult: goodwillResult,
+      exaustaoResult: exaustaoResult,
+      preOperacionalResult: preOperacionalResult,
+      recomendacaoRegime: recomendacaoRegime,
+
+      // Novos resultados — PARTE 5
+      relatorioConsolidado: relatorioConsolidado,
+      arvoreDecisao: arvoreDecisao,
+      elegibilidade: elegibilidade,
+      retencoesAnuais: retencoesAnuais,
+      comparativoSUDAM: comparativoSUDAM
     };
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -3207,6 +3758,30 @@
         alertas.push({ tipo: "aviso", msg: "Alíquota ISS (" + issAliq + "%) fora dos limites legais (2% a 5%)" });
       }
     }
+
+    // ═══ PARTE 5D — Validações cruzadas aprimoradas ═══
+    if ((d.ehInstituicaoFinanceira === true || d.ehInstituicaoFinanceira === "true") && d.tipoAtividade !== "INSTITUICOES_FINANCEIRAS") {
+      alertas.push({ tipo: "aviso", msg: "Instituição financeira marcada — CSLL deve ser 15% (não 9%). Verifique se alíquota está correta." });
+    }
+    if ((d.atividadeRural === true || d.atividadeRural === "true") && pf > 0) {
+      alertas.push({ tipo: "info", msg: "Atividade rural com prejuízo fiscal — compensação é integral (sem trava de 30%). Art. 583 RIR/2018." });
+    }
+    if (d.tipoReorganizacao && d.tipoReorganizacao !== "NENHUMA" && pf > 0) {
+      alertas.push({ tipo: "aviso", msg: "Reorganização societária (" + d.tipoReorganizacao + ") com prejuízo fiscal — compensação pode ser vedada (Art. 584-585 RIR/2018)." });
+    }
+    if (d.ehSCP === true || d.ehSCP === "true") {
+      alertas.push({ tipo: "aviso", msg: "Sociedade em Conta de Participação (SCP) — prejuízo de SCP não compensa com ostensivo e vice-versa (Art. 586 RIR/2018)." });
+    }
+    if ((_n(d.doacoesOperacionais) + _n(d.doacoesOSCIP)) > 0 && ll <= 0) {
+      alertas.push({ tipo: "aviso", msg: "Doações informadas mas exercício com prejuízo operacional — doações não são dedutíveis quando não há lucro operacional." });
+    }
+    if (rb > 78000000) {
+      alertas.push({ tipo: "info", msg: "Receita bruta > R$ 78 milhões — empresa OBRIGATORIAMENTE no Lucro Real (Art. 257, I do RIR/2018)." });
+    }
+    if (d.regimeCambial === "COMPETENCIA" && _n(d.receitasExteriorAnual) === 0) {
+      alertas.push({ tipo: "aviso", msg: "Regime cambial por competência selecionado mas sem operações em moeda estrangeira declaradas. Verifique se a opção é necessária." });
+    }
+
     return alertas;
   }
 
@@ -3558,6 +4133,414 @@
         prazoImplementacao: "Imediato",
         detalhes: {}
       });
+    }
+
+    // #24 — Previdência Complementar (não usada)
+    var usaPrevidCompl = d.usaPrevidenciaComplementar === true || d.usaPrevidenciaComplementar === "true";
+    if (!usaPrevidCompl && ctx.folhaPagamento > 0 && ctx.lucroRealFinal > 0) {
+      var limPrevidCompl = _r(ctx.folhaPagamento * 0.20);
+      var econPrevidCompl = _r(limPrevidCompl * 0.34);
+      if (econPrevidCompl > 500) {
+        ops.push({
+          id: "PREVIDENCIA_COMPLEMENTAR", titulo: "Previdência Complementar Patronal (não utilizada)",
+          tipo: "Dedução", complexidade: "Média", risco: "Baixo",
+          economiaAnual: econPrevidCompl,
+          descricao: "Contribuição patronal para previdência complementar de até " + _m(limPrevidCompl) + " (20% da folha) é dedutível, gerando economia fiscal de até " + _m(econPrevidCompl) + ".",
+          baseLegal: "Art. 369, §1º do RIR/2018",
+          acaoRecomendada: "Contratar plano de previdência complementar empresarial. Benefício para retenção de talentos.",
+          prazoImplementacao: "60 dias",
+          detalhes: { limiteAnual: limPrevidCompl, economiaFiscal: econPrevidCompl }
+        });
+      }
+    }
+
+    // #25 — PDD Fiscal (oportunidade proativa — quando NÃO há PDD declarada)
+    var temCreditosVencidos = _n(d.creditosVencidos6Meses) > 0 || _n(d.inadimplenciaAnual) > 0;
+    var jaPddUsada = _n(d.perdasCreditos6Meses) + _n(d.perdasCreditosJudicial) + _n(d.perdasCreditosFalencia);
+    if (!temCreditosVencidos && jaPddUsada === 0 && ctx.receitaBruta > 500000) {
+      ops.push({
+        id: "PDD_PROATIVA", titulo: "Revisão de PDD — Provisão para Devedores Duvidosos",
+        tipo: "Dedução", complexidade: "Média", risco: "Baixo",
+        economiaAnual: 0,
+        descricao: "Nenhuma PDD fiscal informada. Empresas com receita acima de R$ 500 mil geralmente têm créditos vencidos enquadráveis como PDD fiscal (Art. 347-351). Recomenda-se revisão dos recebíveis.",
+        baseLegal: "Art. 347-351 do RIR/2018",
+        acaoRecomendada: "Levantar todos os créditos vencidos há mais de 6 meses. Identificar devedores em falência/recuperação judicial. Documentar providências de cobrança.",
+        prazoImplementacao: "30 dias",
+        detalhes: {}
+      });
+    }
+
+    // #26 — Compliance/Riscos (se verificarCompliance disponível)
+    if (LR.calcular.avancado && LR.calcular.avancado.verificarCompliance) {
+      try {
+        var compliance = LR.calcular.avancado.verificarCompliance({
+          lucroLiquido: ctx.lucroLiquido,
+          receitaBruta: ctx.receitaBruta,
+          custos: ctx.custosTotais,
+          despesas: ctx.despesasTotais
+        });
+        if (compliance && compliance.alertas && compliance.alertas.length > 0) {
+          ops.push({
+            id: "COMPLIANCE_ALERTAS", titulo: "Alertas de Compliance Fiscal",
+            tipo: "Risco", complexidade: "Alta", risco: "Alto",
+            economiaAnual: 0,
+            descricao: compliance.alertas.length + " alerta(s) de conformidade identificado(s). Resolução preventiva evita autuações e multas de 75-150%.",
+            baseLegal: "Art. 293-300 do RIR/2018",
+            acaoRecomendada: "Revisar cada alerta com o contador. Priorizar itens críticos.",
+            prazoImplementacao: "Imediato",
+            detalhes: compliance
+          });
+        }
+      } catch(e) {}
+    }
+
+    // #27 — Lei do Bem NÃO usada (potencial — quando investePD NÃO está marcado)
+    var usaLeiBem = d.investePD === true || d.investePD === "true";
+    if (!usaLeiBem && ctx.irpjNormalPrevia > 5000) {
+      var econLeiBemPotencial = _r(ctx.irpjNormalPrevia * 0.20);
+      ops.push({
+        id: "LEI_BEM_POTENCIAL", titulo: "Potencial: Lei do Bem — P&D (não utilizada)",
+        tipo: "Potencial", complexidade: "Alta", risco: "Médio",
+        economiaAnual: econLeiBemPotencial,
+        descricao: "Empresas com lucro real podem excluir 60-80% dos gastos com P&D da base de IRPJ/CSLL. Economia potencial de até " + _m(econLeiBemPotencial) + "/ano.",
+        baseLegal: "Lei 11.196/2005 (Lei do Bem), Cap. III",
+        acaoRecomendada: "Avaliar se a empresa realiza atividades de inovação tecnológica. Consultar MCTI para enquadramento.",
+        prazoImplementacao: "6 meses",
+        detalhes: {}
+      });
+    }
+
+    // #28 — Doações com Incentivo Fiscal
+    if (ctx.validacaoDespesasLimites && ctx.validacaoDespesasLimites.doacoes && ctx.lucroAjustado > 100000) {
+      var limDoacoes = ctx.validacaoDespesasLimites.doacoes;
+      var doacoesAtual = _n(d.doacoesOperacionais) + _n(d.doacoesOSCIP);
+      var limiteMaxDoacoes = _r((ctx.lucroOperacional || ctx.lucroLiquido) * 0.02);
+      var faltaParaLimite = _r(limiteMaxDoacoes - doacoesAtual);
+      if (faltaParaLimite > 0) {
+        var econDoacoes = _r(faltaParaLimite * 0.34);
+        ops.push({
+          id: "DOACOES_INCENTIVO", titulo: "Doações com Incentivo Fiscal — Utilizar Limite Completo",
+          tipo: "Dedução", complexidade: "Baixa", risco: "Baixo",
+          economiaAnual: econDoacoes,
+          descricao: "Doações operacionais atuais de " + _m(doacoesAtual) + " estão abaixo do limite de " + _m(limiteMaxDoacoes) + " (2% do lucro operacional). Margem de " + _m(faltaParaLimite) + " gera economia fiscal de " + _m(econDoacoes) + " (34%).",
+          baseLegal: "Art. 377-385 do RIR/2018",
+          acaoRecomendada: "Realizar doações a entidades civis ou OSCIPs até o limite legal. Obter recibos e manter documentação.",
+          prazoImplementacao: "30 dias",
+          detalhes: { limiteMaximo: limiteMaxDoacoes, doacoesAtuais: doacoesAtual, margemDisponivel: faltaParaLimite }
+        });
+      }
+    }
+
+    // #29 — Amortização de Goodwill
+    if (_n(d.valorGoodwill) > 0 && ctx.goodwillResult) {
+      var deducaoGoodwill = ctx.goodwillResult.amortizacaoAnual || _r(_n(d.valorGoodwill) * (12 / 60));
+      var econGoodwill = _r(deducaoGoodwill * 0.34);
+      ops.push({
+        id: "GOODWILL_AMORTIZACAO", titulo: "Amortização de Goodwill — Dedução Fiscal",
+        tipo: "Dedução", complexidade: "Média", risco: "Baixo",
+        economiaAnual: econGoodwill,
+        descricao: "Goodwill de " + _m(_n(d.valorGoodwill)) + " amortizado em 1/60 avos/mês (20% a.a.), dedução anual de " + _m(deducaoGoodwill) + ", economia fiscal de " + _m(econGoodwill) + ".",
+        baseLegal: "Lei 12.973/2014, Arts. 20-22",
+        acaoRecomendada: "Registrar goodwill conforme CPC 15 e Lei 12.973. Manter laudo de avaliação atualizado.",
+        prazoImplementacao: "Imediato",
+        detalhes: ctx.goodwillResult
+      });
+    }
+
+    // #30 — Exaustão de Recursos Naturais
+    if (_n(d.valorRecursosNaturais) > 0 && ctx.exaustaoResult) {
+      var deducaoExaustao = ctx.exaustaoResult.exaustaoAnual || _r(_n(d.valorRecursosNaturais) * 0.20);
+      var econExaustao = _r(deducaoExaustao * 0.34);
+      ops.push({
+        id: "EXAUSTAO_RECURSOS", titulo: "Exaustão de Recursos Naturais — Dedução Fiscal",
+        tipo: "Dedução", complexidade: "Média", risco: "Baixo",
+        economiaAnual: econExaustao,
+        descricao: "Recursos naturais de " + _m(_n(d.valorRecursosNaturais)) + " permitem dedução de exaustão de " + _m(deducaoExaustao) + "/ano, economia fiscal de " + _m(econExaustao) + ".",
+        baseLegal: "Art. 334-337 do RIR/2018",
+        acaoRecomendada: "Manter laudo técnico de estimativa de vida útil dos recursos. Registrar na contabilidade e LALUR.",
+        prazoImplementacao: "Imediato",
+        detalhes: ctx.exaustaoResult
+      });
+    }
+
+    // #31 — Despesas Pré-Operacionais Diferidas
+    if (_n(d.despesasPreOperacionais) > 0 && ctx.preOperacionalResult) {
+      var deducaoPreOp = ctx.preOperacionalResult.amortizacaoAnual || _r(_n(d.despesasPreOperacionais) / 5);
+      var econPreOp = _r(deducaoPreOp * 0.34);
+      ops.push({
+        id: "PRE_OPERACIONAIS", titulo: "Despesas Pré-Operacionais — Amortização Diferida",
+        tipo: "Dedução", complexidade: "Baixa", risco: "Baixo",
+        economiaAnual: econPreOp,
+        descricao: "Despesas pré-operacionais de " + _m(_n(d.despesasPreOperacionais)) + " amortizadas em no mínimo 5 anos, dedução anual de " + _m(deducaoPreOp) + ", economia de " + _m(econPreOp) + ".",
+        baseLegal: "Art. 11 da Lei 12.973/2014",
+        acaoRecomendada: "Registrar despesas pré-operacionais no ativo diferido. Controlar amortização no LALUR Parte B.",
+        prazoImplementacao: "Imediato",
+        detalhes: ctx.preOperacionalResult
+      });
+    }
+
+    // #32 — Subcapitalização — Alerta de Juros Indedutíveis
+    if (ctx.subcapResult && ctx.subcapResult.excedeu) {
+      var jurosIndedSubcap = ctx.subcapResult.jurosIndedutiveis || 0;
+      var econSubcapPotencial = _r(jurosIndedSubcap * 0.34);
+      ops.push({
+        id: "SUBCAPITALIZACAO_ALERTA", titulo: "Subcapitalização — Juros Indedutíveis (Alerta)",
+        tipo: "Risco", complexidade: "Alta", risco: "Alto",
+        economiaAnual: econSubcapPotencial,
+        descricao: "Juros de " + _m(jurosIndedSubcap) + " pagos a vinculadas excedem limites de subcapitalização e são INDEDUTÍVEIS. Reestruturar dívida pode recuperar dedutibilidade de " + _m(econSubcapPotencial) + ".",
+        baseLegal: "Art. 249-251 do RIR/2018",
+        acaoRecomendada: "Reestruturar dívida para reduzir proporção dívida/PL dentro dos limites legais (2:1 geral, 30% paraíso fiscal).",
+        prazoImplementacao: "90 dias",
+        detalhes: ctx.subcapResult
+      });
+    }
+
+    // #33 — Omissão de Receita — Alertas de Compliance
+    if (ctx.omissaoResult && ctx.omissaoResult.riscosIdentificados > 0) {
+      var descOmissao = ctx.omissaoResult.riscosIdentificados + " indicador(es) de omissão de receita identificado(s).";
+      if (ctx.omissaoResult.indicadores && ctx.omissaoResult.indicadores.length > 0) {
+        var indicadoresDesc = [];
+        ctx.omissaoResult.indicadores.forEach(function (ind) {
+          var descInd = ind.descricao || ind.tipo || "Indicador";
+          indicadoresDesc.push(descInd);
+        });
+        descOmissao += " Indicadores: " + indicadoresDesc.join("; ") + ".";
+      }
+      ops.push({
+        id: "OMISSAO_RECEITA_ALERTA", titulo: "Omissão de Receita — Alertas de Compliance",
+        tipo: "Risco", complexidade: "Alta", risco: "Alto",
+        economiaAnual: 0,
+        descricao: descOmissao + " Resolução preventiva evita autuações com multa de 75-150% e juros SELIC.",
+        baseLegal: "Art. 293-300 do RIR/2018",
+        acaoRecomendada: "Revisar cada indicador imediatamente com o contador. Regularizar divergências antes de fiscalização.",
+        prazoImplementacao: "Imediato",
+        detalhes: ctx.omissaoResult
+      });
+    }
+
+    // #34 — Regime Cambial Ótimo
+    if (_n(d.receitasExteriorAnual) > 0 && d.regimeCambial) {
+      var regCambialAtual = d.regimeCambial === "COMPETENCIA" ? "Competência" : "Caixa";
+      var regCambialAlt = d.regimeCambial === "COMPETENCIA" ? "Caixa" : "Competência";
+      var descCambial = "Regime atual: " + regCambialAtual + ". ";
+      if (d.regimeCambial === "CAIXA") {
+        descCambial += "O regime de Competência pode postergar tributação em cenários de depreciação cambial. A opção deve ser exercida em janeiro (Art. 407).";
+      } else {
+        descCambial += "O regime de Caixa tributa variações cambiais apenas no recebimento/pagamento efetivo, podendo diferir tributação.";
+      }
+      ops.push({
+        id: "REGIME_CAMBIAL", titulo: "Regime Cambial — Análise de Oportunidade",
+        tipo: "Timing", complexidade: "Média", risco: "Médio",
+        economiaAnual: 0,
+        descricao: descCambial,
+        baseLegal: "Art. 407-413 do RIR/2018 (Variação Cambial)",
+        acaoRecomendada: "Simular impacto da mudança de regime cambial considerando projeções de câmbio. Opção por Competência é irretratável no ano-calendário.",
+        prazoImplementacao: "Janeiro do próximo exercício",
+        detalhes: { regimeAtual: d.regimeCambial, alternativa: regCambialAlt }
+      });
+    }
+
+    // #35 — Método de Estoque Ótimo
+    if (_n(d.valorEstoqueFinal) > 0) {
+      var metodoAtual = d.metodoEstoque || "CUSTO_MEDIO";
+      var descEstoque = "Método atual: " + metodoAtual + ". Estoque final: " + _m(_n(d.valorEstoqueFinal)) + ". ";
+      descEstoque += "Em cenários inflacionários, PEPS pode gerar custo mais alto (menor lucro tributável). Custo Médio é mais conservador.";
+      var vedacoesEstoque = [];
+      if (LR.estoques && LR.estoques.vedacoes) {
+        vedacoesEstoque = LR.estoques.vedacoes;
+      }
+      ops.push({
+        id: "METODO_ESTOQUE", titulo: "Método de Avaliação de Estoques — Revisão",
+        tipo: "Timing", complexidade: "Média", risco: "Baixo",
+        economiaAnual: 0,
+        descricao: descEstoque + (vedacoesEstoque.length > 0 ? " Vedações: " + vedacoesEstoque[0] + "." : ""),
+        baseLegal: "Art. 304-310 do RIR/2018",
+        acaoRecomendada: "Avaliar qual método de estoque minimiza a carga tributária no cenário atual. Método deve ser consistente ano a ano. UEPS é vedado (Art. 307).",
+        prazoImplementacao: "Início do exercício",
+        detalhes: { metodoAtual: metodoAtual, valorEstoque: _n(d.valorEstoqueFinal), vedacoes: vedacoesEstoque }
+      });
+    }
+
+    // #36 — Provisões Não Dedutíveis — Estratégia de Reversão
+    if (_n(d.provisoesContingencias) > 0) {
+      var totalProvisoes = _n(d.provisoesContingencias) + _n(d.provisoesGarantias);
+      var econFuturaProvisoes = _r(totalProvisoes * 0.34);
+      var descProvisao = "Provisões não dedutíveis de " + _m(totalProvisoes) + " geram adição ao LALUR no exercício corrente. ";
+      descProvisao += "A reversão/utilização futura gera EXCLUSÃO do LALUR, resultando em economia fiscal futura de até " + _m(econFuturaProvisoes) + ".";
+      var fundamentacao = "";
+      if (LR.provisoes && LR.provisoes.naoDedutiveis) {
+        LR.provisoes.naoDedutiveis.forEach(function (prov) {
+          fundamentacao += prov.descricao + " (" + prov.artigo + "); ";
+        });
+      }
+      ops.push({
+        id: "PROVISOES_REVERSAO", titulo: "Provisões Não Dedutíveis — Estratégia de Reversão Futura",
+        tipo: "Timing", complexidade: "Baixa", risco: "Baixo",
+        economiaAnual: 0,
+        descricao: descProvisao + (fundamentacao ? " Fundamento: " + fundamentacao : ""),
+        baseLegal: "Art. 340-342 do RIR/2018",
+        acaoRecomendada: "Controlar provisões na Parte B do LALUR. Na reversão/utilização, registrar exclusão na Parte A. Manter memória de cálculo atualizada.",
+        prazoImplementacao: "Contínuo",
+        detalhes: { provisoesContingencias: _n(d.provisoesContingencias), provisoesGarantias: _n(d.provisoesGarantias), economiaFuturaEstimada: econFuturaProvisoes }
+      });
+    }
+
+    // #37 — Reinvestimento 30% SUDAM/SUDENE Potencial (SEM projeto)
+    if ((ctx.isSUDAM || ctx.isSUDENE) && !ctx.temProjetoSUDAM && ctx.irpjNormalPrevia > 0) {
+      var nomeSup37 = ctx.isSUDAM ? "SUDAM" : "SUDENE";
+      var reinvPotencial = _r(ctx.irpjNormalPrevia * 0.30);
+      var capitalGiroPotencial = _r(reinvPotencial * 0.50);
+      var bancoDeposito = "";
+      if (LR.sudam && LR.sudam.reinvestimento30 && LR.sudam.reinvestimento30.bancoDeposito) {
+        bancoDeposito = LR.sudam.reinvestimento30.bancoDeposito[nomeSup37] || "";
+      } else if (LR.reinvestimento30 && LR.reinvestimento30.bancoDeposito) {
+        bancoDeposito = LR.reinvestimento30.bancoDeposito || "";
+      }
+      ops.push({
+        id: "REINVESTIMENTO_30_POTENCIAL", titulo: "Potencial: Reinvestimento 30% " + nomeSup37 + " (sem projeto)",
+        tipo: "Potencial", complexidade: "Alta", risco: "Médio",
+        economiaAnual: reinvPotencial,
+        descricao: "Com projeto " + nomeSup37 + " aprovado, seria possível depositar 30% do IRPJ (" + _m(reinvPotencial) + ") como reinvestimento. 50% (" + _m(capitalGiroPotencial) + ") pode ser usado como capital de giro." + (bancoDeposito ? " Banco: " + bancoDeposito + "." : ""),
+        baseLegal: "Art. 638-651 do RIR/2018",
+        acaoRecomendada: "Elaborar projeto de investimento e protocolar junto à " + nomeSup37 + " para obter aprovação e acessar o benefício.",
+        prazoImplementacao: "6-12 meses",
+        detalhes: { reinvestimentoPotencial: reinvPotencial, capitalGiro50: capitalGiroPotencial }
+      });
+    }
+
+    // #38 — Receita Bruta Formal (revisão)
+    if (ctx.receitaBruta > 0 && LR.calcular && LR.calcular.receitaBrutaCalc) {
+      try {
+        var receitaFormal = LR.calcular.receitaBrutaCalc({
+          receitaBruta: ctx.receitaBruta,
+          devolucoes: _n(d.devolucoes),
+          descontosIncondicionais: _n(d.descontosIncondicionais),
+          avp: _n(d.ajusteValorPresente)
+        });
+        if (receitaFormal && receitaFormal.deducoesNaoAplicadas > 0) {
+          var econReceitaFormal = _r(receitaFormal.deducoesNaoAplicadas * 0.34);
+          ops.push({
+            id: "RECEITA_BRUTA_FORMAL", titulo: "Receita Bruta — Deduções Não Aplicadas",
+            tipo: "Dedução", complexidade: "Baixa", risco: "Baixo",
+            economiaAnual: econReceitaFormal,
+            descricao: "Revisão da composição da receita bruta identificou deduções não aplicadas de " + _m(receitaFormal.deducoesNaoAplicadas) + " (devoluções, descontos, AVP). Economia potencial de " + _m(econReceitaFormal) + ".",
+            baseLegal: "Lei 12.973/2014, Art. 12",
+            acaoRecomendada: "Verificar se devoluções, descontos incondicionais e AVP estão sendo corretamente deduzidos da receita bruta.",
+            prazoImplementacao: "Imediato",
+            detalhes: receitaFormal
+          });
+        }
+      } catch(e) {}
+    }
+
+    // #39 — Simulação Completa Integrada
+    if (LR.calcular && LR.calcular.simulacaoCompleta) {
+      try {
+        var simCompleta = LR.calcular.simulacaoCompleta({
+          receitaBruta: ctx.receitaBruta,
+          lucroLiquido: ctx.lucroLiquido,
+          lucroAjustado: ctx.lucroAjustado,
+          patrimonioLiquido: ctx.plVal,
+          prejuizoFiscal: _n(d.prejuizoFiscal),
+          baseNegativaCSLL: _n(d.baseNegativaCSLL),
+          ehFinanceira: ctx.ehFinanceira,
+          isSUDAM: ctx.isSUDAM,
+          isSUDENE: ctx.isSUDENE,
+          temProjetoSUDAM: ctx.temProjetoSUDAM
+        });
+        if (simCompleta && simCompleta.economia && simCompleta.economia.total > 0) {
+          ops.push({
+            id: "SIMULACAO_COMPLETA", titulo: "Simulação Integrada — Economia Consolidada",
+            tipo: "Dedução", complexidade: "Média", risco: "Baixo",
+            economiaAnual: simCompleta.economia.total,
+            descricao: "Simulação consolidada IRPJ+CSLL+JCP+Incentivos indica economia total otimizada de " + _m(simCompleta.economia.total) + " vs cenário sem otimizações.",
+            baseLegal: "Diversos — consolidação de todos os incentivos aplicáveis",
+            acaoRecomendada: "Implementar todas as otimizações identificadas na simulação completa para maximizar a economia fiscal.",
+            prazoImplementacao: "30-90 dias",
+            detalhes: simCompleta
+          });
+        }
+      } catch(e) {}
+    }
+
+    // #40 — Recomendação Trimestral vs Anual
+    if (ctx.recomendacaoRegime) {
+      var regimeRecomendado = ctx.recomendacaoRegime.regimeRecomendado || "";
+      var regimeAtual = d.apuracaoLR || "anual";
+      var econRegime = ctx.recomendacaoRegime.economiaEstimada || 0;
+      if (regimeRecomendado && regimeRecomendado.toLowerCase() !== regimeAtual.toLowerCase() && econRegime > 0) {
+        ops.push({
+          id: "REGIME_APURACAO", titulo: "Recomendação: Apuração " + regimeRecomendado.charAt(0).toUpperCase() + regimeRecomendado.slice(1),
+          tipo: "Timing", complexidade: "Baixa", risco: "Baixo",
+          economiaAnual: econRegime,
+          descricao: "Regime atual: " + regimeAtual + ". Recomendação: " + regimeRecomendado + ". Economia estimada de " + _m(econRegime) + "/ano pela mudança. " + (ctx.recomendacaoRegime.motivo || ""),
+          baseLegal: "Art. 218-220 do RIR/2018",
+          acaoRecomendada: "Avaliar mudança de regime de apuração no próximo exercício. Considerar impacto no fluxo de caixa e compensação de prejuízos.",
+          prazoImplementacao: "Início do exercício",
+          detalhes: ctx.recomendacaoRegime
+        });
+      }
+    }
+
+    // #41 — PDD Fiscal Detalhada (usando motor)
+    var temPDD = _n(d.perdasCreditos6Meses) + _n(d.perdasCreditosJudicial) + _n(d.perdasCreditosFalencia);
+    if (temPDD > 0 && LR.calcular && LR.calcular.avancado && LR.calcular.avancado.calcularPDD) {
+      try {
+        var pddDetalhada = LR.calcular.avancado.calcularPDD({
+          perdasCreditos6Meses: _n(d.perdasCreditos6Meses),
+          perdasCreditosJudicial: _n(d.perdasCreditosJudicial),
+          perdasCreditosFalencia: _n(d.perdasCreditosFalencia),
+          creditosVencidos6Meses: _n(d.creditosVencidos6Meses)
+        });
+        if (pddDetalhada && pddDetalhada.economiaAdicional > 0) {
+          ops.push({
+            id: "PDD_DETALHADA", titulo: "PDD Fiscal — Validação Detalhada por Faixas",
+            tipo: "Dedução", complexidade: "Média", risco: "Baixo",
+            economiaAnual: pddDetalhada.economiaAdicional,
+            descricao: "Validação por faixas de valor (< R$ 15k, R$ 15k-100k, > R$ 100k) identificou economia adicional de " + _m(pddDetalhada.economiaAdicional) + ". " + (pddDetalhada.alertas ? pddDetalhada.alertas.join("; ") : ""),
+            baseLegal: "Art. 347-351 do RIR/2018 (Decreto 9.580/2018)",
+            acaoRecomendada: "Classificar créditos por faixa de valor e verificar requisitos específicos de cada faixa para maximizar PDD dedutível.",
+            prazoImplementacao: "30 dias",
+            detalhes: pddDetalhada
+          });
+        }
+      } catch(e) {}
+    }
+
+    // #42 — Mapa de Economia Consolidado
+    if (LR.calcular && LR.calcular.avancado && LR.calcular.avancado.gerarMapaEconomia) {
+      try {
+        var mapaEconomia = LR.calcular.avancado.gerarMapaEconomia({
+          receitaBruta: ctx.receitaBruta,
+          lucroLiquido: ctx.lucroLiquido,
+          lucroAjustado: ctx.lucroAjustado,
+          patrimonioLiquido: ctx.plVal,
+          irpjResult: ctx.irpjResult,
+          csllResult: ctx.csllResult,
+          jcpResult: ctx.jcpResult,
+          pisCofinsResult: ctx.pisCofinsResult,
+          depreciacaoResult: ctx.depreciacaoResult,
+          compensacao: ctx.compensacao,
+          incentivosFiscais: ctx.incentivosFiscais,
+          sudamResult: ctx.sudamResult,
+          goodwillResult: ctx.goodwillResult,
+          exaustaoResult: ctx.exaustaoResult,
+          preOperacionalResult: ctx.preOperacionalResult,
+          oportunidades: ops
+        });
+        if (mapaEconomia && mapaEconomia.economiaTotal > 0) {
+          ops.push({
+            id: "MAPA_ECONOMIA", titulo: "Mapa de Economia Consolidado IMPOST.",
+            tipo: "Dedução", complexidade: "Baixa", risco: "Baixo",
+            economiaAnual: mapaEconomia.economiaTotal,
+            descricao: "Mapa consolidado de todas as estratégias identifica economia total potencial de " + _m(mapaEconomia.economiaTotal) + ". " + (mapaEconomia.estrategiasAtivas || 0) + " estratégias ativas de " + (mapaEconomia.estrategiasDisponiveis || 0) + " disponíveis.",
+            baseLegal: "Consolidação de todas as bases legais aplicáveis",
+            acaoRecomendada: "Utilizar o Mapa de Economia como roteiro de implementação. Priorizar estratégias por impacto e complexidade.",
+            prazoImplementacao: "Contínuo",
+            detalhes: mapaEconomia
+          });
+        }
+      } catch(e) {}
     }
 
     // Ordenar por economia anual descrescente e atribuir ranking
@@ -4170,6 +5153,158 @@
     html += _secao(3, 'Demonstração do Resultado e Apuração do Lucro Real', s3);
 
     // ═══════════════════════════════════════════════════════════════════════
+    //  SEÇÃO NOVA 1 — DIAGNÓSTICO DE DESPESAS COM LIMITES LEGAIS
+    // ═══════════════════════════════════════════════════════════════════════
+    var vdl = r.validacaoDespesasLimites;
+    if (vdl && (vdl.doacoes || vdl.previdencia || vdl.royalties)) {
+      var sN1 = '';
+      var houveExcesso = false;
+      sN1 += '<table class="res-table"><thead><tr><th>Despesa</th><th>Valor Informado</th><th>Limite Legal</th><th>Excesso Indedutível</th></tr></thead><tbody>';
+      if (vdl.doacoes) {
+        var limDoacoes = (LR.despesasComLimites && LR.despesasComLimites.doacoes) ? LR.despesasComLimites.doacoes : {};
+        var excD = (vdl.doacoes.excesso || vdl.doacoes.excedenteTotal || 0);
+        if (excD > 0) houveExcesso = true;
+        sN1 += '<tr' + (excD > 0 ? ' style="color:#E74C3C;"' : '') + '><td>Doações (operacionais + OSCIP + ensino)';
+        if (limDoacoes.operacionais) sN1 += ' <span class="res-artigo">' + limDoacoes.operacionais.artigo + ' — limite ' + ((limDoacoes.operacionais.limite || 0.02) * 100) + '% do lucro oper.</span>';
+        sN1 += '</td><td class="res-valor">' + _m(vdl.doacoes.totalInformado || 0) + '</td><td class="res-valor">' + _m(vdl.doacoes.limiteCalculado || vdl.doacoes.limiteTotal || 0) + '</td><td class="res-valor">' + (excD > 0 ? '⚠️ ' + _m(excD) : '✅ —') + '</td></tr>';
+      }
+      if (vdl.previdencia) {
+        var limPrev = (LR.despesasComLimites && LR.despesasComLimites.previdenciaComplementar) ? LR.despesasComLimites.previdenciaComplementar : {};
+        var excP = (vdl.previdencia.excesso || vdl.previdencia.excedente || 0);
+        if (excP > 0) houveExcesso = true;
+        sN1 += '<tr' + (excP > 0 ? ' style="color:#E74C3C;"' : '') + '><td>Previdência Complementar Patronal';
+        if (limPrev.artigo) sN1 += ' <span class="res-artigo">' + limPrev.artigo + ' — limite ' + ((limPrev.limite || 0.20) * 100) + '% da folha</span>';
+        sN1 += '</td><td class="res-valor">' + _m(vdl.previdencia.contribuicao || vdl.previdencia.totalInformado || 0) + '</td><td class="res-valor">' + _m(vdl.previdencia.limite || vdl.previdencia.limiteCalculado || 0) + '</td><td class="res-valor">' + (excP > 0 ? '⚠️ ' + _m(excP) : '✅ —') + '</td></tr>';
+      }
+      if (vdl.royalties) {
+        var limRoy = (LR.despesasComLimites && LR.despesasComLimites.royalties) ? LR.despesasComLimites.royalties : {};
+        var excR = (vdl.royalties.excesso || vdl.royalties.excedente || 0);
+        if (excR > 0) houveExcesso = true;
+        sN1 += '<tr' + (excR > 0 ? ' style="color:#E74C3C;"' : '') + '><td>Royalties e Assistência Técnica';
+        if (limRoy.artigo) sN1 += ' <span class="res-artigo">' + limRoy.artigo + ' — limite ' + ((limRoy.limiteGeral || 0.05) * 100) + '% da receita líq.</span>';
+        sN1 += '</td><td class="res-valor">' + _m(vdl.royalties.royaltiesPagos || vdl.royalties.totalInformado || 0) + '</td><td class="res-valor">' + _m(vdl.royalties.limite || vdl.royalties.limiteCalculado || 0) + '</td><td class="res-valor">' + (excR > 0 ? '⚠️ ' + _m(excR) : '✅ —') + '</td></tr>';
+      }
+      sN1 += '</tbody></table>';
+      if (houveExcesso) {
+        sN1 += '<div class="res-alerta res-alerta-aviso"><span class="res-alerta-icon">&#x1F7E1;</span>Excessos identificados foram adicionados automaticamente ao LALUR como despesas indedutíveis.</div>';
+      } else {
+        sN1 += '<div class="res-alerta res-alerta-economia"><span class="res-alerta-icon">&#x1F7E2;</span>✅ Todas as despesas dentro dos limites legais.</div>';
+      }
+      html += _secao('A', 'Diagnóstico de Despesas com Limites Legais', sN1);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  SEÇÃO NOVA 2 — DESPESAS INDEDUTÍVEIS IDENTIFICADAS
+    // ═══════════════════════════════════════════════════════════════════════
+    var despInded = r.despesasIndedutivelDetalhe;
+    if (despInded && despInded.length > 0) {
+      var sN2 = '';
+      var totalInded = 0;
+      var totalImpacto = 0;
+      sN2 += '<table class="res-table"><thead><tr><th>Despesa</th><th>Artigo</th><th>Valor Informado</th><th>Impacto Fiscal (34%)</th></tr></thead><tbody>';
+      despInded.forEach(function (di) {
+        var impacto = _r((di.valor || 0) * 0.34);
+        totalInded += (di.valor || 0);
+        totalImpacto += impacto;
+        // Lookup da descrição no mapeamento
+        var descMapa = di.descricao || di.desc || '';
+        var artigoMapa = di.artigo || '';
+        if (!descMapa && LR.despesasIndedutiveis) {
+          for (var dii = 0; dii < LR.despesasIndedutiveis.length; dii++) {
+            if (LR.despesasIndedutiveis[dii].id === di.id) {
+              descMapa = LR.despesasIndedutiveis[dii].descricao;
+              artigoMapa = LR.despesasIndedutiveis[dii].artigo;
+              break;
+            }
+          }
+        }
+        sN2 += '<tr><td>' + descMapa + '</td><td><span class="res-artigo">' + artigoMapa + '</span></td><td class="res-valor">' + _m(di.valor) + '</td><td class="res-valor" style="color:#E74C3C;">' + _m(impacto) + '</td></tr>';
+      });
+      sN2 += '<tr class="res-total"><td colspan="2"><strong>Total de adições por despesas indedutíveis</strong></td><td class="res-valor"><strong>' + _m(totalInded) + '</strong></td><td class="res-valor" style="color:#E74C3C;"><strong>' + _m(totalImpacto) + '</strong></td></tr>';
+      sN2 += '</tbody></table>';
+      html += _secao('B', 'Despesas Indedutíveis Identificadas', sN2);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  SEÇÃO NOVA 3 — ANÁLISE DE SUBCAPITALIZAÇÃO
+    // ═══════════════════════════════════════════════════════════════════════
+    if (r.subcapResult) {
+      var sN3 = '';
+      if (r.subcapResult.excedeu) {
+        sN3 += '<div class="res-alerta res-alerta-critico"><span class="res-alerta-icon">&#x1F534;</span><strong>ATENÇÃO:</strong> Juros indedutíveis por subcapitalização: <strong>' + _m(r.subcapResult.jurosIndedutiveis || 0) + '</strong></div>';
+        // Detalhamento dos limites violados
+        sN3 += '<table class="res-table"><thead><tr><th>Limite</th><th>Regra</th><th>Status</th></tr></thead><tbody>';
+        if (LR.subcapitalizacao) {
+          if (LR.subcapitalizacao.vinculadaComParticipacao) {
+            sN3 += '<tr><td>Vinculada c/ participação <span class="res-artigo">' + LR.subcapitalizacao.vinculadaComParticipacao.artigo + '</span></td><td>' + LR.subcapitalizacao.vinculadaComParticipacao.descricao + '</td><td style="color:#E74C3C;">Excedido</td></tr>';
+          }
+          if (LR.subcapitalizacao.paraisoFiscal) {
+            sN3 += '<tr><td>Paraíso Fiscal <span class="res-artigo">' + LR.subcapitalizacao.paraisoFiscal.artigo + '</span></td><td>' + LR.subcapitalizacao.paraisoFiscal.descricao + '</td><td>' + (r.subcapResult.paraisoFiscalExcedeu ? '<span style="color:#E74C3C;">Excedido</span>' : '✅ OK') + '</td></tr>';
+          }
+        }
+        sN3 += '</tbody></table>';
+        sN3 += '<div class="res-alerta res-alerta-info"><span class="res-alerta-icon">&#x1F535;</span><strong>Base Legal:</strong> Art. 249-251 do RIR/2018. <strong>Ação recomendada:</strong> Reestruturar dívida para reduzir proporção dívida/PL.</div>';
+      } else {
+        sN3 += '<div class="res-alerta res-alerta-economia"><span class="res-alerta-icon">&#x1F7E2;</span>✅ Dívidas com vinculadas dentro dos limites de subcapitalização.</div>';
+      }
+      html += _secao('C', 'Análise de Subcapitalização', sN3);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  SEÇÃO NOVA 4 — ALERTAS DE COMPLIANCE E OMISSÃO DE RECEITA
+    // ═══════════════════════════════════════════════════════════════════════
+    if (r.omissaoResult && r.omissaoResult.indicadores && r.omissaoResult.indicadores.length > 0) {
+      var sN4 = '';
+      r.omissaoResult.indicadores.forEach(function (ind) {
+        var gravIcon = ind.gravidade === 'CRITICO' ? '&#x1F534;' : ind.gravidade === 'ALTO' ? '&#x1F7E0;' : '&#x1F7E1;';
+        var gravCls = ind.gravidade === 'CRITICO' ? 'res-alerta-critico' : ind.gravidade === 'ALTO' ? 'res-alerta-aviso' : 'res-alerta-info';
+        // Lookup no mapeamento
+        var descOm = ind.descricao || '';
+        var artigoOm = ind.artigo || '';
+        if (LR.indicadoresOmissao) {
+          for (var oi = 0; oi < LR.indicadoresOmissao.length; oi++) {
+            if (LR.indicadoresOmissao[oi].id === ind.id) {
+              descOm = descOm || LR.indicadoresOmissao[oi].descricao;
+              artigoOm = artigoOm || LR.indicadoresOmissao[oi].artigo;
+              break;
+            }
+          }
+        }
+        sN4 += '<div class="res-alerta ' + gravCls + '"><span class="res-alerta-icon">' + gravIcon + '</span>';
+        sN4 += '<strong>' + descOm + '</strong>';
+        if (artigoOm) sN4 += ' <span class="res-artigo">' + artigoOm + '</span>';
+        if (ind.resolucao) sN4 += '<br><em>Resolução: ' + ind.resolucao + '</em>';
+        sN4 += '</div>';
+      });
+      html += _secao('D', 'Alertas de Compliance e Omissão de Receita', sN4);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  SEÇÃO NOVA 5 — AMORTIZAÇÃO, EXAUSTÃO E PRÉ-OPERACIONAIS
+    // ═══════════════════════════════════════════════════════════════════════
+    if (r.goodwillResult || r.exaustaoResult || r.preOperacionalResult) {
+      var sN5 = '';
+      sN5 += '<table class="res-table"><thead><tr><th>Item</th><th>Valor Original</th><th>Dedução Anual</th><th>Economia Fiscal (34%)</th><th>Base Legal</th></tr></thead><tbody>';
+      if (r.goodwillResult) {
+        var gwDeducao = r.goodwillResult.amortizacaoAnual || r.goodwillResult.deducaoAnual || 0;
+        var gwEcon = _r(gwDeducao * 0.34);
+        sN5 += '<tr><td>Goodwill (ágio por rentabilidade)</td><td class="res-valor">' + _m(r.goodwillResult.valorGoodwill || _n(d.valorGoodwill)) + '</td><td class="res-valor">' + _m(gwDeducao) + '</td><td class="res-valor res-economia">' + _m(gwEcon) + '</td><td><span class="res-artigo">Lei 12.973/2014, Art. 20-22</span></td></tr>';
+      }
+      if (r.exaustaoResult) {
+        var exDeducao = r.exaustaoResult.exaustaoAnual || r.exaustaoResult.deducaoAnual || 0;
+        var exEcon = _r(exDeducao * 0.34);
+        sN5 += '<tr><td>Exaustão de Recursos Naturais</td><td class="res-valor">' + _m(r.exaustaoResult.custoAquisicao || _n(d.valorRecursosNaturais)) + '</td><td class="res-valor">' + _m(exDeducao) + '</td><td class="res-valor res-economia">' + _m(exEcon) + '</td><td><span class="res-artigo">Art. 334-337 RIR/2018</span></td></tr>';
+      }
+      if (r.preOperacionalResult) {
+        var poDeducao = r.preOperacionalResult.amortizacaoAnual || r.preOperacionalResult.deducaoAnual || 0;
+        var poEcon = _r(poDeducao * 0.34);
+        sN5 += '<tr><td>Despesas Pré-Operacionais</td><td class="res-valor">' + _m(r.preOperacionalResult.valorTotal || _n(d.despesasPreOperacionais)) + '</td><td class="res-valor">' + _m(poDeducao) + '</td><td class="res-valor res-economia">' + _m(poEcon) + '</td><td><span class="res-artigo">Art. 11 Lei 12.973</span></td></tr>';
+      }
+      sN5 += '</tbody></table>';
+      html += _secao('E', 'Amortização, Exaustão e Pré-Operacionais', sN5);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
     //  SEÇÃO 4 — CÁLCULO DETALHADO DE CADA TRIBUTO
     // ═══════════════════════════════════════════════════════════════════════
     var s4 = '<div class="res-detail-grid">';
@@ -4627,6 +5762,470 @@
       s12 += '</tbody></table>';
     }
     html += _secao(12, 'Obrigações Acessórias e DARFs', s12);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  SEÇÃO NOVA 6 — REFORMA TRIBUTÁRIA — IMPACTOS E DISCLAIMER
+    // ═══════════════════════════════════════════════════════════════════════
+    if (LR.reformaTributaria) {
+      var sN6 = '';
+      sN6 += '<div class="res-detail-card" style="border-left:4px solid #3498DB;padding:16px;">';
+      sN6 += '<h3>⚖️ Impactos da LC 214/2025 (Reforma Tributária)</h3>';
+      if (LR.reformaTributaria.impactosLucroReal) {
+        sN6 += '<table class="res-table"><thead><tr><th>Tema</th><th>Impacto</th><th>Status</th></tr></thead><tbody>';
+        LR.reformaTributaria.impactosLucroReal.forEach(function (imp) {
+          var corImp = imp.impacto === 'ALTO' ? '#E74C3C' : imp.impacto === 'MEDIO' ? '#F39C12' : '#3498DB';
+          sN6 += '<tr><td><strong>' + (imp.tema || '') + '</strong>';
+          if (imp.artigo) sN6 += ' <span class="res-artigo">' + imp.artigo + '</span>';
+          sN6 += '<br><span style="font-size:0.85em;color:#666;">' + (imp.descricao || '') + '</span></td>';
+          sN6 += '<td style="color:' + corImp + ';font-weight:600;">' + (imp.impacto || '') + '</td>';
+          sN6 += '<td style="font-size:0.85em;color:#666;">' + (imp.statusRegulamentacao || imp.status || '') + '</td></tr>';
+        });
+        sN6 += '</tbody></table>';
+      }
+      if (LR.reformaTributaria.disclaimer) {
+        sN6 += '<div style="margin-top:12px;padding:10px;background:#f8f9fa;border-radius:6px;font-style:italic;color:#666;font-size:0.9em;">' + LR.reformaTributaria.disclaimer + '</div>';
+      }
+      if (LR.reformaTributaria.dataUltimaRevisao) {
+        sN6 += '<div style="margin-top:6px;font-size:0.8em;color:#999;">Última revisão: ' + LR.reformaTributaria.dataUltimaRevisao + '</div>';
+      }
+      sN6 += '</div>';
+      html += _secao('F', 'Reforma Tributária — Impactos e Disclaimer', sN6);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  SEÇÃO NOVA 7 — FÓRMULA MESTRE DO LUCRO REAL
+    // ═══════════════════════════════════════════════════════════════════════
+    if (LR.formulaMestre && LR.formulaMestre.passos) {
+      var sN7 = '';
+      // Mapear valores reais para cada passo da fórmula
+      var valoresFormula = {};
+      valoresFormula[1] = r.dre ? r.dre.lucroLiquido : 0;
+      valoresFormula[2] = r.lalur ? r.lalur.totalAdicoes : 0;
+      valoresFormula[3] = r.lalur ? r.lalur.totalExclusoes : 0;
+      valoresFormula[4] = r.lalur ? r.lalur.lucroAjustado : 0;
+      var compensTotal = 0;
+      if (r.compensacao && r.compensacao.resumo && r.compensacao.resumo.compensacaoEfetiva) {
+        compensTotal = (r.compensacao.resumo.compensacaoEfetiva.prejuizoOperacional || 0) + (r.compensacao.resumo.compensacaoEfetiva.baseNegativaCSLL || 0);
+      }
+      valoresFormula[5] = compensTotal;
+      valoresFormula[6] = r.lucroRealFinal || 0;
+      valoresFormula[7] = r.irpj ? (r.irpj.irpjNormal || 0) : 0;
+      valoresFormula[8] = r.irpj ? (r.irpj.adicional || 0) : 0;
+      valoresFormula[9] = r.irpjAntesReducao || 0;
+      valoresFormula[10] = (r.incentivosFiscais ? (r.incentivosFiscais.totalDeducaoFinal || r.incentivosFiscais.economiaTotal || 0) : 0) + (r.reducaoSUDAM || 0);
+      var totalRetForm = _n(d.irrfRetidoPrivado) + _n(d.irrfRetidoPublico);
+      valoresFormula[11] = totalRetForm;
+      valoresFormula[12] = r.irpjAposReducao ? _r(r.irpjAposReducao - totalRetForm) : 0;
+
+      sN7 += '<div class="res-detail-card" style="font-family:\'JetBrains Mono\',monospace;">';
+      sN7 += '<div style="margin-bottom:8px;font-size:0.85em;color:#666;">Sequência de cálculo — <span class="res-artigo">' + (LR.formulaMestre.artigo || 'Art. 258-261') + '</span></div>';
+      LR.formulaMestre.passos.forEach(function (p) {
+        var val = valoresFormula[p.passo] || 0;
+        var isTotal = (p.operacao === '=' && (p.passo === 6 || p.passo === 9 || p.passo === 12));
+        var bgColor = isTotal ? '#f0fdf4' : 'transparent';
+        var fWeight = isTotal ? 'font-weight:700;' : '';
+        var opIcon = p.operacao === '+' ? '(+)' : p.operacao === '-' ? '(-)' : p.operacao === '×' ? '(×)' : '(=)';
+        sN7 += '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 12px;border-bottom:1px solid #eee;background:' + bgColor + ';' + fWeight + '">';
+        sN7 += '<div><span style="display:inline-block;width:30px;color:#999;font-size:0.9em;">' + opIcon + '</span> ' + p.descricao;
+        if (p.artigo && p.artigo !== '-') sN7 += ' <span class="res-artigo">' + p.artigo + '</span>';
+        sN7 += '</div>';
+        sN7 += '<div style="text-align:right;min-width:140px;' + (isTotal ? 'color:#10b981;font-size:1.1em;' : '') + '">' + _m(val) + '</div>';
+        sN7 += '</div>';
+      });
+      sN7 += '</div>';
+      html += _secao('G', 'Fórmula Mestre do Lucro Real', sN7);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  SEÇÃO NOVA 8 — MAPA DE ESTRATÉGIAS DE ECONOMIA — RANKINGS
+    // ═══════════════════════════════════════════════════════════════════════
+    if (LR.estrategiasEconomia && LR.estrategiasEconomia.length > 0) {
+      var sN8 = '';
+      var opsArr = r.oportunidades || [];
+      // Calcular total economia para % barras
+      var totalEconOps = 0;
+      opsArr.forEach(function (op) { totalEconOps += (op.economiaAnual || 0); });
+
+      sN8 += '<div class="res-oportunidades">';
+      LR.estrategiasEconomia.forEach(function (est) {
+        // Cruzar com oportunidade correspondente
+        var econReal = 0;
+        opsArr.forEach(function (op) {
+          if (op.titulo && op.titulo.indexOf(est.nome.substring(0, 10)) >= 0) econReal += (op.economiaAnual || 0);
+        });
+        // Fallback: cruzar pelo tipo
+        if (econReal === 0) {
+          var ecoKey = est.nome.toLowerCase();
+          if (ecoKey.indexOf('jcp') >= 0) econReal = r.economia ? (r.economia.jcp || 0) : 0;
+          else if (ecoKey.indexOf('prejuízo') >= 0 || ecoKey.indexOf('prejuizo') >= 0) econReal = r.economia ? (r.economia.prejuizo || 0) : 0;
+          else if (ecoKey.indexOf('sudam') >= 0) econReal = r.economia ? (r.economia.sudam || 0) : 0;
+          else if (ecoKey.indexOf('incentiv') >= 0) econReal = r.economia ? (r.economia.incentivos || 0) : 0;
+          else if (ecoKey.indexOf('deprecia') >= 0) econReal = r.economia ? (r.economia.depreciacao || 0) : 0;
+          else if (ecoKey.indexOf('pis') >= 0 || ecoKey.indexOf('cofins') >= 0) econReal = r.economia ? (r.economia.pisCofinsCreditos || 0) : 0;
+        }
+
+        var pctBarra = totalEconOps > 0 ? _r(econReal / totalEconOps * 100) : 0;
+        var corTipo = est.tipo === 'Dedução' ? '#2ECC71' : est.tipo === 'Timing' ? '#3498DB' : est.tipo === 'Crédito' ? '#9B59B6' : est.tipo === 'Redução' ? '#F39C12' : '#95A5A6';
+        var corCompl = est.complexidade === 'Baixa' ? '#2ECC71' : est.complexidade === 'Média' ? '#F39C12' : '#E74C3C';
+        var corRisco = est.risco === 'Baixo' ? '#2ECC71' : est.risco === 'Médio' ? '#F39C12' : '#E74C3C';
+
+        sN8 += '<div class="res-oport-card" style="margin-bottom:8px;">';
+        sN8 += '<div class="res-oport-header">';
+        sN8 += '<div class="res-oport-titulo">' + est.nome + '</div>';
+        sN8 += '<div class="res-oport-valor">' + _m(econReal) + '</div>';
+        sN8 += '</div>';
+        sN8 += '<div class="res-oport-tags">';
+        sN8 += '<span class="res-tag" style="background:' + corTipo + ';">' + est.tipo + '</span>';
+        sN8 += '<span class="res-tag" style="background:' + corCompl + ';">Compl.: ' + est.complexidade + '</span>';
+        sN8 += '<span class="res-tag" style="background:' + corRisco + ';">Risco: ' + est.risco + '</span>';
+        sN8 += '</div>';
+        // Barra de progresso
+        sN8 += '<div style="display:flex;align-items:center;margin:6px 0 4px;">';
+        sN8 += '<div style="flex:1;background:#eee;border-radius:4px;height:10px;overflow:hidden;margin-right:8px;">';
+        sN8 += '<div style="width:' + pctBarra + '%;background:' + corTipo + ';height:100%;border-radius:4px;transition:width 0.3s;"></div>';
+        sN8 += '</div>';
+        sN8 += '<span style="font-size:0.8em;color:#666;min-width:40px;text-align:right;">' + pctBarra.toFixed(0) + '%</span>';
+        sN8 += '</div>';
+        if (est.artigo) sN8 += '<div style="font-size:0.8em;color:#999;">' + est.artigo + '</div>';
+        sN8 += '</div>';
+      });
+      sN8 += '</div>';
+      html += _secao('H', 'Mapa de Estratégias de Economia — Rankings', sN8);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  SEÇÃO NOVA 9 — ESTRUTURA LALUR — PARTE A E PARTE B
+    // ═══════════════════════════════════════════════════════════════════════
+    if (LR.lalur) {
+      var sN9 = '';
+
+      // Parte A — Adições e exclusões efetivamente realizadas
+      sN9 += '<h3>Parte A — Demonstração do Lucro Real (Art. 277)</h3>';
+      if (LR.lalur.parteA) {
+        sN9 += '<p style="color:#666;font-size:0.9em;">' + (LR.lalur.parteA.descricao || '') + '</p>';
+      }
+      sN9 += '<table class="res-table"><thead><tr><th>Tipo</th><th>Descrição</th><th>Artigo</th><th>Valor</th></tr></thead><tbody>';
+      // Adições efetivas
+      if (r.lalur && r.lalur.adicoes && r.lalur.adicoes.length > 0) {
+        r.lalur.adicoes.forEach(function (a) {
+          // Lookup artigo no mapeamento LR.adicoes
+          var artigoLookup = a.artigo || '';
+          if (!artigoLookup && LR.adicoes) {
+            for (var ai = 0; ai < LR.adicoes.length; ai++) {
+              if (LR.adicoes[ai].id === a.id || (LR.adicoes[ai].descricao && a.desc && LR.adicoes[ai].descricao.indexOf(a.desc.substring(0, 15)) >= 0)) {
+                artigoLookup = LR.adicoes[ai].artigo || '';
+                break;
+              }
+            }
+          }
+          sN9 += '<tr><td style="color:#E74C3C;font-weight:600;">(+) Adição</td><td>' + (a.desc || a.descricao || '') + '</td><td><span class="res-artigo">' + artigoLookup + '</span></td><td class="res-valor">' + _m(a.valor) + '</td></tr>';
+        });
+      }
+      // Exclusões efetivas
+      if (r.lalur && r.lalur.exclusoes && r.lalur.exclusoes.length > 0) {
+        r.lalur.exclusoes.forEach(function (e) {
+          var artigoLookupE = e.artigo || '';
+          if (!artigoLookupE && LR.exclusoes) {
+            for (var ei = 0; ei < LR.exclusoes.length; ei++) {
+              if (LR.exclusoes[ei].id === e.id || (LR.exclusoes[ei].descricao && e.desc && LR.exclusoes[ei].descricao.indexOf(e.desc.substring(0, 15)) >= 0)) {
+                artigoLookupE = LR.exclusoes[ei].artigo || '';
+                break;
+              }
+            }
+          }
+          sN9 += '<tr><td style="color:#2ECC71;font-weight:600;">(-) Exclusão</td><td>' + (e.desc || e.descricao || '') + '</td><td><span class="res-artigo">' + artigoLookupE + '</span></td><td class="res-valor">' + _m(e.valor) + '</td></tr>';
+        });
+      }
+      sN9 += '</tbody></table>';
+
+      // Parte B — Controles futuros
+      sN9 += '<h3 style="margin-top:20px;">Parte B — Controle de Valores Futuros (Art. 277)</h3>';
+      if (LR.lalur.parteB) {
+        sN9 += '<p style="color:#666;font-size:0.9em;">' + (LR.lalur.parteB.descricao || '') + '</p>';
+      }
+      sN9 += '<table class="res-table"><thead><tr><th>Controle</th><th>Saldo Remanescente</th><th>Projeção de Reversão</th></tr></thead><tbody>';
+      // Prejuízos remanescentes
+      var saldoPrej = 0;
+      if (r.compensacao && r.compensacao.resumo && r.compensacao.resumo.saldosPosCompensacao) {
+        saldoPrej = r.compensacao.resumo.saldosPosCompensacao.prejuizoOperacional || r.compensacao.resumo.saldosPosCompensacao.prejuizoFiscal || 0;
+      }
+      if (saldoPrej > 0 || _n(d.prejuizoFiscal) > 0) {
+        sN9 += '<tr><td>Prejuízos Fiscais a Compensar</td><td class="res-valor">' + _m(saldoPrej > 0 ? saldoPrej : _n(d.prejuizoFiscal)) + '</td><td>Compensável a 30% do lucro ajustado por período</td></tr>';
+      }
+      // Base negativa CSLL
+      var saldoBN = 0;
+      if (r.compensacao && r.compensacao.resumo && r.compensacao.resumo.saldosPosCompensacao) {
+        saldoBN = r.compensacao.resumo.saldosPosCompensacao.baseNegativaCSLL || 0;
+      }
+      if (saldoBN > 0 || _n(d.baseNegativaCSLL) > 0) {
+        sN9 += '<tr><td>Base Negativa da CSLL</td><td class="res-valor">' + _m(saldoBN > 0 ? saldoBN : _n(d.baseNegativaCSLL)) + '</td><td>Compensável a 30% da base positiva</td></tr>';
+      }
+      // Provisões não dedutíveis (reversão futura)
+      var provND = _n(d.provisoesContingencias) + _n(d.provisoesGarantias);
+      if (provND > 0) {
+        sN9 += '<tr><td>Provisões Não Dedutíveis (reversão futura → exclusão)</td><td class="res-valor">' + _m(provND) + '</td><td>Exclusão quando da reversão/liquidação da provisão</td></tr>';
+      }
+      // Depreciação acelerada (diferença fiscal × contábil)
+      if (r.depreciacaoDetalhada && r.depreciacaoDetalhada.depreciaAcelerada > 0 && r.depreciacaoDetalhada.depreciaNormal > 0) {
+        var difDepFiscal = _r(r.depreciacaoDetalhada.depreciaAcelerada - r.depreciacaoDetalhada.depreciaNormal);
+        if (difDepFiscal > 0) {
+          sN9 += '<tr><td>Depreciação Acelerada (diferença fiscal × contábil)</td><td class="res-valor">' + _m(difDepFiscal) + '</td><td>Adição futura quando a depreciação contábil ultrapassar a fiscal</td></tr>';
+        }
+      }
+      sN9 += '</tbody></table>';
+
+      html += _secao('I', 'Estrutura LALUR — Parte A e Parte B', sN9);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  SEÇÃO NOVA 10 — ALÍQUOTAS APLICÁVEIS (PARTE 5B)
+    // ═══════════════════════════════════════════════════════════════════════
+    if (LR.aliquotas) {
+      var sAliq = '';
+      sAliq += '<div class="res-detail-grid">';
+      var aliqIRPJ = LR.aliquotas.irpj || {};
+      var aliqCSLL = LR.aliquotas.csll || {};
+      var aliqPC = LR.aliquotas.pisCofins || {};
+      var aliqJCP = LR.aliquotas.jcp || {};
+      var aliqComp = LR.aliquotas.compensacaoPrejuizo || {};
+      sAliq += '<div class="res-detail-card"><h3>IRPJ <span class="res-artigo">' + (aliqIRPJ.artigoBase || 'Art. 225') + '</span></h3>';
+      sAliq += '<table class="res-table">';
+      sAliq += '<tr><td>Alíquota normal</td><td class="res-valor">' + _p(aliqIRPJ.normal || 0.15) + '</td></tr>';
+      sAliq += '<tr><td>Adicional sobre excedente</td><td class="res-valor">' + _p(aliqIRPJ.adicional || 0.10) + '</td></tr>';
+      sAliq += '<tr><td>Limite adicional/mês</td><td class="res-valor">' + _m(aliqIRPJ.limiteAdicionalMes || 20000) + '</td></tr>';
+      sAliq += '</table></div>';
+      sAliq += '<div class="res-detail-card"><h3>CSLL <span class="res-artigo">' + (aliqCSLL.artigoBase || 'Lei 7.689') + '</span></h3>';
+      sAliq += '<table class="res-table">';
+      sAliq += '<tr><td>Alíquota geral</td><td class="res-valor">' + _p(aliqCSLL.geral || 0.09) + '</td></tr>';
+      sAliq += '<tr><td>Instituições financeiras</td><td class="res-valor">' + _p(aliqCSLL.financeiras || 0.15) + '</td></tr>';
+      sAliq += '</table></div>';
+      sAliq += '<div class="res-detail-card"><h3>PIS/COFINS NC <span class="res-artigo">' + (aliqPC.artigoBase || '') + '</span></h3>';
+      sAliq += '<table class="res-table">';
+      sAliq += '<tr><td>PIS não-cumulativo</td><td class="res-valor">' + _p(aliqPC.pisNaoCumulativo || 0.0165) + '</td></tr>';
+      sAliq += '<tr><td>COFINS não-cumulativo</td><td class="res-valor">' + _p(aliqPC.cofinsNaoCumulativo || 0.076) + '</td></tr>';
+      sAliq += '<tr><td>Total NC</td><td class="res-valor">' + _p(aliqPC.totalNaoCumulativo || 0.0925) + '</td></tr>';
+      sAliq += '</table></div>';
+      sAliq += '<div class="res-detail-card"><h3>JCP e Compensação</h3>';
+      sAliq += '<table class="res-table">';
+      sAliq += '<tr><td>IRRF sobre JCP <span class="res-artigo">' + (aliqJCP.artigoBase || '') + '</span></td><td class="res-valor">' + _p(aliqJCP.irrfAliquota || 0.15) + '</td></tr>';
+      sAliq += '<tr><td>Trava compensação <span class="res-artigo">' + (aliqComp.artigoBase || '') + '</span></td><td class="res-valor">' + _p(aliqComp.trava30 || 0.30) + '</td></tr>';
+      sAliq += '</table></div>';
+      sAliq += '</div>';
+      html += _secao('J', 'Alíquotas Aplicáveis — Referência', sAliq);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  SEÇÃO NOVA 11 — OBRIGATORIEDADE LUCRO REAL — HIPÓTESES (PARTE 5B)
+    // ═══════════════════════════════════════════════════════════════════════
+    if (LR.obrigatoriedadeLucroReal && LR.obrigatoriedadeLucroReal.hipoteses) {
+      var sObrig = '';
+      sObrig += '<p style="color:#666;font-size:0.9em;">Artigo base: <span class="res-artigo">' + (LR.obrigatoriedadeLucroReal.artigo || 'Art. 257') + '</span></p>';
+      sObrig += '<table class="res-table"><thead><tr><th>Inciso</th><th>Hipótese</th><th>Aplicável?</th></tr></thead><tbody>';
+      LR.obrigatoriedadeLucroReal.hipoteses.forEach(function (hip) {
+        var aplicavel = false;
+        if (hip.id === 'RECEITA' && _n(d.receitaBrutaAnual) > (hip.valor || 78000000)) aplicavel = true;
+        else if (hip.id === 'FINANCEIRA' && (d.ehInstituicaoFinanceira === true || d.ehInstituicaoFinanceira === "true" || d.ehFinanceira === true || d.ehFinanceira === "true")) aplicavel = true;
+        else if (hip.id === 'LUCRO_EXTERIOR' && (d.temLucroExterior === true || d.temLucroExterior === "true")) aplicavel = true;
+        else if (hip.id === 'BENEFICIO_FISCAL' && (d.temBeneficioFiscalIsencao === true || d.temBeneficioFiscalIsencao === "true")) aplicavel = true;
+        else if (hip.id === 'ESTIMATIVA' && d.apuracaoLR === 'anual') aplicavel = true;
+        else if (hip.id === 'FACTORING' && (d.ehFactoring === true || d.ehFactoring === "true")) aplicavel = true;
+        else if (hip.id === 'SECURITIZADORA' && (d.ehSecuritizadora === true || d.ehSecuritizadora === "true")) aplicavel = true;
+        sObrig += '<tr><td>' + (hip.inciso || '') + '</td><td>' + (hip.descricao || '') + '</td><td style="text-align:center;font-size:1.2em;">' + (aplicavel ? '✅' : '—') + '</td></tr>';
+      });
+      sObrig += '</tbody></table>';
+      html += _secao('K', 'Hipóteses de Obrigatoriedade do Lucro Real', sObrig);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  SEÇÃO NOVA 12 — IMPACTOS LEI 12.973/2014 (PARTE 5B)
+    // ═══════════════════════════════════════════════════════════════════════
+    if (LR.lei12973 && LR.lei12973.temas) {
+      var sLei = '';
+      sLei += '<p style="color:#666;font-size:0.9em;">Vigência: ' + (LR.lei12973.vigencia || '01/01/2015') + '</p>';
+      sLei += '<table class="res-table"><thead><tr><th>Tema</th><th>Artigo</th><th>Relevante?</th></tr></thead><tbody>';
+      LR.lei12973.temas.forEach(function (tema) {
+        var relevante = false;
+        if (tema.id === 'GOODWILL' && _n(d.valorGoodwill) > 0) relevante = true;
+        else if (tema.id === 'JCP_PL' && r.jcpDetalhado && r.jcpDetalhado.jcpDedutivel > 0) relevante = true;
+        else if (tema.id === 'PRE_OPERACIONAL' && _n(d.despesasPreOperacionais) > 0) relevante = true;
+        else if (tema.id === 'RECEITA_BRUTA') relevante = true;
+        sLei += '<tr><td><strong>' + (tema.label || '') + '</strong></td><td><span class="res-artigo">' + (tema.artigo || '') + '</span></td><td style="text-align:center;">' + (relevante ? '✅ Sim' : '—') + '</td></tr>';
+      });
+      sLei += '</tbody></table>';
+      html += _secao('L', 'Impactos da Lei 12.973/2014', sLei);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  SEÇÃO NOVA 13 — TABELA DE RETENÇÕES APLICÁVEIS (PARTE 5B)
+    // ═══════════════════════════════════════════════════════════════════════
+    if (LR.retencoes) {
+      var sRet = '';
+      sRet += '<table class="res-table"><thead><tr><th>Retenção</th><th>Alíquota</th><th>Artigo</th><th>Tratamento</th></tr></thead><tbody>';
+      var retKeys = ['irrfServicosPJ', 'irrfAdmPublica', 'csrf', 'beneficiarioNaoIdentificado', 'jcp', 'dividendos'];
+      retKeys.forEach(function (rk) {
+        var retItem = LR.retencoes[rk];
+        if (retItem) {
+          var aliqStr = retItem.aliquota !== undefined ? _p(retItem.aliquota) : (retItem.aliquotas ? _p(retItem.aliquotas.total) : '—');
+          sRet += '<tr><td><strong>' + (retItem.descricao || rk) + '</strong></td><td class="res-valor">' + aliqStr + '</td><td><span class="res-artigo">' + (retItem.artigo || '') + '</span></td><td>' + (retItem.tratamento || '') + '</td></tr>';
+        }
+      });
+      sRet += '</tbody></table>';
+      html += _secao('M', 'Tabela de Retenções na Fonte Aplicáveis', sRet);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  SEÇÃO NOVA 14 — TABELA IRPF REFERÊNCIA (PARTE 5B)
+    // ═══════════════════════════════════════════════════════════════════════
+    if (LR.tabelaIRPF && LR.tabelaIRPF.tabela_2025) {
+      var sIRPF = '';
+      sIRPF += '<p style="color:#666;font-size:0.9em;">Referência para retenções sobre PF — <span class="res-artigo">' + (LR.tabelaIRPF.artigo || 'Art. 677') + '</span> — Ano-base: ' + (LR.tabelaIRPF.anoBase || '2025') + '</p>';
+      sIRPF += '<table class="res-table"><thead><tr><th>Faixa</th><th>Até (R$)</th><th>Alíquota</th><th>Dedução</th></tr></thead><tbody>';
+      LR.tabelaIRPF.tabela_2025.forEach(function (f) {
+        sIRPF += '<tr><td>' + f.faixa + 'ª</td><td class="res-valor">' + (f.ate === Infinity ? 'Acima' : _m(f.ate)) + '</td><td class="res-valor">' + _p(f.aliquota) + '</td><td class="res-valor">' + _m(f.deducao) + '</td></tr>';
+      });
+      sIRPF += '</tbody></table>';
+      if (LR.tabelaIRPF.deducaoDependente_2025) {
+        sIRPF += '<p style="color:#666;font-size:0.85em;">Dedução por dependente: ' + _m(LR.tabelaIRPF.deducaoDependente_2025) + '</p>';
+      }
+      html += _secao('N', 'Tabela IRPF — Referência para Retenções PF', sIRPF);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  SEÇÃO NOVA 15 — ÁRVORE DE DECISÃO E ELEGIBILIDADE (PARTE 5B)
+    // ═══════════════════════════════════════════════════════════════════════
+    if (r.arvoreDecisao) {
+      var sArvore = '';
+      if (r.arvoreDecisao.recomendacoes && r.arvoreDecisao.recomendacoes.length > 0) {
+        sArvore += '<div class="res-oportunidades">';
+        r.arvoreDecisao.recomendacoes.forEach(function (rec, i) {
+          var corPri = rec.prioridade === 'ALTA' ? '#E74C3C' : rec.prioridade === 'MEDIA' ? '#F39C12' : '#2ECC71';
+          sArvore += '<div class="res-oport-card" style="border-left:4px solid ' + corPri + ';margin-bottom:6px;">';
+          sArvore += '<div class="res-oport-header"><div class="res-oport-rank">' + (i + 1) + '</div>';
+          sArvore += '<div class="res-oport-titulo">' + (rec.titulo || rec.descricao || '') + '</div></div>';
+          if (rec.impacto) sArvore += '<div style="font-size:0.85em;color:#666;padding:4px 12px;">' + rec.impacto + '</div>';
+          sArvore += '</div>';
+        });
+        sArvore += '</div>';
+      } else if (typeof r.arvoreDecisao === 'object') {
+        sArvore += '<div class="res-alerta res-alerta-info"><span class="res-alerta-icon">&#x1F535;</span>Árvore de decisão processada. Consulte as oportunidades ranqueadas para o plano de ação detalhado.</div>';
+      }
+      html += _secao('O', 'Árvore de Decisão — Otimização Tributária', sArvore);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  SEÇÃO NOVA 16 — COMPARATIVO SUDAM (PARTE 5B)
+    // ═══════════════════════════════════════════════════════════════════════
+    if (r.comparativoSUDAM) {
+      var sCompSUDAM = '';
+      if (r.comparativoSUDAM.simplesNacional !== undefined && r.comparativoSUDAM.lucroRealSUDAM !== undefined) {
+        sCompSUDAM += '<table class="res-table"><thead><tr><th>Regime</th><th>Carga Tributária</th></tr></thead><tbody>';
+        sCompSUDAM += '<tr><td>Simples Nacional (estimativa)</td><td class="res-valor">' + _m(r.comparativoSUDAM.simplesNacional) + '</td></tr>';
+        sCompSUDAM += '<tr><td>Lucro Real com SUDAM</td><td class="res-valor res-economia">' + _m(r.comparativoSUDAM.lucroRealSUDAM) + '</td></tr>';
+        var difComp = _r((r.comparativoSUDAM.simplesNacional || 0) - (r.comparativoSUDAM.lucroRealSUDAM || 0));
+        sCompSUDAM += '<tr class="res-total"><td><strong>' + (difComp > 0 ? 'Economia com LR+SUDAM' : 'Diferença') + '</strong></td><td class="res-valor"><strong>' + _m(difComp) + '</strong></td></tr>';
+        sCompSUDAM += '</tbody></table>';
+      } else {
+        sCompSUDAM += '<div class="res-alerta res-alerta-info"><span class="res-alerta-icon">&#x1F535;</span>Comparativo SUDAM processado. Dados detalhados disponíveis no relatório consolidado.</div>';
+      }
+      html += _secao('P', 'Comparativo: Simples Nacional vs Lucro Real SUDAM', sCompSUDAM);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  SEÇÃO NOVA 17 — PDD FISCAL — CRITÉRIOS E FAIXAS DE VALOR (PARTE 5B)
+    // ═══════════════════════════════════════════════════════════════════════
+    if (LR.pdd && (LR.pdd.criterios || LR.pdd.faixasValor)) {
+      var sPDD = '';
+      if (LR.pdd.criterios && LR.pdd.criterios.length > 0) {
+        sPDD += '<h4>Critérios para Dedutibilidade <span class="res-artigo">' + (LR.pdd.artigo || 'Art. 347-351') + '</span></h4>';
+        sPDD += '<table class="res-table"><thead><tr><th>Critério</th><th>Descrição</th><th>Artigo</th></tr></thead><tbody>';
+        LR.pdd.criterios.forEach(function (c) {
+          sPDD += '<tr><td><strong>' + (c.id || '') + '</strong></td><td>' + (c.descricao || '') + '</td><td><span class="res-artigo">' + (c.artigo || '') + '</span></td></tr>';
+        });
+        sPDD += '</tbody></table>';
+      }
+      if (LR.pdd.faixasValor && LR.pdd.faixasValor.length > 0) {
+        sPDD += '<h4 style="margin-top:12px;">Faixas de Valor — Requisitos por Faixa</h4>';
+        sPDD += '<table class="res-table"><thead><tr><th>Faixa</th><th>Requisito</th><th>Artigo</th></tr></thead><tbody>';
+        LR.pdd.faixasValor.forEach(function (f) {
+          var faixaLabel = f.ate ? 'Até ' + _m(f.ate) : (f.acima ? 'Acima de ' + _m(f.acima) : '—');
+          sPDD += '<tr><td><strong>' + faixaLabel + '</strong></td><td>' + (f.descricao || '') + '</td><td><span class="res-artigo">' + (f.artigo || '') + '</span></td></tr>';
+        });
+        sPDD += '</tbody></table>';
+      }
+      if (LR.pdd.vedacoes && LR.pdd.vedacoes.length > 0) {
+        sPDD += '<div class="res-alerta res-alerta-warn" style="margin-top:8px;"><span class="res-alerta-icon">&#x26A0;&#xFE0F;</span><strong>Vedações:</strong> ' + LR.pdd.vedacoes.join('; ') + '</div>';
+      }
+      html += _secao('Q', 'PDD Fiscal — Critérios e Faixas de Valor', sPDD);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  SEÇÃO NOVA 18 — ESTOQUES — VEDAÇÕES (PARTE 5B)
+    // ═══════════════════════════════════════════════════════════════════════
+    if (LR.estoques && LR.estoques.vedacoes && LR.estoques.vedacoes.length > 0) {
+      var sEstoque = '';
+      if (d.metodoEstoque) {
+        var metodoSelecionado = null;
+        if (LR.estoques.permitidos) {
+          LR.estoques.permitidos.forEach(function (m) {
+            if (m.id === d.metodoEstoque) metodoSelecionado = m;
+          });
+        }
+        if (metodoSelecionado) {
+          sEstoque += '<p>Método selecionado: <strong>' + (metodoSelecionado.descricao || d.metodoEstoque) + '</strong> <span class="res-artigo">' + (metodoSelecionado.artigo || '') + '</span></p>';
+        }
+      }
+      sEstoque += '<h4>Vedações ao Custeio de Estoques <span class="res-artigo">Art. 310 RIR/2018</span></h4>';
+      sEstoque += '<div class="res-oportunidades">';
+      LR.estoques.vedacoes.forEach(function (v) {
+        sEstoque += '<div class="res-alerta res-alerta-warn" style="margin-bottom:4px;"><span class="res-alerta-icon">&#x26A0;&#xFE0F;</span>' + v + '</div>';
+      });
+      sEstoque += '</div>';
+      if (LR.estoques.permitidos && LR.estoques.permitidos.length > 0) {
+        sEstoque += '<h4 style="margin-top:12px;">Métodos Permitidos</h4>';
+        sEstoque += '<table class="res-table"><thead><tr><th>Método</th><th>Descrição</th><th>Artigo</th></tr></thead><tbody>';
+        LR.estoques.permitidos.forEach(function (m) {
+          var isSel = (d.metodoEstoque === m.id);
+          sEstoque += '<tr' + (isSel ? ' style="background:rgba(16,185,129,0.1);"' : '') + '><td><strong>' + (m.id || '') + '</strong>' + (isSel ? ' ✅' : '') + '</td><td>' + (m.descricao || '') + '</td><td><span class="res-artigo">' + (m.artigo || '') + '</span></td></tr>';
+        });
+        sEstoque += '</tbody></table>';
+      }
+      html += _secao('R', 'Avaliação de Estoques — Métodos e Vedações', sEstoque);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  SEÇÃO NOVA 19 — EXCLUSÕES DO LUCRO DA EXPLORAÇÃO (PARTE 5B)
+    // ═══════════════════════════════════════════════════════════════════════
+    if (r.lucroExploracaoResult && LR.exclusoesLucroExploracao) {
+      var sExcLE = '';
+      sExcLE += '<p style="color:#666;font-size:0.9em;">Para cálculo do lucro da exploração (base dos incentivos SUDAM/SUDENE), devem ser ajustados os seguintes itens:</p>';
+      var excluirLE = LR.exclusoesLucroExploracao.excluirDoLucroLiquido || LR.exclusoesLucroExploracao.excluir || [];
+      var adicionarLE = LR.exclusoesLucroExploracao.adicionarAoLucroLiquido || LR.exclusoesLucroExploracao.adicionar || [];
+      if (excluirLE.length > 0) {
+        sExcLE += '<h4>Exclusões do Lucro Líquido</h4>';
+        sExcLE += '<table class="res-table"><thead><tr><th>Item</th><th>Descrição</th><th>Artigo</th></tr></thead><tbody>';
+        excluirLE.forEach(function (e) {
+          sExcLE += '<tr><td>(-)</td><td>' + (e.descricao || e.label || '') + '</td><td><span class="res-artigo">' + (e.artigo || '') + '</span></td></tr>';
+        });
+        sExcLE += '</tbody></table>';
+      }
+      if (adicionarLE.length > 0) {
+        sExcLE += '<h4 style="margin-top:12px;">Adições ao Lucro Líquido</h4>';
+        sExcLE += '<table class="res-table"><thead><tr><th>Item</th><th>Descrição</th><th>Artigo</th></tr></thead><tbody>';
+        adicionarLE.forEach(function (a) {
+          sExcLE += '<tr><td>(+)</td><td>' + (a.descricao || a.label || '') + '</td><td><span class="res-artigo">' + (a.artigo || '') + '</span></td></tr>';
+        });
+        sExcLE += '</tbody></table>';
+      }
+      if (r.lucroExploracaoResult.lucroExploracao !== undefined) {
+        sExcLE += '<div style="margin-top:12px;padding:8px 12px;background:rgba(16,185,129,0.08);border-radius:8px;">';
+        sExcLE += '<strong>Lucro da Exploração Calculado: ' + _m(r.lucroExploracaoResult.lucroExploracao) + '</strong>';
+        if (r.lucroExploracaoResult.reducao75 !== undefined) {
+          sExcLE += '<br>Redução 75% aplicável: <span class="res-economia"><strong>' + _m(r.lucroExploracaoResult.reducao75) + '</strong></span>';
+        }
+        sExcLE += '</div>';
+      }
+      html += _secao('S', 'Lucro da Exploração — Ajustes SUDAM/SUDENE', sExcLE);
+    }
 
     // ═══════════════════════════════════════════════════════════════════════
     //  SEÇÃO 13 — CRONOGRAMA DE IMPLEMENTAÇÃO (condicional)
@@ -5619,6 +7218,77 @@
     });
     h += '</div></div>';
 
+    // ══════════════════════════════════════════════════════════════
+    //  NOVA PÁGINA: FÓRMULA MESTRE + MAPA ECONOMIA + COMPLIANCE
+    // ══════════════════════════════════════════════════════════════
+
+    h += pageBreak();
+
+    // Fórmula Mestre (Seção 7)
+    if (LR.formulaMestre && LR.formulaMestre.passos) {
+      h += secaoTitulo('📐', 'FÓRMULA MESTRE DO LUCRO REAL', 'Sequência de cálculo — ' + (LR.formulaMestre.artigo || 'Art. 258-261'));
+      var vfPdf = {};
+      vfPdf[1] = res.cargaBruta ? (r.dre ? r.dre.lucroLiquido : 0) : 0;
+      vfPdf[2] = r.lalur ? r.lalur.totalAdicoes : 0;
+      vfPdf[3] = r.lalur ? r.lalur.totalExclusoes : 0;
+      vfPdf[4] = r.lalur ? r.lalur.lucroAjustado : 0;
+      var compTotPdf = 0;
+      if (r.compensacao && r.compensacao.resumo && r.compensacao.resumo.compensacaoEfetiva) {
+        compTotPdf = (r.compensacao.resumo.compensacaoEfetiva.prejuizoOperacional || 0) + (r.compensacao.resumo.compensacaoEfetiva.baseNegativaCSLL || 0);
+      }
+      vfPdf[5] = compTotPdf;
+      vfPdf[6] = r.lucroRealFinal || 0;
+      vfPdf[7] = r.irpj ? (r.irpj.irpjNormal || 0) : 0;
+      vfPdf[8] = r.irpj ? (r.irpj.adicional || 0) : 0;
+      vfPdf[9] = r.irpjAntesReducao || 0;
+      vfPdf[10] = (r.incentivosFiscais ? (r.incentivosFiscais.totalDeducaoFinal || r.incentivosFiscais.economiaTotal || 0) : 0) + (r.reducaoSUDAM || 0);
+      var retFormPdf = (r.retencoes ? r.retencoes.irrf : 0) || 0;
+      vfPdf[11] = retFormPdf;
+      vfPdf[12] = r.irpjAposReducao ? _r(r.irpjAposReducao - retFormPdf) : 0;
+
+      var fmRows = [];
+      LR.formulaMestre.passos.forEach(function (p) {
+        var opI = p.operacao === '+' ? '(+)' : p.operacao === '-' ? '(-)' : p.operacao === '×' ? '(×)' : '(=)';
+        var isT = (p.operacao === '=' && (p.passo === 6 || p.passo === 9 || p.passo === 12));
+        var row = { cells: [opI, p.descricao + (p.artigo && p.artigo !== '-' ? ' — ' + p.artigo : ''), _m(vfPdf[p.passo] || 0)] };
+        if (isT) row._subtotal = true;
+        fmRows.push(row);
+      });
+      h += tabelaHTML(['Op.', 'Passo', 'Valor'], fmRows, { noAlignRight: false });
+    }
+
+    // Mapa Economia top 5 oportunidades (Seção 8)
+    if (ops.length > 0) {
+      h += secaoTitulo('🗺️', 'MAPA DE ECONOMIA — TOP 5');
+      ops.slice(0, 5).forEach(function (op, i) {
+        h += '<div style="background:#fff;border:1px solid #e8ecf0;border-left:4px solid ' + COR.accentDark + ';padding:8px 12px;margin:5px 0;page-break-inside:avoid;">';
+        h += '<div style="display:flex;justify-content:space-between;align-items:center;">';
+        h += '<div><strong style="font-size:10px;">#' + (i + 1) + ' ' + (op.titulo || '') + '</strong> ';
+        h += badge(op.tipo || '', COR.primary) + badgeRisco(op.risco) + '</div>';
+        h += '<div style="font-size:13px;font-weight:700;color:' + COR.accentDark + ';' + FONT_MONO + '">' + _m(op.economiaAnual || 0) + '/ano</div>';
+        h += '</div></div>';
+      });
+    }
+
+    // Alertas de compliance (Seção 4 — só se houver)
+    var omissaoPdf = r.omissaoResult;
+    if (omissaoPdf && omissaoPdf.indicadores && omissaoPdf.indicadores.length > 0) {
+      h += secaoTitulo('⚠️', 'ALERTAS DE COMPLIANCE');
+      omissaoPdf.indicadores.forEach(function (ind) {
+        var tipoAl = ind.gravidade === 'CRITICO' ? 'critico' : ind.gravidade === 'ALTO' ? 'aviso' : 'info';
+        h += alertaBox(tipoAl, '<strong>' + (ind.descricao || '') + '</strong>' + (ind.artigo ? ' (' + ind.artigo + ')' : '') + (ind.resolucao ? '<br>→ ' + ind.resolucao : ''));
+      });
+    }
+
+    // Reforma Tributária disclaimer (Seção 6)
+    if (LR.reformaTributaria) {
+      h += '<div style="background:#f8f9fa;border-left:3px solid ' + COR.info + ';padding:10px 14px;margin:14px 0;font-size:9px;color:' + COR.textSec + ';line-height:1.5;page-break-inside:avoid;">';
+      h += '<strong>⚖️ Reforma Tributária (LC 214/2025):</strong> ';
+      h += (LR.reformaTributaria.disclaimer || '');
+      if (LR.reformaTributaria.dataUltimaRevisao) h += ' <em>(Revisão: ' + LR.reformaTributaria.dataUltimaRevisao + ')</em>';
+      h += '</div>';
+    }
+
     // Footer
     h += pdfFooter(r);
 
@@ -6232,6 +7902,259 @@
 
 
     // ═════════════════════════════════════════════════════
+    //  SEÇÃO NOVA PDF 1 — DIAGNÓSTICO DESPESAS COM LIMITES
+    // ═════════════════════════════════════════════════════
+
+    var vdlPdf = r.validacaoDespesasLimites;
+    if (vdlPdf && (vdlPdf.doacoes || vdlPdf.previdencia || vdlPdf.royalties)) {
+      h += pageBreak();
+      h += secaoTitulo('📋', 'DIAGNÓSTICO DE DESPESAS COM LIMITES LEGAIS');
+      var dlRows = [];
+      if (vdlPdf.doacoes) {
+        var excDPdf = vdlPdf.doacoes.excesso || vdlPdf.doacoes.excedenteTotal || 0;
+        dlRows.push({ cells: ['Doações', _m(vdlPdf.doacoes.totalInformado || 0), _m(vdlPdf.doacoes.limiteCalculado || vdlPdf.doacoes.limiteTotal || 0), excDPdf > 0 ? _m(excDPdf) : '—'] });
+      }
+      if (vdlPdf.previdencia) {
+        var excPPdf = vdlPdf.previdencia.excesso || vdlPdf.previdencia.excedente || 0;
+        dlRows.push({ cells: ['Previdência Complementar', _m(vdlPdf.previdencia.contribuicao || vdlPdf.previdencia.totalInformado || 0), _m(vdlPdf.previdencia.limite || vdlPdf.previdencia.limiteCalculado || 0), excPPdf > 0 ? _m(excPPdf) : '—'] });
+      }
+      if (vdlPdf.royalties) {
+        var excRPdf = vdlPdf.royalties.excesso || vdlPdf.royalties.excedente || 0;
+        dlRows.push({ cells: ['Royalties', _m(vdlPdf.royalties.royaltiesPagos || vdlPdf.royalties.totalInformado || 0), _m(vdlPdf.royalties.limite || vdlPdf.royalties.limiteCalculado || 0), excRPdf > 0 ? _m(excRPdf) : '—'] });
+      }
+      h += tabelaHTML(['Despesa', 'Valor Informado', 'Limite Legal', 'Excesso'], dlRows);
+    }
+
+    // ═════════════════════════════════════════════════════
+    //  SEÇÃO NOVA PDF 2 — DESPESAS INDEDUTÍVEIS
+    // ═════════════════════════════════════════════════════
+
+    var diPdf = r.despesasIndedutivelDetalhe;
+    if (diPdf && diPdf.length > 0) {
+      h += secaoTitulo('🚫', 'DESPESAS INDEDUTÍVEIS IDENTIFICADAS');
+      var diRowsPdf = [];
+      var totalIndPdf = 0;
+      var totalImpPdf = 0;
+      diPdf.forEach(function (di) {
+        var impDi = _r((di.valor || 0) * 0.34);
+        totalIndPdf += (di.valor || 0);
+        totalImpPdf += impDi;
+        diRowsPdf.push({ cells: [di.descricao || di.desc || '', di.artigo || '', _m(di.valor), _m(impDi)] });
+      });
+      diRowsPdf.push({ cells: ['TOTAL', '', _m(totalIndPdf), _m(totalImpPdf)], _total: true });
+      h += tabelaHTML(['Despesa', 'Artigo', 'Valor', 'Impacto (34%)'], diRowsPdf);
+    }
+
+    // ═════════════════════════════════════════════════════
+    //  SEÇÃO NOVA PDF 3 — SUBCAPITALIZAÇÃO
+    // ═════════════════════════════════════════════════════
+
+    if (r.subcapResult) {
+      h += secaoTitulo('🏦', 'ANÁLISE DE SUBCAPITALIZAÇÃO');
+      if (r.subcapResult.excedeu) {
+        h += alertaBox('critico', '<strong>Juros indedutíveis:</strong> ' + _m(r.subcapResult.jurosIndedutiveis || 0) + ' — Ação: reestruturar dívida (Art. 249-251)');
+      } else {
+        h += alertaBox('info', 'Dívidas com vinculadas dentro dos limites de subcapitalização.');
+      }
+    }
+
+    // ═════════════════════════════════════════════════════
+    //  SEÇÃO NOVA PDF 4 — ALERTAS COMPLIANCE / OMISSÃO
+    // ═════════════════════════════════════════════════════
+
+    var omPdf = r.omissaoResult;
+    if (omPdf && omPdf.indicadores && omPdf.indicadores.length > 0) {
+      h += secaoTitulo('🔍', 'ALERTAS DE COMPLIANCE E OMISSÃO DE RECEITA');
+      omPdf.indicadores.forEach(function (ind) {
+        var tipoAlPdf = ind.gravidade === 'CRITICO' ? 'critico' : ind.gravidade === 'ALTO' ? 'aviso' : 'info';
+        h += alertaBox(tipoAlPdf, '<strong>' + (ind.descricao || '') + '</strong>' + (ind.artigo ? ' (' + ind.artigo + ')' : '') + (ind.resolucao ? '<br>→ ' + ind.resolucao : ''));
+      });
+    }
+
+    // ═════════════════════════════════════════════════════
+    //  SEÇÃO NOVA PDF 5 — AMORTIZAÇÃO, EXAUSTÃO, PRÉ-OPER.
+    // ═════════════════════════════════════════════════════
+
+    if (r.goodwillResult || r.exaustaoResult || r.preOperacionalResult) {
+      h += secaoTitulo('📊', 'AMORTIZAÇÃO, EXAUSTÃO E PRÉ-OPERACIONAIS');
+      var aeRows = [];
+      if (r.goodwillResult) {
+        var gwDedPdf = r.goodwillResult.amortizacaoAnual || r.goodwillResult.deducaoAnual || 0;
+        aeRows.push({ cells: ['Goodwill', _m(r.goodwillResult.valorGoodwill || 0), _m(gwDedPdf), _m(_r(gwDedPdf * 0.34)), 'Lei 12.973, Art. 20-22'], _eco: true });
+      }
+      if (r.exaustaoResult) {
+        var exDedPdf = r.exaustaoResult.exaustaoAnual || r.exaustaoResult.deducaoAnual || 0;
+        aeRows.push({ cells: ['Exaustão', _m(r.exaustaoResult.custoAquisicao || 0), _m(exDedPdf), _m(_r(exDedPdf * 0.34)), 'Art. 334-337 RIR'], _eco: true });
+      }
+      if (r.preOperacionalResult) {
+        var poDedPdf = r.preOperacionalResult.amortizacaoAnual || r.preOperacionalResult.deducaoAnual || 0;
+        aeRows.push({ cells: ['Pré-Operacionais', _m(r.preOperacionalResult.valorTotal || 0), _m(poDedPdf), _m(_r(poDedPdf * 0.34)), 'Art. 11 Lei 12.973'], _eco: true });
+      }
+      h += tabelaHTML(['Item', 'Valor Original', 'Dedução Anual', 'Economia (34%)', 'Base Legal'], aeRows);
+    }
+
+    // ═════════════════════════════════════════════════════
+    //  SEÇÃO NOVA PDF 6 — REFORMA TRIBUTÁRIA
+    // ═════════════════════════════════════════════════════
+
+    if (LR.reformaTributaria) {
+      h += pageBreak();
+      h += secaoTitulo('⚖️', 'REFORMA TRIBUTÁRIA — IMPACTOS LC 214/2025');
+      if (LR.reformaTributaria.impactosLucroReal) {
+        var rtRows = [];
+        LR.reformaTributaria.impactosLucroReal.forEach(function (imp) {
+          rtRows.push({ cells: [imp.tema || '', imp.descricao || '', imp.impacto || '', imp.statusRegulamentacao || imp.status || ''] });
+        });
+        h += tabelaHTML(['Tema', 'Descrição', 'Impacto', 'Status'], rtRows, { noAlignRight: true });
+      }
+      h += '<div style="font-style:italic;font-size:9px;color:' + COR.textMuted + ';margin:8px 0;">' + (LR.reformaTributaria.disclaimer || '') + '</div>';
+      if (LR.reformaTributaria.dataUltimaRevisao) {
+        h += '<div style="font-size:8px;color:' + COR.textMuted + ';">Última revisão: ' + LR.reformaTributaria.dataUltimaRevisao + '</div>';
+      }
+    }
+
+    // ═════════════════════════════════════════════════════
+    //  SEÇÃO NOVA PDF 7 — FÓRMULA MESTRE
+    // ═════════════════════════════════════════════════════
+
+    if (LR.formulaMestre && LR.formulaMestre.passos) {
+      h += secaoTitulo('📐', 'FÓRMULA MESTRE DO LUCRO REAL');
+      var vfPdfC = {};
+      vfPdfC[1] = dre.lucroLiquido || 0;
+      vfPdfC[2] = lalur.totalAdicoes || 0;
+      vfPdfC[3] = lalur.totalExclusoes || 0;
+      vfPdfC[4] = lalur.lucroAjustado || 0;
+      var compTotPdfC = 0;
+      if (r.compensacao && r.compensacao.resumo && r.compensacao.resumo.compensacaoEfetiva) {
+        compTotPdfC = (r.compensacao.resumo.compensacaoEfetiva.prejuizoOperacional || 0) + (r.compensacao.resumo.compensacaoEfetiva.baseNegativaCSLL || 0);
+      }
+      vfPdfC[5] = compTotPdfC;
+      vfPdfC[6] = r.lucroRealFinal || 0;
+      vfPdfC[7] = irpj.irpjNormal || 0;
+      vfPdfC[8] = irpj.adicional || 0;
+      vfPdfC[9] = r.irpjAntesReducao || 0;
+      vfPdfC[10] = (r.incentivosFiscais ? (r.incentivosFiscais.totalDeducaoFinal || r.incentivosFiscais.economiaTotal || 0) : 0) + (r.reducaoSUDAM || 0);
+      var retFormPdfC = r.retencoes ? (r.retencoes.irrf || 0) : 0;
+      vfPdfC[11] = retFormPdfC;
+      vfPdfC[12] = r.irpjAposReducao ? _r(r.irpjAposReducao - retFormPdfC) : 0;
+
+      var fmRowsC = [];
+      LR.formulaMestre.passos.forEach(function (p) {
+        var opI = p.operacao === '+' ? '(+)' : p.operacao === '-' ? '(-)' : p.operacao === '×' ? '(×)' : '(=)';
+        var isT = (p.operacao === '=' && (p.passo === 6 || p.passo === 9 || p.passo === 12));
+        var row = { cells: [opI, p.descricao + (p.artigo && p.artigo !== '-' ? ' — ' + p.artigo : ''), _m(vfPdfC[p.passo] || 0)] };
+        if (isT) row._subtotal = true;
+        fmRowsC.push(row);
+      });
+      h += tabelaHTML(['Op.', 'Passo', 'Valor'], fmRowsC);
+    }
+
+    // ═════════════════════════════════════════════════════
+    //  SEÇÃO NOVA PDF 8 — MAPA ESTRATÉGIAS RANKINGS
+    // ═════════════════════════════════════════════════════
+
+    if (LR.estrategiasEconomia && LR.estrategiasEconomia.length > 0 && ops.length > 0) {
+      h += secaoTitulo('🗺️', 'MAPA DE ESTRATÉGIAS DE ECONOMIA — RANKINGS');
+      var estRows = [];
+      LR.estrategiasEconomia.forEach(function (est) {
+        var econEstPdf = 0;
+        var ecoKeyPdf = est.nome.toLowerCase();
+        if (ecoKeyPdf.indexOf('jcp') >= 0) econEstPdf = eco.jcp || 0;
+        else if (ecoKeyPdf.indexOf('prejuízo') >= 0 || ecoKeyPdf.indexOf('prejuizo') >= 0) econEstPdf = eco.prejuizo || 0;
+        else if (ecoKeyPdf.indexOf('sudam') >= 0) econEstPdf = eco.sudam || 0;
+        else if (ecoKeyPdf.indexOf('incentiv') >= 0) econEstPdf = eco.incentivos || 0;
+        else if (ecoKeyPdf.indexOf('deprecia') >= 0) econEstPdf = eco.depreciacao || 0;
+        else if (ecoKeyPdf.indexOf('pis') >= 0 || ecoKeyPdf.indexOf('cofins') >= 0) econEstPdf = eco.pisCofinsCreditos || 0;
+        estRows.push({ cells: [est.nome, est.tipo || '', _m(econEstPdf), est.complexidade || '', est.risco || '', est.artigo || ''], _eco: econEstPdf > 0 });
+      });
+      h += tabelaHTML(['Estratégia', 'Tipo', 'Economia Real', 'Complexidade', 'Risco', 'Artigo'], estRows, { noAlignRight: true });
+    }
+
+    // ═════════════════════════════════════════════════════
+    //  SEÇÃO NOVA PDF 9 — ESTRUTURA LALUR
+    // ═════════════════════════════════════════════════════
+
+    if (LR.lalur) {
+      h += secaoTitulo('📑', 'ESTRUTURA LALUR — PARTE A E PARTE B');
+
+      // Parte A
+      h += '<div style="font-weight:700;font-size:10px;margin:8px 0 4px;">Parte A — Demonstração do Lucro Real</div>';
+      var lalurRowsPdf = [];
+      if (lalur.adicoes && lalur.adicoes.length > 0) {
+        lalur.adicoes.forEach(function (a) {
+          lalurRowsPdf.push({ cells: ['(+) Adição', a.desc || a.descricao || '', _m(a.valor), a.artigo || ''] });
+        });
+      }
+      if (lalur.exclusoes && lalur.exclusoes.length > 0) {
+        lalur.exclusoes.forEach(function (e) {
+          lalurRowsPdf.push({ cells: ['(-) Exclusão', e.desc || e.descricao || '', _m(e.valor), e.artigo || ''], _eco: true });
+        });
+      }
+      if (lalurRowsPdf.length > 0) {
+        h += tabelaHTML(['Tipo', 'Descrição', 'Valor', 'Artigo'], lalurRowsPdf, { noAlignRight: true });
+      }
+
+      // Parte B
+      h += '<div style="font-weight:700;font-size:10px;margin:12px 0 4px;">Parte B — Controles Futuros</div>';
+      var parteBRows = [];
+      var saldoPrejPdf = 0;
+      if (r.compensacao && r.compensacao.resumo && r.compensacao.resumo.saldosPosCompensacao) {
+        saldoPrejPdf = r.compensacao.resumo.saldosPosCompensacao.prejuizoOperacional || r.compensacao.resumo.saldosPosCompensacao.prejuizoFiscal || 0;
+      }
+      if (saldoPrejPdf > 0) parteBRows.push({ cells: ['Prejuízos Fiscais', _m(saldoPrejPdf), '30% do lucro ajustado por período'] });
+      var saldoBNPdf = 0;
+      if (r.compensacao && r.compensacao.resumo && r.compensacao.resumo.saldosPosCompensacao) {
+        saldoBNPdf = r.compensacao.resumo.saldosPosCompensacao.baseNegativaCSLL || 0;
+      }
+      if (saldoBNPdf > 0) parteBRows.push({ cells: ['Base Negativa CSLL', _m(saldoBNPdf), '30% da base positiva'] });
+      if (parteBRows.length > 0) {
+        h += tabelaHTML(['Controle', 'Saldo', 'Projeção Reversão'], parteBRows);
+      }
+    }
+
+    // ═════════════════════════════════════════════════════
+    //  SEÇÃO NOVA PDF 10 — ALÍQUOTAS APLICÁVEIS (PARTE 5B)
+    // ═════════════════════════════════════════════════════
+
+    if (LR.aliquotas) {
+      h += secaoTitulo('📊', 'ALÍQUOTAS APLICÁVEIS — REFERÊNCIA');
+      var aliqRowsPdf = [];
+      var aIRPJ = LR.aliquotas.irpj || {};
+      var aCSLL = LR.aliquotas.csll || {};
+      var aPC = LR.aliquotas.pisCofins || {};
+      aliqRowsPdf.push({ cells: ['IRPJ Normal', _pp((aIRPJ.normal || 0.15) * 100), aIRPJ.artigoBase || 'Art. 225'] });
+      aliqRowsPdf.push({ cells: ['IRPJ Adicional', _pp((aIRPJ.adicional || 0.10) * 100), 'Excedente R$ 20.000/mês'] });
+      aliqRowsPdf.push({ cells: ['CSLL Geral', _pp((aCSLL.geral || 0.09) * 100), aCSLL.artigoBase || 'Lei 7.689'] });
+      aliqRowsPdf.push({ cells: ['CSLL Financeiras', _pp((aCSLL.financeiras || 0.15) * 100), 'Lei 13.169/2015'] });
+      aliqRowsPdf.push({ cells: ['PIS NC', _pp((aPC.pisNaoCumulativo || 0.0165) * 100), 'Lei 10.637/02'] });
+      aliqRowsPdf.push({ cells: ['COFINS NC', _pp((aPC.cofinsNaoCumulativo || 0.076) * 100), 'Lei 10.833/03'] });
+      aliqRowsPdf.push({ cells: ['JCP IRRF', '15,00%', 'Art. 355-358'] });
+      aliqRowsPdf.push({ cells: ['Trava Compensação', '30,00%', 'Art. 580-590'] });
+      h += tabelaHTML(['Tributo', 'Alíquota', 'Base Legal'], aliqRowsPdf, { noAlignRight: true });
+    }
+
+    // ═════════════════════════════════════════════════════
+    //  SEÇÃO NOVA PDF 11 — HIPÓTESES OBRIGATORIEDADE (PARTE 5B)
+    // ═════════════════════════════════════════════════════
+
+    if (LR.obrigatoriedadeLucroReal && LR.obrigatoriedadeLucroReal.hipoteses) {
+      h += secaoTitulo('📋', 'HIPÓTESES DE OBRIGATORIEDADE DO LUCRO REAL');
+      var hipRowsPdf = [];
+      LR.obrigatoriedadeLucroReal.hipoteses.forEach(function (hip) {
+        var apl = false;
+        if (hip.id === 'RECEITA' && _n(d.receitaBrutaAnual) > (hip.valor || 78000000)) apl = true;
+        else if (hip.id === 'FINANCEIRA' && (d.ehInstituicaoFinanceira === true || d.ehInstituicaoFinanceira === "true")) apl = true;
+        else if (hip.id === 'LUCRO_EXTERIOR' && (d.temLucroExterior === true || d.temLucroExterior === "true")) apl = true;
+        else if (hip.id === 'BENEFICIO_FISCAL' && (d.temBeneficioFiscalIsencao === true || d.temBeneficioFiscalIsencao === "true")) apl = true;
+        else if (hip.id === 'FACTORING' && (d.ehFactoring === true || d.ehFactoring === "true")) apl = true;
+        else if (hip.id === 'SECURITIZADORA' && (d.ehSecuritizadora === true || d.ehSecuritizadora === "true")) apl = true;
+        hipRowsPdf.push({ cells: [hip.inciso || '', hip.descricao || '', apl ? '✅ SIM' : '—'] });
+      });
+      h += tabelaHTML(['Inciso', 'Hipótese', 'Aplicável?'], hipRowsPdf, { noAlignRight: true });
+    }
+
+
+    // ═════════════════════════════════════════════════════
     //  SEÇÃO 14 — DISCLAIMER + RODAPÉ
     // ═════════════════════════════════════════════════════
 
@@ -6509,6 +8432,217 @@
       aba6.push(['Ative as opções "Gerar Cenários" e "Gerar Projeção" na Etapa 7 do wizard.']);
     }
     addSheet('Cenários-Projeção', aba6, [20, 18, 18, 18, 20]);
+
+
+    // ═════════════════════════════════════════════════════
+    //  ABA 7 — DESPESAS LIMITES
+    // ═════════════════════════════════════════════════════
+
+    var aba7 = [];
+    aba7.push(['DESPESAS COM LIMITES LEGAIS']);
+    aba7.push(['Despesa', 'Valor Informado', 'Limite Legal', 'Excesso Indedutível']);
+    var vdlXls = r.validacaoDespesasLimites;
+    if (vdlXls) {
+      if (vdlXls.doacoes) {
+        aba7.push(['Doações', mv(vdlXls.doacoes.totalInformado || 0), mv(vdlXls.doacoes.limiteCalculado || vdlXls.doacoes.limiteTotal || 0), mv(vdlXls.doacoes.excesso || vdlXls.doacoes.excedenteTotal || 0)]);
+      }
+      if (vdlXls.previdencia) {
+        aba7.push(['Previdência Complementar', mv(vdlXls.previdencia.contribuicao || vdlXls.previdencia.totalInformado || 0), mv(vdlXls.previdencia.limite || vdlXls.previdencia.limiteCalculado || 0), mv(vdlXls.previdencia.excesso || vdlXls.previdencia.excedente || 0)]);
+      }
+      if (vdlXls.royalties) {
+        aba7.push(['Royalties', mv(vdlXls.royalties.royaltiesPagos || vdlXls.royalties.totalInformado || 0), mv(vdlXls.royalties.limite || vdlXls.royalties.limiteCalculado || 0), mv(vdlXls.royalties.excesso || vdlXls.royalties.excedente || 0)]);
+      }
+    } else {
+      aba7.push(['Nenhuma despesa com limite informada', '', '', '']);
+    }
+    addSheet('Despesas Limites', aba7, [30, 18, 18, 18]);
+
+
+    // ═════════════════════════════════════════════════════
+    //  ABA 8 — INDEDUTÍVEIS
+    // ═════════════════════════════════════════════════════
+
+    var aba8 = [];
+    aba8.push(['DESPESAS INDEDUTÍVEIS']);
+    aba8.push(['Descrição', 'Artigo', 'Valor', 'Impacto Fiscal (34%)']);
+    var diXls = r.despesasIndedutivelDetalhe;
+    if (diXls && diXls.length > 0) {
+      var totalIndXls = 0;
+      var totalImpXls = 0;
+      diXls.forEach(function (di) {
+        var impXls = _r((di.valor || 0) * 0.34);
+        totalIndXls += (di.valor || 0);
+        totalImpXls += impXls;
+        aba8.push([di.descricao || di.desc || '', di.artigo || '', mv(di.valor), mv(impXls)]);
+      });
+      aba8.push(['TOTAL', '', mv(totalIndXls), mv(totalImpXls)]);
+    } else {
+      aba8.push(['Nenhuma despesa indedutível identificada', '', '', '']);
+    }
+    addSheet('Indedutíveis', aba8, [40, 25, 18, 18]);
+
+
+    // ═════════════════════════════════════════════════════
+    //  ABA 9 — SUBCAPITALIZAÇÃO
+    // ═════════════════════════════════════════════════════
+
+    var aba9 = [];
+    aba9.push(['ANÁLISE DE SUBCAPITALIZAÇÃO']);
+    aba9.push([]);
+    if (r.subcapResult) {
+      aba9.push(['Limite Excedido?', r.subcapResult.excedeu ? 'SIM' : 'NÃO']);
+      if (r.subcapResult.excedeu) {
+        aba9.push(['Juros Indedutíveis', mv(r.subcapResult.jurosIndedutiveis || 0)]);
+      }
+      aba9.push([]);
+      aba9.push(['LIMITES DE SUBCAPITALIZAÇÃO (Art. 249-251)']);
+      aba9.push(['Tipo', 'Regra', 'Artigo']);
+      if (LR.subcapitalizacao) {
+        if (LR.subcapitalizacao.vinculadaComParticipacao) {
+          aba9.push(['Vinculada c/ Participação', LR.subcapitalizacao.vinculadaComParticipacao.descricao || '', LR.subcapitalizacao.vinculadaComParticipacao.artigo || '']);
+        }
+        if (LR.subcapitalizacao.vinculadaSemParticipacao) {
+          aba9.push(['Vinculada s/ Participação', LR.subcapitalizacao.vinculadaSemParticipacao.descricao || '', LR.subcapitalizacao.vinculadaSemParticipacao.artigo || '']);
+        }
+        if (LR.subcapitalizacao.paraisoFiscal) {
+          aba9.push(['Paraíso Fiscal', LR.subcapitalizacao.paraisoFiscal.descricao || '', LR.subcapitalizacao.paraisoFiscal.artigo || '']);
+        }
+      }
+    } else {
+      aba9.push(['Dados de subcapitalização não informados']);
+    }
+    addSheet('Subcapitalização', aba9, [30, 50, 15]);
+
+
+    // ═════════════════════════════════════════════════════
+    //  ABA 10 — LALUR
+    // ═════════════════════════════════════════════════════
+
+    var aba10 = [];
+    aba10.push(['LALUR — PARTE A E PARTE B']);
+    aba10.push([]);
+    aba10.push(['PARTE A — Adições e Exclusões Efetivas']);
+    aba10.push(['Tipo', 'Descrição', 'Valor', 'Artigo']);
+    if (lalur.adicoes && lalur.adicoes.length > 0) {
+      lalur.adicoes.forEach(function (a) {
+        aba10.push(['(+) Adição', a.desc || a.descricao || '', mv(a.valor), a.artigo || '']);
+      });
+      aba10.push(['Total Adições', '', mv(lalur.totalAdicoes), '']);
+    }
+    if (lalur.exclusoes && lalur.exclusoes.length > 0) {
+      lalur.exclusoes.forEach(function (e) {
+        aba10.push(['(-) Exclusão', e.desc || e.descricao || '', mv(e.valor), e.artigo || '']);
+      });
+      aba10.push(['Total Exclusões', '', mv(lalur.totalExclusoes), '']);
+    }
+    aba10.push([]);
+    aba10.push(['PARTE B — Controles Futuros']);
+    aba10.push(['Controle', 'Saldo Remanescente', 'Projeção']);
+    var saldoPrejXls = 0;
+    if (r.compensacao && r.compensacao.resumo && r.compensacao.resumo.saldosPosCompensacao) {
+      saldoPrejXls = r.compensacao.resumo.saldosPosCompensacao.prejuizoOperacional || r.compensacao.resumo.saldosPosCompensacao.prejuizoFiscal || 0;
+    }
+    if (saldoPrejXls > 0) aba10.push(['Prejuízos Fiscais a Compensar', mv(saldoPrejXls), 'Compensável a 30% do lucro ajustado']);
+    var saldoBNXls = 0;
+    if (r.compensacao && r.compensacao.resumo && r.compensacao.resumo.saldosPosCompensacao) {
+      saldoBNXls = r.compensacao.resumo.saldosPosCompensacao.baseNegativaCSLL || 0;
+    }
+    if (saldoBNXls > 0) aba10.push(['Base Negativa CSLL', mv(saldoBNXls), 'Compensável a 30% da base positiva']);
+    var provNDXls = _n(d.provisoesContingencias) + _n(d.provisoesGarantias);
+    if (provNDXls > 0) aba10.push(['Provisões Não Dedutíveis', mv(provNDXls), 'Exclusão na reversão/liquidação']);
+    addSheet('LALUR', aba10, [15, 40, 18, 25]);
+
+
+    // ═════════════════════════════════════════════════════
+    //  ABA 11 — MAPA ECONOMIA
+    // ═════════════════════════════════════════════════════
+
+    var aba11 = [];
+    aba11.push(['MAPA DE ECONOMIA — OPORTUNIDADES RANQUEADAS']);
+    aba11.push(['#', 'Título', 'Tipo', 'Economia Anual', 'Complexidade', 'Risco', 'Base Legal', 'Descrição']);
+    var opsRank = (r.oportunidades || []).slice().sort(function (a, b) { return (b.economiaAnual || 0) - (a.economiaAnual || 0); });
+    opsRank.forEach(function (op, i) {
+      aba11.push([
+        i + 1,
+        op.titulo || '',
+        op.tipo || '',
+        mv(op.economiaAnual),
+        op.complexidade || '',
+        op.risco || '',
+        op.baseLegal || '',
+        op.descricao || ''
+      ]);
+    });
+    if (opsRank.length > 0) {
+      var econTotalXls = 0;
+      opsRank.forEach(function (op) { econTotalXls += (op.economiaAnual || 0); });
+      aba11.push(['', 'TOTAL', '', mv(econTotalXls), '', '', '', '']);
+    }
+    addSheet('Mapa Economia', aba11, [5, 30, 12, 16, 12, 10, 25, 50]);
+
+
+    // ═════════════════════════════════════════════════════
+    //  ABA 12 — ALÍQUOTAS REFERÊNCIA (PARTE 5B)
+    // ═════════════════════════════════════════════════════
+
+    if (LR.aliquotas) {
+      var aba12 = [];
+      aba12.push(['ALÍQUOTAS APLICÁVEIS — REFERÊNCIA']);
+      aba12.push(['Tributo', 'Alíquota (%)', 'Base Legal']);
+      var aI = LR.aliquotas.irpj || {};
+      var aC = LR.aliquotas.csll || {};
+      var aP = LR.aliquotas.pisCofins || {};
+      aba12.push(['IRPJ Normal', pv(aI.normal || 0.15), aI.artigoBase || 'Art. 225']);
+      aba12.push(['IRPJ Adicional', pv(aI.adicional || 0.10), 'Excedente R$ 20.000/mês']);
+      aba12.push(['CSLL Geral', pv(aC.geral || 0.09), aC.artigoBase || 'Lei 7.689']);
+      aba12.push(['CSLL Financeiras', pv(aC.financeiras || 0.15), 'Lei 13.169/2015']);
+      aba12.push(['PIS NC', pv(aP.pisNaoCumulativo || 0.0165), 'Lei 10.637/02']);
+      aba12.push(['COFINS NC', pv(aP.cofinsNaoCumulativo || 0.076), 'Lei 10.833/03']);
+      aba12.push(['JCP IRRF', 15.00, 'Art. 355-358']);
+      aba12.push(['Trava Compensação', 30.00, 'Art. 580-590']);
+      addSheet('Alíquotas', aba12, [25, 15, 30]);
+    }
+
+    // ═════════════════════════════════════════════════════
+    //  ABA 13 — HIPÓTESES OBRIGATORIEDADE (PARTE 5B)
+    // ═════════════════════════════════════════════════════
+
+    if (LR.obrigatoriedadeLucroReal && LR.obrigatoriedadeLucroReal.hipoteses) {
+      var aba13 = [];
+      aba13.push(['HIPÓTESES DE OBRIGATORIEDADE DO LUCRO REAL']);
+      aba13.push(['Inciso', 'Hipótese', 'Aplicável?']);
+      LR.obrigatoriedadeLucroReal.hipoteses.forEach(function (hip) {
+        var aplXls = false;
+        if (hip.id === 'RECEITA' && _n(d.receitaBrutaAnual) > (hip.valor || 78000000)) aplXls = true;
+        else if (hip.id === 'FINANCEIRA' && (d.ehInstituicaoFinanceira === true || d.ehInstituicaoFinanceira === "true")) aplXls = true;
+        else if (hip.id === 'LUCRO_EXTERIOR' && (d.temLucroExterior === true || d.temLucroExterior === "true")) aplXls = true;
+        else if (hip.id === 'BENEFICIO_FISCAL' && (d.temBeneficioFiscalIsencao === true || d.temBeneficioFiscalIsencao === "true")) aplXls = true;
+        else if (hip.id === 'FACTORING' && (d.ehFactoring === true || d.ehFactoring === "true")) aplXls = true;
+        else if (hip.id === 'SECURITIZADORA' && (d.ehSecuritizadora === true || d.ehSecuritizadora === "true")) aplXls = true;
+        aba13.push([hip.inciso || '', hip.descricao || '', aplXls ? 'SIM' : '—']);
+      });
+      addSheet('Obrigatoriedade', aba13, [10, 60, 12]);
+    }
+
+    // ═════════════════════════════════════════════════════
+    //  ABA 14 — RELATÓRIO CONSOLIDADO (PARTE 5B)
+    // ═════════════════════════════════════════════════════
+
+    if (r.relatorioConsolidado) {
+      var aba14 = [];
+      aba14.push(['RELATÓRIO CONSOLIDADO']);
+      aba14.push([]);
+      if (r.relatorioConsolidado.resumo) {
+        var rcRes = r.relatorioConsolidado.resumo;
+        Object.keys(rcRes).forEach(function (k) {
+          var val = rcRes[k];
+          aba14.push([k, typeof val === 'number' ? mv(val) : String(val || '')]);
+        });
+      } else {
+        aba14.push(['Dados consolidados disponíveis', 'Sim']);
+      }
+      addSheet('Consolidado', aba14, [35, 25]);
+    }
 
 
     // ═════════════════════════════════════════════════════
