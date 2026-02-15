@@ -1,0 +1,2661 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IMPOST. — Análise Tributária TEA v5.1 | Brasil 2026</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* ═══════════════════════════════════════════ */
+        /*  CSS VARIABLES                              */
+        /* ═══════════════════════════════════════════ */
+        :root {
+            --bg-deepest: #f5f3ee;
+            --bg-deep: #faf8f4;
+            --bg-base: #ffffff;
+            --bg-card: #ffffff;
+            --bg-card-hover: #f9f7f2;
+            --bg-input: #ffffff;
+            --border-subtle: #e8e3d8;
+            --border-base: #ddd7ca;
+            --border-active: rgba(22,163,74,0.35);
+            --text-primary: #1a1a1a;
+            --text-secondary: #555555;
+            --text-muted: #8a8578;
+            --accent: #16a34a;
+            --accent-dim: rgba(22,163,74,0.08);
+            --accent-glow: rgba(22,163,74,0.18);
+            --accent-bright: #15803d;
+            --blue: #2563eb;
+            --purple: #7c3aed;
+            --orange: #ea580c;
+            --amber: #d97706;
+            --red: #dc2626;
+            --cyan: #0891b2;
+            --font-body: 'DM Sans', system-ui, sans-serif;
+            --font-mono: 'JetBrains Mono', 'Courier New', monospace;
+            --transition-fast: 0.2s cubic-bezier(.4,0,.2,1);
+            --transition-base: 0.3s cubic-bezier(.4,0,.2,1);
+            --radius-sm: 8px;
+            --radius-md: 12px;
+            --radius-lg: 16px;
+            --radius-xl: 20px;
+        }
+
+        /* ═══════════════════════════════════════════ */
+        /*  RESET & BASE                               */
+        /* ═══════════════════════════════════════════ */
+        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+        html { scroll-behavior: smooth; }
+        body {
+            font-family: var(--font-body);
+            background: var(--bg-deepest);
+            color: var(--text-primary);
+            line-height: 1.6;
+            min-height: 100vh;
+            -webkit-font-smoothing: antialiased;
+        }
+        .mono { font-family: var(--font-mono); }
+
+        /* ═══════════════════════════════════════════ */
+        /*  LAYOUT                                     */
+        /* ═══════════════════════════════════════════ */
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px 16px 60px;
+        }
+
+        /* ═══════════════════════════════════════════ */
+        /*  NAVBAR                                     */
+        /* ═══════════════════════════════════════════ */
+        .navbar {
+            background: var(--bg-card);
+            border-bottom: 1px solid var(--border-subtle);
+            padding: 12px 0;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+        .navbar .inner {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 0 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .navbar .logo {
+            font-size: 1.4rem;
+            font-weight: 800;
+            color: var(--text-primary);
+            text-decoration: none;
+            letter-spacing: -0.02em;
+        }
+        .navbar .logo b { color: var(--accent); }
+        .navbar .nav-sep { color: var(--border-base); margin: 0 12px; font-weight: 300; }
+        .navbar .nav-sub { font-size: 0.88rem; color: var(--text-muted); }
+        .navbar .btn-back {
+            font-size: 0.82rem;
+            font-weight: 600;
+            color: #fff;
+            background: var(--accent);
+            padding: 8px 18px;
+            border-radius: 8px;
+            text-decoration: none;
+            transition: background 0.15s;
+        }
+        .navbar .btn-back:hover { background: var(--accent-bright); }
+
+        /* ═══════════════════════════════════════════ */
+        /*  HEADER                                     */
+        /* ═══════════════════════════════════════════ */
+        .header {
+            text-align: center;
+            padding: 32px 0 24px;
+        }
+        .header h1 {
+            font-size: 2rem;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+        }
+        .header h1 span { color: var(--accent); }
+        .header p {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+            margin-top: 4px;
+        }
+        .header .version-badge {
+            display: inline-block;
+            background: var(--accent);
+            color: #fff;
+            font-size: 0.7rem;
+            font-weight: 700;
+            padding: 2px 8px;
+            border-radius: 10px;
+            margin-left: 6px;
+            vertical-align: super;
+        }
+
+        /* ═══════════════════════════════════════════ */
+        /*  SECTIONS & CARDS                           */
+        /* ═══════════════════════════════════════════ */
+        .section {
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-md);
+            padding: 24px;
+            margin-bottom: 20px;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+        }
+        .section-title {
+            font-size: 1.05rem;
+            font-weight: 700;
+            color: var(--accent-bright);
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .section-title .num {
+            background: var(--accent);
+            color: #fff;
+            font-family: var(--font-mono);
+            font-size: 0.8rem;
+            font-weight: 700;
+            width: 26px; height: 26px;
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+        }
+
+        /* ═══════════════════════════════════════════ */
+        /*  FORM ELEMENTS                              */
+        /* ═══════════════════════════════════════════ */
+        .field { margin-bottom: 16px; }
+        .field-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+        @media (max-width: 600px) {
+            .field-row { grid-template-columns: 1fr; }
+        }
+        label {
+            display: block;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            margin-bottom: 6px;
+        }
+        label .hint {
+            font-weight: 400;
+            color: var(--text-muted);
+            font-size: 0.78rem;
+        }
+        input[type="text"],
+        input[type="number"],
+        select {
+            width: 100%;
+            padding: 10px 14px;
+            background: var(--bg-input);
+            border: 1.5px solid var(--border-base);
+            border-radius: var(--radius-sm);
+            color: var(--text-primary);
+            font-family: var(--font-body);
+            font-size: 0.95rem;
+            outline: none;
+            transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+        }
+        input:focus, select:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px var(--accent-glow);
+        }
+        input.money {
+            font-family: var(--font-mono);
+            font-weight: 600;
+            font-size: 1rem;
+        }
+        select {
+            cursor: pointer;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23555555' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 12px center;
+            padding-right: 36px;
+        }
+        input::placeholder { color: var(--text-muted); }
+
+        /* Checkbox */
+        .check-group { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 4px; }
+        .check-item {
+            display: flex; align-items: center; gap: 8px;
+            font-size: 0.88rem; color: var(--text-secondary);
+            cursor: pointer;
+        }
+        .check-item input[type="checkbox"] {
+            width: 18px; height: 18px;
+            accent-color: var(--accent);
+            cursor: pointer;
+        }
+
+        /* Slider */
+        .slider-group {
+            display: flex; align-items: center; gap: 12px;
+        }
+        .slider-group input[type="range"] {
+            flex: 1;
+            height: 6px;
+            -webkit-appearance: none;
+            appearance: none;
+            background: var(--border-base);
+            border-radius: 3px;
+            outline: none;
+        }
+        .slider-group input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 18px; height: 18px;
+            border-radius: 50%;
+            background: var(--accent);
+            cursor: pointer;
+            box-shadow: 0 1px 4px rgba(22,163,74,0.3);
+        }
+        .slider-group .slider-value {
+            font-family: var(--font-mono);
+            font-weight: 600;
+            font-size: 0.95rem;
+            color: var(--accent);
+            min-width: 50px;
+            text-align: right;
+        }
+
+        /* ═══════════════════════════════════════════ */
+        /*  CNAE AUTOCOMPLETE                          */
+        /* ═══════════════════════════════════════════ */
+        .cnae-wrapper { position: relative; }
+        #cnaeDropdown {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 0; right: 0;
+            background: var(--bg-base);
+            border: 1px solid var(--border-active);
+            border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+            max-height: 320px;
+            overflow-y: auto;
+            z-index: 100;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+        }
+        .cnae-item {
+            padding: 10px 14px;
+            cursor: pointer;
+            border-bottom: 1px solid var(--border-subtle);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+            transition: background var(--transition-fast);
+        }
+        .cnae-item:hover, .cnae-item.active {
+            background: var(--accent-dim);
+        }
+        .cnae-item .cnae-text {
+            font-size: 0.88rem;
+            color: var(--text-primary);
+            flex: 1;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .cnae-item .cnae-text .code {
+            font-family: var(--font-mono);
+            color: var(--accent);
+            font-size: 0.82rem;
+        }
+        .cnae-badge {
+            font-size: 0.7rem;
+            font-weight: 700;
+            padding: 2px 8px;
+            border-radius: 10px;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+        .cnae-badge.comercio { background: rgba(22,163,74,0.10); color: #15803d; }
+        .cnae-badge.industria { background: rgba(37,99,235,0.10); color: #1d4ed8; }
+        .cnae-badge.servico { background: rgba(124,58,237,0.10); color: #6d28d9; }
+
+        /* CNAE Info Card */
+        #cnaeInfo {
+            display: none;
+            background: var(--bg-deep);
+            border: 1px solid var(--border-active);
+            border-radius: var(--radius-sm);
+            padding: 14px;
+            margin-top: 10px;
+            font-size: 0.88rem;
+        }
+        #cnaeInfo .cnae-info-title {
+            font-weight: 700;
+            color: var(--accent-bright);
+            margin-bottom: 8px;
+        }
+        #cnaeInfo .cnae-info-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 3px 0;
+            color: var(--text-secondary);
+        }
+        #cnaeInfo .cnae-info-row span:last-child {
+            font-weight: 600;
+            color: var(--text-primary);
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+        }
+        .badge-warn {
+            background: rgba(217,119,6,0.10);
+            color: var(--amber);
+            font-size: 0.75rem;
+            font-weight: 700;
+            padding: 3px 10px;
+            border-radius: 10px;
+            display: inline-block;
+            margin-top: 8px;
+        }
+        .badge-ok {
+            background: rgba(22,163,74,0.10);
+            color: var(--accent);
+            font-size: 0.75rem;
+            font-weight: 700;
+            padding: 3px 10px;
+            border-radius: 10px;
+            display: inline-block;
+            margin-top: 8px;
+        }
+        .badge-vedado {
+            background: rgba(220,38,38,0.10);
+            color: var(--red);
+            font-size: 0.75rem;
+            font-weight: 700;
+            padding: 3px 10px;
+            border-radius: 10px;
+            display: inline-block;
+            margin-top: 8px;
+        }
+
+        /* ═══════════════════════════════════════════ */
+        /*  INDICATOR BARS                             */
+        /* ═══════════════════════════════════════════ */
+        .bar-container {
+            display: none;
+            background: var(--bg-deep);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-sm);
+            padding: 14px;
+            margin-top: 10px;
+        }
+        .bar-label {
+            font-size: 0.82rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            margin-bottom: 6px;
+        }
+        .bar-track {
+            height: 10px;
+            background: var(--border-base);
+            border-radius: 5px;
+            position: relative;
+            overflow: visible;
+        }
+        .bar-fill {
+            height: 100%;
+            border-radius: 5px;
+            transition: width var(--transition-base), background var(--transition-base);
+        }
+        .bar-marker {
+            position: absolute;
+            top: -4px;
+            width: 2px; height: 18px;
+            background: var(--text-muted);
+            border-radius: 1px;
+        }
+        .bar-marker-label {
+            position: absolute;
+            top: 18px;
+            font-size: 0.65rem;
+            color: var(--text-muted);
+            white-space: nowrap;
+            transform: translateX(-50%);
+        }
+        .bar-value {
+            font-family: var(--font-mono);
+            font-size: 0.9rem;
+            font-weight: 700;
+            margin-top: 6px;
+        }
+
+        /* ═══════════════════════════════════════════ */
+        /*  ISS HINT & MUNICÍPIO LOADING — v4.1       */
+        /* ═══════════════════════════════════════════ */
+        .iss-hint {
+            margin-top: 8px;
+            padding: 10px 14px;
+            font-size: 0.82rem;
+            line-height: 1.55;
+            border-radius: var(--radius-sm);
+            background: var(--bg-deep);
+            border-left: 3px solid var(--amber);
+            color: var(--text-secondary);
+        }
+        .iss-hint strong { color: var(--text-primary); }
+        #munLoading svg { color: var(--accent); }
+        /* Município com ISS aproximado */
+        #selectMunicipio option[data-iss-conhecido="0"] {
+            color: #8a8578;
+            font-style: italic;
+        }
+
+        /* ═══════════════════════════════════════════ */
+        /*  DICA BANNER                                */
+        /* ═══════════════════════════════════════════ */
+        #dicaBanner {
+            display: none;
+            background: rgba(22,163,74,0.06);
+            border: 1px solid rgba(22,163,74,0.15);
+            border-radius: var(--radius-sm);
+            padding: 14px;
+            margin-bottom: 16px;
+            font-size: 0.88rem;
+            color: var(--text-secondary);
+        }
+        #dicaBanner strong { color: var(--accent-bright); }
+
+        /* ═══════════════════════════════════════════ */
+        /*  SÓCIOS CONFIG — NOVO v4.0                  */
+        /* ═══════════════════════════════════════════ */
+        #sociosSection {
+            display: none;
+            margin-top: 16px;
+        }
+        .socios-section-title {
+            font-size: 0.9rem;
+            font-weight: 700;
+            color: var(--accent-bright);
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .socios-section-title .hint {
+            font-weight: 400;
+            color: var(--text-muted);
+            font-size: 0.78rem;
+        }
+        .socio-row {
+            display: grid;
+            grid-template-columns: 1fr 80px 1fr;
+            gap: 10px;
+            margin-bottom: 8px;
+            align-items: center;
+        }
+        @media (max-width: 500px) {
+            .socio-row {
+                grid-template-columns: 1fr;
+                gap: 6px;
+                padding-bottom: 10px;
+                border-bottom: 1px solid var(--border-subtle);
+                margin-bottom: 10px;
+            }
+        }
+        .socio-field input {
+            width: 100%;
+            padding: 8px 10px;
+            background: var(--bg-input);
+            border: 1px solid var(--border-base);
+            border-radius: 6px;
+            color: var(--text-primary);
+            font-family: var(--font-body);
+            font-size: 0.85rem;
+            outline: none;
+            transition: border-color var(--transition-fast);
+        }
+        .socio-field input:focus {
+            border-color: var(--accent);
+        }
+        .socio-input-group {
+            display: flex;
+            align-items: center;
+        }
+        .socio-input-group input {
+            border-radius: 6px 0 0 6px;
+            text-align: center;
+        }
+        .socio-suffix {
+            background: var(--bg-deepest);
+            color: var(--text-muted);
+            padding: 8px 8px;
+            border-radius: 0 6px 6px 0;
+            font-size: 0.82rem;
+            font-weight: 600;
+            border: 1.5px solid var(--border-base);
+            border-left: none;
+        }
+        .socios-total {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 0.82rem;
+            font-weight: 600;
+            margin-top: 8px;
+        }
+        .socios-total.valid {
+            background: rgba(22,163,74,0.06);
+            color: var(--accent);
+        }
+        .socios-total.invalid {
+            background: rgba(220,38,38,0.06);
+            color: var(--red);
+        }
+        .socios-total span:first-child {
+            color: var(--text-muted);
+        }
+        .socios-total .socios-status {
+            margin-left: auto;
+            font-weight: 700;
+        }
+        .socios-presets {
+            display: flex;
+            gap: 8px;
+            margin-top: 10px;
+            flex-wrap: wrap;
+        }
+        .socios-presets button {
+            padding: 5px 14px;
+            font-size: 0.78rem;
+            font-weight: 600;
+            font-family: var(--font-body);
+            background: var(--bg-deepest);
+            border: 1.5px solid var(--border-base);
+            border-radius: 20px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all var(--transition-fast);
+        }
+        .socios-presets button:hover {
+            border-color: var(--accent);
+            color: #fff;
+            background: var(--accent);
+        }
+
+        /* Socio column headers */
+        .socios-header {
+            display: grid;
+            grid-template-columns: 1fr 80px 1fr;
+            gap: 10px;
+            margin-bottom: 6px;
+            font-size: 0.72rem;
+            font-weight: 700;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        @media (max-width: 500px) {
+            .socios-header { display: none; }
+        }
+
+        /* ═══════════════════════════════════════════ */
+        /*  BUTTON                                     */
+        /* ═══════════════════════════════════════════ */
+        .btn-calcular {
+            width: 100%;
+            padding: 16px;
+            font-size: 1.1rem;
+            font-weight: 700;
+            font-family: var(--font-body);
+            color: #fff;
+            background: linear-gradient(135deg, var(--accent), #22c55e);
+            border: none;
+            border-radius: var(--radius-md);
+            cursor: pointer;
+            transition: all var(--transition-base);
+            position: relative;
+            overflow: hidden;
+        }
+        .btn-calcular:hover:not(:disabled) {
+            transform: translateY(-1px);
+            box-shadow: 0 8px 24px var(--accent-glow);
+        }
+        .btn-calcular:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+        .btn-calcular::after {
+            content: '';
+            position: absolute;
+            top: 0; left: -100%;
+            width: 100%; height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent);
+            transition: left 0.6s ease;
+        }
+        .btn-calcular:hover:not(:disabled)::after { left: 100%; }
+
+        .btn-secondary {
+            padding: 12px 24px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            font-family: var(--font-body);
+            color: var(--text-primary);
+            background: var(--bg-card);
+            border: 1.5px solid var(--border-base);
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            transition: all var(--transition-fast);
+        }
+        .btn-secondary:hover:not(:disabled) {
+            border-color: var(--accent);
+            color: var(--accent);
+            background: rgba(22,163,74,0.04);
+        }
+        .btn-secondary:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        /* ═══════════════════════════════════════════ */
+        /*  RESULTS AREA                               */
+        /* ═══════════════════════════════════════════ */
+        #formArea, #resultArea { transition: opacity var(--transition-base); }
+        #resultArea { display: none; }
+
+        /* Tabs */
+        .tabs {
+            display: flex;
+            gap: 4px;
+            background: var(--bg-deepest);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-sm);
+            padding: 4px;
+            margin-bottom: 20px;
+            overflow-x: auto;
+        }
+        .tab-btn {
+            flex: 1;
+            padding: 10px 8px;
+            font-size: 0.82rem;
+            font-weight: 600;
+            font-family: var(--font-body);
+            color: var(--text-muted);
+            background: transparent;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all var(--transition-fast);
+            white-space: nowrap;
+            text-align: center;
+        }
+        .tab-btn.active {
+            background: var(--accent);
+            color: #fff;
+        }
+        .tab-btn:hover:not(.active) { color: var(--text-secondary); }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        /* Winner Card */
+        .winner-card {
+            background: linear-gradient(135deg, rgba(22,163,74,0.06), rgba(22,163,74,0.02));
+            border: 2px solid var(--accent);
+            border-radius: var(--radius-lg);
+            padding: 28px;
+            text-align: center;
+            margin-bottom: 24px;
+            position: relative;
+            overflow: hidden;
+        }
+        .winner-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, var(--accent), #22c55e);
+        }
+        .winner-label {
+            font-size: 0.8rem;
+            font-weight: 700;
+            letter-spacing: 0.1em;
+            color: var(--accent);
+            text-transform: uppercase;
+            margin-bottom: 8px;
+        }
+        .winner-regime {
+            font-size: 1.6rem;
+            font-weight: 800;
+            color: var(--text-primary);
+            margin-bottom: 4px;
+        }
+        .winner-value {
+            font-family: var(--font-mono);
+            font-size: 1.3rem;
+            font-weight: 700;
+            color: var(--accent-bright);
+        }
+        .winner-sub {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin-top: 6px;
+        }
+
+        /* Regime Cards */
+        .regime-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin-bottom: 24px; }
+        .regime-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-md);
+            padding: 20px;
+            position: relative;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+        }
+        .regime-card.pos-1 { border-color: var(--accent); }
+        .regime-card.pos-2 { border-color: var(--border-base); }
+        .regime-card.pos-3 { border-color: var(--border-base); }
+        .regime-card .medal {
+            font-size: 1.4rem;
+            position: absolute;
+            top: 14px; right: 16px;
+        }
+        .regime-card .regime-name {
+            font-size: 1rem;
+            font-weight: 700;
+            margin-bottom: 12px;
+        }
+        .regime-card .regime-total {
+            font-family: var(--font-mono);
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: var(--accent-bright);
+            margin-bottom: 4px;
+        }
+        .regime-card .regime-aliq {
+            font-size: 0.82rem;
+            color: var(--text-muted);
+            font-family: var(--font-mono);
+        }
+        .regime-card .regime-breakdown {
+            margin-top: 14px;
+            border-top: 1px solid var(--border-subtle);
+            padding-top: 12px;
+        }
+        .regime-card .regime-breakdown .bk-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 3px 0;
+            font-size: 0.82rem;
+        }
+        .regime-card .regime-breakdown .bk-row span:first-child { color: var(--text-muted); }
+        .regime-card .regime-breakdown .bk-row span:last-child { font-family: var(--font-mono); font-weight: 600; }
+        .regime-card .regime-ineligible {
+            color: var(--red);
+            font-size: 0.88rem;
+            font-weight: 600;
+            text-align: center;
+            padding: 20px 0;
+        }
+
+        /* Alerts */
+        .alert-list { margin-top: 12px; }
+        .alert-item {
+            background: rgba(217,119,6,0.06);
+            border-left: 3px solid var(--amber);
+            padding: 8px 12px;
+            font-size: 0.82rem;
+            color: var(--text-secondary);
+            margin-bottom: 6px;
+            border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+        }
+        .alert-item.danger, .alert-item.error {
+            background: rgba(220,38,38,0.06);
+            border-left-color: var(--red);
+        }
+        .alert-item.info {
+            background: rgba(37,99,235,0.06);
+            border-left-color: var(--blue);
+        }
+        .validacao-alertas {
+            margin-bottom: 16px;
+        }
+
+        /* Detail Table */
+        .detail-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.82rem;
+            margin: 20px 0;
+        }
+        .detail-table th {
+            text-align: left;
+            padding: 10px 12px;
+            background: var(--bg-deep);
+            color: var(--text-muted);
+            font-weight: 600;
+            border-bottom: 1px solid var(--border-subtle);
+        }
+        .detail-table td {
+            padding: 8px 12px;
+            border-bottom: 1px solid var(--border-subtle);
+            font-family: var(--font-mono);
+            font-size: 0.82rem;
+        }
+        .detail-table tr:last-child td {
+            font-weight: 700;
+            color: var(--accent-bright);
+            border-bottom: 2px solid var(--accent);
+        }
+        .detail-table.socios-detail tr:last-child td {
+            font-weight: 400;
+            color: inherit;
+            border-bottom: 1px solid var(--border-subtle);
+        }
+        .detail-table tr.row-warning {
+            background: rgba(217,119,6,0.05);
+        }
+        .table-responsive {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        /* CSS Bar Chart */
+        .chart-bars {
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+            gap: 20px;
+            height: 200px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .chart-bar-item { text-align: center; flex: 1; max-width: 140px; }
+        .chart-bar {
+            width: 100%;
+            border-radius: 6px 6px 0 0;
+            transition: height var(--transition-base);
+            min-height: 4px;
+            position: relative;
+        }
+        .chart-bar-label {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-top: 8px;
+            font-weight: 600;
+        }
+        .chart-bar-value {
+            font-family: var(--font-mono);
+            font-size: 0.78rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-top: 4px;
+        }
+
+        /* Donut SVG */
+        .donut-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 30px;
+            margin: 20px 0;
+            flex-wrap: wrap;
+        }
+        .donut-legend {
+            font-size: 0.82rem;
+        }
+        .donut-legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 4px 0;
+            color: var(--text-secondary);
+        }
+        .donut-legend-item .dot {
+            width: 10px; height: 10px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        /* TEA / Personal / Projection cards */
+        .info-card {
+            background: var(--bg-deep);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-sm);
+            padding: 16px;
+            margin-bottom: 16px;
+        }
+        .info-card h4 {
+            font-size: 0.9rem;
+            font-weight: 700;
+            color: var(--accent-bright);
+            margin-bottom: 12px;
+        }
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 4px 0;
+            font-size: 0.85rem;
+        }
+        .info-row span:first-child { color: var(--text-muted); }
+        .info-row span:last-child { font-family: var(--font-mono); font-weight: 600; }
+        .info-row.total { border-top: 1px solid var(--border-base); padding-top: 8px; margin-top: 4px; }
+        .info-row.total span:last-child { color: var(--accent-bright); font-size: 1rem; }
+
+        /* ═══════════════════════════════════════════ */
+        /*  ALERTA R$ 50K — NOVO v4.0                  */
+        /* ═══════════════════════════════════════════ */
+        .alerta-50k {
+            display: flex;
+            gap: 12px;
+            background: rgba(217,119,6,0.06);
+            border: 1px solid rgba(217,119,6,0.25);
+            border-radius: var(--radius-sm);
+            padding: 14px;
+            margin-top: 12px;
+        }
+        .alerta-50k-icon {
+            font-size: 1.5rem;
+            flex-shrink: 0;
+        }
+        .alerta-50k-content {
+            font-size: 0.82rem;
+            color: var(--text-secondary);
+        }
+        .alerta-50k-content strong {
+            color: var(--amber);
+            display: block;
+            margin-bottom: 4px;
+        }
+        .alerta-50k-content p {
+            margin-top: 4px;
+        }
+
+        /* ═══════════════════════════════════════════ */
+        /*  CENÁRIOS DE DISTRIBUIÇÃO — NOVO v4.0       */
+        /* ═══════════════════════════════════════════ */
+        .cenarios-card {
+            border-color: rgba(22,163,74,0.18);
+        }
+        .cenario-item {
+            background: var(--bg-deep);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-sm);
+            padding: 14px;
+            margin-bottom: 10px;
+            transition: border-color var(--transition-fast);
+        }
+        .cenario-item.cenario-melhor {
+            border-color: var(--accent);
+            background: rgba(22,163,74,0.03);
+        }
+        .cenario-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 6px;
+        }
+        .cenario-nome {
+            font-weight: 700;
+            font-size: 0.88rem;
+            color: var(--text-primary);
+        }
+        .cenario-ir {
+            font-family: var(--font-mono);
+            font-size: 0.82rem;
+            font-weight: 600;
+            color: var(--red);
+        }
+        .cenario-desc {
+            font-size: 0.78rem;
+            color: var(--text-muted);
+            margin-bottom: 10px;
+        }
+        .cenario-grid {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .cenario-socio {
+            flex: 1;
+            min-width: 120px;
+            background: var(--bg-deep);
+            border-radius: 6px;
+            padding: 10px;
+            text-align: center;
+        }
+        .cenario-socio-nome {
+            display: block;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-bottom: 4px;
+        }
+        .cenario-socio-valor {
+            display: block;
+            font-family: var(--font-mono);
+            font-weight: 700;
+            font-size: 0.88rem;
+            color: var(--text-primary);
+        }
+        .cenario-socio-ir {
+            display: block;
+            font-size: 0.72rem;
+            color: var(--red);
+            margin-top: 2px;
+        }
+        .cenario-socio-isento {
+            display: block;
+            font-size: 0.72rem;
+            color: var(--accent);
+            margin-top: 2px;
+        }
+        .cenario-socio-reinv {
+            display: block;
+            font-size: 0.72rem;
+            color: var(--blue);
+            margin-top: 2px;
+        }
+        .cenario-economia {
+            background: rgba(22,163,74,0.06);
+            border: 1px solid rgba(22,163,74,0.15);
+            border-radius: var(--radius-sm);
+            padding: 12px;
+            font-size: 0.85rem;
+            color: var(--accent);
+            margin-top: 12px;
+        }
+
+        /* Action buttons */
+        .action-buttons {
+            display: flex;
+            gap: 12px;
+            margin-top: 24px;
+            flex-wrap: wrap;
+        }
+        .action-buttons .btn-secondary { flex: 1; text-align: center; min-width: 120px; }
+
+        /* Projection bars */
+        .proj-month {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 8px;
+            font-size: 0.82rem;
+        }
+        .proj-month .proj-label {
+            width: 60px;
+            color: var(--text-muted);
+            font-family: var(--font-mono);
+            flex-shrink: 0;
+        }
+        .proj-month .proj-bar-track {
+            flex: 1;
+            height: 8px;
+            background: var(--border-base);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .proj-month .proj-bar-fill {
+            height: 100%;
+            border-radius: 4px;
+            transition: width var(--transition-base);
+        }
+        .proj-month .proj-value {
+            font-family: var(--font-mono);
+            font-weight: 600;
+            font-size: 0.78rem;
+            width: 100px;
+            text-align: right;
+            flex-shrink: 0;
+        }
+        .proj-alert {
+            background: rgba(220,38,38,0.06);
+            border: 1px solid rgba(220,38,38,0.15);
+            border-radius: var(--radius-sm);
+            padding: 10px 14px;
+            font-size: 0.82rem;
+            color: var(--red);
+            margin-top: 12px;
+        }
+
+        /* Loading overlay */
+        #loadingOverlay {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 200px;
+            color: var(--text-muted);
+            font-size: 1rem;
+        }
+        .spinner {
+            width: 32px; height: 32px;
+            border: 3px solid var(--border-base);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-right: 12px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: var(--border-base); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+        /* Error highlight */
+        .field-error input, .field-error select {
+            border-color: var(--red) !important;
+            box-shadow: 0 0 0 3px rgba(220,38,38,0.15) !important;
+        }
+
+        /* Hidden */
+        .hidden { display: none !important; }
+
+        /* ═══════════════════════════════════════════ */
+        /*  LUCRO REAL ADVANTAGES PANEL — v5.0         */
+        /* ═══════════════════════════════════════════ */
+        .lr-vantagens-card {
+            background: linear-gradient(135deg, rgba(22,163,74,0.04), rgba(37,99,235,0.03));
+            border: 2px solid rgba(22,163,74,0.20);
+            border-radius: var(--radius-lg);
+            padding: 24px;
+            margin: 20px 0;
+        }
+        .lr-vantagens-card h4 {
+            font-size: 1rem;
+            font-weight: 700;
+            color: var(--accent-bright);
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .lr-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 12px;
+            border-radius: 6px;
+            margin-bottom: 4px;
+            font-size: 0.88rem;
+            transition: background 0.15s;
+        }
+        .lr-item:hover { background: rgba(22,163,74,0.04); }
+        .lr-item .lr-label { color: var(--text-secondary); display: flex; align-items: center; gap: 6px; }
+        .lr-item .lr-value { font-family: var(--font-mono); font-weight: 700; color: var(--accent-bright); }
+        .lr-item .lr-value.negative { color: var(--red); }
+        .lr-item.lr-total {
+            border-top: 2px solid var(--accent);
+            margin-top: 8px;
+            padding-top: 12px;
+            font-weight: 700;
+        }
+        .lr-item.lr-total .lr-value { font-size: 1.05rem; }
+        .lr-item.lr-custo { background: rgba(220,38,38,0.04); }
+        .lr-item.lr-economia-liq { background: rgba(22,163,74,0.06); border-radius: 8px; padding: 12px; }
+        .lr-item.lr-economia-liq .lr-value { font-size: 1.1rem; color: var(--accent); }
+
+        /* Score Badge */
+        .score-container {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin: 16px 0;
+            padding: 16px;
+            background: var(--bg-deep);
+            border-radius: var(--radius-md);
+            border: 1px solid var(--border-subtle);
+        }
+        .score-ring {
+            width: 80px; height: 80px;
+            position: relative;
+            flex-shrink: 0;
+        }
+        .score-ring svg { transform: rotate(-90deg); }
+        .score-ring .score-text {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            font-family: var(--font-mono);
+            font-size: 1.2rem;
+            font-weight: 800;
+        }
+        .score-details { flex: 1; }
+        .score-details h5 { font-size: 0.9rem; font-weight: 700; margin-bottom: 4px; }
+        .score-details p { font-size: 0.82rem; color: var(--text-muted); }
+
+        /* Tooltip helper */
+        .field-help {
+            display: inline-block;
+            width: 16px; height: 16px;
+            background: var(--accent-dim);
+            color: var(--accent);
+            border-radius: 50%;
+            text-align: center;
+            font-size: 0.68rem;
+            font-weight: 800;
+            line-height: 16px;
+            cursor: help;
+            margin-left: 4px;
+            position: relative;
+        }
+        .field-help:hover::after {
+            content: attr(data-tip);
+            position: absolute;
+            bottom: 120%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--text-primary);
+            color: #fff;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 400;
+            white-space: normal;
+            width: 260px;
+            z-index: 200;
+            line-height: 1.4;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+        }
+
+        /* Break-even card */
+        .breakeven-card {
+            background: var(--bg-deep);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-md);
+            padding: 16px;
+            margin: 16px 0;
+        }
+        .breakeven-card h5 { font-size: 0.88rem; font-weight: 700; color: var(--blue); margin-bottom: 10px; }
+
+        .bolso-comparison {
+            background: var(--bg-deep);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-md);
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .bolso-comparison .regime-cards {
+            gap: 12px;
+        }
+
+        .breakeven-bar {
+            height: 24px;
+            background: var(--border-base);
+            border-radius: 12px;
+            position: relative;
+            overflow: visible;
+            margin: 12px 0 8px;
+        }
+        .breakeven-bar-fill {
+            height: 100%;
+            border-radius: 12px;
+            transition: width 0.5s ease;
+        }
+        .breakeven-marker {
+            position: absolute;
+            top: -6px;
+            width: 3px;
+            height: 36px;
+            background: var(--text-primary);
+            border-radius: 2px;
+        }
+        .breakeven-marker-label {
+            position: absolute;
+            top: 34px;
+            font-size: 0.68rem;
+            font-weight: 700;
+            white-space: nowrap;
+            transform: translateX(-50%);
+        }
+
+        /* Collapsible Section */
+        .section-collapsible { cursor: pointer; user-select: none; }
+        .section-collapsible .toggle-icon {
+            transition: transform 0.2s;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+        .section-collapsible.collapsed .toggle-icon { transform: rotate(-90deg); }
+        .section-collapsible.collapsed + .section-body { display: none; }
+
+        /* Obrigacoes comparison */
+        .obrig-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 8px;
+            font-size: 0.78rem;
+            margin-top: 12px;
+        }
+        @media (max-width: 600px) { .obrig-grid { grid-template-columns: 1fr; } }
+        .obrig-col h6 {
+            font-size: 0.72rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
+            margin-bottom: 6px;
+            padding-bottom: 4px;
+            border-bottom: 1px solid var(--border-subtle);
+        }
+        .obrig-item { padding: 3px 0; color: var(--text-secondary); }
+
+        /* ═══════════════════════════════════════════ */
+        /*  ESTADO INFO PANEL — v5.0                   */
+        /* ═══════════════════════════════════════════ */
+        #estadoInfoPanel {
+            display: none;
+            background: var(--bg-deep);
+            border: 1px solid var(--border-active);
+            border-radius: var(--radius-md);
+            padding: 18px;
+            margin-top: 14px;
+            animation: fadeSlideIn 0.3s ease;
+        }
+        @keyframes fadeSlideIn {
+            from { opacity: 0; transform: translateY(-6px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .estado-panel-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 14px;
+        }
+        .estado-panel-header h4 {
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: var(--accent-bright);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .estado-panel-header .regiao-badge {
+            font-size: 0.68rem;
+            font-weight: 700;
+            padding: 2px 10px;
+            border-radius: 10px;
+            background: rgba(22,163,74,0.08);
+            color: var(--accent);
+        }
+        .estado-panel-header .status-badge {
+            font-size: 0.68rem;
+            font-weight: 600;
+            padding: 2px 8px;
+            border-radius: 10px;
+        }
+        .estado-panel-header .status-badge.ok {
+            background: rgba(22,163,74,0.08);
+            color: var(--accent);
+        }
+        .estado-panel-header .status-badge.warn {
+            background: rgba(217,119,6,0.08);
+            color: var(--amber);
+        }
+        .estado-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+        @media (max-width: 600px) {
+            .estado-grid { grid-template-columns: 1fr; }
+        }
+        .estado-imposto-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-sm);
+            padding: 12px;
+            transition: border-color var(--transition-fast);
+        }
+        .estado-imposto-card:hover {
+            border-color: var(--accent);
+        }
+        .estado-imposto-card .card-label {
+            font-size: 0.72rem;
+            font-weight: 700;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 4px;
+        }
+        .estado-imposto-card .card-value {
+            font-family: var(--font-mono);
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+        .estado-imposto-card .card-detail {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-top: 2px;
+        }
+        .estado-imposto-card .card-value.destaque {
+            color: var(--accent-bright);
+        }
+        .estado-imposto-card .card-value.alerta {
+            color: var(--red);
+        }
+        .estado-incentivos {
+            margin-top: 12px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+        .incentivo-tag {
+            font-size: 0.7rem;
+            font-weight: 700;
+            padding: 3px 10px;
+            border-radius: 10px;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .incentivo-tag.ativo {
+            background: rgba(22,163,74,0.08);
+            color: var(--accent);
+        }
+        .incentivo-tag.inativo {
+            background: rgba(138,133,120,0.08);
+            color: var(--text-muted);
+        }
+        /* Comparativo Ranking Mini */
+        .ranking-mini {
+            background: var(--bg-deep);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-sm);
+            padding: 12px;
+            margin-top: 14px;
+        }
+        .ranking-mini h5 {
+            font-size: 0.82rem;
+            font-weight: 700;
+            color: var(--accent-bright);
+            margin-bottom: 10px;
+        }
+        .ranking-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 4px 0;
+            font-size: 0.8rem;
+        }
+        .ranking-row .rank-pos {
+            font-family: var(--font-mono);
+            font-size: 0.72rem;
+            font-weight: 700;
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+        .ranking-row .rank-pos.pos-1 { background: rgba(22,163,74,0.12); color: var(--accent); }
+        .ranking-row .rank-pos.pos-2 { background: rgba(37,99,235,0.10); color: var(--blue); }
+        .ranking-row .rank-pos.pos-3 { background: rgba(217,119,6,0.10); color: var(--amber); }
+        .ranking-row .rank-pos.pos-other { background: var(--bg-deepest); color: var(--text-muted); }
+        .ranking-row .rank-uf {
+            font-weight: 600;
+            color: var(--text-primary);
+            min-width: 32px;
+        }
+        .ranking-row .rank-bar {
+            flex: 1;
+            height: 6px;
+            background: var(--border-base);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+        .ranking-row .rank-bar-fill {
+            height: 100%;
+            border-radius: 3px;
+            transition: width 0.5s ease;
+        }
+        .ranking-row .rank-value {
+            font-family: var(--font-mono);
+            font-weight: 600;
+            font-size: 0.78rem;
+            min-width: 50px;
+            text-align: right;
+        }
+        .ranking-row.current {
+            background: rgba(22,163,74,0.04);
+            border-radius: 4px;
+            padding: 4px 6px;
+        }
+        .ranking-row.current .rank-uf { color: var(--accent-bright); }
+        /* Estado - alertas e dicas */
+        .estado-dicas {
+            margin-top: 12px;
+            padding: 10px 14px;
+            background: rgba(37,99,235,0.04);
+            border-left: 3px solid var(--blue);
+            border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+            font-size: 0.82rem;
+            color: var(--text-secondary);
+        }
+        .estado-dicas strong { color: var(--blue); }
+        .estado-st-alert {
+            margin-top: 8px;
+            padding: 8px 12px;
+            background: rgba(217,119,6,0.06);
+            border-left: 3px solid var(--amber);
+            border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+            font-size: 0.78rem;
+            color: var(--text-secondary);
+        }
+
+        /* ═══════════════════════════════════════════ */
+        /*  PRINT STYLES — NOVO v4.0                   */
+        /* ═══════════════════════════════════════════ */
+        @media print {
+            body { background: #fff; color: #111; }
+            .container { max-width: 100%; padding: 0; }
+            .action-buttons, .tabs { display: none !important; }
+            .tab-content { display: block !important; page-break-inside: avoid; }
+            .section, .info-card, .regime-card, .winner-card {
+                background: #fff;
+                border-color: #ddd;
+                color: #111;
+                box-shadow: none;
+            }
+            .detail-table th { background: #f5f5f5; }
+            :root {
+                --text-primary: #111;
+                --text-secondary: #444;
+                --text-muted: #777;
+                --accent-bright: #15803d;
+                --accent: #16a34a;
+                --red: #dc2626;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- NAVBAR -->
+    <nav class="navbar">
+        <div class="inner">
+            <div style="display:flex;align-items:center">
+                <a href="dashboard.html" class="logo">IMPOST<b>.</b></a>
+                <span class="nav-sep">|</span>
+                <span class="nav-sub">Análise Tributária</span>
+            </div>
+            <a href="dashboard.html" class="btn-back">← Dashboard</a>
+        </div>
+    </nav>
+
+    <div class="container">
+        <!-- HEADER -->
+        <div class="header">
+            <h1>IMPOST<span>.</span> <span class="version-badge">v5.1</span></h1>
+            <p>Inteligência em Modelagem de Otimização Tributária — Brasil 2026</p>
+        </div>
+
+        <!-- LOADING -->
+        <div id="loadingOverlay">
+            <div class="spinner"></div>
+            <span>Carregando dados tributários...</span>
+        </div>
+
+        <!-- ═══ FORM AREA ═══ -->
+        <div id="formArea" style="display:none;">
+
+            <!-- SEÇÃO 1: Identificação -->
+            <div class="section">
+                <div class="section-title">
+                    <span class="num">1</span> Identificação da Empresa
+                </div>
+
+                <div class="field-row">
+                    <div class="field">
+                        <label for="selectEstado">Estado (UF)</label>
+                        <select id="selectEstado">
+                            <option value="">Selecione o estado...</option>
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label for="selectMunicipio">
+                            Município
+                            <span id="munLoading" style="display:none; margin-left:6px;">
+                                <svg width="14" height="14" viewBox="0 0 24 24" style="animation:spin 1s linear infinite; vertical-align:middle;">
+                                    <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" fill="none" opacity="0.25"/>
+                                    <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" stroke-width="3" fill="none" stroke-linecap="round"/>
+                                </svg>
+                                <span style="font-size:0.75em; opacity:0.6;">carregando...</span>
+                            </span>
+                        </label>
+                        <select id="selectMunicipio" disabled>
+                            <option value="">Selecione o estado primeiro...</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- ═══ Painel de Informações Tributárias do Estado ═══ -->
+                <div id="estadoInfoPanel">
+                    <div class="estado-panel-header">
+                        <h4>
+                            <span id="estadoNomePanel">—</span>
+                            <span id="estadoRegiaoPanel" class="regiao-badge"></span>
+                        </h4>
+                        <span id="estadoStatusPanel" class="status-badge"></span>
+                    </div>
+                    <div class="estado-grid">
+                        <div class="estado-imposto-card">
+                            <div class="card-label">ICMS Padrão</div>
+                            <div class="card-value" id="estadoICMS">—</div>
+                            <div class="card-detail" id="estadoICMSDetail"></div>
+                        </div>
+                        <div class="estado-imposto-card">
+                            <div class="card-label">ICMS Efetivo (c/ FECOP)</div>
+                            <div class="card-value" id="estadoICMSEfetivo">—</div>
+                            <div class="card-detail" id="estadoFECOPDetail"></div>
+                        </div>
+                        <div class="estado-imposto-card">
+                            <div class="card-label">ISS (Capital)</div>
+                            <div class="card-value" id="estadoISS">—</div>
+                            <div class="card-detail" id="estadoISSDetail"></div>
+                        </div>
+                        <div class="estado-imposto-card">
+                            <div class="card-label">Sublimite Simples</div>
+                            <div class="card-value" id="estadoSublimite">—</div>
+                            <div class="card-detail" id="estadoSublimiteDetail"></div>
+                        </div>
+                        <div class="estado-imposto-card">
+                            <div class="card-label">IPVA Automóvel</div>
+                            <div class="card-value" id="estadoIPVA">—</div>
+                            <div class="card-detail" id="estadoIPVADetail"></div>
+                        </div>
+                        <div class="estado-imposto-card">
+                            <div class="card-label">ITBI (Capital)</div>
+                            <div class="card-value" id="estadoITBI">—</div>
+                            <div class="card-detail" id="estadoITBIDetail"></div>
+                        </div>
+                    </div>
+                    <div class="estado-incentivos" id="estadoIncentivos"></div>
+                    <div id="estadoDicas" class="estado-dicas" style="display:none;"></div>
+                    <div id="estadoSTAlert" class="estado-st-alert" style="display:none;"></div>
+                    <!-- Mini Ranking ICMS -->
+                    <div class="ranking-mini" id="rankingICMSMini">
+                        <h5>📊 Ranking ICMS — Menor Carga (Top 5 + sua UF)</h5>
+                        <div id="rankingICMSRows"></div>
+                    </div>
+                </div>
+
+                <div class="field">
+                    <label for="inputCNAE">CNAE — Atividade Econômica</label>
+                    <div class="cnae-wrapper">
+                        <input type="text" id="inputCNAE" placeholder="Digite o código ou nome da atividade..." autocomplete="off">
+                        <div id="cnaeDropdown"></div>
+                    </div>
+                    <div id="cnaeInfo"></div>
+                </div>
+
+                <div class="field">
+                    <label for="selectTipoAtividade">Tipo de Atividade <span class="hint">(inferido do CNAE)</span></label>
+                    <select id="selectTipoAtividade">
+                        <option value="">Selecione o CNAE primeiro...</option>
+                        <option value="Comércio">Comércio</option>
+                        <option value="Indústria">Indústria</option>
+                        <option value="Serviço">Serviço</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- SEÇÃO 2: Dados Financeiros -->
+            <div class="section">
+                <div class="section-title">
+                    <span class="num">2</span> Dados Financeiros
+                </div>
+
+                <div class="field-row">
+                    <div class="field">
+                        <label for="inputFaturamento">Faturamento Bruto Mensal <span class="hint">(obrigatório)</span></label>
+                        <input type="text" id="inputFaturamento" class="money" placeholder="R$ 0,00" data-type="money">
+                    </div>
+                    <div class="field">
+                        <label for="inputFolha">Folha de Pagamento Mensal <span class="hint">(salários + pró-labore)</span></label>
+                        <input type="text" id="inputFolha" class="money" placeholder="R$ 0,00" data-type="money">
+                    </div>
+                </div>
+
+                <div class="field-row">
+                    <div class="field">
+                        <label for="inputProLabore">Pró-labore Total dos Sócios <span class="hint">(já incluído na folha)</span></label>
+                        <input type="text" id="inputProLabore" class="money" placeholder="R$ 0,00" data-type="money">
+                    </div>
+                    <div class="field">
+                        <label for="inputCMV">CMV / CSV <span class="hint">(Custo de Mercadorias/Serviços)</span></label>
+                        <input type="text" id="inputCMV" class="money" placeholder="R$ 0,00" data-type="money">
+                    </div>
+                </div>
+
+                <div class="field">
+                    <label for="inputDespesas">Despesas Operacionais <span class="hint">(aluguel, energia, internet, etc.)</span></label>
+                    <input type="text" id="inputDespesas" class="money" placeholder="R$ 0,00" data-type="money">
+                </div>
+
+                <div class="field-row">
+                    <div class="field">
+                        <label for="inputCreditosPISCOFINS">
+                            Despesas Elegíveis Crédito PIS/COFINS
+                            <span class="field-help" data-tip="Aluguel, energia, combustível, equipamentos (depreciação), serviços PJ, telecomunicações, seguros, insumos. Essas despesas geram crédito de 9,25% no Lucro Real.">?</span>
+                        </label>
+                        <input type="text" id="inputCreditosPISCOFINS" class="money" placeholder="R$ 0,00 (mensal)" data-type="money">
+                    </div>
+                    <div class="field">
+                        <label for="inputPctOrgaoPublico">
+                            % Faturamento Órgãos Públicos
+                            <span class="field-help" data-tip="Retenção de 9,45% na NF (IRRF 4,8% + CSRF 4,65%). No Lucro Real, 100% é compensável como antecipação.">?</span>
+                        </label>
+                        <div class="slider-group">
+                            <input type="range" id="sliderOrgaoPublico" min="0" max="100" value="0" step="5">
+                            <span class="slider-value" id="orgaoPublicoValue">0%</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="field">
+                    <label>Margem de Lucro Líquido</label>
+                    <div class="slider-group">
+                        <input type="range" id="sliderMargem" min="0" max="80" value="20" step="1">
+                        <input type="text" id="inputMargem" style="width:70px;text-align:center;" value="20%">
+                        <span id="margemBadge" class="hidden" style="font-size:0.7rem;color:var(--amber);">manual</span>
+                    </div>
+                </div>
+
+                <!-- Indicator Bars -->
+                <div id="barFatorR" class="bar-container">
+                    <div class="bar-label">Fator R (Folha / Faturamento)</div>
+                    <div class="bar-track">
+                        <div id="barFatorRFill" class="bar-fill" style="width:0%;background:var(--red);"></div>
+                        <div class="bar-marker" style="left:28%;">
+                            <span class="bar-marker-label">28%</span>
+                        </div>
+                    </div>
+                    <div id="barFatorRValue" class="bar-value" style="color:var(--red);">0,0%</div>
+                    <div id="barFatorRMsg" style="font-size:0.78rem;color:var(--text-muted);margin-top:2px;"></div>
+                </div>
+
+                <div id="barRBT12" class="bar-container">
+                    <div class="bar-label">Receita Bruta 12 meses (RBT12)</div>
+                    <div class="bar-track">
+                        <div id="barRBT12Fill" class="bar-fill" style="width:0%;background:var(--accent);"></div>
+                        <div id="barRBT12MarkerSub" class="bar-marker" style="left:75%;">
+                            <span class="bar-marker-label">Sublimite</span>
+                        </div>
+                        <div class="bar-marker" style="left:100%;">
+                            <span class="bar-marker-label">4,8M</span>
+                        </div>
+                    </div>
+                    <div id="barRBT12Value" class="bar-value" style="color:var(--accent);">R$ 0</div>
+                </div>
+            </div>
+
+            <!-- SEÇÃO 3: Estratégia e Opções -->
+            <div class="section">
+                <div class="section-title">
+                    <span class="num">3</span> Estratégia e Opções
+                </div>
+
+                <div id="dicaBanner">
+                    <strong id="dicaTitulo"></strong><br>
+                    <span id="dicaTexto"></span>
+                </div>
+
+                <div class="field-row">
+                    <div class="field">
+                        <label for="inputFuncionarios">Quantidade de Funcionários</label>
+                        <input type="number" id="inputFuncionarios" min="0" value="0" placeholder="0">
+                    </div>
+                    <div class="field">
+                        <label for="sliderSocios">Sócios com Pró-labore</label>
+                        <div class="slider-group">
+                            <input type="range" id="sliderSocios" min="1" max="6" value="1" step="1">
+                            <span class="slider-value" id="sociosValue">1</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SEÇÃO SÓCIOS — NOVO v4.0 -->
+                <div id="sociosSection">
+                    <div class="socios-section-title">
+                        👥 Configuração dos Sócios <span class="hint">(participação e pró-labore individual)</span>
+                    </div>
+                    <div class="socios-header">
+                        <span>Nome</span>
+                        <span>Part. (%)</span>
+                        <span>Pró-labore</span>
+                    </div>
+                    <div id="sociosList"></div>
+                </div>
+
+                <div class="field-row" style="margin-top:16px;">
+                    <div class="field">
+                        <label for="inputCrescimento">Crescimento previsto 12 meses</label>
+                        <div class="slider-group">
+                            <input type="range" id="sliderCrescimento" min="0" max="100" value="10" step="1">
+                            <span class="slider-value" id="crescimentoValue">10%</span>
+                        </div>
+                    </div>
+                    <div class="field">
+                        <label for="selectDestinoLucro">Destino do Lucro</label>
+                        <select id="selectDestinoLucro">
+                            <option value="retira">Retira tudo</option>
+                            <option value="parcial" selected>Parcial (50%)</option>
+                            <option value="reinveste">Reinveste tudo</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="field-row">
+                    <div class="field">
+                        <label for="selectCliente">Tipo de Cliente Principal</label>
+                        <select id="selectCliente">
+                            <option value="b2c">B2C (Pessoa Física)</option>
+                            <option value="b2b">B2B (Pessoa Jurídica)</option>
+                            <option value="misto" selected>Misto</option>
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label for="inputISS">Alíquota ISS <span class="hint">(%)</span></label>
+                        <input type="text" id="inputISS" value="5,00" placeholder="Ex: 5,00" maxlength="5" style="font-family:var(--font-mono); max-width:120px;">
+                        <div id="issHint" class="iss-hint">
+                            <span style="color:var(--amber);">ℹ</span>
+                            A alíquota de ISS geralmente varia entre <strong>2% e 5%</strong>
+                            conforme a legislação municipal (LC 116/2003).
+                            Se não informada, será usado <strong>5%</strong> (teto legal).
+                        </div>
+                    </div>
+                </div>
+
+                <div class="field">
+                    <label>Opções Especiais</label>
+                    <div class="check-group">
+                        <label class="check-item">
+                            <input type="checkbox" id="checkST"> Substituição Tributária
+                        </label>
+                        <label class="check-item">
+                            <input type="checkbox" id="checkCesta"> Produto Cesta Básica
+                        </label>
+                        <label class="check-item">
+                            <input type="checkbox" id="checkSudam"> Incentivo SUDAM/SUDENE (-75% IRPJ)
+                        </label>
+                        <label class="check-item">
+                            <input type="checkbox" id="checkInterestadual"> Vendas Interestaduais
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SEÇÃO 4: Dados Avançados Lucro Real (colapsável) -->
+            <div class="section">
+                <div class="section-title section-collapsible collapsed" onclick="this.classList.toggle('collapsed')">
+                    <span class="num">4</span> Dados Avançados — Lucro Real
+                    <span class="hint" style="margin-left:auto;">(opcional, melhora precisão)</span>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div class="section-body">
+                    <div class="field-row">
+                        <div class="field">
+                            <label for="inputPatrimonioLiquido">
+                                Patrimônio Líquido (PL)
+                                <span class="field-help" data-tip="Capital social + Reservas + Lucros acumulados. Usado para calcular JCP (Juros sobre Capital Próprio) — dedutível no Lucro Real.">?</span>
+                            </label>
+                            <input type="text" id="inputPatrimonioLiquido" class="money" placeholder="R$ 0,00" data-type="money">
+                        </div>
+                        <div class="field">
+                            <label for="inputLucrosAcumulados">
+                                Lucros Acumulados / Reservas
+                                <span class="field-help" data-tip="Limite do JCP: 50% do lucro líquido OU 50% de lucros acumulados + reservas (o menor).">?</span>
+                            </label>
+                            <input type="text" id="inputLucrosAcumulados" class="money" placeholder="R$ 0,00" data-type="money">
+                        </div>
+                    </div>
+
+                    <div class="field-row">
+                        <div class="field">
+                            <label for="inputPrejuizoFiscal">
+                                Prejuízo Fiscal Acumulado
+                                <span class="field-help" data-tip="Compensável até 30% do lucro ajustado por período. Exclusivo do Lucro Real — Simples e Presumido não permitem.">?</span>
+                            </label>
+                            <input type="text" id="inputPrejuizoFiscal" class="money" placeholder="R$ 0,00" data-type="money">
+                        </div>
+                        <div class="field">
+                            <label for="inputBaseNegativaCSLL">
+                                Base Negativa CSLL
+                                <span class="field-help" data-tip="Similar ao prejuízo fiscal, mas para CSLL. Compensável até 30% da base positiva.">?</span>
+                            </label>
+                            <input type="text" id="inputBaseNegativaCSLL" class="money" placeholder="R$ 0,00" data-type="money">
+                        </div>
+                    </div>
+
+                    <div class="field-row">
+                        <div class="field">
+                            <label for="inputInvestimentoAtivos">
+                                Investimento em Ativos Fixos (12 meses)
+                                <span class="field-help" data-tip="GPS, drones, veículos, computadores, equipamentos. Na SUDAM: depreciação 100% no ano. Gera crédito de PIS/COFINS + redução do lucro tributável.">?</span>
+                            </label>
+                            <input type="text" id="inputInvestimentoAtivos" class="money" placeholder="R$ 0,00" data-type="money">
+                        </div>
+                        <div class="field">
+                            <label for="inputCustoContabilLR">
+                                Custo Contábil Adicional LR (mensal)
+                                <span class="field-help" data-tip="LALUR, ECD, ECF, EFD-Contribuições exigem contabilidade mais detalhada. Típico: R$ 1.500-3.000/mês a mais que Simples.">?</span>
+                            </label>
+                            <input type="text" id="inputCustoContabilLR" class="money" placeholder="R$ 2.000,00" data-type="money">
+                        </div>
+                    </div>
+
+                    <div class="field-row">
+                        <div class="field">
+                            <label for="selectApuracaoLR">Tipo de Apuração Lucro Real</label>
+                            <select id="selectApuracaoLR">
+                                <option value="trimestral" selected>Trimestral</option>
+                                <option value="anual">Anual (Estimativa Mensal)</option>
+                            </select>
+                        </div>
+                        <div class="field">
+                            <label for="inputTJLP">
+                                TJLP Anual (%)
+                                <span class="field-help" data-tip="Taxa de Juros de Longo Prazo. Usada no cálculo do JCP. Padrão: 6% a.a.">?</span>
+                            </label>
+                            <input type="text" id="inputTJLP" value="6,00" placeholder="6,00" maxlength="5" style="font-family:var(--font-mono); max-width:120px;">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SEÇÃO 5: DADOS LUCRO PRESUMIDO -->
+            <div class="section">
+                <div class="section-header" onclick="this.parentElement.classList.toggle('collapsed')">
+                    <h3><span class="section-num">5</span> Dados Lucro Presumido <span class="section-tag">Opcional</span></h3>
+                    <span class="chevron">▾</span>
+                </div>
+                <div class="section-body">
+                    <p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:16px;">
+                        Preencha para cálculo preciso do Lucro Presumido usando o motor completo. Campos vazios usam valores padrão.
+                    </p>
+                    <div class="field-grid">
+                        <div class="field">
+                            <label for="inputDevolucoesLP">
+                                Devoluções / Cancelamentos (trimestral)
+                                <span class="field-help" data-tip="Devoluções de vendas e cancelamentos. Reduzem a receita bruta para cálculo da base presumida.">?</span>
+                            </label>
+                            <input type="text" id="inputDevolucoesLP" class="money" placeholder="R$ 0,00" oninput="window._IMPOST?.mascaraMoney?.(this)" onblur="window._IMPOST?.blurMoney?.(this)">
+                        </div>
+                        <div class="field">
+                            <label for="inputDescontosIncondLP">
+                                Descontos Incondicionais (trimestral)
+                                <span class="field-help" data-tip="Descontos concedidos incondicionalmente na NF. Reduzem a base de cálculo.">?</span>
+                            </label>
+                            <input type="text" id="inputDescontosIncondLP" class="money" placeholder="R$ 0,00" oninput="window._IMPOST?.mascaraMoney?.(this)" onblur="window._IMPOST?.blurMoney?.(this)">
+                        </div>
+                        <div class="field">
+                            <label for="inputGanhosCapitalLP">
+                                Ganhos de Capital (trimestral)
+                                <span class="field-help" data-tip="Lucro na venda de ativos (imóveis, veículos, equipamentos). Adicionado 100% à base de IRPJ e CSLL.">?</span>
+                            </label>
+                            <input type="text" id="inputGanhosCapitalLP" class="money" placeholder="R$ 0,00" oninput="window._IMPOST?.mascaraMoney?.(this)" onblur="window._IMPOST?.blurMoney?.(this)">
+                        </div>
+                        <div class="field">
+                            <label for="inputRendimentosFinancLP">
+                                Rendimentos Financeiros (trimestral)
+                                <span class="field-help" data-tip="Rendimentos de aplicações financeiras, juros recebidos. ATENÇÃO: Adicionado 100% à base (risco fiscal comum quando esquecido).">?</span>
+                            </label>
+                            <input type="text" id="inputRendimentosFinancLP" class="money" placeholder="R$ 0,00" oninput="window._IMPOST?.mascaraMoney?.(this)" onblur="window._IMPOST?.blurMoney?.(this)">
+                        </div>
+                        <div class="field">
+                            <label for="inputIRRFRetidoLP">
+                                IRRF Retido na Fonte (trimestral)
+                                <span class="field-help" data-tip="Imposto de renda retido na fonte sobre suas receitas (ex: serviços para órgãos públicos). Compensável do IRPJ devido.">?</span>
+                            </label>
+                            <input type="text" id="inputIRRFRetidoLP" class="money" placeholder="R$ 0,00" oninput="window._IMPOST?.mascaraMoney?.(this)" onblur="window._IMPOST?.blurMoney?.(this)">
+                        </div>
+                        <div class="field">
+                            <label for="inputCSLLRetidaLP">
+                                CSLL Retida na Fonte (trimestral)
+                                <span class="field-help" data-tip="CSLL retida na fonte sobre suas receitas. Compensável da CSLL devida.">?</span>
+                            </label>
+                            <input type="text" id="inputCSLLRetidaLP" class="money" placeholder="R$ 0,00" oninput="window._IMPOST?.mascaraMoney?.(this)" onblur="window._IMPOST?.blurMoney?.(this)">
+                        </div>
+                        <div class="field">
+                            <label for="inputLucroContabilLP">
+                                Lucro Contábil Efetivo (anual)
+                                <span class="field-help" data-tip="Se a empresa mantém escrituração contábil completa, informar o lucro contábil. Permite distribuir dividendos acima da base presumida.">?</span>
+                            </label>
+                            <input type="text" id="inputLucroContabilLP" class="money" placeholder="R$ 0,00" oninput="window._IMPOST?.mascaraMoney?.(this)" onblur="window._IMPOST?.blurMoney?.(this)">
+                        </div>
+                        <div class="field">
+                            <label for="selectMesesAtividadeLP">
+                                Meses de Atividade (ano anterior)
+                                <span class="field-help" data-tip="Se a empresa iniciou atividades no ano anterior com menos de 12 meses, o limite de receita é proporcional (R$ 6,5M/mês).">?</span>
+                            </label>
+                            <select id="selectMesesAtividadeLP">
+                                <option value="12" selected>12 meses (normal)</option>
+                                <option value="11">11 meses</option>
+                                <option value="10">10 meses</option>
+                                <option value="9">9 meses</option>
+                                <option value="8">8 meses</option>
+                                <option value="7">7 meses</option>
+                                <option value="6">6 meses</option>
+                                <option value="5">5 meses</option>
+                                <option value="4">4 meses</option>
+                                <option value="3">3 meses</option>
+                                <option value="2">2 meses</option>
+                                <option value="1">1 mês</option>
+                            </select>
+                        </div>
+                    </div>
+                    <!-- Impedimentos -->
+                    <div style="margin-top:16px;">
+                        <label style="font-size:0.85rem;font-weight:600;color:var(--text-secondary);margin-bottom:8px;display:block;">Verificação de Impedimentos</label>
+                        <div class="checkbox-group" style="display:flex;flex-direction:column;gap:8px;">
+                            <label class="check-label"><input type="checkbox" id="checkInstFinanceira"> Instituição financeira ou equiparada</label>
+                            <label class="check-label"><input type="checkbox" id="checkFactoring"> Factoring (fomento comercial)</label>
+                            <label class="check-label"><input type="checkbox" id="checkRendaExterior"> Lucros, rendimentos ou ganhos de capital do exterior</label>
+                            <label class="check-label"><input type="checkbox" id="checkIsencaoIR"> Benefício de isenção ou redução de IR</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- BOTÃO CALCULAR -->
+            <button id="btnCalcular" class="btn-calcular" disabled>
+                Calcular Análise TEA Completa
+            </button>
+        </div>
+
+        <!-- ═══ RESULTS AREA ═══ -->
+        <div id="resultArea">
+            <!-- Tabs -->
+            <div class="tabs">
+                <button class="tab-btn active" data-tab="tabTributaria">Tributária</button>
+                <button class="tab-btn" data-tab="tabSimplesNacional">Simples Nacional</button>
+                <button class="tab-btn" data-tab="tabLucroPresumido">Lucro Presumido</button>
+                <button class="tab-btn" data-tab="tabLucroReal">Lucro Real</button>
+                <button class="tab-btn" data-tab="tabTEA">TEA</button>
+                <button class="tab-btn" data-tab="tabPessoal">Pessoal</button>
+                <button class="tab-btn" data-tab="tabReforma">Reforma</button>
+                <button class="tab-btn" data-tab="tabProjecoes">Projeções</button>
+            </div>
+
+            <!-- Tab 1: Análise Tributária -->
+            <div id="tabTributaria" class="tab-content active"></div>
+
+            <!-- Tab 2: Simples Nacional Detalhado -->
+            <div id="tabSimplesNacional" class="tab-content"></div>
+
+            <!-- Tab 3: Lucro Presumido Detalhado -->
+            <div id="tabLucroPresumido" class="tab-content"></div>
+
+            <!-- Tab 3: Lucro Real Detalhado -->
+            <div id="tabLucroReal" class="tab-content"></div>
+
+            <!-- Tab 3: Análise TEA -->
+            <div id="tabTEA" class="tab-content"></div>
+
+            <!-- Tab 3: Impacto Pessoal -->
+            <div id="tabPessoal" class="tab-content"></div>
+
+            <!-- Tab 4: Reforma Tributária (IBS/CBS) -->
+            <div id="tabReforma" class="tab-content"></div>
+
+            <!-- Tab 5: Projeções -->
+            <div id="tabProjecoes" class="tab-content"></div>
+
+            <!-- Action Buttons -->
+            <div class="action-buttons">
+                <button id="btnVoltar" class="btn-secondary">← Refazer Simulação</button>
+                <button id="btnPDF" class="btn-secondary" disabled>📄 Exportar PDF</button>
+                <button id="btnExcel" class="btn-secondary" disabled>📊 Exportar Excel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══ SCRIPTS ═══ -->
+    <script src="../scripts/impostos_federais.js"></script>
+    <script src="../scripts/cnae-mapeamento.js"></script>
+    <script src="../scripts/lucro-real-mapeamento.js"></script>
+
+    <!-- ═══ Scripts de Estados — Base Tributária Completa (27 UFs) ═══ -->
+    <!-- IMPORTANTE: Carregar TODOS antes de estados.js (agregador) -->
+    <script src="../scripts/acre.js"></script>
+    <script src="../scripts/alagoas.js"></script>
+    <script src="../scripts/amapa.js"></script>
+    <script src="../scripts/amazonas.js"></script>
+    <script src="../scripts/bahia.js"></script>
+    <script src="../scripts/ceara.js"></script>
+    <script src="../scripts/distrito_federal.js"></script>
+    <script src="../scripts/espirito_santo.js"></script>
+    <script src="../scripts/goias.js"></script>
+    <script src="../scripts/maranhao.js"></script>
+    <script src="../scripts/mato_grosso.js"></script>
+    <script src="../scripts/mato_grosso_do_sul.js"></script>
+    <script src="../scripts/minas_gerais.js"></script>
+    <script src="../scripts/para.js"></script>
+    <script src="../scripts/paraiba.js"></script>
+    <script src="../scripts/parana.js"></script>
+    <script src="../scripts/pernambuco.js"></script>
+    <script src="../scripts/piaui.js"></script>
+    <script src="../scripts/rio_de_janeiro.js"></script>
+    <script src="../scripts/rio_grande_do_norte.js"></script>
+    <script src="../scripts/rio_grande_do_sul.js"></script>
+    <script src="../scripts/rondonia.js"></script>
+    <script src="../scripts/roraima.js"></script>
+    <script src="../scripts/santa_catarina.js"></script>
+    <script src="../scripts/sao_paulo.js"></script>
+    <script src="../scripts/sergipe.js"></script>
+    <script src="../scripts/tocantins.js"></script>
+    <!-- ═══ Agregador Central ═══ -->
+    <script src="../scripts/estados.js"></script>
+
+    <script src="../scripts/municipios.js"></script>
+    <script type="module">
+        import { BANCO_CNAE } from '../scripts/cnae.js';
+        window.BANCO_CNAE = BANCO_CNAE;
+        window.dispatchEvent(new Event('cnae-loaded'));
+    </script>
+    <script src="../scripts/lucro_presumido.js"></script>
+    <script src="../scripts/simples_nacional.js"></script>
+    <script src="../scripts/analise.js"></script>
+    <script src="../scripts/reforma-tributaria.js"></script>
+    <script>
+    /* ═══ Integração Reforma Tributária com analise.js ═══ */
+    (function() {
+        // Aguarda o cálculo principal terminar para renderizar a aba Reforma
+        // analise.js dispara 'analise-calculada' ou preenche #tabTributaria
+        var _lastCalcData = null;
+
+        // Hook: observar quando resultArea fica visível (cálculo foi feito)
+        var observer = new MutationObserver(function() {
+            var resultArea = document.getElementById('resultArea');
+            if (resultArea && resultArea.style.display !== 'none') {
+                renderizarReforma();
+            }
+        });
+
+        var resultArea = document.getElementById('resultArea');
+        if (resultArea) {
+            observer.observe(resultArea, { attributes: true, attributeFilter: ['style'] });
+        }
+
+        // Também escuta evento customizado se analise.js disparar
+        window.addEventListener('analise-calculada', function(e) {
+            if (e.detail) _lastCalcData = e.detail;
+            renderizarReforma();
+        });
+
+        function renderizarReforma() {
+            if (typeof ReformaTributaria === 'undefined') return;
+
+            // Coletar dados do formulário
+            var fat = parseMoneyValue(document.getElementById('inputFaturamento'));
+            var folha = parseMoneyValue(document.getElementById('inputFolha'));
+            var uf = getSelectValue('selectEstado');
+            var cnaeCode = '';
+            var cnaeDesc = '';
+            var cnaeCat = '';
+            var regras = {};
+
+            // Tentar pegar dados do CNAE selecionado
+            var cnaeInput = document.getElementById('inputCNAE');
+            if (cnaeInput && cnaeInput.dataset.code) {
+                cnaeCode = cnaeInput.dataset.code;
+            }
+            if (cnaeInput && cnaeInput.dataset.desc) {
+                cnaeDesc = cnaeInput.dataset.desc || cnaeInput.value;
+            }
+            if (window._selectedCnae) {
+                cnaeDesc = window._selectedCnae.descricao || cnaeDesc;
+                cnaeCat = window._selectedCnae.categoria || '';
+                regras = window._selectedCnae.regras || window._selectedCnae || {};
+            }
+
+            // Tipo de atividade
+            var tipoSelect = document.getElementById('selectTipoAtividade');
+            if (tipoSelect && tipoSelect.value) {
+                cnaeCat = tipoSelect.value;
+            }
+
+            // ISS
+            var issInput = document.getElementById('inputISS');
+            var issRate = 0.05;
+            if (issInput && issInput.value) {
+                var issVal = parseFloat(issInput.value.replace(',', '.'));
+                if (!isNaN(issVal) && issVal > 0) issRate = issVal / 100;
+            }
+
+            // Regime vencedor — tentar ler do resultado
+            var regime = 'presumido';
+            if (_lastCalcData && _lastCalcData.regimeVencedor) {
+                regime = _lastCalcData.regimeVencedor;
+            } else {
+                // Tentar inferir do DOM
+                var winnerEl = document.querySelector('.winner-regime');
+                if (winnerEl) {
+                    var winText = winnerEl.textContent.toLowerCase();
+                    if (winText.indexOf('simples') >= 0) regime = 'simples';
+                    else if (winText.indexOf('real') >= 0) regime = 'real';
+                    else regime = 'presumido';
+                }
+            }
+
+            ReformaTributaria.render({
+                faturamento: fat,
+                folha: folha,
+                uf: uf,
+                regime: regime,
+                cnaeDesc: cnaeDesc,
+                cnaeCat: cnaeCat,
+                cnaeCode: cnaeCode,
+                regras: regras,
+                issRate: issRate,
+                ES: window.ESTADOS || null,
+                containerID: 'tabReforma'
+            });
+        }
+
+        function parseMoneyValue(el) {
+            if (!el) return 0;
+            var v = el.value || '';
+            v = v.replace(/[^\d,.-]/g, '').replace(/\./g, '').replace(',', '.');
+            var n = parseFloat(v);
+            return isNaN(n) ? 0 : n;
+        }
+
+        function getSelectValue(id) {
+            var el = document.getElementById(id);
+            return el ? el.value : '';
+        }
+    })();
+    </script>
+
+    <!-- ═══ INTEGRAÇÃO ESTADOS.JS → Painel Estadual + Ranking ═══ -->
+    <script>
+    (function() {
+        'use strict';
+
+        // ── Aguardar carregamento dos estados ──
+        function waitForEstados(cb) {
+            if (window.Estados || window.EstadosBR) return cb();
+            var attempts = 0;
+            var iv = setInterval(function() {
+                attempts++;
+                if (window.Estados || window.EstadosBR) { clearInterval(iv); cb(); }
+                else if (attempts > 50) {
+                    clearInterval(iv);
+                    // Diagnóstico: verificar se o script carregou mas não exportou
+                    var scripts = document.querySelectorAll('script[src*="estados.js"]');
+                    var scriptFound = scripts.length > 0;
+                    console.warn('[EstadoPainel] Estados.js não carregou após 5s.');
+                    console.warn('[EstadoPainel] Script tag encontrada:', scriptFound);
+                    if (scriptFound) {
+                        console.warn('[EstadoPainel] Possível causa: erro no script ou conflito de módulo.');
+                        console.warn('[EstadoPainel] Verifique o console por erros de rede (404) ou sintaxe.');
+                    } else {
+                        console.warn('[EstadoPainel] Script tag não encontrada no DOM.');
+                    }
+                    // Verificar se globals individuais existem (indica se os 27 estados carregaram)
+                    var testGlobals = ['MATO_GROSSO_TRIBUTARIO','SAO_PAULO_TRIBUTARIO','PARA_TRIBUTARIO'];
+                    testGlobals.forEach(function(g) {
+                        console.warn('[EstadoPainel] window.' + g + ':', typeof window[g] !== 'undefined' ? 'OK' : 'NÃO encontrado');
+                    });
+                }
+            }, 100);
+        }
+
+        waitForEstados(function() {
+            var ES = window.Estados || window.EstadosBR;
+
+            // ── Preencher select de estados usando estados.js ──
+            var selectEstado = document.getElementById('selectEstado');
+            if (selectEstado && ES.opcoesSelectPorRegiao) {
+                var regioes = ES.opcoesSelectPorRegiao();
+                // Limpar opções existentes mantendo a primeira
+                while (selectEstado.options.length > 1) selectEstado.remove(1);
+
+                var ordemRegioes = ['Norte', 'Nordeste', 'Centro-Oeste', 'Sudeste', 'Sul'];
+                ordemRegioes.forEach(function(regiao) {
+                    if (regioes[regiao] && regioes[regiao].length > 0) {
+                        var optgroup = document.createElement('optgroup');
+                        optgroup.label = regiao;
+                        regioes[regiao].forEach(function(estado) {
+                            var opt = document.createElement('option');
+                            opt.value = estado.value;
+                            opt.textContent = estado.label;
+                            optgroup.appendChild(opt);
+                        });
+                        selectEstado.appendChild(optgroup);
+                    }
+                });
+            }
+
+            // ── Escutar mudança de estado ──
+            if (selectEstado) {
+                selectEstado.addEventListener('change', function() {
+                    atualizarPainelEstado(this.value, ES);
+                });
+            }
+
+            // ── Exportar para uso global ──
+            window.ESTADOS = ES;
+            window._atualizarPainelEstado = function(uf) { atualizarPainelEstado(uf, ES); };
+
+            // ── Carregar todos para ranking ──
+            if (ES.carregarTodos) ES.carregarTodos();
+
+            // ── Esconder loading e mostrar form ──
+            var loading = document.getElementById('loadingOverlay');
+            var formArea = document.getElementById('formArea');
+            if (loading) loading.style.display = 'none';
+            if (formArea) formArea.style.display = 'block';
+        });
+
+        /**
+         * Atualiza o painel de informações tributárias do estado selecionado
+         */
+        function atualizarPainelEstado(sigla, ES) {
+            var panel = document.getElementById('estadoInfoPanel');
+            if (!panel) return;
+
+            if (!sigla) {
+                panel.style.display = 'none';
+                return;
+            }
+
+            // ── Buscar dados normalizados ──
+            var icmsN   = ES.getICMSNormalizado   ? ES.getICMSNormalizado(sigla)   : null;
+            var issN    = ES.getISSNormalizado     ? ES.getISSNormalizado(sigla)    : null;
+            var snN     = ES.getSimplesNacionalNormalizado ? ES.getSimplesNacionalNormalizado(sigla) : null;
+            var ipvaN   = ES.getIPVANormalizado    ? ES.getIPVANormalizado(sigla)   : null;
+            var incN    = ES.getIncentivosNormalizado ? ES.getIncentivosNormalizado(sigla) : null;
+            var dadosG  = ES.getDadosGerais        ? ES.getDadosGerais(sigla)       : null;
+            var estado  = ES.getEstado             ? ES.getEstado(sigla)            : null;
+            var reg     = ES.UF_REGISTRY           ? ES.UF_REGISTRY[sigla]          : null;
+
+            if (!estado && !reg) {
+                panel.style.display = 'none';
+                return;
+            }
+
+            panel.style.display = 'block';
+
+            // ── Header ──
+            setText('estadoNomePanel', reg ? reg.nome + ' (' + sigla + ')' : sigla);
+            var regiaoBadge = document.getElementById('estadoRegiaoPanel');
+            if (regiaoBadge && reg) {
+                regiaoBadge.textContent = reg.regiao;
+                regiaoBadge.style.display = '';
+            }
+
+            // Status
+            var statusEl = document.getElementById('estadoStatusPanel');
+            if (statusEl) {
+                var cobertura = estado && estado.cobertura ? estado.cobertura.completude_estimada : null;
+                if (cobertura) {
+                    var pct = parseInt(cobertura);
+                    statusEl.textContent = cobertura;
+                    statusEl.className = 'status-badge ' + (pct >= 80 ? 'ok' : 'warn');
+                } else {
+                    statusEl.textContent = 'Dados carregados';
+                    statusEl.className = 'status-badge ok';
+                }
+            }
+
+            // ── ICMS ──
+            if (icmsN) {
+                setText('estadoICMS', icmsN.aliquota_padrao_percentual || 'N/D');
+                setText('estadoICMSDetail', icmsN.base_legal || '');
+                setText('estadoICMSEfetivo', icmsN.aliquota_efetiva_percentual || 'N/D');
+                var fecopText = icmsN.fecop && icmsN.fecop.existe
+                    ? icmsN.fecop.nome + ' +' + (icmsN.fecop.adicional * 100).toFixed(0) + '%'
+                    : 'Sem FECOP adicional';
+                setText('estadoFECOPDetail', fecopText);
+            } else {
+                setText('estadoICMS', 'N/D');
+                setText('estadoICMSEfetivo', 'N/D');
+                setText('estadoICMSDetail', '');
+                setText('estadoFECOPDetail', '');
+            }
+
+            // ── ISS ──
+            if (issN) {
+                setText('estadoISS', issN.aliquota_geral_percentual || 'N/D');
+                var issMun = issN.municipio_referencia || 'Capital';
+                var issServicos = issN.total_servicos_detalhados || 0;
+                setText('estadoISSDetail', issMun + (issServicos > 0 ? ' · ' + issServicos + ' serviços mapeados' : ''));
+            } else {
+                setText('estadoISS', 'N/D');
+                setText('estadoISSDetail', '');
+            }
+
+            // ── Sublimite Simples ──
+            if (snN) {
+                var sub = snN.sublimite_estadual;
+                if (sub) {
+                    setText('estadoSublimite', 'R$ ' + formatNum(sub));
+                    setText('estadoSublimiteDetail', sub < 3600000 ? '⚠ Sublimite reduzido' : 'Teto máximo');
+                } else {
+                    setText('estadoSublimite', 'R$ 3.600.000');
+                    setText('estadoSublimiteDetail', 'Teto máximo (padrão)');
+                }
+            } else {
+                setText('estadoSublimite', 'R$ 3.600.000');
+                setText('estadoSublimiteDetail', 'Padrão federal');
+            }
+
+            // ── IPVA ──
+            if (ipvaN && ipvaN.automovel != null) {
+                setText('estadoIPVA', (ipvaN.automovel * 100).toFixed(1) + '%');
+                var ipvaMoto = ipvaN.motocicleta != null ? ' · Moto: ' + (ipvaN.motocicleta * 100).toFixed(1) + '%' : '';
+                setText('estadoIPVADetail', 'Sobre valor venal' + ipvaMoto);
+            } else {
+                setText('estadoIPVA', 'N/D');
+                setText('estadoIPVADetail', '');
+            }
+
+            // ── ITBI ──
+            var itbi = estado ? (estado.itbi || null) : null;
+            if (itbi) {
+                var aliqITBI = itbi.aliquota_geral || itbi.aliquota || null;
+                if (aliqITBI != null) {
+                    setText('estadoITBI', (aliqITBI * 100).toFixed(1) + '%');
+                    setText('estadoITBIDetail', itbi.municipio_referencia || 'Capital');
+                } else {
+                    setText('estadoITBI', 'N/D');
+                    setText('estadoITBIDetail', '');
+                }
+            } else {
+                setText('estadoITBI', 'N/D');
+                setText('estadoITBIDetail', '');
+            }
+
+            // ── Incentivos ──
+            renderIncentivos(sigla, incN, dadosG);
+
+            // ── Dicas contextuais ──
+            renderDicas(sigla, icmsN, incN, reg);
+
+            // ── Ranking ICMS ──
+            renderRankingICMS(sigla, ES);
+        }
+
+        /**
+         * Renderiza tags de incentivos fiscais
+         */
+        function renderIncentivos(sigla, incN, dadosG) {
+            var container = document.getElementById('estadoIncentivos');
+            if (!container) return;
+
+            var tags = [];
+            var incentivos = [
+                { key: 'sudam',       label: 'SUDAM (-75% IRPJ)' },
+                { key: 'sudene',      label: 'SUDENE (-75% IRPJ)' },
+                { key: 'sudeco',      label: 'SUDECO' },
+                { key: 'zona_franca', label: 'Zona Franca' },
+                { key: 'suframa',     label: 'SUFRAMA' },
+                { key: 'alc',         label: 'ALC' },
+            ];
+
+            incentivos.forEach(function(inc) {
+                var dados = null;
+                if (incN && incN[inc.key]) dados = incN[inc.key];
+                else if (dadosG && dadosG[inc.key]) dados = dadosG[inc.key];
+
+                if (dados && (dados.ativo === true || dados.existe === true)) {
+                    var parcial = dados.abrangencia_parcial ? ' (parcial)' : '';
+                    tags.push('<span class="incentivo-tag ativo">✓ ' + inc.label + parcial + '</span>');
+                }
+            });
+
+            // Incentivos estaduais
+            if (incN && incN.incentivos_estaduais) {
+                var ie = incN.incentivos_estaduais;
+                var programas = typeof ie === 'object' ? Object.keys(ie) : [];
+                programas.slice(0, 3).forEach(function(prog) {
+                    var p = ie[prog];
+                    if (p && (p.ativo !== false)) {
+                        var nome = p.nome || p.programa || prog;
+                        tags.push('<span class="incentivo-tag ativo">⚡ ' + nome + '</span>');
+                    }
+                });
+            }
+
+            container.innerHTML = tags.length > 0
+                ? tags.join('')
+                : '<span class="incentivo-tag inativo">Sem incentivos especiais identificados</span>';
+        }
+
+        /**
+         * Dicas contextuais baseadas no estado
+         */
+        function renderDicas(sigla, icmsN, incN, reg) {
+            var dicasEl = document.getElementById('estadoDicas');
+            var stEl = document.getElementById('estadoSTAlert');
+            if (!dicasEl || !stEl) return;
+
+            var dicas = [];
+
+            // SUDAM/SUDENE
+            if (incN) {
+                if (incN.sudam && (incN.sudam.ativo || incN.sudam.existe)) {
+                    dicas.push('<strong>💡 Incentivo SUDAM:</strong> Redução de 75% do IRPJ para empresas na área de atuação da SUDAM. Marque a opção "Incentivo SUDAM/SUDENE" na seção de Estratégia.');
+                }
+                if (incN.sudene && (incN.sudene.ativo || incN.sudene.existe)) {
+                    dicas.push('<strong>💡 Incentivo SUDENE:</strong> Redução de 75% do IRPJ para empresas na área de atuação da SUDENE.');
+                }
+                if (incN.zona_franca && (incN.zona_franca.ativo || incN.zona_franca.existe)) {
+                    dicas.push('<strong>💡 Zona Franca:</strong> Isenção de IPI + redução de ICMS + créditos SUFRAMA podem tornar este estado o mais vantajoso para importação e indústria.');
+                }
+            }
+
+            // ICMS alto
+            if (icmsN && icmsN.aliquota_efetiva != null && icmsN.aliquota_efetiva > 0.19) {
+                dicas.push('<strong>⚠ ICMS elevado (' + icmsN.aliquota_efetiva_percentual + '):</strong> Considere verificar se há redução de base de cálculo para seu CNAE ou benefícios de ST no estado.');
+            }
+
+            if (dicas.length > 0) {
+                dicasEl.innerHTML = dicas.join('<br><br>');
+                dicasEl.style.display = 'block';
+            } else {
+                dicasEl.style.display = 'none';
+            }
+
+            // Alerta ST
+            if (icmsN && icmsN.substituicao_tributaria) {
+                stEl.innerHTML = '<strong>⚠ Substituição Tributária:</strong> Este estado possui regras de ICMS-ST. O cálculo final pode variar dependendo do NCM/produto. Marque a opção "Substituição Tributária" se aplicável.';
+                stEl.style.display = 'block';
+            } else {
+                stEl.style.display = 'none';
+            }
+        }
+
+        /**
+         * Renderiza mini-ranking de ICMS — Top 5 menores + UF atual
+         */
+        function renderRankingICMS(siglaAtual, ES) {
+            var container = document.getElementById('rankingICMSRows');
+            if (!container || !ES.compararICMS) return;
+
+            var ranking = ES.compararICMS(); // retorna já ordenado por menor ICMS
+            if (!ranking || ranking.length === 0) {
+                container.innerHTML = '<div style="font-size:0.82rem;color:var(--text-muted);">Dados insuficientes para ranking</div>';
+                return;
+            }
+
+            // Achar posição atual
+            var posAtual = -1;
+            for (var i = 0; i < ranking.length; i++) {
+                if (ranking[i].sigla === siglaAtual) { posAtual = i; break; }
+            }
+
+            // Montar lista: top 5 + UF atual se não estiver no top 5
+            var exibir = ranking.slice(0, 5);
+            var atualIncluido = posAtual >= 0 && posAtual < 5;
+
+            if (!atualIncluido && posAtual >= 0) {
+                exibir.push(ranking[posAtual]);
+            }
+
+            // Valor máximo para escala da barra
+            var maxICMS = 0;
+            exibir.forEach(function(e) { if (e.icms_efetivo != null && e.icms_efetivo > maxICMS) maxICMS = e.icms_efetivo; });
+            if (maxICMS === 0) maxICMS = 0.20;
+
+            var html = '';
+            exibir.forEach(function(e, idx) {
+                var pos = idx + 1;
+                if (!atualIncluido && idx === exibir.length - 1) pos = posAtual + 1;
+
+                var posClass = pos <= 3 ? 'pos-' + pos : 'pos-other';
+                var isCurrent = e.sigla === siglaAtual;
+                var rowClass = isCurrent ? 'ranking-row current' : 'ranking-row';
+
+                var icmsEfetivo = e.icms_efetivo != null ? e.icms_efetivo : (e.icms_padrao || 0);
+                var pct = maxICMS > 0 ? (icmsEfetivo / maxICMS * 100).toFixed(0) : 0;
+                var percText = e.icms_efetivo_percentual || e.icms_percentual || 'N/D';
+
+                var barColor = pos === 1 ? 'var(--accent)' : pos === 2 ? 'var(--blue)' : pos === 3 ? 'var(--amber)' : 'var(--text-muted)';
+                if (isCurrent && pos > 3) barColor = 'var(--accent)';
+
+                // Separador visual se UF atual não está no top 5
+                var separator = '';
+                if (!atualIncluido && idx === exibir.length - 1) {
+                    separator = '<div style="border-top:1px dashed var(--border-base);margin:6px 0;"></div>';
+                }
+
+                html += separator;
+                html += '<div class="' + rowClass + '">';
+                html += '  <span class="rank-pos ' + posClass + '">' + pos + '°</span>';
+                html += '  <span class="rank-uf">' + e.sigla + '</span>';
+                html += '  <div class="rank-bar"><div class="rank-bar-fill" style="width:' + pct + '%;background:' + barColor + '"></div></div>';
+                html += '  <span class="rank-value">' + percText + '</span>';
+                html += '</div>';
+            });
+
+            container.innerHTML = html;
+        }
+
+        // ── Helpers ──
+        function setText(id, text) {
+            var el = document.getElementById(id);
+            if (el) el.textContent = text || '';
+        }
+
+        function formatNum(n) {
+            if (n == null) return '0';
+            return n.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+        }
+    })();
+    </script>
+</body>
+</html>

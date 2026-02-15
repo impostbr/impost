@@ -1,0 +1,2311 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IMPOST. — Estudo Tributário Lucro Real</title>
+  <meta name="description" content="Estudo tributário profissional do regime Lucro Real — IMPOST. Inteligência em Modelagem de Otimização Tributária">
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300..700;1,9..40,300..700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+
+  <style>
+    /* ═══════════════════════════════════════════════════════════════════════════
+       RESET & BASE
+       ═══════════════════════════════════════════════════════════════════════════ */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --primary: #2D8C4E;
+      --primary-dark: #1E6B38;
+      --primary-light: #38A85C;
+      --secondary: #E8A838;
+      --secondary-light: #F0C060;
+      --accent: #2ECC71;
+      --accent-dark: #27AE60;
+      --danger: #E74C3C;
+      --danger-light: #FADBD8;
+      --warning: #F39C12;
+      --warning-light: #FEF5E7;
+      --info: #3498DB;
+      --info-light: #EBF5FB;
+      --purple: #9B59B6;
+
+      --bg: #f4f6f8;
+      --bg-gradient: linear-gradient(135deg, #f4f6f8 0%, #eef1f4 100%);
+      --card-bg: #ffffff;
+      --card-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+      --card-shadow-hover: 0 4px 24px rgba(0, 0, 0, 0.1);
+      --card-radius: 12px;
+      --input-border: #d0d5dd;
+      --input-focus: #2D8C4E;
+      --text: #1a1a2e;
+      --text-secondary: #5a6170;
+      --text-muted: #8b95a5;
+      --border: #e2e6ea;
+      --table-header: #2D8C4E;
+      --table-stripe: #f7f9fb;
+      --table-hover: #edf7f0;
+
+      --font-body: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+      --transition: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: var(--font-body);
+      background: var(--bg-gradient);
+      color: var(--text);
+      line-height: 1.6;
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ═══════════════════════════════════════════════════════════════════════════
+       LAYOUT PRINCIPAL
+       ═══════════════════════════════════════════════════════════════════════════ */
+    .app-header {
+      background: #ffffff;
+      color: var(--text);
+      padding: 1rem 2rem;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+      position: relative;
+      z-index: 100;
+      border-bottom: 1px solid var(--border);
+    }
+    .app-header .logo {
+      font-size: 1.6rem;
+      font-weight: 700;
+      letter-spacing: 1px;
+      color: var(--text);
+    }
+    .app-header .logo-dot { color: var(--accent); }
+    .app-header .header-sep {
+      width: 1px;
+      height: 24px;
+      background: var(--border);
+    }
+    .app-header .header-title {
+      font-size: 0.95rem;
+      font-weight: 400;
+      color: var(--text-secondary);
+    }
+    .app-header .header-version {
+      margin-left: auto;
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      background: var(--primary);
+      color: #fff;
+      padding: 0.2rem 0.6rem;
+      border-radius: 12px;
+      font-weight: 600;
+    }
+    .app-header .header-btn-dashboard {
+      margin-left: auto;
+      padding: 0.5rem 1.2rem;
+      background: var(--primary);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-family: var(--font-body);
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+      transition: var(--transition);
+    }
+    .app-header .header-btn-dashboard:hover {
+      background: var(--primary-dark);
+    }
+
+    .app-container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem 4rem;
+    }
+
+    /* ═══════════════════════════════════════════════════════════════════════════
+       WIZARD — PROGRESS BAR
+       ═══════════════════════════════════════════════════════════════════════════ */
+    .wz-progress {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1.5rem 1rem;
+      margin-bottom: 1.5rem;
+      overflow-x: auto;
+      gap: 0;
+    }
+
+    .wz-step-indicator {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      cursor: pointer;
+      min-width: 80px;
+      transition: var(--transition);
+    }
+    .wz-step-indicator:hover .wz-step-num {
+      transform: scale(1.1);
+      box-shadow: 0 0 0 4px rgba(45, 140, 78, 0.15);
+    }
+
+    .wz-step-num {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 0.9rem;
+      background: #e2e6ea;
+      color: var(--text-muted);
+      transition: var(--transition);
+      border: 3px solid transparent;
+    }
+    .wz-step-indicator.active .wz-step-num {
+      background: var(--primary);
+      color: #fff;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 4px rgba(45, 140, 78, 0.2);
+    }
+    .wz-step-indicator.done .wz-step-num {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent-dark);
+    }
+
+    .wz-step-label {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      margin-top: 6px;
+      text-align: center;
+      max-width: 90px;
+      line-height: 1.3;
+      font-weight: 500;
+    }
+    .wz-step-indicator.active .wz-step-label { color: var(--primary); font-weight: 700; }
+    .wz-step-indicator.done .wz-step-label { color: var(--accent-dark); }
+
+    .wz-step-line {
+      flex: 1;
+      height: 3px;
+      background: #e2e6ea;
+      min-width: 20px;
+      max-width: 60px;
+      margin: 0 4px;
+      margin-bottom: 22px;
+      border-radius: 2px;
+      transition: var(--transition);
+    }
+    .wz-step-line.done {
+      background: var(--accent);
+    }
+
+    /* ═══════════════════════════════════════════════════════════════════════════
+       WIZARD — CONTENT AREA
+       ═══════════════════════════════════════════════════════════════════════════ */
+    .wz-content {
+      background: var(--card-bg);
+      border-radius: var(--card-radius);
+      box-shadow: var(--card-shadow);
+      padding: 2rem;
+      animation: fadeIn 0.3s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .wz-header {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+      padding-bottom: 1rem;
+      border-bottom: 2px solid var(--border);
+    }
+    .wz-header-icon {
+      font-size: 2rem;
+      line-height: 1;
+    }
+    .wz-title {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--primary);
+      margin: 0;
+    }
+    .wz-subtitle {
+      font-size: 0.85rem;
+      color: var(--text-secondary);
+      margin: 2px 0 0;
+    }
+
+    .wz-form {
+      margin-bottom: 1.5rem;
+    }
+
+    /* ═══════════════════════════════════════════════════════════════════════════
+       WIZARD — SECTION TITLES
+       ═══════════════════════════════════════════════════════════════════════════ */
+    .wz-section-title {
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: var(--primary);
+      margin: 1.8rem 0 1rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 2px solid var(--accent);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .wz-section-title::before {
+      content: '';
+      display: inline-block;
+      width: 4px;
+      height: 20px;
+      background: var(--accent);
+      border-radius: 2px;
+    }
+
+    /* ═══════════════════════════════════════════════════════════════════════════
+       WIZARD — ROWS & FIELDS
+       ═══════════════════════════════════════════════════════════════════════════ */
+    .wz-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      margin-bottom: 0;
+    }
+
+    .wz-field {
+      margin-bottom: 1rem;
+    }
+    .wz-field > label {
+      display: block;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 4px;
+    }
+
+    .wz-input {
+      width: 100%;
+      padding: 0.6rem 0.85rem;
+      border: 1.5px solid var(--input-border);
+      border-radius: 8px;
+      font-family: var(--font-body);
+      font-size: 0.9rem;
+      color: var(--text);
+      background: #fff;
+      transition: var(--transition);
+      outline: none;
+    }
+    .wz-input:focus {
+      border-color: var(--input-focus);
+      box-shadow: 0 0 0 3px rgba(45, 140, 78, 0.12);
+    }
+    .wz-input:disabled {
+      background: #f5f5f5;
+      cursor: not-allowed;
+      opacity: 0.7;
+    }
+    select.wz-input {
+      cursor: pointer;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%235a6170' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 12px center;
+      padding-right: 2rem;
+    }
+    textarea.wz-input {
+      resize: vertical;
+      min-height: 70px;
+    }
+
+    .wz-input-prefix, .wz-input-suffix {
+      display: flex;
+      align-items: stretch;
+    }
+    .wz-input-prefix > span, .wz-input-suffix > span {
+      display: flex;
+      align-items: center;
+      padding: 0 0.7rem;
+      background: var(--table-stripe);
+      border: 1.5px solid var(--input-border);
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+    }
+    .wz-input-prefix > span {
+      border-right: none;
+      border-radius: 8px 0 0 8px;
+    }
+    .wz-input-prefix .wz-input {
+      border-radius: 0 8px 8px 0;
+    }
+    .wz-input-suffix > span {
+      border-left: none;
+      border-radius: 0 8px 8px 0;
+    }
+    .wz-input-suffix .wz-input {
+      border-radius: 8px 0 0 8px;
+    }
+
+    .wz-tip {
+      display: block;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-top: 3px;
+      line-height: 1.4;
+    }
+
+    .wz-field-error .wz-input {
+      border-color: var(--danger);
+      box-shadow: 0 0 0 3px rgba(231, 76, 60, 0.12);
+    }
+
+    /* ═══════════════════════════════════════════════════════════════════════════
+       WIZARD — CHECKBOXES & RADIOS
+       ═══════════════════════════════════════════════════════════════════════════ */
+    .wz-field-check {
+      margin-bottom: 0.8rem;
+    }
+    .wz-check-label {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      cursor: pointer;
+      font-size: 0.88rem;
+      font-weight: 500;
+      user-select: none;
+      padding: 0.4rem 0;
+    }
+    .wz-check-label input[type="checkbox"] {
+      display: none;
+    }
+    .wz-checkmark {
+      width: 20px;
+      height: 20px;
+      border: 2px solid var(--input-border);
+      border-radius: 5px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: var(--transition);
+      flex-shrink: 0;
+      background: #fff;
+    }
+    .wz-check-label input:checked + .wz-checkmark {
+      background: var(--primary);
+      border-color: var(--primary);
+    }
+    .wz-check-label input:checked + .wz-checkmark::after {
+      content: '✓';
+      color: #fff;
+      font-size: 0.7rem;
+      font-weight: 700;
+    }
+
+    .wz-radio-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-top: 0.3rem;
+    }
+    .wz-radio-label {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      cursor: pointer;
+      font-size: 0.85rem;
+      user-select: none;
+      padding: 0.5rem 0.8rem;
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
+      transition: var(--transition);
+      background: #fff;
+    }
+    .wz-radio-label:hover {
+      border-color: var(--primary);
+      background: var(--info-light);
+    }
+    .wz-radio-label input[type="radio"] {
+      display: none;
+    }
+    .wz-radio-mark {
+      width: 18px;
+      height: 18px;
+      border: 2px solid var(--input-border);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: var(--transition);
+      flex-shrink: 0;
+    }
+    .wz-radio-label input:checked + .wz-radio-mark {
+      border-color: var(--primary);
+    }
+    .wz-radio-label input:checked + .wz-radio-mark::after {
+      content: '';
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--primary);
+    }
+    .wz-radio-label:has(input:checked) {
+      border-color: var(--primary);
+      background: var(--info-light);
+    }
+
+    /* ═══════════════════════════════════════════════════════════════════════════
+       WIZARD — INFO BOXES & BADGES
+       ═══════════════════════════════════════════════════════════════════════════ */
+    .wz-info-box {
+      padding: 0.85rem 1rem;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      line-height: 1.55;
+      margin-bottom: 1rem;
+      border-left: 4px solid var(--info);
+      background: var(--info-light);
+      color: var(--text);
+    }
+    .wz-info-box strong { color: var(--primary); }
+    .wz-info-default { border-left-color: var(--info); background: var(--info-light); }
+    .wz-info-success { border-left-color: var(--accent); background: #eafaf1; }
+    .wz-info-warning { border-left-color: var(--warning); background: var(--warning-light); }
+    .wz-info-gray { border-left-color: #bbb; background: #f5f5f5; }
+
+    .wz-badge {
+      display: inline-block;
+      padding: 0.3rem 0.7rem;
+      border-radius: 6px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      margin-top: 0.4rem;
+    }
+    .wz-badge-green { background: #eafaf1; color: var(--accent-dark); border: 1px solid #c3e6cb; }
+    .wz-badge-red { background: var(--danger-light); color: var(--danger); border: 1px solid #f5c6cb; }
+    .wz-badge-gray { background: #f5f5f5; color: #666; border: 1px solid #ddd; }
+    .wz-badge-blue { background: var(--info-light); color: var(--info); border: 1px solid #b8daff; }
+
+    /* ═══════════════════════════════════════════════════════════════════════════
+       WIZARD — AUTO CALC BOXES
+       ═══════════════════════════════════════════════════════════════════════════ */
+    .wz-auto-calc {
+      background: linear-gradient(135deg, #f7f9fb 0%, #edf2f7 100%);
+      border: 1px solid var(--border);
+      border-left: 4px solid var(--primary);
+      border-radius: 8px;
+      padding: 0.8rem 1rem;
+      margin: 1rem 0;
+      font-size: 0.85rem;
+      line-height: 1.6;
+      color: var(--text);
+      font-family: var(--font-mono);
+    }
+    .wz-auto-calc strong { color: var(--primary); }
+
+    /* ═══════════════════════════════════════════════════════════════════════════
+       WIZARD — NAVIGATION
+       ═══════════════════════════════════════════════════════════════════════════ */
+    .wz-nav {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 0.8rem;
+      padding-top: 1.5rem;
+      border-top: 1px solid var(--border);
+      flex-wrap: wrap;
+    }
+
+    .wz-btn {
+      padding: 0.65rem 1.4rem;
+      border: none;
+      border-radius: 8px;
+      font-family: var(--font-body);
+      font-size: 0.88rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: var(--transition);
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+    .wz-btn:hover { transform: translateY(-1px); }
+    .wz-btn:active { transform: translateY(0); }
+
+    .wz-btn-next {
+      background: var(--primary);
+      color: #fff;
+      box-shadow: 0 2px 8px rgba(45, 140, 78, 0.3);
+    }
+    .wz-btn-next:hover { background: var(--primary-light); }
+
+    .wz-btn-back {
+      background: transparent;
+      color: var(--text-secondary);
+      border: 1.5px solid var(--border);
+    }
+    .wz-btn-back:hover { background: var(--table-stripe); }
+
+    .wz-btn-analyze {
+      background: linear-gradient(135deg, var(--accent) 0%, var(--accent-dark) 100%);
+      color: #fff;
+      font-size: 1rem;
+      padding: 0.8rem 2rem;
+      box-shadow: 0 4px 16px rgba(46, 204, 113, 0.35);
+    }
+    .wz-btn-analyze:hover { box-shadow: 0 6px 24px rgba(46, 204, 113, 0.45); }
+
+    .wz-btn-fill {
+      background: transparent;
+      color: var(--warning);
+      border: 1.5px solid var(--warning);
+      font-size: 0.8rem;
+      padding: 0.5rem 1rem;
+    }
+    .wz-btn-fill:hover { background: var(--warning-light); }
+
+    .wz-btn-small {
+      font-size: 0.78rem;
+      padding: 0.35rem 0.7rem;
+      background: transparent;
+      color: var(--primary);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+    }
+    .wz-btn-small:hover { background: var(--info-light); }
+
+    /* ═══════════════════════════════════════════════════════════════════════════
+       WIZARD — MISC
+       ═══════════════════════════════════════════════════════════════════════════ */
+    .wz-error {
+      background: var(--danger-light);
+      border: 2px solid var(--danger);
+      border-radius: var(--card-radius);
+      padding: 2rem;
+      text-align: center;
+      color: var(--danger);
+    }
+    .wz-error h2 { margin-bottom: 0.5rem; }
+
+    .wz-resumo {
+      background: var(--table-stripe);
+      border-radius: 8px;
+      padding: 1.2rem;
+      margin-bottom: 1.5rem;
+    }
+    .wz-resumo-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.85rem;
+    }
+    .wz-resumo-table td {
+      padding: 0.4rem 0.6rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .wz-resumo-table strong { color: var(--primary); }
+    .wz-resumo-editar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-top: 1rem;
+    }
+
+    .wz-municipio-loading {
+      font-size: 0.8rem;
+      color: var(--info);
+      padding: 0.3rem 0;
+      animation: pulse 1.5s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    .wz-iss-dica {
+      font-size: 0.8rem;
+      padding: 0.4rem 0;
+    }
+
+    .wz-adm-impact {
+      font-size: 0.8rem;
+      color: var(--danger);
+      font-weight: 600;
+    }
+
+    /* ═══════════════════════════════════════════════════════════════════════════
+       ACTION BAR (FIXED WHEN REPORT VISIBLE)
+       ═══════════════════════════════════════════════════════════════════════════ */
+    .action-bar {
+      position: sticky;
+      top: 0;
+      z-index: 200;
+      background: linear-gradient(135deg, var(--primary-dark) 0%, var(--primary) 100%);
+      padding: 0.7rem 1.5rem;
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+      flex-wrap: wrap;
+      margin: -2rem -1.5rem 2rem;
+      border-radius: 0 0 var(--card-radius) var(--card-radius);
+    }
+    .action-bar .action-label {
+      font-size: 0.82rem;
+      color: rgba(255,255,255,0.6);
+      font-weight: 600;
+      margin-right: 0.5rem;
+      white-space: nowrap;
+    }
+    .action-bar .ab-btn {
+      padding: 0.5rem 1rem;
+      border: 1.5px solid rgba(255,255,255,0.25);
+      border-radius: 8px;
+      background: rgba(255,255,255,0.08);
+      color: #fff;
+      font-family: var(--font-body);
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: var(--transition);
+      white-space: nowrap;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+    .ab-btn:hover {
+      background: rgba(255,255,255,0.18);
+      border-color: rgba(255,255,255,0.5);
+      transform: translateY(-1px);
+    }
+    .ab-btn.ab-btn-primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+    .ab-btn.ab-btn-primary:hover {
+      background: var(--accent-dark);
+    }
+    .ab-btn.ab-btn-success {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+    .ab-btn.ab-btn-success:hover {
+      background: var(--accent-dark);
+    }
+    .action-bar .ab-spacer { flex: 1; }
+
+    /* ═══════════════════════════════════════════════════════════════════════════
+       RESULTADOS — HEADER
+       ═══════════════════════════════════════════════════════════════════════════ */
+    .res-header {
+      background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+      color: #fff;
+      padding: 2rem 2.5rem;
+      border-radius: var(--card-radius);
+      margin-bottom: 2rem;
+      position: relative;
+      overflow: hidden;
+    }
+    .res-header::after {
+      content: '';
+      position: absolute;
+      top: 0; right: 0; bottom: 0;
+      width: 40%;
+      background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='80' cy='20' r='40' fill='rgba(232,168,56,0.06)'/%3E%3Ccircle cx='60' cy='70' r='30' fill='rgba(46,204,113,0.04)'/%3E%3C/svg%3E") no-repeat center;
+      background-size: cover;
+      pointer-events: none;
+    }
+    .res-logo { margin-bottom: 0.8rem; }
+    .res-logo img { max-height: 50px; }
+    .res-title {
+      font-size: 1.5rem;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      margin-bottom: 0.3rem;
+    }
+    .res-subtitle { font-size: 0.9rem; opacity: 0.8; }
+    .res-header-line {
+      width: 60px;
+      height: 3px;
+      background: var(--accent);
+      border-radius: 2px;
+      margin: 1rem 0;
+    }
+    .res-company {
+      font-size: 0.88rem;
+      line-height: 1.8;
+    }
+    .res-company-row strong { color: var(--accent); }
+    .res-elaborador {
+      margin-top: 1rem;
+      padding-top: 0.8rem;
+      border-top: 1px solid rgba(255,255,255,0.15);
+      font-size: 0.82rem;
+      opacity: 0.9;
+    }
+    .res-powered {
+      margin-top: 0.8rem;
+      font-size: 0.72rem;
+      font-family: var(--font-mono);
+      opacity: 0.5;
+    }
+
+    /* ═══════════════════════════════════════════════════════════════════════════
+       RESULTADOS — SECTIONS
+       ═══════════════════════════════════════════════════════════════════════════ */
+    .res-section {
+      background: var(--card-bg);
+      border-radius: var(--card-radius);
+      box-shadow: var(--card-shadow);
+      margin-bottom: 1.5rem;
+      overflow: hidden;
+    }
+    .res-section-title {
+      background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+      color: #fff;
+      padding: 1rem 1.5rem;
+      font-size: 1.05rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 0.7rem;
+      margin: 0;
+    }
+    .res-section-num {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.2);
+      font-size: 0.85rem;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+    .res-section-body {
+      padding: 1.5rem;
+    }
+    .res-section-body h3 {
+      font-size: 1rem;
+      font-weight: 700;
+      color: var(--primary);
+      margin: 1.5rem 0 0.8rem;
+      padding-bottom: 0.4rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .res-section-body h3:first-child { margin-top: 0; }
+    .res-section-body h4 {
+      font-size: 0.92rem;
+      font-weight: 700;
+      color: var(--primary);
+      margin: 1.2rem 0 0.6rem;
+    }
+
+    /* ═══════════════════════════════════════════════════════════════════════════
+       RESULTADOS — SUMMARY CARDS
+       ═══════════════════════════════════════════════════════════════════════════ */
+    .res-summary {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1rem;
+      margin-bottom: 0.5rem;
+    }
+    .res-summary-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1.2rem;
+      text-align: center;
+      transition: var(--transition);
+    }
+    .res-summary-card:hover {
+      box-shadow: var(--card-shadow-hover);
+      transform: translateY(-2px);
+    }
+    .res-card-hero {
+      border-color: var(--accent);
+      border-width: 2px;
+      background: linear-gradient(135deg, #eafaf1 0%, #fff 100%);
+    }
+    .res-card-label {
+      font-size: 0.68rem;
+      font-weight: 700;
+      letter-spacing: 0.8px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      margin-bottom: 0.5rem;
+    }
+    .res-card-value {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--primary);
+      font-family: var(--font-mono);
+      line-height: 1.2;
+    }
+    .res-card-economia { color: var(--accent-dark) !important; }
+    .res-card-sub {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-top: 0.3rem;
+    }
+
+    /* ═══════════════════════════════════════════════════════════════════════════
+       RESULTADOS — TABLES
+       ═══════════════════════════════════════════════════════════════════════════ */
+    .res-table-wrap {
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    .res-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.85rem;
+      margin-bottom: 1rem;
+    }
+    .res-table thead th {
+      background: var(--table-header);
+      color: #fff;
+      padding: 0.65rem 0.8rem;
+      text-align: left;
+      font-weight: 600;
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      position: sticky;
+      top: 0;
+    }
+    .res-table thead th:first-child { border-radius: 8px 0 0 0; }
+    .res-table thead th:last-child { border-radius: 0 8px 0 0; }
+    .res-table td {
+      padding: 0.55rem 0.8rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .res-table tbody tr:nth-child(even) { background: var(--table-stripe); }
+    .res-table tbody tr:hover { background: var(--table-hover); }
+    .res-table tfoot td, .res-table tfoot th {
+      padding: 0.7rem 0.8rem;
+      font-weight: 700;
+    }
+
+    .res-valor {
+      text-align: right;
+      font-family: var(--font-mono);
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .res-artigo {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      font-style: italic;
+    }
+
+    .res-sub td { padding-left: 1.5rem; font-size: 0.82rem; }
+    .res-subtotal td { font-weight: 700; background: var(--table-stripe) !important; }
+    .res-total td, .res-total th { font-weight: 700; background: var(--primary) !important; color: #fff !important; }
+    .res-total .res-valor { color: #fff !important; }
+    .res-destaque { background: linear-gradient(90deg, #eafaf1, #fff) !important; }
+    .res-economia { color: var(--accent-dark) !important; }
+    .res-economia .res-valor { color: var(--accent-dark) !important; }
+    .res-group-header td { font-weight: 700; background: #f0f4f8 !important; color: var(--primary); padding-top: 0.8rem; }
+    .res-info-row td { font-size: 0.8rem; color: var(--text-muted); font-style: italic; background: var(--table-stripe) !important; }
+    .res-tag-tipo-t { font-size: 0.68rem; padding: 0.15rem 0.4rem; border-radius: 4px; background: var(--warning-light); color: var(--warning); font-weight: 600; }
+    .res-tag-tipo-c { font-size: 0.68rem; padding: 0.15rem 0.4rem; border-radius: 4px; background: var(--info-light); color: var(--info); font-weight: 600; }
+
+    .res-table-dre, .res-table-lalur { }
+    .res-dre, .res-lalur { }
+
+    .res-info-msg {
+      font-size: 0.88rem;
+      color: var(--text-muted);
+      font-style: italic;
+      padding: 1rem;
+      text-align: center;
+    }
+
+    /* ═══════════════════════════════════════════════════════════════════════════
+       RESULTADOS — DETAIL GRID (Tributos)
+       ═══════════════════════════════════════════════════════════════════════════ */
+    .res-detail-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.2rem;
+    }
+    .res-detail-card {
+      background: var(--table-stripe);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1.2rem;
+    }
+    .res-detail-card h3 {
+      margin-top: 0 !important;
+      border-bottom: none !important;
+    }
+    .res-detail-wide {
+      grid-column: span 2;
+    }
+    .res-detail-row { display: flex; justify-content: space-between; padding: 0.3rem 0; }
+    .res-detail-label { font-size: 0.85rem; color: var(--text-secondary); }
+    .res-detail-value { font-family: var(--font-mono); font-weight: 600; }
+    .res-detail-total { font-weight: 700; border-top: 2px solid var(--primary); padding-top: 0.5rem; margin-top: 0.5rem; }
+
+    /* ═══════════════════════════════════════════════════════════════════════════
+       RESULTADOS — COMPOSIÇÃO VISUAL BAR
+       ═══════════════════════════════════════════════════════════════════════════ */
+    .res-composicao-visual { margin-bottom: 1.5rem; }
+    .res-comp-bar {
+      display: flex;
+      height: 36px;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .res-comp-seg {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      min-width: 40px;
+      transition: var(--transition);
+    }
+    .res-comp-seg:hover { filter: brightness(1.15); }
+
+    /* ═══════════════════════════════════════════════════════════════════════════
+       RESULTADOS — MAPA DE ECONOMIA (Antes × Depois)
+       ═══════════════════════════════════════════════════════════════════════════ */
+    .res-mapa-economia { }
+    .res-mapa-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 1.5rem;
+      margin-bottom: 2rem;
+      flex-wrap: wrap;
+    }
+    .res-mapa-card {
+      flex: 1;
+      min-width: 200px;
+      max-width: 280px;
+      padding: 1.5rem;
+      border-radius: 12px;
+      text-align: center;
+    }
+    .res-mapa-card-label { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 0.5rem; }
+    .res-mapa-card-value { font-size: 1.6rem; font-weight: 700; font-family: var(--font-mono); }
+    .res-mapa-card-sub { font-size: 0.8rem; margin-top: 0.3rem; }
+    .res-mapa-antes {
+      background: linear-gradient(135deg, #fdecea, #fff);
+      border: 2px solid var(--danger);
+      color: var(--danger);
+    }
+    .res-mapa-antes .res-mapa-card-label { color: var(--danger); }
+    .res-mapa-depois {
+      background: linear-gradient(135deg, #eafaf1, #fff);
+      border: 2px solid var(--accent);
+      color: var(--accent-dark);
+    }
+    .res-mapa-depois .res-mapa-card-label { color: var(--accent-dark); }
+    .res-mapa-seta {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.3rem;
+      flex-shrink: 0;
+    }
+    .res-mapa-seta-valor {
+      font-family: var(--font-mono);
+      font-weight: 700;
+      color: var(--accent-dark);
+      font-size: 0.95rem;
+    }
+    .res-mapa-seta-icon {
+      font-size: 2rem;
+      color: var(--accent);
+    }
+    .res-mapa-breakdown { margin-top: 1rem; }
+    .res-mapa-projecoes { margin-top: 1.5rem; }
+
+    /* ═══════════════════════════════════════════════════════════════════════════
+       RESULTADOS — OPORTUNIDADES
+       ═══════════════════════════════════════════════════════════════════════════ */
+    .res-oportunidades { }
+    .res-oport-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      margin-bottom: 1rem;
+      overflow: hidden;
+      transition: var(--transition);
+    }
+    .res-oport-card:hover { box-shadow: var(--card-shadow-hover); }
+    .res-oport-header {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding: 1rem 1.2rem;
+      background: var(--table-stripe);
+      border-bottom: 1px solid var(--border);
+    }
+    .res-oport-rank {
+      font-family: var(--font-mono);
+      font-weight: 700;
+      font-size: 1.1rem;
+      color: var(--primary);
+      background: #fff;
+      width: 42px;
+      height: 42px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 2px solid var(--primary);
+      flex-shrink: 0;
+    }
+    .res-oport-titulo {
+      flex: 1;
+      font-weight: 700;
+      font-size: 0.95rem;
+      color: var(--text);
+    }
+    .res-oport-valor {
+      font-family: var(--font-mono);
+      font-size: 1.2rem;
+      font-weight: 700;
+      color: var(--accent-dark);
+      white-space: nowrap;
+    }
+    .res-oport-valor span { font-size: 0.72rem; color: var(--text-muted); font-family: var(--font-body); }
+    .res-oport-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+      padding: 0.6rem 1.2rem;
+    }
+    .res-tag {
+      font-size: 0.7rem;
+      font-weight: 600;
+      padding: 0.25rem 0.6rem;
+      border-radius: 20px;
+      color: #fff;
+    }
+    .res-tag-tipo { }
+    .res-tag-compl { }
+    .res-tag-risco { }
+    .res-oport-body {
+      padding: 0.8rem 1.2rem 1rem;
+      font-size: 0.85rem;
+      line-height: 1.6;
+    }
+    .res-oport-legal {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      font-style: italic;
+      margin-top: 0.5rem;
+    }
+    .res-oport-acao {
+      background: #eafaf1;
+      border-radius: 6px;
+      padding: 0.5rem 0.8rem;
+      margin-top: 0.6rem;
+      font-size: 0.82rem;
+      border-left: 3px solid var(--accent);
+    }
+
+    /* ═══════════════════════════════════════════════════════════════════════════
+       RESULTADOS — ALERTAS
+       ═══════════════════════════════════════════════════════════════════════════ */
+    .res-alertas { }
+    .res-alerta {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.7rem;
+      padding: 0.8rem 1rem;
+      border-radius: 8px;
+      margin-bottom: 0.7rem;
+      font-size: 0.85rem;
+      line-height: 1.5;
+      border-left: 4px solid;
+    }
+    .res-alerta-icon { font-size: 1.1rem; flex-shrink: 0; line-height: 1.3; }
+    .res-alerta-critico { border-left-color: var(--danger); background: var(--danger-light); }
+    .res-alerta-aviso { border-left-color: var(--warning); background: var(--warning-light); }
+    .res-alerta-info { border-left-color: var(--info); background: var(--info-light); }
+    .res-alerta-economia { border-left-color: var(--accent); background: #eafaf1; }
+
+    /* ═══════════════════════════════════════════════════════════════════════════
+       RESULTADOS — CENÁRIOS
+       ═══════════════════════════════════════════════════════════════════════════ */
+    .res-cenarios { }
+    .res-cenario-base td { font-weight: 700; }
+    .res-cenario-pessimista td { color: var(--danger); }
+    .res-cenario-otimista td { color: var(--accent-dark); }
+
+    /* ═══════════════════════════════════════════════════════════════════════════
+       RESULTADOS — FLUXO MENSAL
+       ═══════════════════════════════════════════════════════════════════════════ */
+    .res-fluxo-mensal { font-size: 0.8rem; }
+    .res-fluxo-mensal td { padding: 0.4rem 0.5rem; }
+
+    /* ═══════════════════════════════════════════════════════════════════════════
+       RESULTADOS — RECOMENDAÇÃO
+       ═══════════════════════════════════════════════════════════════════════════ */
+    .res-recomendacao, .res-trimestral-recomendacao {
+      background: linear-gradient(135deg, #edf2f7, #fff);
+      border-radius: 10px;
+      padding: 1.2rem;
+      margin-top: 1rem;
+    }
+    .res-recomendacao h4, .res-trimestral-recomendacao h4 {
+      color: var(--primary);
+      margin-bottom: 0.5rem;
+    }
+
+    /* ═══════════════════════════════════════════════════════════════════════════
+       RESULTADOS — OBRIGAÇÕES
+       ═══════════════════════════════════════════════════════════════════════════ */
+    .res-obrigacoes { }
+    .res-darf-table { }
+
+    /* ═══════════════════════════════════════════════════════════════════════════
+       RESULTADOS — TIMELINE
+       ═══════════════════════════════════════════════════════════════════════════ */
+    .res-timeline {
+      position: relative;
+      padding-left: 40px;
+    }
+    .res-timeline::before {
+      content: '';
+      position: absolute;
+      left: 18px;
+      top: 0;
+      bottom: 0;
+      width: 3px;
+      background: var(--border);
+      border-radius: 2px;
+    }
+    .res-timeline-item {
+      position: relative;
+      margin-bottom: 1.5rem;
+      display: flex;
+      gap: 1rem;
+    }
+    .res-timeline-marker {
+      position: absolute;
+      left: -40px;
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: var(--primary);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 0.85rem;
+      z-index: 1;
+      box-shadow: 0 2px 8px rgba(45, 140, 78, 0.3);
+    }
+    .res-timeline-content {
+      flex: 1;
+      background: var(--table-stripe);
+      border-radius: 8px;
+      padding: 0.8rem 1rem;
+      border-left: 3px solid var(--primary);
+    }
+    .res-timeline-titulo { font-weight: 700; color: var(--text); margin-bottom: 0.3rem; }
+    .res-timeline-prazo {
+      font-size: 0.75rem;
+      color: var(--info);
+      font-family: var(--font-mono);
+    }
+    .res-timeline-desc { font-size: 0.83rem; color: var(--text-secondary); }
+
+    /* ═══════════════════════════════════════════════════════════════════════════
+       RESULTADOS — CHARTS
+       ═══════════════════════════════════════════════════════════════════════════ */
+    .res-chart-container {
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1.2rem;
+      margin: 1rem 0;
+    }
+    .res-chart-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+    }
+    .res-chart-aliquota {
+      max-width: 250px;
+      margin: 0 auto 2rem;
+    }
+
+    /* ═══════════════════════════════════════════════════════════════════════════
+       RESULTADOS — FOOTER & ACTIONS
+       ═══════════════════════════════════════════════════════════════════════════ */
+    .res-footer {
+      text-align: center;
+      padding-top: 1rem;
+    }
+    .res-footer-elaborador { font-weight: 600; margin-bottom: 0.3rem; }
+    .res-footer-data { font-size: 0.82rem; color: var(--text-secondary); }
+    .res-footer-base { font-size: 0.72rem; color: var(--text-muted); margin-top: 0.8rem; }
+    .res-footer-disclaimer {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      font-style: italic;
+      margin-top: 0.5rem;
+      padding: 0.8rem;
+      background: var(--table-stripe);
+      border-radius: 6px;
+    }
+    .res-footer-marca {
+      font-size: 0.7rem;
+      font-family: var(--font-mono);
+      color: var(--text-muted);
+      margin-top: 0.5rem;
+    }
+    .res-actions {
+      display: flex;
+      justify-content: center;
+      gap: 0.8rem;
+      flex-wrap: wrap;
+      margin-top: 1.5rem;
+    }
+    .res-btn {
+      padding: 0.6rem 1.4rem;
+      border: 1.5px solid var(--primary);
+      border-radius: 8px;
+      background: transparent;
+      color: var(--primary);
+      font-family: var(--font-body);
+      font-size: 0.88rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: var(--transition);
+    }
+    .res-btn:hover {
+      background: var(--primary);
+      color: #fff;
+    }
+
+    /* ═══════════════════════════════════════════════════════════════════════════
+       TOTAL DESTAQUE
+       ═══════════════════════════════════════════════════════════════════════════ */
+    .res-total-destaque {
+      font-size: 1rem;
+      font-weight: 700;
+      color: var(--primary);
+      margin-top: 0.5rem;
+    }
+
+    /* ═══════════════════════════════════════════════════════════════════════════
+       LOADING OVERLAY
+       ═══════════════════════════════════════════════════════════════════════════ */
+    .export-loading {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 9999;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      backdrop-filter: blur(4px);
+    }
+    .export-loading-inner {
+      background: #fff;
+      border-radius: 12px;
+      padding: 2rem 3rem;
+      text-align: center;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+    }
+    .export-loading-inner .spinner {
+      width: 40px; height: 40px;
+      border: 4px solid var(--border);
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 1rem;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ═══════════════════════════════════════════════════════════════════════════
+       CNAE AUTOCOMPLETE — Override tema escuro injetado pelo JS
+       O JS injeta .cnae-dropdown com cores escuras (bg #1a2236). Aqui
+       sobrescrevemos com o design system claro usando especificidade maior.
+       ═══════════════════════════════════════════════════════════════════════════ */
+    .app-container .cnae-dropdown {
+      background: var(--card-bg);
+      border: 1.5px solid var(--input-border);
+      box-shadow: var(--card-shadow-hover);
+    }
+    .app-container .cnae-dropdown-item {
+      color: var(--text);
+      border-bottom-color: var(--border);
+    }
+    .app-container .cnae-dropdown-item:hover,
+    .app-container .cnae-dropdown-item.active {
+      background: var(--table-hover);
+      color: var(--primary);
+    }
+    .app-container .cnae-dropdown-item .cnae-code {
+      color: var(--primary);
+    }
+    .app-container .cnae-dropdown-item .cnae-cat {
+      color: var(--text-muted);
+    }
+    .app-container .cnae-dropdown-empty {
+      color: var(--text-muted);
+    }
+    .app-container .cnae-dropdown::-webkit-scrollbar {
+      width: 6px;
+    }
+    .app-container .cnae-dropdown::-webkit-scrollbar-track {
+      background: var(--table-stripe);
+      border-radius: 3px;
+    }
+    .app-container .cnae-dropdown::-webkit-scrollbar-thumb {
+      background: var(--input-border);
+      border-radius: 3px;
+    }
+    .app-container .cnae-dropdown::-webkit-scrollbar-thumb:hover {
+      background: var(--text-muted);
+    }
+
+    /* ═══════════════════════════════════════════════════════════════════════════
+       RESPONSIVE
+       ═══════════════════════════════════════════════════════════════════════════ */
+    @media (max-width: 768px) {
+      .app-container { padding: 1rem 0.8rem 3rem; }
+      .wz-row { grid-template-columns: 1fr; }
+      .wz-content { padding: 1.2rem; }
+      .wz-progress { gap: 0; padding: 1rem 0.5rem; }
+      .wz-step-indicator { min-width: 50px; }
+      .wz-step-label { font-size: 0.6rem; max-width: 55px; }
+      .wz-step-num { width: 32px; height: 32px; font-size: 0.75rem; }
+      .wz-nav { gap: 0.5rem; }
+      .wz-btn { font-size: 0.8rem; padding: 0.55rem 1rem; }
+
+      .res-summary { grid-template-columns: 1fr 1fr; }
+      .res-card-value { font-size: 1.1rem; }
+      .res-detail-grid { grid-template-columns: 1fr; }
+      .res-detail-wide { grid-column: span 1; }
+      .res-chart-row { grid-template-columns: 1fr; }
+      .res-mapa-row { flex-direction: column; }
+      .res-mapa-seta { transform: rotate(90deg); }
+      .res-oport-header { flex-wrap: wrap; }
+      .res-oport-valor { width: 100%; text-align: right; }
+      .res-header { padding: 1.5rem; }
+      .res-title { font-size: 1.1rem; }
+
+      .action-bar { padding: 0.5rem 0.8rem; gap: 0.4rem; }
+      .action-bar .action-label { display: none; }
+      .ab-btn { font-size: 0.72rem; padding: 0.4rem 0.7rem; }
+    }
+    @media (max-width: 480px) {
+      .res-summary { grid-template-columns: 1fr; }
+      .res-table { font-size: 0.75rem; }
+      .res-table td, .res-table th { padding: 0.4rem 0.5rem; }
+      .wz-radio-group { flex-direction: column; }
+    }
+
+    /* ═══════════════════════════════════════════════════════════════════════════
+       PRINT STYLES
+       ═══════════════════════════════════════════════════════════════════════════ */
+    @media print {
+      body { background: #fff !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .app-header, .action-bar, .wz-nav, .res-actions, .res-btn, .ab-btn { display: none !important; }
+      #wizardContainer { display: none !important; }
+      #resultadosContainer { display: block !important; }
+      .app-container { max-width: 100%; padding: 0; margin: 0; }
+
+      .res-section {
+        page-break-inside: avoid;
+        break-inside: avoid;
+        box-shadow: none !important;
+        border: 1px solid #ddd;
+        margin-bottom: 1rem;
+      }
+      .res-header {
+        page-break-after: avoid;
+        background: var(--primary) !important;
+      }
+      .res-chart-container {
+        page-break-inside: avoid;
+        break-inside: avoid;
+        max-height: 350px;
+      }
+      .res-oport-card { page-break-inside: avoid; break-inside: avoid; }
+      .res-summary-card { border: 1px solid #ccc; }
+      .res-total td { background: var(--primary) !important; color: #fff !important; }
+      .res-section-title { background: var(--primary) !important; color: #fff !important; }
+
+      @page {
+        margin: 1.5cm;
+        size: A4;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════════
+       APP HEADER
+       ═══════════════════════════════════════════════════════════════════════════ -->
+  <header class="app-header">
+    <div class="logo">IMPOST<span class="logo-dot">.</span></div>
+    <div class="header-sep"></div>
+    <span class="header-title">Estudo Tributário — Lucro Real</span>
+    <a class="header-btn-dashboard" href="../pages/dashboard.html">← Dashboard</a>
+  </header>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════════
+       CONTAINERS PRINCIPAIS
+       ═══════════════════════════════════════════════════════════════════════════ -->
+  <div class="app-container">
+    <div id="wizardContainer"></div>
+    <div id="resultadosContainer" style="display:none"></div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════════
+       SCRIPTS — Ordem obrigatória
+       ═══════════════════════════════════════════════════════════════════════════ -->
+  <!-- 1. Dados de estados -->
+  <script src="../scripts/estados.js"></script>
+  <!-- 2. Municípios via API IBGE -->
+  <script src="../scripts/municipios.js"></script>
+  <!-- 3. Mapeamento unificado do Lucro Real -->
+  <script src="../scripts/lucro-real-mapeamento.js"></script>
+  <!-- 4. Chart.js 4.4 CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+  <!-- 5. html2pdf.js para exportação PDF -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+  <!-- 6. SheetJS para exportação Excel -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <!-- 7. Motor principal do wizard -->
+  <script src="../scripts/lucro-real-estudos.js"></script>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════════
+       BARRA DE AÇÕES + FUNÇÕES DE EXPORTAÇÃO
+       ═══════════════════════════════════════════════════════════════════════════ -->
+  <script>
+  (function () {
+    'use strict';
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  HELPERS
+    // ═══════════════════════════════════════════════════════════════════════
+    var _m = function (v) {
+      return 'R$\u00a0' + (v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    };
+    var _pp = function (v) { return ((v || 0)).toFixed(2) + '%'; };
+
+    function showLoading(msg) {
+      var overlay = document.createElement('div');
+      overlay.className = 'export-loading';
+      overlay.id = 'exportLoading';
+      overlay.innerHTML = '<div class="export-loading-inner"><div class="spinner"></div><div>' + (msg || 'Gerando...') + '</div></div>';
+      document.body.appendChild(overlay);
+    }
+    function hideLoading() {
+      var el = document.getElementById('exportLoading');
+      if (el) el.remove();
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  INJETAR BARRA DE AÇÕES QUANDO RESULTADOS APARECEM
+    // ═══════════════════════════════════════════════════════════════════════
+
+    var originalRender = null;
+
+    function injectActionBar() {
+      var resContainer = document.getElementById('resultadosContainer');
+      if (!resContainer) return;
+
+      // Observar quando resultados ficam visíveis
+      var observer = new MutationObserver(function (mutations) {
+        mutations.forEach(function (m) {
+          if (m.attributeName === 'style') {
+            var visible = resContainer.style.display !== 'none';
+            var existingBar = document.getElementById('actionBar');
+            if (visible && !existingBar) {
+              createActionBar(resContainer);
+            } else if (!visible && existingBar) {
+              existingBar.remove();
+            }
+          }
+        });
+      });
+      observer.observe(resContainer, { attributes: true, attributeFilter: ['style'] });
+
+      // Observar childList para quando innerHTML é setado
+      var childObserver = new MutationObserver(function () {
+        if (resContainer.style.display !== 'none' && resContainer.children.length > 0) {
+          if (!document.getElementById('actionBar')) {
+            createActionBar(resContainer);
+          }
+        }
+      });
+      childObserver.observe(resContainer, { childList: true });
+    }
+
+    function createActionBar(container) {
+      var bar = document.createElement('div');
+      bar.id = 'actionBar';
+      bar.className = 'action-bar';
+      bar.innerHTML =
+        '<span class="action-label">AÇÕES</span>' +
+        '<button class="ab-btn" onclick="IMPOSTExport.voltarWizard()" title="Voltar ao formulário">← Editar Dados</button>' +
+        '<button class="ab-btn ab-btn-primary" onclick="IMPOSTExport.pdfSimplificado()" title="PDF resumido para o empresário">📄 Relatório Simplificado</button>' +
+        '<button class="ab-btn ab-btn-primary" onclick="IMPOSTExport.pdfCompleto()" title="PDF técnico completo para o contador">📋 Relatório Completo</button>' +
+        '<button class="ab-btn ab-btn-success" onclick="IMPOSTExport.exportarExcel()" title="Planilha com 6 abas">📊 Exportar Excel</button>' +
+        '<span class="ab-spacer"></span>' +
+        '<button class="ab-btn" onclick="LucroRealEstudos.exportarJSON()" title="Dados brutos em JSON">💾 JSON</button>' +
+        '<button class="ab-btn" onclick="LucroRealEstudos.novoEstudo()" title="Limpar e iniciar novo">🔄 Novo Estudo</button>';
+      container.insertBefore(bar, container.firstChild);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  PDF — CABEÇALHO E RODAPÉ PADRÃO
+    // ═══════════════════════════════════════════════════════════════════════
+
+    function pdfHeader(r, titulo) {
+      var d = r.dadosEmpresa || {};
+      var data = new Date().toLocaleDateString('pt-BR');
+      return '<div style="border-bottom:3px solid #2D8C4E;padding-bottom:12px;margin-bottom:20px;display:flex;justify-content:space-between;align-items:flex-end;">' +
+        '<div>' +
+          '<div style="font-size:22px;font-weight:700;color:#2D8C4E;font-family:DM Sans,sans-serif;">IMPOST<span style="color:#2ECC71">.</span></div>' +
+          '<div style="font-size:10px;color:#888;font-family:DM Sans,sans-serif;">Inteligência em Modelagem de Otimização Tributária</div>' +
+        '</div>' +
+        '<div style="text-align:right;">' +
+          '<div style="font-size:14px;font-weight:700;color:#2D8C4E;">' + titulo + '</div>' +
+          '<div style="font-size:10px;color:#666;">' + (d.razaoSocial || 'Empresa') + ' | ' + data + '</div>' +
+        '</div>' +
+      '</div>';
+    }
+
+    function pdfFooter(r) {
+      var cfg = r.config || {};
+      return '<div style="margin-top:30px;padding-top:12px;border-top:2px solid #2D8C4E;font-size:8px;color:#888;text-align:center;font-family:DM Sans,sans-serif;">' +
+        '<div>' + (cfg.disclaimer || 'Este estudo é uma estimativa automatizada para fins de planejamento tributário. Consulte um profissional habilitado.') + '</div>' +
+        '<div style="margin-top:4px;">Powered by IMPOST. v2.0.0 — Inteligência em Modelagem de Otimização Tributária</div>' +
+      '</div>';
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  PDF SIMPLIFICADO — Para o empresário (max 3 páginas)
+    // ═══════════════════════════════════════════════════════════════════════
+
+    function pdfSimplificado() {
+      var r = LucroRealEstudos.getResultados();
+      if (!r) { alert('Gere o estudo antes de exportar.'); return; }
+      if (typeof html2pdf === 'undefined') { alert('html2pdf.js não carregado.'); return; }
+
+      showLoading('Gerando Relatório Simplificado...');
+
+      var d = r.dadosEmpresa || {};
+      var res = r.resumo || {};
+      var eco = r.economia || {};
+      var ops = (r.oportunidades || []).slice(0, 5);
+      var fc = r.fluxoCaixa || {};
+      var ca = r.comparativoApuracao || {};
+
+      var css = 'font-family:"DM Sans",sans-serif;color:#1a1a2e;font-size:11px;line-height:1.6;';
+      var h = '<div style="' + css + 'max-width:700px;padding:20px;">';
+      h += pdfHeader(r, 'RELATÓRIO SIMPLIFICADO');
+
+      // ── Resumo Executivo (6 cards em grid) ──
+      h += '<h2 style="font-size:16px;color:#2D8C4E;border-bottom:2px solid #2ECC71;padding-bottom:6px;margin:20px 0 12px;">Resumo Executivo</h2>';
+      h += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:20px;">';
+
+      var cards = [
+        { label: 'ECONOMIA IDENTIFICADA', value: _m(res.economiaTotal), color: '#2ECC71' },
+        { label: 'CARGA TRIBUTÁRIA TOTAL', value: _m(res.cargaBruta), color: '#2D8C4E' },
+        { label: 'ALÍQUOTA EFETIVA', value: _pp(res.aliquotaEfetiva), color: '#2D8C4E' },
+        { label: 'CARGA OTIMIZADA', value: _m(res.cargaOtimizada), color: '#2ECC71' },
+        { label: 'RETENÇÕES A COMPENSAR', value: _m(res.totalRetencoes), color: '#3498DB' },
+        { label: 'SALDO EFETIVO', value: _m(res.saldoEfetivo), color: res.saldoEfetivo < 0 ? '#2ECC71' : '#2D8C4E' }
+      ];
+      cards.forEach(function (c) {
+        h += '<div style="border:1px solid #ddd;border-radius:8px;padding:10px;text-align:center;">' +
+          '<div style="font-size:8px;font-weight:700;color:#888;letter-spacing:0.5px;">' + c.label + '</div>' +
+          '<div style="font-size:16px;font-weight:700;color:' + c.color + ';font-family:JetBrains Mono,monospace;margin:4px 0;">' + c.value + '</div>' +
+        '</div>';
+      });
+      h += '</div>';
+
+      // ── O que isso significa ──
+      h += '<div style="background:#eafaf1;border-radius:8px;padding:12px;margin-bottom:20px;border-left:4px solid #2ECC71;">';
+      h += '<div style="font-weight:700;color:#27AE60;margin-bottom:6px;">O que isso significa para sua empresa?</div>';
+      h += '<div>Identificamos <strong>' + _m(res.economiaTotal) + ' em economia anual</strong>. ';
+      h += 'Sua empresa paga hoje ' + _m(res.cargaBruta) + ' em tributos. Com as otimizações, esse valor pode cair para <strong>' + _m(res.cargaOtimizada) + '</strong>. ';
+      h += 'A alíquota efetiva sai de ' + _pp(res.aliquotaEfetiva) + ' para <strong>' + _pp(res.aliquotaOtimizada) + '</strong>.</div>';
+      h += '</div>';
+
+      // ── Mapa de Economia ──
+      h += '<h2 style="font-size:16px;color:#2D8C4E;border-bottom:2px solid #2ECC71;padding-bottom:6px;margin:20px 0 12px;">De Onde Vem a Economia</h2>';
+      h += '<table style="width:100%;border-collapse:collapse;font-size:11px;">';
+      h += '<tr style="background:#2D8C4E;color:#fff;"><th style="padding:6px 8px;text-align:left;">Fonte de Economia</th><th style="padding:6px 8px;text-align:right;">Valor Anual</th></tr>';
+      var ecoItems = [
+        { label: 'Juros sobre Capital Próprio (JCP)', val: eco.jcp },
+        { label: 'Compensação de Prejuízos Fiscais', val: eco.prejuizo },
+        { label: 'Incentivos Regionais (SUDAM/SUDENE)', val: eco.sudam },
+        { label: 'Incentivos Fiscais (PAT, Rouanet, etc.)', val: eco.incentivos },
+        { label: 'Créditos de PIS/COFINS', val: eco.pisCofinsCreditos },
+        { label: 'Economia Fiscal com Depreciação', val: eco.depreciacao },
+        { label: 'Conversão Gratificação → Pró-labore', val: eco.gratificacao },
+        { label: 'CPRB — Desoneração da Folha', val: eco.cprb },
+        { label: 'PDD Fiscal — Perdas no Recebimento', val: eco.pddFiscal }
+      ];
+      var stripe = false;
+      ecoItems.forEach(function (it) {
+        if (it.val > 0) {
+          h += '<tr style="background:' + (stripe ? '#f7f9fb' : '#fff') + ';"><td style="padding:5px 8px;">' + it.label + '</td><td style="padding:5px 8px;text-align:right;font-family:JetBrains Mono,monospace;font-weight:600;color:#27AE60;">' + _m(it.val) + '</td></tr>';
+          stripe = !stripe;
+        }
+      });
+      h += '<tr style="background:#2D8C4E;color:#fff;font-weight:700;"><td style="padding:6px 8px;">ECONOMIA TOTAL</td><td style="padding:6px 8px;text-align:right;font-family:JetBrains Mono,monospace;">' + _m(eco.total) + '</td></tr>';
+      h += '</table>';
+
+      // ── Helpers para tabelas no PDF ──
+      var _thStyle = 'padding:6px 8px;text-align:left;';
+      var _thRStyle = 'padding:6px 8px;text-align:right;';
+      var _tdStyle = 'padding:5px 8px;';
+      var _tdRStyle = 'padding:5px 8px;text-align:right;font-family:JetBrains Mono,monospace;font-weight:600;';
+      var _tblStyle = 'width:100%;border-collapse:collapse;font-size:11px;margin-bottom:12px;';
+      var _hdrRow = '<tr style="background:#2D8C4E;color:#fff;">';
+      var _h2Style = 'font-size:14px;color:#2D8C4E;border-bottom:1px solid #2ECC71;padding-bottom:4px;margin:16px 0 8px;';
+      function _pdfRow(label, val, color, bg) {
+        return '<tr style="background:' + (bg || '#fff') + ';"><td style="' + _tdStyle + '">' + label + '</td><td style="' + _tdRStyle + 'color:' + (color || '#1a1a2e') + ';">' + val + '</td></tr>';
+      }
+
+      // ── CPRB — Desoneração da Folha ──
+      if (r.cprb && r.cprb.optou) {
+        h += '<h2 style="' + _h2Style + '">CPRB — Desoneração da Folha</h2>';
+        h += '<table style="' + _tblStyle + '">';
+        h += _hdrRow + '<th style="' + _thStyle + '">Item</th><th style="' + _thRStyle + '">Valor</th></tr>';
+        h += _pdfRow('Alíquota CPRB', _pp(r.cprb.aliquota * 100), '#1a1a2e', '#fff');
+        h += _pdfRow('Base de Cálculo (Receita Bruta)', _m(r.cprb.baseCPRB), '#1a1a2e', '#f7f9fb');
+        h += _pdfRow('CPRB Calculada', _m(r.cprb.custoCPRB), '#1a1a2e', '#fff');
+        h += _pdfRow('CPP Patronal Normal (20% s/ folha)', _m(r.cprb.cppNormal), '#1a1a2e', '#f7f9fb');
+        if (r.cprb.compensa) {
+          h += '<tr style="background:#eafaf1;"><td style="' + _tdStyle + 'font-weight:700;color:#27AE60;">Economia com CPRB</td><td style="' + _tdRStyle + 'color:#27AE60;">' + _m(r.cprb.economia) + '</td></tr>';
+        } else {
+          h += '<tr style="background:#fef5e7;"><td style="' + _tdStyle + 'font-weight:700;color:#e67e22;">CPRB não compensa</td><td style="' + _tdRStyle + 'color:#e67e22;">+' + _m(Math.abs(r.cprb.economia || 0)) + ' a mais</td></tr>';
+        }
+        h += '</table>';
+      }
+
+      // ── PDD Fiscal — Perdas no Recebimento de Créditos ──
+      var _pdd6m = parseFloat(d.perdasCreditos6Meses) || 0;
+      var _pddJud = parseFloat(d.perdasCreditosJudicial) || 0;
+      var _pddFal = parseFloat(d.perdasCreditosFalencia) || 0;
+      var _pddTotal = _pdd6m + _pddJud + _pddFal;
+      if (_pddTotal > 0) {
+        var _pddEcon = Math.round(_pddTotal * 0.34 * 100) / 100;
+        h += '<h2 style="' + _h2Style + '">PDD Fiscal — Perdas no Recebimento de Créditos</h2>';
+        h += '<table style="' + _tblStyle + '">';
+        h += _hdrRow + '<th style="' + _thStyle + '">Tipo de Perda</th><th style="' + _thRStyle + '">Valor</th></tr>';
+        if (_pdd6m > 0) h += _pdfRow('Créditos vencidos > 6 meses (Art. 340 RIR/2018)', _m(_pdd6m), '#1a1a2e', '#fff');
+        if (_pddJud > 0) h += _pdfRow('Créditos em cobrança judicial (Art. 340, §1º)', _m(_pddJud), '#1a1a2e', '#f7f9fb');
+        if (_pddFal > 0) h += _pdfRow('Créditos c/ devedor em falência (Art. 341)', _m(_pddFal), '#1a1a2e', '#fff');
+        h += '<tr style="background:#edf2f7;font-weight:700;"><td style="' + _tdStyle + '">Total PDD</td><td style="' + _tdRStyle + '">' + _m(_pddTotal) + '</td></tr>';
+        h += '<tr style="background:#eafaf1;"><td style="' + _tdStyle + 'font-weight:700;color:#27AE60;">Economia Fiscal (×34%: IRPJ 25% + CSLL 9%)</td><td style="' + _tdRStyle + 'color:#27AE60;">' + _m(_pddEcon) + '</td></tr>';
+        h += '</table>';
+      }
+
+      // ── ISS Detalhado ──
+      if (r.iss) {
+        h += '<h2 style="' + _h2Style + '">ISS — Imposto sobre Serviços</h2>';
+        h += '<table style="' + _tblStyle + '">';
+        h += _hdrRow + '<th style="' + _thStyle + '">Item</th><th style="' + _thRStyle + '">Valor</th></tr>';
+        h += _pdfRow('Receita de Serviços', _m(r.iss.receitaServicos), '#1a1a2e', '#fff');
+        h += _pdfRow('Município', r.iss.municipio || '—', '#1a1a2e', '#f7f9fb');
+        if (r.iss.tipoServico) {
+          h += _pdfRow('Tipo de Serviço (LC 116/2003)', r.iss.tipoServico, '#1a1a2e', '#fff');
+        }
+        h += _pdfRow('Modalidade', r.iss.modalidade || 'Percentual', '#1a1a2e', '#f7f9fb');
+        if (r.iss.ehSUP) {
+          var _issFixoProf = parseFloat(d.issFixoPorProfissional) || 800;
+          var _nProf = parseInt(d.numProfissionaisSUP) || 2;
+          var _issFixoTotal = Math.round(_issFixoProf * _nProf * 100) / 100;
+          var _issPercTotal = Math.round((r.iss.receitaServicos || 0) * (parseFloat(d.issAliquota) || 5) / 100 * 100) / 100;
+          var _issEconSUP = Math.round((_issPercTotal - _issFixoTotal) * 100) / 100;
+          h += _pdfRow('ISS Fixo por Profissional', _m(_issFixoProf) + ' × ' + _nProf + ' prof.', '#1a1a2e', '#fff');
+          h += _pdfRow('ISS Fixo Total (SUP)', _m(_issFixoTotal), '#1a1a2e', '#f7f9fb');
+          h += _pdfRow('ISS Percentual (' + _pp(parseFloat(d.issAliquota) || 5) + ')', _m(_issPercTotal), '#888', '#fff');
+          if (_issEconSUP > 0) {
+            h += '<tr style="background:#eafaf1;"><td style="' + _tdStyle + 'font-weight:700;color:#27AE60;">Economia com SUP</td><td style="' + _tdRStyle + 'color:#27AE60;">' + _m(_issEconSUP) + '/ano</td></tr>';
+          }
+        } else {
+          h += _pdfRow('Alíquota ISS', _pp(r.iss.aliquota), '#1a1a2e', '#fff');
+        }
+        h += '<tr style="background:#2D8C4E;color:#fff;font-weight:700;"><td style="' + _tdStyle + '">ISS Anual</td><td style="' + _tdRStyle + 'color:#fff;">' + _m(r.iss.issAnual) + '</td></tr>';
+        h += '<tr><td style="' + _tdStyle + '">ISS Mensal</td><td style="' + _tdRStyle + '">' + _m(r.iss.issMensal) + '</td></tr>';
+        h += '</table>';
+      }
+
+      // ── Estimativas Pagas e Saldo ──
+      var _estIRPJ = parseFloat(d.estimativasIRPJPagas) || 0;
+      var _estCSLL = parseFloat(d.estimativasCSLLPagas) || 0;
+      var _estPCof = parseFloat(d.estimativasPISCOFINSPagas) || 0;
+      var _estTotal = _estIRPJ + _estCSLL + _estPCof;
+      if (_estTotal > 0) {
+        h += '<h2 style="' + _h2Style + '">Estimativas Pagas e Saldo</h2>';
+        h += '<table style="' + _tblStyle + '">';
+        h += _hdrRow + '<th style="' + _thStyle + '">Tributo</th><th style="' + _thRStyle + '">Estimativa Paga</th><th style="' + _thRStyle + '">Devido</th><th style="' + _thRStyle + '">Saldo</th></tr>';
+        var _irpjDevido = r.irpjAposReducao || 0;
+        var _csllDevida = (r.csll && r.csll.csllDevida) || 0;
+        var _pcDevido = (r.pisCofins && r.pisCofins.totalAPagar) || 0;
+        var _saldoIRPJ = Math.round((_irpjDevido - _estIRPJ) * 100) / 100;
+        var _saldoCSLL = Math.round((_csllDevida - _estCSLL) * 100) / 100;
+        var _saldoPCof = Math.round((_pcDevido - _estPCof) * 100) / 100;
+        function _estRow(tributo, pago, devido, saldo, bg) {
+          var corSaldo = saldo < 0 ? '#27AE60' : saldo > 0 ? '#E74C3C' : '#1a1a2e';
+          var labelSaldo = saldo < 0 ? 'A restituir' : saldo > 0 ? 'A pagar' : 'Quitado';
+          return '<tr style="background:' + bg + ';"><td style="' + _tdStyle + '">' + tributo + '</td><td style="' + _tdRStyle + '">' + _m(pago) + '</td><td style="' + _tdRStyle + '">' + _m(devido) + '</td><td style="' + _tdRStyle + 'color:' + corSaldo + ';">' + _m(Math.abs(saldo)) + ' <small>(' + labelSaldo + ')</small></td></tr>';
+        }
+        if (_estIRPJ > 0) h += _estRow('IRPJ', _estIRPJ, _irpjDevido, _saldoIRPJ, '#fff');
+        if (_estCSLL > 0) h += _estRow('CSLL', _estCSLL, _csllDevida, _saldoCSLL, '#f7f9fb');
+        if (_estPCof > 0) h += _estRow('PIS/COFINS', _estPCof, _pcDevido, _saldoPCof, '#fff');
+        var _saldoTotal = Math.round((_saldoIRPJ + _saldoCSLL + _saldoPCof) * 100) / 100;
+        var _corSaldoT = _saldoTotal < 0 ? '#27AE60' : _saldoTotal > 0 ? '#E74C3C' : '#1a1a2e';
+        h += '<tr style="background:#2D8C4E;color:#fff;font-weight:700;"><td style="' + _tdStyle + '">TOTAL</td><td style="' + _tdRStyle + 'color:#fff;">' + _m(_estTotal) + '</td><td style="' + _tdRStyle + 'color:#fff;">' + _m(_irpjDevido + _csllDevida + _pcDevido) + '</td><td style="' + _tdRStyle + 'color:#fff;">' + _m(Math.abs(_saldoTotal)) + ' (' + (_saldoTotal < 0 ? 'Restituir' : _saldoTotal > 0 ? 'Pagar' : 'Quitado') + ')</td></tr>';
+        h += '</table>';
+      }
+
+      // ── Top 5 Oportunidades ──
+      h += '<h2 style="font-size:16px;color:#2D8C4E;border-bottom:2px solid #2ECC71;padding-bottom:6px;margin:20px 0 12px;">Top 5 Ações Para Economizar</h2>';
+      if (ops.length > 0) {
+        ops.forEach(function (op, idx) {
+          h += '<div style="border:1px solid #ddd;border-radius:8px;padding:10px;margin-bottom:8px;border-left:4px solid #2ECC71;">';
+          h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">';
+          h += '<strong style="color:#2D8C4E;">#' + (idx + 1) + ' ' + op.titulo + '</strong>';
+          h += '<span style="font-family:JetBrains Mono,monospace;font-weight:700;color:#27AE60;font-size:13px;">' + _m(op.economiaAnual) + '/ano</span>';
+          h += '</div>';
+          h += '<div style="font-size:10px;color:#555;">' + op.descricao + '</div>';
+          if (op.acaoRecomendada) {
+            h += '<div style="font-size:10px;color:#2D8C4E;margin-top:4px;font-weight:600;">O que fazer: ' + op.acaoRecomendada + '</div>';
+          }
+          h += '</div>';
+        });
+      }
+
+      // ── Fluxo de Caixa Mensal ──
+      if (fc.meses && fc.meses.length > 0) {
+        h += '<h2 style="font-size:16px;color:#2D8C4E;border-bottom:2px solid #2ECC71;padding-bottom:6px;margin:20px 0 12px;">Desembolso Mensal com Impostos</h2>';
+        h += '<table style="width:100%;border-collapse:collapse;font-size:10px;">';
+        h += '<tr style="background:#2D8C4E;color:#fff;"><th style="padding:4px 6px;">Mês</th><th style="padding:4px 6px;text-align:right;">Total a Pagar</th></tr>';
+        var mesesNome = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+        fc.meses.forEach(function (m, i) {
+          h += '<tr style="background:' + (i % 2 ? '#f7f9fb' : '#fff') + ';"><td style="padding:3px 6px;">' + mesesNome[m.mes - 1] + '</td><td style="padding:3px 6px;text-align:right;font-family:JetBrains Mono,monospace;">' + _m(m.total) + '</td></tr>';
+        });
+        h += '<tr style="background:#2D8C4E;color:#fff;font-weight:700;"><td style="padding:4px 6px;">TOTAL ANUAL</td><td style="padding:4px 6px;text-align:right;font-family:JetBrains Mono,monospace;">' + _m(fc.totalAnual) + '</td></tr>';
+        h += '</table>';
+      }
+
+      // ── Recomendação ──
+      if (ca.recomendacao) {
+        h += '<div style="background:#edf2f7;border-radius:8px;padding:12px;margin-top:20px;border-left:4px solid #2D8C4E;">';
+        h += '<div style="font-weight:700;color:#2D8C4E;margin-bottom:6px;">Recomendação de Forma de Apuração</div>';
+        h += '<div>' + ca.recomendacao.justificativa + '</div>';
+        h += '</div>';
+      }
+
+      h += pdfFooter(r);
+      h += '</div>';
+
+      // Gerar PDF
+      var tempDiv = document.createElement('div');
+      tempDiv.innerHTML = h;
+      document.body.appendChild(tempDiv);
+
+      html2pdf().set({
+        margin: [10, 10, 15, 10],
+        filename: 'relatorio-simplificado-' + (d.razaoSocial || 'empresa').replace(/\s+/g, '-') + '.pdf',
+        image: { type: 'jpeg', quality: 0.95 },
+        html2canvas: { scale: 2, useCORS: true },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+        pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+      }).from(tempDiv).save().then(function () {
+        document.body.removeChild(tempDiv);
+        hideLoading();
+      }).catch(function () {
+        document.body.removeChild(tempDiv);
+        hideLoading();
+        alert('Erro ao gerar PDF.');
+      });
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  PDF COMPLETO — Para o contador (todas as 14 seções)
+    // ═══════════════════════════════════════════════════════════════════════
+
+    function pdfCompleto() {
+      var r = LucroRealEstudos.getResultados();
+      if (!r) { alert('Gere o estudo antes de exportar.'); return; }
+      if (typeof html2pdf === 'undefined') { alert('html2pdf.js não carregado.'); return; }
+
+      showLoading('Gerando Relatório Completo...');
+
+      var d = r.dadosEmpresa || {};
+      var eco = r.economia || {};
+      var res = r.resumo || {};
+
+      // Clonar o container de resultados para não afetar a tela
+      var resContainer = document.getElementById('resultadosContainer');
+      var clone = resContainer.cloneNode(true);
+
+      // Remover barra de ações e botões interativos do clone
+      var actionBar = clone.querySelector('#actionBar');
+      if (actionBar) actionBar.remove();
+      var buttons = clone.querySelectorAll('.res-actions, .res-btn, .ab-btn');
+      buttons.forEach(function (b) { b.remove(); });
+
+      // Remover canvas (gráficos não renderizam bem no clone)
+      var canvases = clone.querySelectorAll('canvas');
+      canvases.forEach(function (c) { c.remove(); });
+
+      // Criar wrapper com cabeçalho profissional
+      var wrapper = document.createElement('div');
+      wrapper.style.cssText = 'font-family:"DM Sans",sans-serif;color:#1a1a2e;font-size:11px;line-height:1.5;max-width:780px;padding:15px;';
+
+      // ── Cabeçalho ──
+      var headerDiv = document.createElement('div');
+      headerDiv.innerHTML = pdfHeader(r, 'ESTUDO TRIBUTÁRIO COMPLETO — LUCRO REAL');
+      wrapper.appendChild(headerDiv);
+
+      // Inserir conteúdo clonado
+      wrapper.appendChild(clone);
+      clone.style.display = 'block';
+
+      // ══════════════════════════════════════════════════════════════
+      //  SEÇÕES COMPLEMENTARES (injetadas após o conteúdo clonado)
+      // ══════════════════════════════════════════════════════════════
+      var suppDiv = document.createElement('div');
+      suppDiv.style.cssText = 'margin-top:20px;page-break-before:always;';
+      var sh = '';
+      var _tbl = 'width:100%;border-collapse:collapse;font-size:10px;margin-bottom:12px;';
+      var _hdr = '<tr style="background:#2D8C4E;color:#fff;">';
+      var _td = 'padding:5px 8px;';
+      var _tdR = 'padding:5px 8px;text-align:right;font-family:JetBrains Mono,monospace;font-weight:600;';
+      var _h2 = 'font-size:14px;color:#2D8C4E;border-bottom:2px solid #2ECC71;padding-bottom:4px;margin:20px 0 10px;';
+      function _row(label, val, color, bg) {
+        return '<tr style="background:' + (bg || '#fff') + ';"><td style="' + _td + '">' + label + '</td><td style="' + _tdR + 'color:' + (color || '#1a1a2e') + ';">' + val + '</td></tr>';
+      }
+
+      sh += '<h2 style="' + _h2 + '">Detalhamento Complementar</h2>';
+
+      // ── 1. CPRB — Desoneração da Folha ──
+      if (r.cprb && r.cprb.optou) {
+        sh += '<h3 style="font-size:12px;color:#2D8C4E;margin:14px 0 6px;">CPRB — Desoneração da Folha (Lei 12.546/2011)</h3>';
+        sh += '<table style="' + _tbl + '">';
+        sh += _hdr + '<th style="' + _td + '">Item</th><th style="' + _tdR + '">Valor</th></tr>';
+        sh += _row('Opção pela CPRB', 'SIM', '#2D8C4E', '#fff');
+        sh += _row('Alíquota CPRB', _pp(r.cprb.aliquota * 100), '#1a1a2e', '#f7f9fb');
+        sh += _row('Base de Cálculo (Receita Bruta)', _m(r.cprb.baseCPRB), '#1a1a2e', '#fff');
+        sh += _row('CPRB Calculada', _m(r.cprb.custoCPRB), '#1a1a2e', '#f7f9fb');
+        sh += _row('CPP Patronal Normal (20% s/ folha)', _m(r.cprb.cppNormal), '#1a1a2e', '#fff');
+        if (r.cprb.compensa) {
+          sh += '<tr style="background:#eafaf1;font-weight:700;"><td style="' + _td + 'color:#27AE60;">Economia com CPRB</td><td style="' + _tdR + 'color:#27AE60;">' + _m(r.cprb.economia) + '</td></tr>';
+        } else {
+          sh += '<tr style="background:#fef5e7;font-weight:700;"><td style="' + _td + 'color:#e67e22;">CPRB não compensa</td><td style="' + _tdR + 'color:#e67e22;">+' + _m(Math.abs(r.cprb.economia || 0)) + '</td></tr>';
+        }
+        sh += '</table>';
+      }
+
+      // ── 2. PDD Fiscal — Perdas no Recebimento de Créditos ──
+      var pdd6m = parseFloat(d.perdasCreditos6Meses) || 0;
+      var pddJud = parseFloat(d.perdasCreditosJudicial) || 0;
+      var pddFal = parseFloat(d.perdasCreditosFalencia) || 0;
+      var pddTot = pdd6m + pddJud + pddFal;
+      if (pddTot > 0) {
+        var pddEcon = Math.round(pddTot * 0.34 * 100) / 100;
+        sh += '<h3 style="font-size:12px;color:#2D8C4E;margin:14px 0 6px;">PDD Fiscal — Perdas no Recebimento de Créditos (Art. 340-342 RIR/2018)</h3>';
+        sh += '<table style="' + _tbl + '">';
+        sh += _hdr + '<th style="' + _td + '">Tipo de Perda</th><th style="' + _tdR + '">Valor</th></tr>';
+        if (pdd6m > 0) sh += _row('Créditos vencidos há mais de 6 meses (Art. 340)', _m(pdd6m), '#1a1a2e', '#fff');
+        if (pddJud > 0) sh += _row('Créditos em cobrança judicial (Art. 340, §1º)', _m(pddJud), '#1a1a2e', '#f7f9fb');
+        if (pddFal > 0) sh += _row('Devedor em falência/recuperação judicial (Art. 341)', _m(pddFal), '#1a1a2e', '#fff');
+        sh += '<tr style="background:#edf2f7;font-weight:700;"><td style="' + _td + '">Total PDD</td><td style="' + _tdR + '">' + _m(pddTot) + '</td></tr>';
+        sh += '<tr style="background:#eafaf1;"><td style="' + _td + 'font-weight:700;color:#27AE60;">Economia Fiscal (×34%: IRPJ 25% + CSLL 9%)</td><td style="' + _tdR + 'color:#27AE60;">' + _m(pddEcon) + '</td></tr>';
+        sh += '</table>';
+      }
+
+      // ── 3. ISS Detalhado (SUP) ──
+      if (r.iss && r.iss.ehSUP) {
+        var issFixo = parseFloat(d.issFixoPorProfissional) || 800;
+        var numProf = parseInt(d.numProfissionaisSUP) || 2;
+        var issFixoTot = Math.round(issFixo * numProf * 100) / 100;
+        var issPercTot = Math.round((r.iss.receitaServicos || 0) * (parseFloat(d.issAliquota) || 5) / 100 * 100) / 100;
+        var issEconSUP = Math.round((issPercTot - issFixoTot) * 100) / 100;
+        sh += '<h3 style="font-size:12px;color:#2D8C4E;margin:14px 0 6px;">ISS — Sociedade Uniprofissional (SUP) — LC 116/2003</h3>';
+        if (r.iss.tipoServico) {
+          sh += '<p style="font-size:10px;color:#555;margin-bottom:6px;">Tipo de Serviço: <strong>' + r.iss.tipoServico + '</strong></p>';
+        }
+        sh += '<table style="' + _tbl + '">';
+        sh += _hdr + '<th style="' + _td + '">Comparativo ISS</th><th style="' + _tdR + '">Valor</th></tr>';
+        sh += _row('ISS Percentual (' + _pp(parseFloat(d.issAliquota) || 5) + ' s/ receita)', _m(issPercTot) + '/ano', '#888', '#fff');
+        sh += _row('ISS Fixo SUP (' + numProf + ' prof. × ' + _m(issFixo) + ')', _m(issFixoTot) + '/ano', '#1a1a2e', '#f7f9fb');
+        sh += _row('Modalidade aplicada', r.iss.modalidade, '#2D8C4E', '#fff');
+        sh += '<tr style="background:#2D8C4E;color:#fff;font-weight:700;"><td style="' + _td + '">ISS Efetivo Anual</td><td style="' + _tdR + 'color:#fff;">' + _m(r.iss.issAnual) + '</td></tr>';
+        if (issEconSUP > 0) {
+          sh += '<tr style="background:#eafaf1;font-weight:700;"><td style="' + _td + 'color:#27AE60;">Economia com SUP</td><td style="' + _tdR + 'color:#27AE60;">' + _m(issEconSUP) + '/ano</td></tr>';
+        }
+        sh += '</table>';
+      } else if (r.iss && r.iss.tipoServico) {
+        sh += '<h3 style="font-size:12px;color:#2D8C4E;margin:14px 0 6px;">ISS — Detalhamento (LC 116/2003)</h3>';
+        sh += '<p style="font-size:10px;color:#555;margin-bottom:4px;">Tipo de Serviço: <strong>' + r.iss.tipoServico + '</strong> | Município: ' + (r.iss.municipio || '—') + ' | Alíquota: ' + _pp(r.iss.aliquota) + '</p>';
+      }
+
+      // ── 4. Estimativas Pagas e Saldo a Pagar/Restituir ──
+      var estIRPJ = parseFloat(d.estimativasIRPJPagas) || 0;
+      var estCSLL = parseFloat(d.estimativasCSLLPagas) || 0;
+      var estPCof = parseFloat(d.estimativasPISCOFINSPagas) || 0;
+      var estTot = estIRPJ + estCSLL + estPCof;
+      if (estTot > 0) {
+        var irpjDev = r.irpjAposReducao || 0;
+        var csllDev = (r.csll && r.csll.csllDevida) || 0;
+        var pcDev = (r.pisCofins && r.pisCofins.totalAPagar) || 0;
+        var sIRPJ = Math.round((irpjDev - estIRPJ) * 100) / 100;
+        var sCSLL = Math.round((csllDev - estCSLL) * 100) / 100;
+        var sPCof = Math.round((pcDev - estPCof) * 100) / 100;
+        sh += '<h3 style="font-size:12px;color:#2D8C4E;margin:14px 0 6px;">Estimativas Pagas × Tributos Devidos</h3>';
+        sh += '<table style="' + _tbl + '">';
+        sh += _hdr + '<th style="' + _td + '">Tributo</th><th style="' + _tdR + '">Estimativa Paga</th><th style="' + _tdR + '">Devido</th><th style="' + _tdR + '">Saldo</th></tr>';
+        function _estR(trib, pago, dev, saldo, bg) {
+          var cor = saldo < 0 ? '#27AE60' : saldo > 0 ? '#E74C3C' : '#1a1a2e';
+          var lbl = saldo < 0 ? 'Restituir' : saldo > 0 ? 'Pagar' : 'Quitado';
+          return '<tr style="background:' + bg + ';"><td style="' + _td + '">' + trib + '</td><td style="' + _tdR + '">' + _m(pago) + '</td><td style="' + _tdR + '">' + _m(dev) + '</td><td style="' + _tdR + 'color:' + cor + ';">' + _m(Math.abs(saldo)) + ' (' + lbl + ')</td></tr>';
+        }
+        if (estIRPJ > 0) sh += _estR('IRPJ', estIRPJ, irpjDev, sIRPJ, '#fff');
+        if (estCSLL > 0) sh += _estR('CSLL', estCSLL, csllDev, sCSLL, '#f7f9fb');
+        if (estPCof > 0) sh += _estR('PIS/COFINS', estPCof, pcDev, sPCof, '#fff');
+        var sTot = Math.round((sIRPJ + sCSLL + sPCof) * 100) / 100;
+        sh += '<tr style="background:#2D8C4E;color:#fff;font-weight:700;"><td style="' + _td + '">TOTAL</td><td style="' + _tdR + 'color:#fff;">' + _m(estTot) + '</td><td style="' + _tdR + 'color:#fff;">' + _m(irpjDev + csllDev + pcDev) + '</td><td style="' + _tdR + 'color:#fff;">' + _m(Math.abs(sTot)) + ' (' + (sTot < 0 ? 'Restituir' : sTot > 0 ? 'Pagar' : 'Quitado') + ')</td></tr>';
+        sh += '</table>';
+        if (sTot < 0) {
+          sh += '<div style="background:#eafaf1;border-radius:6px;padding:8px;border-left:3px solid #27AE60;font-size:10px;margin-bottom:8px;"><strong style="color:#27AE60;">Saldo a restituir: ' + _m(Math.abs(sTot)) + '</strong> — Solicitar via PER/DCOMP (IN RFB 2.055/2021) ou compensar com débitos futuros.</div>';
+        }
+      }
+
+      // ── 5. Ajustes de Avaliação Patrimonial no PL ──
+      var aap = parseFloat(d.ajustesAvaliacaoPatrimonial) || 0;
+      var cs = parseFloat(d.capitalSocial) || 0;
+      var rc = parseFloat(d.reservasCapital) || 0;
+      var rl = parseFloat(d.reservasLucros) || 0;
+      var la = parseFloat(d.lucrosAcumulados) || 0;
+      var pc = parseFloat(d.prejuizosContabeis) || 0;
+      if (aap !== 0 || (cs > 0 && (rc > 0 || rl > 0 || la > 0))) {
+        var plTotal = cs + rc + rl + la + aap - pc;
+        sh += '<h3 style="font-size:12px;color:#2D8C4E;margin:14px 0 6px;">Composição do Patrimônio Líquido</h3>';
+        sh += '<table style="' + _tbl + '">';
+        sh += _hdr + '<th style="' + _td + '">Componente</th><th style="' + _tdR + '">Valor</th></tr>';
+        if (cs > 0) sh += _row('Capital Social Integralizado', _m(cs), '#1a1a2e', '#fff');
+        if (rc > 0) sh += _row('Reservas de Capital', _m(rc), '#1a1a2e', '#f7f9fb');
+        if (rl > 0) sh += _row('Reservas de Lucros', _m(rl), '#1a1a2e', '#fff');
+        if (la > 0) sh += _row('Lucros Acumulados', _m(la), '#1a1a2e', '#f7f9fb');
+        if (aap !== 0) sh += _row('Ajustes de Avaliação Patrimonial', _m(aap), aap >= 0 ? '#2D8C4E' : '#E74C3C', '#fff');
+        if (pc > 0) sh += _row('(-) Prejuízos Contábeis', '-' + _m(pc), '#E74C3C', '#f7f9fb');
+        sh += '<tr style="background:#2D8C4E;color:#fff;font-weight:700;"><td style="' + _td + '">PATRIMÔNIO LÍQUIDO TOTAL</td><td style="' + _tdR + 'color:#fff;">' + _m(plTotal) + '</td></tr>';
+        sh += '</table>';
+      }
+
+      // ── 6. Resumo consolidado de economias ──
+      sh += '<h3 style="font-size:12px;color:#2D8C4E;margin:14px 0 6px;">Resumo Consolidado de Economias</h3>';
+      sh += '<table style="' + _tbl + '">';
+      sh += _hdr + '<th style="' + _td + '">Fonte de Economia</th><th style="' + _tdR + '">Valor Anual</th><th style="' + _td + '">Base Legal</th></tr>';
+      var ecoAll = [
+        { label: 'JCP — Juros sobre Capital Próprio', val: eco.jcp, base: 'Art. 355-358 RIR/2018' },
+        { label: 'Compensação de Prejuízo Fiscal', val: eco.prejuizo, base: 'Art. 579-586 RIR/2018' },
+        { label: 'SUDAM/SUDENE (75%)', val: eco.sudam, base: 'Art. 627-637 RIR/2018' },
+        { label: 'Incentivos Fiscais', val: eco.incentivos, base: 'Art. 641 RIR/2018' },
+        { label: 'Depreciação Fiscal', val: eco.depreciacao, base: 'Art. 305-329 RIR/2018' },
+        { label: 'Créditos PIS/COFINS', val: eco.pisCofinsCreditos, base: 'Art. 3º, Lei 10.637/02 e 10.833/03' },
+        { label: 'Gratificação → Pró-labore', val: eco.gratificacao, base: 'Art. 358, §1º RIR/2018' },
+        { label: 'CPRB — Desoneração da Folha', val: eco.cprb, base: 'Lei 12.546/2011' },
+        { label: 'PDD Fiscal — Perdas no Recebimento', val: eco.pddFiscal, base: 'Art. 340-342 RIR/2018' }
+      ];
+      var ecoStripe = false;
+      ecoAll.forEach(function (it) {
+        if (it.val > 0) {
+          sh += '<tr style="background:' + (ecoStripe ? '#f7f9fb' : '#fff') + ';"><td style="' + _td + '">' + it.label + '</td><td style="' + _tdR + 'color:#27AE60;">' + _m(it.val) + '</td><td style="' + _td + 'font-size:9px;color:#888;">' + it.base + '</td></tr>';
+          ecoStripe = !ecoStripe;
+        }
+      });
+      sh += '<tr style="background:#2D8C4E;color:#fff;font-weight:700;"><td style="' + _td + '">ECONOMIA TOTAL IDENTIFICADA</td><td style="' + _tdR + 'color:#fff;">' + _m(eco.total) + '</td><td style="' + _td + '"></td></tr>';
+      sh += '</table>';
+
+      // ── Rodapé ──
+      sh += pdfFooter(r);
+
+      suppDiv.innerHTML = sh;
+      wrapper.appendChild(suppDiv);
+
+      document.body.appendChild(wrapper);
+
+      html2pdf().set({
+        margin: [10, 10, 15, 10],
+        filename: 'estudo-lucro-real-completo-' + (d.razaoSocial || 'empresa').replace(/\s+/g, '-') + '.pdf',
+        image: { type: 'jpeg', quality: 0.92 },
+        html2canvas: { scale: 1.8, useCORS: true, logging: false },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+        pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+      }).from(wrapper).save().then(function () {
+        document.body.removeChild(wrapper);
+        hideLoading();
+      }).catch(function (err) {
+        document.body.removeChild(wrapper);
+        hideLoading();
+        console.error('Erro PDF Completo:', err);
+        alert('Erro ao gerar PDF completo.');
+      });
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  EXCEL — 6 abas via SheetJS
+    // ═══════════════════════════════════════════════════════════════════════
+
+    function exportarExcel() {
+      var r = LucroRealEstudos.getResultados();
+      if (!r) { alert('Gere o estudo antes de exportar.'); return; }
+      if (typeof XLSX === 'undefined') { alert('SheetJS não carregado.'); return; }
+
+      showLoading('Gerando planilha Excel...');
+
+      try {
+        var wb = XLSX.utils.book_new();
+        var d = r.dadosEmpresa || {};
+        var res = r.resumo || {};
+        var eco = r.economia || {};
+
+        // ── Aba 1: Resumo ──
+        var wsResumo = XLSX.utils.aoa_to_sheet([
+          ['IMPOST. — Estudo Tributário Lucro Real'],
+          ['Empresa:', d.razaoSocial || '—', '', 'Data:', new Date().toLocaleDateString('pt-BR')],
+          ['CNPJ:', d.cnpj || '—', '', 'Ano-Base:', d.anoBase || '2026'],
+          ['UF/Município:', (d.uf || '—') + ' / ' + (d.municipio || '—'), '', 'Atividade:', d.tipoAtividade || '—'],
+          [],
+          ['PAINEL RESUMO EXECUTIVO'],
+          ['Indicador', 'Valor'],
+          ['Economia Total Identificada', res.economiaTotal || 0],
+          ['Carga Tributária Total', res.cargaBruta || 0],
+          ['Carga Tributária Mensal', res.cargaBrutaMensal || 0],
+          ['Alíquota Efetiva Global', (res.aliquotaEfetiva || 0) / 100],
+          ['Carga Otimizada', res.cargaOtimizada || 0],
+          ['Alíquota Otimizada', (res.aliquotaOtimizada || 0) / 100],
+          ['Retenções a Compensar', res.totalRetencoes || 0],
+          ['Saldo Efetivo a Pagar', res.saldoEfetivo || 0],
+          [],
+          ['DETALHAMENTO DAS ECONOMIAS'],
+          ['Fonte', 'Valor Anual'],
+          ['JCP', eco.jcp || 0],
+          ['Prejuízo Fiscal', eco.prejuizo || 0],
+          ['SUDAM/SUDENE', eco.sudam || 0],
+          ['Incentivos Fiscais', eco.incentivos || 0],
+          ['Depreciação', eco.depreciacao || 0],
+          ['Créditos PIS/COFINS', eco.pisCofinsCreditos || 0],
+          ['Gratificação → Pró-labore', eco.gratificacao || 0],
+          ['TOTAL', eco.total || 0]
+        ]);
+        wsResumo['!cols'] = [{ wch: 30 }, { wch: 20 }, { wch: 5 }, { wch: 15 }, { wch: 20 }];
+        XLSX.utils.book_append_sheet(wb, wsResumo, 'Resumo');
+
+        // ── Aba 2: DRE-LALUR ──
+        var dre = r.dre || {};
+        var lalur = r.lalur || {};
+        var wsDRE = XLSX.utils.aoa_to_sheet([
+          ['DEMONSTRAÇÃO DO RESULTADO DO EXERCÍCIO (DRE)'],
+          ['Item', 'Valor (R$)'],
+          ['Receita Bruta', dre.receitaBruta || 0],
+          ['(-) Custos Totais', -(dre.custosTotais || 0)],
+          ['    Folha de Pagamento', dre.folhaPagamento || 0],
+          ['    CMV', dre.cmv || 0],
+          ['    Serviços de Terceiros', dre.servicosTerceiros || 0],
+          ['(-) Despesas Operacionais', -(dre.despesasTotais || 0)],
+          ['(-) Depreciação', -(dre.depreciacao || 0)],
+          ['(+) Receitas Financeiras', dre.receitaFinanceiras || 0],
+          ['= LUCRO LÍQUIDO', dre.lucroLiquido || 0],
+          ['Margem de Lucro (%)', (dre.margemLucro || 0) / 100],
+          [],
+          ['LIVRO DE APURAÇÃO DO LUCRO REAL (LALUR)'],
+          ['Item', 'Valor (R$)', 'Base Legal'],
+          ['Lucro Líquido', lalur.lucroLiquido || 0, '']
+        ]);
+        // Adições
+        if (lalur.adicoes && lalur.adicoes.length > 0) {
+          var row = 16;
+          XLSX.utils.sheet_add_aoa(wsDRE, [['(+) ADIÇÕES', '', '']], { origin: 'A' + (row + 1) });
+          row++;
+          lalur.adicoes.forEach(function (a) {
+            XLSX.utils.sheet_add_aoa(wsDRE, [['    ' + a.desc, a.valor, a.artigo || '']], { origin: 'A' + (row + 1) });
+            row++;
+          });
+          XLSX.utils.sheet_add_aoa(wsDRE, [
+            ['= Total Adições', lalur.totalAdicoes || 0, ''],
+            ['(-) EXCLUSÕES', '', '']
+          ], { origin: 'A' + (row + 1) });
+          row += 2;
+          if (lalur.exclusoes) {
+            lalur.exclusoes.forEach(function (e) {
+              XLSX.utils.sheet_add_aoa(wsDRE, [['    ' + e.desc, e.valor, e.artigo || '']], { origin: 'A' + (row + 1) });
+              row++;
+            });
+          }
+          XLSX.utils.sheet_add_aoa(wsDRE, [
+            ['= Total Exclusões', lalur.totalExclusoes || 0, ''],
+            ['= LUCRO AJUSTADO', lalur.lucroAjustado || 0, ''],
+            ['= LUCRO REAL', r.lucroRealFinal || 0, '']
+          ], { origin: 'A' + (row + 1) });
+        }
+        wsDRE['!cols'] = [{ wch: 40 }, { wch: 18 }, { wch: 25 }];
+        XLSX.utils.book_append_sheet(wb, wsDRE, 'DRE-LALUR');
+
+        // ── Aba 3: Tributos ──
+        var irpj = r.irpj || {};
+        var csll = r.csll || {};
+        var pc = r.pisCofins || {};
+        var iss = r.iss || {};
+        var comp = r.composicao || {};
+        var wsTrib = XLSX.utils.aoa_to_sheet([
+          ['CÁLCULO DETALHADO DE TRIBUTOS'],
+          [],
+          ['IRPJ — Imposto de Renda Pessoa Jurídica'],
+          ['Lucro Real (base)', r.lucroRealFinal || 0],
+          ['IRPJ Normal (15%)', irpj.irpjNormal || 0],
+          ['Adicional (10%)', irpj.adicional || 0],
+          ['IRPJ Bruto', r.irpjAntesReducao || 0],
+          ['(-) Incentivos', irpj.deducaoIncentivos || 0],
+          ['(-) Redução SUDAM/SUDENE', r.reducaoSUDAM || 0],
+          ['= IRPJ após Reduções', r.irpjAposReducao || 0],
+          [],
+          ['CSLL — Contribuição Social sobre Lucro Líquido'],
+          ['Base CSLL', r.baseCSLLFinal || 0],
+          ['Alíquota', csll.aliquota || 0.09],
+          ['= CSLL Devida', csll.csllDevida || 0],
+          [],
+          ['PIS/COFINS — Não Cumulativo'],
+          ['Receita Tributável', pc.receitaTributavel || 0],
+          ['Total Débitos', (pc.debitoPIS || 0) + (pc.debitoCOFINS || 0)],
+          ['Total Créditos', (pc.creditoPIS || 0) + (pc.creditoCOFINS || 0)],
+          ['= PIS/COFINS a Pagar', pc.totalAPagar || 0],
+          [],
+          ['ISS — Imposto sobre Serviços'],
+          ['Receita de Serviços', iss.receitaServicos || 0],
+          ['Alíquota ISS (%)', (iss.aliquota || 0) / 100],
+          ['= ISS Anual', iss.issAnual || 0],
+          [],
+          ['COMPOSIÇÃO DA CARGA'],
+          ['Tributo', 'Valor Anual', '% da Carga'],
+          ['IRPJ', comp.irpj ? comp.irpj.valor : 0, comp.irpj ? (comp.irpj.percentual || 0) / 100 : 0],
+          ['CSLL', comp.csll ? comp.csll.valor : 0, comp.csll ? (comp.csll.percentual || 0) / 100 : 0],
+          ['PIS/COFINS', comp.pisCofins ? comp.pisCofins.valor : 0, comp.pisCofins ? (comp.pisCofins.percentual || 0) / 100 : 0],
+          ['ISS', comp.iss ? comp.iss.valor : 0, comp.iss ? (comp.iss.percentual || 0) / 100 : 0],
+          ['TOTAL', res.cargaBruta || 0, 1]
+        ]);
+        wsTrib['!cols'] = [{ wch: 35 }, { wch: 18 }, { wch: 15 }];
+        XLSX.utils.book_append_sheet(wb, wsTrib, 'Tributos');
+
+        // ── Aba 4: Oportunidades ──
+        var ops = r.oportunidades || [];
+        var opsData = [['#', 'Oportunidade', 'Tipo', 'Economia Anual', 'Complexidade', 'Risco', 'Prazo', 'Base Legal']];
+        ops.forEach(function (op, i) {
+          opsData.push([i + 1, op.titulo, op.tipo, op.economiaAnual || 0, op.complexidade, op.risco, op.prazoImplementacao || '—', op.baseLegal || '—']);
+        });
+        var wsOps = XLSX.utils.aoa_to_sheet(opsData);
+        wsOps['!cols'] = [{ wch: 4 }, { wch: 40 }, { wch: 14 }, { wch: 16 }, { wch: 14 }, { wch: 10 }, { wch: 12 }, { wch: 30 }];
+        XLSX.utils.book_append_sheet(wb, wsOps, 'Oportunidades');
+
+        // ── Aba 5: Fluxo Mensal ──
+        var fc = r.fluxoCaixa || {};
+        var mesesNome = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+        var fcData = [['Mês', 'IRPJ', 'CSLL', 'PIS', 'COFINS', 'ISS', 'TOTAL']];
+        var totais = [0, 0, 0, 0, 0, 0];
+        if (fc.meses) {
+          fc.meses.forEach(function (m) {
+            fcData.push([mesesNome[m.mes - 1], m.irpj, m.csll, m.pis, m.cofins, m.iss, m.total]);
+            totais[0] += m.irpj; totais[1] += m.csll; totais[2] += m.pis; totais[3] += m.cofins; totais[4] += m.iss; totais[5] += m.total;
+          });
+        }
+        fcData.push(['TOTAL ANUAL', totais[0], totais[1], totais[2], totais[3], totais[4], totais[5]]);
+        var wsFC = XLSX.utils.aoa_to_sheet(fcData);
+        wsFC['!cols'] = [{ wch: 12 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }];
+        XLSX.utils.book_append_sheet(wb, wsFC, 'Fluxo Mensal');
+
+        // ── Aba 6: Cenários ──
+        var cenarios = r.cenarios || [];
+        var cenData = [['Cenário', 'Margem (%)', 'Lucro', 'IRPJ+CSLL', 'PIS/COFINS', 'ISS', 'Carga Total', 'Alíq. Efetiva (%)']];
+        cenarios.forEach(function (c) {
+          cenData.push([c.nome, (c.margem || 0) / 100, c.lucro || 0, c.irpjCSLL || 0, c.pisCofins || 0, c.iss || 0, c.cargaTotal || 0, (c.aliquotaEfetiva || 0) / 100]);
+        });
+        if (r.projecao && r.projecao.projecaoCarga) {
+          cenData.push([]);
+          cenData.push(['PROJEÇÃO PLURIANUAL']);
+          cenData.push(['Ano', 'Receita', 'Carga', 'Economia/Ano', 'Economia Acumulada']);
+          r.projecao.projecaoCarga.forEach(function (p) {
+            cenData.push(['Ano ' + p.ano, p.receita, p.carga, p.economiaAno, p.economiaAcumulada]);
+          });
+        }
+        var wsCen = XLSX.utils.aoa_to_sheet(cenData);
+        wsCen['!cols'] = [{ wch: 14 }, { wch: 14 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 14 }, { wch: 16 }, { wch: 16 }];
+        XLSX.utils.book_append_sheet(wb, wsCen, 'Cenários');
+
+        // Salvar
+        var filename = 'estudo-lucro-real-' + (d.razaoSocial || 'empresa').replace(/\s+/g, '-') + '-' + new Date().toISOString().split('T')[0] + '.xlsx';
+        XLSX.writeFile(wb, filename);
+
+        hideLoading();
+      } catch (err) {
+        hideLoading();
+        console.error('Erro Excel:', err);
+        alert('Erro ao gerar Excel: ' + err.message);
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  VOLTAR AO WIZARD
+    // ═══════════════════════════════════════════════════════════════════════
+
+    function voltarWizard() {
+      LucroRealEstudos.voltarWizard();
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  EXPORT PÚBLICO
+    // ═══════════════════════════════════════════════════════════════════════
+
+    window.IMPOSTExport = {
+      pdfSimplificado: pdfSimplificado,
+      pdfCompleto: pdfCompleto,
+      exportarExcel: exportarExcel,
+      voltarWizard: voltarWizard
+    };
+
+    // Iniciar observação quando DOM estiver pronto
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', injectActionBar);
+    } else {
+      injectActionBar();
+    }
+  })();
+  </script>
+</body>
+</html>

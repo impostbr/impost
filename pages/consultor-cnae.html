@@ -1,0 +1,1066 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IMPOST. — Inteligência em Modelagem de Otimização Tributária | Consultor de CNAE</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700;9..40,800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-body: #faf8f3;
+            --bg-card: #ffffff;
+            --bg-card-alt: #fefcf7;
+            --bg-input: #ffffff;
+            --bg-hover: #f5f3ee;
+            --bg-section: #fef9e7;
+            --border: #e2ddd3;
+            --border-light: #eae6dc;
+            --border-focus: #16a34a;
+            --text-primary: #1a1a1a;
+            --text-secondary: #555;
+            --text-muted: #888;
+            --text-label: #444;
+            --accent: #16a34a;
+            --accent-light: #dcfce7;
+            --accent-hover: #15803d;
+            --accent-bg: rgba(22,163,74,0.08);
+            --gold: #d97706;
+            --gold-light: #fef3c7;
+            --blue: #2563eb;
+            --blue-light: #dbeafe;
+            --purple: #7c3aed;
+            --purple-light: #ede9fe;
+            --red: #dc2626;
+            --red-light: #fee2e2;
+            --orange: #ea580c;
+            --orange-light: #fff7ed;
+            --cyan: #0891b2;
+            --font-body: 'DM Sans', system-ui, sans-serif;
+            --font-mono: 'JetBrains Mono', monospace;
+            --shadow-sm: 0 1px 3px rgba(0,0,0,0.06);
+            --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+            --shadow-lg: 0 8px 30px rgba(0,0,0,0.1);
+            --r: 12px;
+        }
+        *,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+        html{scroll-behavior:smooth;}
+        body{font-family:var(--font-body);background:var(--bg-body);color:var(--text-primary);line-height:1.6;min-height:100vh;-webkit-font-smoothing:antialiased;}
+
+        /* ─── NAVBAR ─── */
+        .navbar{background:var(--bg-card);border-bottom:1px solid var(--border);padding:12px 0;position:sticky;top:0;z-index:100;box-shadow:var(--shadow-sm);}
+        .navbar .inner{max-width:1100px;margin:0 auto;padding:0 20px;display:flex;align-items:center;justify-content:space-between;}
+        .navbar .logo{font-size:1.4rem;font-weight:800;color:var(--text-primary);text-decoration:none;letter-spacing:-0.02em;}
+        .navbar .logo b{color:var(--accent);}
+        .navbar .sep{color:var(--border);margin:0 12px;font-weight:300;}
+        .navbar .subtitle{font-size:0.82rem;color:var(--text-muted);white-space:nowrap;}
+        .navbar .btn-back{font-size:0.82rem;font-weight:600;color:var(--bg-card);background:var(--accent);padding:8px 18px;border-radius:8px;text-decoration:none;transition:background 0.15s;}
+        .navbar .btn-back:hover{background:var(--accent-hover);}
+
+        /* ─── LAYOUT ─── */
+        .wrap{max-width:1100px;margin:0 auto;padding:0 20px;}
+        .title-section{text-align:center;padding:28px 0 8px;}
+        .title-section h2{font-size:1.5rem;font-weight:800;}
+        .title-section h2 span{color:var(--accent);}
+        .title-section p{font-size:0.88rem;color:var(--text-muted);margin-top:2px;}
+        .law-badge{display:inline-block;margin-top:8px;font-family:var(--font-mono);font-size:0.72rem;color:var(--accent);background:var(--accent-light);padding:4px 14px;border-radius:20px;font-weight:600;letter-spacing:0.04em;}
+
+        /* ─── SECTION CARDS ─── */
+        .section-card{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--r);padding:28px;margin-bottom:20px;box-shadow:var(--shadow-sm);}
+        .section-title{display:flex;align-items:center;gap:10px;margin-bottom:20px;font-size:1.05rem;font-weight:700;}
+        .section-num{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:var(--accent);color:#fff;font-size:0.82rem;font-weight:700;flex-shrink:0;}
+
+        /* ─── INFO BOX ─── */
+        .info-box{background:var(--bg-section);border:1px solid #f0e6c8;border-radius:var(--r);padding:20px;margin-bottom:20px;}
+        .info-box h4{color:var(--accent);font-size:0.92rem;margin-bottom:8px;}
+        .info-box p{font-size:0.85rem;color:var(--text-secondary);line-height:1.7;}
+        .info-box .warn{display:flex;gap:8px;margin-top:12px;padding:12px;background:var(--gold-light);border-left:3px solid var(--gold);border-radius:0 8px 8px 0;font-size:0.82rem;color:#92400e;}
+
+        /* ─── FORM ─── */
+        .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+        .grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;}
+        .grid-4{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:16px;}
+        @media(max-width:700px){.grid-2,.grid-3,.grid-4{grid-template-columns:1fr;}.navbar .subtitle{font-size:0.7rem;white-space:normal;}}
+        label{display:block;font-size:0.82rem;font-weight:600;color:var(--text-label);margin-bottom:4px;}
+        label .hint{font-weight:400;color:var(--text-muted);}
+        input[type="text"],input[type="number"],select,textarea{
+            width:100%;padding:10px 14px;font-family:var(--font-body);font-size:0.9rem;
+            background:var(--bg-input);border:1.5px solid var(--border);border-radius:8px;
+            color:var(--text-primary);outline:none;transition:border-color 0.2s,box-shadow 0.2s;
+        }
+        input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(22,163,74,0.12);}
+        select{cursor:pointer;appearance:auto;}
+        textarea{resize:vertical;min-height:56px;}
+
+        /* ─── SEARCH ─── */
+        .search-box{position:relative;margin-bottom:16px;}
+        .search-box .ico{position:absolute;left:16px;top:50%;transform:translateY(-50%);font-size:1.1rem;color:var(--text-muted);pointer-events:none;}
+        .search-box input{padding-left:44px;font-size:1rem;padding-top:14px;padding-bottom:14px;border-radius:var(--r);border-width:2px;}
+        .search-box input:focus{border-color:var(--accent);}
+        .autocomplete{position:absolute;top:100%;left:0;right:0;background:var(--bg-card);border:1px solid var(--border);border-radius:0 0 var(--r) var(--r);max-height:260px;overflow-y:auto;z-index:50;display:none;box-shadow:var(--shadow-md);}
+        .autocomplete .item{padding:10px 16px;font-size:0.85rem;cursor:pointer;border-bottom:1px solid var(--border-light);display:flex;justify-content:space-between;align-items:center;}
+        .autocomplete .item:hover{background:var(--accent-bg);}
+        .autocomplete .item .code{font-family:var(--font-mono);font-size:0.78rem;color:var(--accent);font-weight:600;}
+
+        /* ─── TAGS ─── */
+        .tags{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px;}
+        .tag{font-family:var(--font-body);font-size:0.78rem;font-weight:600;color:var(--text-secondary);background:var(--bg-body);border:1px solid var(--border);border-radius:20px;padding:5px 14px;cursor:pointer;transition:all 0.15s;}
+        .tag:hover,.tag.active{color:var(--accent);border-color:var(--accent);background:var(--accent-light);}
+
+        /* ─── FATOR R BAR ─── */
+        .fator-r-bar{margin-top:12px;padding:12px 16px;background:var(--bg-body);border:1px solid var(--border-light);border-radius:8px;}
+        .fator-r-bar .label{font-size:0.78rem;color:var(--text-muted);margin-bottom:6px;display:flex;justify-content:space-between;}
+        .fator-r-bar .track{height:8px;background:#e5e7eb;border-radius:4px;position:relative;overflow:hidden;}
+        .fator-r-bar .fill{height:100%;border-radius:4px;transition:width 0.3s,background 0.3s;}
+        .fator-r-bar .mark{position:absolute;top:-4px;width:2px;height:16px;background:var(--red);left:28%;}
+        .fator-r-bar .info{font-size:0.75rem;margin-top:4px;font-weight:600;}
+
+        /* ─── BUTTONS ─── */
+        .btn{font-family:var(--font-body);font-weight:600;border:none;border-radius:8px;cursor:pointer;transition:all 0.15s;display:inline-flex;align-items:center;gap:6px;}
+        .btn-lg{padding:12px 28px;font-size:0.95rem;}
+        .btn-md{padding:8px 18px;font-size:0.85rem;}
+        .btn-sm{padding:6px 14px;font-size:0.78rem;}
+        .btn-accent{color:#fff;background:var(--accent);}
+        .btn-accent:hover{background:var(--accent-hover);box-shadow:0 2px 8px rgba(22,163,74,0.25);}
+        .btn-outline{color:var(--text-secondary);background:transparent;border:1.5px solid var(--border);}
+        .btn-outline:hover{border-color:var(--accent);color:var(--accent);}
+        .btn-gold{color:#fff;background:linear-gradient(135deg,var(--gold),#f59e0b);}
+
+        /* ─── FILTERS ─── */
+        .filters{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:16px;}
+        .filters .label{font-size:0.78rem;color:var(--text-muted);font-weight:600;margin-right:4px;}
+        .pill{font-family:var(--font-body);font-size:0.78rem;font-weight:600;padding:5px 14px;border-radius:20px;border:1.5px solid var(--border);background:var(--bg-card);color:var(--text-secondary);cursor:pointer;transition:all 0.15s;}
+        .pill:hover,.pill.active{border-color:var(--accent);color:var(--accent);background:var(--accent-light);}
+
+        /* ─── TOP 3 ─── */
+        .top3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:20px;}
+        @media(max-width:700px){.top3{grid-template-columns:1fr;}}
+        .top3-card{background:var(--bg-card);border:2px solid var(--border);border-radius:var(--r);padding:18px;position:relative;transition:all 0.2s;}
+        .top3-card.gold{border-color:var(--gold);background:linear-gradient(135deg,#fffbeb,#fefce8);}
+        .top3-card.silver{border-color:#94a3b8;}
+        .top3-card.bronze{border-color:#d97706;}
+        .top3-medal{font-size:1.4rem;margin-bottom:6px;}
+        .top3-code{font-family:var(--font-mono);font-size:0.85rem;color:var(--accent);font-weight:700;}
+        .top3-desc{font-size:0.82rem;font-weight:600;margin:4px 0 8px;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+        .top3-val{font-family:var(--font-mono);font-size:1.1rem;font-weight:700;color:var(--accent);}
+        .top3-regime{font-size:0.72rem;color:var(--text-muted);font-weight:600;}
+        .top3-pct{font-size:0.72rem;color:var(--text-muted);font-family:var(--font-mono);}
+
+        /* ─── RESULT CARDS ─── */
+        .results-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px;margin-bottom:20px;}
+        .r-card{background:var(--bg-card);border:1.5px solid var(--border);border-radius:var(--r);padding:18px;position:relative;transition:all 0.2s;opacity:0;animation:fadeUp .35s forwards;}
+        .r-card:hover{border-color:var(--accent);box-shadow:var(--shadow-md);}
+        @keyframes fadeUp{to{opacity:1;transform:translateY(0);}}
+        .r-card .pos{position:absolute;top:12px;right:14px;font-family:var(--font-mono);font-size:0.72rem;color:var(--text-muted);font-weight:700;}
+
+        /* ─── BADGES ─── */
+        .badge{display:inline-block;font-size:0.68rem;font-weight:700;padding:2px 8px;border-radius:10px;}
+        .b-com{background:var(--blue-light);color:var(--blue);}
+        .b-ind{background:var(--orange-light);color:var(--orange);}
+        .b-ser{background:var(--purple-light);color:var(--purple);}
+        .b-anexo{background:var(--accent-light);color:var(--accent);}
+        .b-vedado{background:var(--red-light);color:var(--red);}
+        .b-mono{background:var(--blue-light);color:var(--cyan);}
+
+        /* ─── TABLE ─── */
+        .comp-table{width:100%;border-collapse:collapse;font-size:0.78rem;}
+        .comp-table th{text-align:left;padding:10px 8px;font-weight:600;color:var(--text-muted);border-bottom:2px solid var(--border);background:var(--bg-body);white-space:nowrap;}
+        .comp-table td{padding:8px;border-bottom:1px solid var(--border-light);}
+        .comp-table tr:hover td{background:var(--accent-bg);}
+        .comp-table .best{color:var(--accent);font-weight:700;}
+
+        /* ─── MODAL ─── */
+        .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:200;display:none;align-items:center;justify-content:center;}
+        .modal-overlay.show{display:flex;}
+        .modal{background:var(--bg-card);border-radius:var(--r);padding:28px;max-width:560px;width:90%;max-height:80vh;overflow-y:auto;box-shadow:var(--shadow-lg);}
+        .modal h3{font-size:1.1rem;margin-bottom:12px;}
+        .modal p{font-size:0.88rem;color:var(--text-secondary);line-height:1.7;margin-bottom:8px;}
+        .modal .close{position:absolute;top:12px;right:16px;font-size:1.2rem;cursor:pointer;color:var(--text-muted);}
+
+        /* ─── SIDE PANEL ─── */
+        .page-grid{display:grid;grid-template-columns:1fr 280px;gap:24px;}
+        @media(max-width:900px){.page-grid{grid-template-columns:1fr;}}
+        .side-card{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--r);padding:18px;margin-bottom:14px;box-shadow:var(--shadow-sm);}
+        .side-card h4{font-size:0.88rem;font-weight:700;color:var(--accent);margin-bottom:10px;}
+        .side-row{display:flex;justify-content:space-between;padding:3px 0;font-size:0.82rem;}
+        .side-row span:first-child{color:var(--text-secondary);}
+        .side-row span:last-child{font-family:var(--font-mono);font-weight:600;}
+
+        /* ─── TOAST ─── */
+        .toast{position:fixed;bottom:30px;left:50%;transform:translateX(-50%);padding:10px 24px;background:var(--accent);color:#fff;font-weight:700;font-size:0.85rem;border-radius:8px;z-index:999;box-shadow:var(--shadow-md);animation:toastIn .3s;}
+        @keyframes toastIn{from{opacity:0;transform:translate(-50%,10px);}to{opacity:1;transform:translate(-50%,0);}}
+
+        /* ─── LOADING ─── */
+        #loadingOverlay{position:fixed;inset:0;z-index:999;background:var(--bg-body);display:flex;align-items:center;justify-content:center;gap:14px;font-size:.95rem;color:var(--text-muted);}
+        .spin{width:28px;height:28px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:sp .7s linear infinite;}
+        @keyframes sp{to{transform:rotate(360deg);}}
+
+        /* ─── PRO ─── */
+        .pro-teaser{background:linear-gradient(135deg,#faf5ff,#fef3c7);border:1px solid #e9d5ff;border-radius:var(--r);padding:28px;text-align:center;margin-top:20px;}
+        .pro-teaser h4{font-size:1rem;font-weight:700;margin-bottom:10px;}
+        .pro-teaser .feats{display:flex;flex-wrap:wrap;justify-content:center;gap:12px;margin-bottom:16px;font-size:0.82rem;color:var(--text-secondary);}
+
+        mark{background:rgba(22,163,74,0.15);color:var(--accent-hover);padding:0 2px;border-radius:2px;}
+        .mono{font-family:var(--font-mono);}
+        .hidden{display:none!important;}
+        ::-webkit-scrollbar{width:6px;}::-webkit-scrollbar-track{background:transparent;}::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px;}
+    </style>
+</head>
+<body>
+
+<!-- LOADING -->
+<div id="loadingOverlay"><div class="spin"></div><span>Carregando base de CNAEs...</span></div>
+
+<div id="mainContent" style="display:none">
+
+<!-- NAVBAR -->
+<nav class="navbar">
+    <div class="inner">
+        <div style="display:flex;align-items:center">
+            <a href="dashboard.html" class="logo">IMPOST<b>.</b></a>
+            <span class="sep">|</span>
+            <span class="subtitle">Inteligência em Modelagem de Otimização Tributária</span>
+        </div>
+        <a href="dashboard.html" class="btn-back">← Dashboard</a>
+    </div>
+</nav>
+
+<div class="wrap">
+    <!-- TITLE -->
+    <div class="title-section">
+        <h2>🔍 Consultor de CNAE <span>— Otimização Tributária</span></h2>
+        <p>Descubra qual CNAE paga menos imposto para a sua atividade</p>
+        <div class="law-badge">LC 123/2006 · LEI 9.430/1996 · ATUALIZADO FEV/2026</div>
+    </div>
+
+    <!-- INFO BOX -->
+    <div class="info-box">
+        <h4>💡 Como funciona?</h4>
+        <p>Descreva o que sua empresa faz (ou digite o código CNAE) e o sistema busca entre <strong>7.800 atividades</strong>, calcula os impostos nos <strong>3 regimes tributários</strong> (Simples Nacional, Lucro Presumido e Lucro Real) e rankeia do mais barato ao mais caro.</p>
+        <div class="warn">⚠️ <div><strong>Atenção:</strong> O CNAE deve representar a atividade real da empresa. Escolher um código incompatível pode gerar multas, perda de benefícios e desenquadramento do Simples Nacional. Use esta ferramenta para planejar, mas confirme com seu contador.</div></div>
+    </div>
+
+    <div class="page-grid">
+    <div>
+
+    <!-- SECTION 1: DADOS DA PESQUISA -->
+    <div class="section-card">
+        <div class="section-title"><span class="section-num">1</span> Dados da Pesquisa</div>
+
+        <!-- Search -->
+        <div class="search-box">
+            <span class="ico">🔍</span>
+            <input type="text" id="inputBusca" placeholder='Descreva sua atividade: "vendo roupas", "consultoria ambiental", ou código CNAE...' autocomplete="off">
+            <div class="autocomplete" id="autocomplete"></div>
+        </div>
+
+        <div class="tags" id="tagsContainer">
+            <button class="tag" data-b="comercio varejo loja venda">🛒 Comércio</button>
+            <button class="tag" data-b="restaurante bar lanchonete alimentacao">🍽️ Alimentação</button>
+            <button class="tag" data-b="software sistema desenvolvimento tecnologia">💻 TI/Software</button>
+            <button class="tag" data-b="medico clinica consultorio saude dentista">🏥 Saúde</button>
+            <button class="tag" data-b="construcao obra pedreiro reforma engenharia">🏗️ Construção</button>
+            <button class="tag" data-b="transporte frete caminhao motorista entrega">🚚 Transporte</button>
+            <button class="tag" data-b="agro rural pecuaria lavoura fazenda">🌾 Agro</button>
+            <button class="tag" data-b="salao beleza cabelo estetica manicure">💇 Beleza</button>
+            <button class="tag" data-b="escola curso treinamento aula professor">📚 Educação</button>
+            <button class="tag" data-b="consultoria engenharia advocacia contabilidade ambiental">📋 Serv. Profissionais</button>
+        </div>
+
+        <!-- Fields -->
+        <div class="grid-4" style="margin-bottom:14px">
+            <div><label>Estado (UF)</label><select id="selUF"><option value="">Selecione...</option></select></div>
+            <div style="position:relative">
+                <label>Município <span class="hint" id="munCount"></span></label>
+                <select id="selMunicipio" disabled><option value="">Selecione o estado</option></select>
+                <div id="munLoading" style="display:none;position:absolute;right:12px;top:32px;font-size:.75rem;color:var(--accent);font-weight:600">
+                    <span class="spin" style="width:14px;height:14px;border-width:2px;display:inline-block;vertical-align:middle;margin-right:4px"></span> Carregando...
+                </div>
+            </div>
+            <div><label>Faturamento mensal <span class="hint">(obrig.)</span></label><input type="text" id="inputFat" placeholder="Ex: 30.000,00"></div>
+            <div><label>Folha de pagamento <span class="hint">(mensal)</span></label><input type="text" id="inputFolha" placeholder="Ex: 10.000,00"></div>
+        </div>
+
+        <!-- ISS Info -->
+        <div id="issInfo" style="display:none;margin-bottom:14px;padding:10px 14px;border-radius:8px;font-size:.82rem;line-height:1.6;border:1px solid var(--border-light);background:var(--bg-section)"></div>
+
+        <!-- Fator R indicator -->
+        <div class="fator-r-bar" id="fatorRBar" style="display:none">
+            <div class="label"><span>Fator R (Folha ÷ Faturamento)</span><span id="fatorRValue">0%</span></div>
+            <div class="track"><div class="fill" id="fatorRFill" style="width:0%;background:#ef4444"></div><div class="mark"></div></div>
+            <div class="info" id="fatorRInfo" style="color:var(--red)">Abaixo de 28% — Anexo V (alíquota mais alta)</div>
+        </div>
+
+        <div style="display:flex;gap:10px;margin-top:16px;align-items:center;flex-wrap:wrap">
+            <button class="btn btn-lg btn-accent" id="btnBuscar">🔍 Buscar CNAEs</button>
+            <button class="btn btn-md btn-outline" id="btnInfo" title="Sobre os regimes">ℹ️ Sobre os regimes</button>
+        </div>
+    </div>
+
+    <!-- SECTION 2: RESULTADOS -->
+    <div id="welcomeMsg" style="text-align:center;padding:50px 20px;color:var(--text-muted)">
+        <div style="font-size:48px;margin-bottom:12px">📊</div>
+        <h3 style="font-size:1.05rem;color:var(--text-secondary);font-weight:700;margin-bottom:6px">Descubra qual CNAE paga menos imposto</h3>
+        <p style="font-size:0.85rem;max-width:480px;margin:0 auto">Preencha os campos acima e clique em Buscar. O sistema analisa 7.800 CNAEs e rankeia pelo menor custo tributário.</p>
+    </div>
+
+    <div id="resultsArea" style="display:none"></div>
+
+    </div><!-- /left -->
+
+    <!-- RIGHT SIDE PANEL -->
+    <div><div id="statePanel"></div></div>
+
+    </div><!-- /page-grid -->
+</div><!-- /wrap -->
+</div><!-- /mainContent -->
+
+<!-- MODAL: REGIMES -->
+<div class="modal-overlay" id="modalRegimes">
+    <div class="modal" style="position:relative">
+        <span class="close" onclick="document.getElementById('modalRegimes').classList.remove('show')">✕</span>
+        <h3>📘 Os 3 Regimes Tributários</h3>
+        <p><strong style="color:var(--accent)">Simples Nacional</strong> — Para micro e pequenas empresas com faturamento anual até <strong>R$ 4,8 milhões</strong>. Unifica até 8 impostos (IRPJ, CSLL, PIS, COFINS, IPI, ICMS, ISS, CPP) em uma única guia (DAS). Alíquotas progressivas por Anexo: Comércio (Anexo I) inicia em 4%, Indústria (II) 4,5%, Serviços (III) 6%, Construção (IV) 4,5%, Serv. intelectuais (V) 15,5%.</p>
+        <p><strong style="color:var(--blue)">Lucro Presumido</strong> — Para empresas com faturamento até <strong>R$ 78 milhões/ano</strong>. O governo presume uma margem de lucro (8% comércio, 32% serviços) e calcula IRPJ e CSLL sobre essa base. PIS/COFINS no regime cumulativo (3,65%). Ideal quando o lucro real é maior que o presumido.</p>
+        <p><strong style="color:var(--purple)">Lucro Real</strong> — Obrigatório acima de <strong>R$ 78 milhões/ano</strong> ou para bancos, seguradoras, factoring. Calcula IRPJ/CSLL sobre o lucro contábil efetivo. PIS/COFINS não cumulativo (9,25% com direito a créditos). Vantajoso quando a margem de lucro é baixa.</p>
+        <hr style="margin:16px 0;border:0;border-top:1px solid var(--border)">
+        <p style="font-size:0.82rem"><strong style="color:var(--gold)">Fator R:</strong> Atividades do Anexo V podem migrar para o Anexo III (mais barato) se a folha de pagamento representar ≥ 28% do faturamento dos últimos 12 meses. Isso pode reduzir a alíquota de 15,5% para 6%.</p>
+        <p style="font-size:0.82rem"><strong style="color:var(--accent)">SUDAM/SUDENE:</strong> Empresas na Amazônia Legal (SUDAM) ou Nordeste (SUDENE) têm 75% de desconto no IRPJ no Lucro Presumido e Real.</p>
+    </div>
+</div>
+
+<!-- DATA SCRIPTS -->
+<script src="../scripts/impostos_federais.js"></script>
+<script src="../scripts/cnae-mapeamento.js"></script>
+<script src="../scripts/estados.js"></script>
+<script src="../scripts/municipios.js"></script>
+<script type="module">
+import{BANCO_CNAE}from'../scripts/cnae.js';
+window.BANCO_CNAE=BANCO_CNAE;
+window.dispatchEvent(new Event('cnae-loaded'));
+</script>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!--  CONSULTOR ENGINE v3.0 — COMPLETO E PROFISSIONAL               -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<script>
+(function(){
+"use strict";
+var $=function(id){return document.getElementById(id);};
+var $$=function(s){return document.querySelectorAll(s);};
+var IF,CM,ES,CNAE,cnaeIdx=null,cache=new Map(),lastItems=[],currentFilter='todos';
+
+// ═══ DICIONÁRIO DE SINÔNIMOS ═══
+var DIC={
+"restaurante":["restaurante","alimentacao","refeicao","refeicoes","preparo"],
+"lanchonete":["lanchonete","fast food","alimentacao rapida","salgados"],
+"padaria":["padaria","panificacao","paes","confeitaria"],
+"bar":["bar","bebidas","pub","choperia"],
+"pizzaria":["pizzaria","pizza","alimentacao"],
+"hamburgueria":["hamburgueria","lanchonete","alimentacao"],
+"acougue":["acougue","carnes","frigorifico"],
+"sorveteria":["sorvete","gelados","sorveteria"],
+"food truck":["ambulante","alimentacao","comida"],
+"delivery":["entrega","alimentacao","refeicoes","preparacao"],
+"doceria":["doces","confeitaria","bombons","chocolates"],
+"cafeteria":["cafe","cafeteria","bebidas"],
+"loja":["comercio","varejo","varejista","venda","vendas","loja"],
+"mercado":["mercado","supermercado","minimercado","mercearia","generos alimenticios"],
+"farmacia":["farmacia","medicamento","medicamentos","drogaria"],
+"pet shop":["pet","animal","animais","veterinaria","racao"],
+"posto":["combustivel","combustiveis","lubrificante","gasolina","etanol","posto"],
+"materiais":["material","materiais","construcao","ferragem","tintas"],
+"roupas":["vestuario","roupa","roupas","confeccao","confeccoes","moda"],
+"calcados":["calcados","sapatos","calcado"],
+"eletronicos":["informatica","computador","eletronico","eletronicos","celular","telefone"],
+"autopecas":["autopecas","pecas","acessorios","veiculos","automotivo"],
+"otica":["otica","oculos","lentes","optometria"],
+"joias":["joias","bijouteria","relogios","ouro","prata"],
+"papelaria":["papelaria","artigos","escritorio","escolar"],
+"brinquedos":["brinquedos","brinquedo","diversoes","jogos"],
+"moveis":["moveis","mobiliario","movel","colchoes","decoracao"],
+"ecommerce":["comercio eletronico","internet","varejo","nao-especializado","correio"],
+"importacao":["importacao","importados","importado","comercio exterior"],
+"atacado":["atacadista","atacado","distribuicao","distribuidora"],
+"floricultura":["flores","floricultura","plantas","ornamentais"],
+"conveniencia":["conveniencia","loja","varejo","tabacaria"],
+"software":["software","programa","programas","sistemas","desenvolvimento","customizavel"],
+"site":["internet","web","consultoria em tecnologia","desenvolvimento","portais"],
+"app":["software","aplicativo","desenvolvimento","customizavel"],
+"programacao":["desenvolvimento","software","sistemas","tecnologia"],
+"ti":["tecnologia","informacao","informatica","consultoria","suporte tecnico"],
+"suporte tecnico":["suporte tecnico","manutencao","informatica","equipamentos"],
+"hospedagem":["hospedagem","internet","servicos de informacao","processamento de dados"],
+"marketing digital":["publicidade","marketing","propaganda","promocao","digital"],
+"design":["design","comunicacao visual","grafico","atividades de design"],
+"fotografia":["fotografia","fotografico","filmagem","video"],
+"streaming":["streaming","audio","video","internet","transmissao"],
+"games":["jogos","games","eletronico","software","entretenimento"],
+"medico":["medico","medicina","clinica","atividade medica","ambulatorial"],
+"dentista":["odontologia","odontologica","dental","dentista","dentario"],
+"psicologo":["psicologia","psicologica","terapia"],
+"fisioterapia":["fisioterapia","fisioterapica","reabilitacao"],
+"nutricao":["nutricao","nutricionista","dietetica"],
+"enfermagem":["enfermagem","cuidados","home care"],
+"laboratorio":["laboratorio","analises clinicas","patologia","diagnostico"],
+"clinica":["clinica","ambulatorial","medica","consultorio"],
+"hospital":["hospital","hospitalar","internacao","pronto-socorro"],
+"fonoaudiologia":["fonoaudiologia","fono","audiologia"],
+"construcao":["construcao","obra","edificacao","edificio","predial"],
+"pedreiro":["construcao","alvenaria","obras"],
+"eletricista":["instalacoes eletricas","eletrica","eletricidade"],
+"encanador":["hidraulica","instalacoes hidraulicas","hidrossanitarias"],
+"pintor":["pintura","acabamento","obra"],
+"reforma":["reforma","manutencao","acabamento","construcao"],
+"terraplanagem":["terraplanagem","terraplenagem","movimentacao de terra","escavacao"],
+"incorporacao":["incorporacao","imobiliario","imobiliaria"],
+"ar condicionado":["ar condicionado","climatizacao","refrigeracao","instalacao"],
+"frete":["transporte","cargas","mudanca","frete"],
+"caminhao":["transporte","cargas","rodoviario"],
+"motorista":["transporte","passageiros","taxi","motorista"],
+"uber":["transporte","passageiros","aplicativo","taxi"],
+"motoboy":["entrega","motoboy","motocicleta","courrier"],
+"logistica":["logistica","armazenamento","distribuicao","deposito"],
+"onibus":["onibus","transporte","passageiros","coletivo","rodoviario"],
+"mudanca":["mudanca","transporte","cargas","frete"],
+"agro":["agropecuaria","agricola","agricultura","rural"],
+"pecuaria":["pecuaria","bovino","gado","criacao de animais"],
+"fazenda":["agropecuaria","cultivo","lavoura","producao agricola"],
+"soja":["soja","cereais","graos","cultivo","lavoura temporaria"],
+"milho":["milho","cereais","graos","cultivo"],
+"gado":["bovino","bovinos","pecuaria","criacao"],
+"madeira":["madeira","serraria","madeireira","desdobramento","florestal"],
+"peixe":["pesca","piscicultura","aquicultura","peixes"],
+"engenharia":["engenharia","engenheiro","projetos","tecnico"],
+"arquitetura":["arquitetura","arquitetonico","urbanismo"],
+"consultoria":["consultoria","assessoria","gestao empresarial"],
+"contabilidade":["contabilidade","contabil","contabilista","auditoria"],
+"advocacia":["advocacia","juridica","direito","advogado"],
+"ambiental":["ambiental","meio ambiente","licenciamento","gerenciamento ambiental"],
+"georeferenciamento":["cartografia","georreferenciamento","geodesia","topografia","mapeamento","analises tecnicas"],
+"topografia":["topografia","agrimensura","geodesia","levantamento"],
+"pericia":["pericia","perito","avaliacao","laudo"],
+"salao":["salao","cabeleireiro","cabeleireiros","beleza","estetica"],
+"barbearia":["barbearia","barbeiro","cabeleireiro"],
+"manicure":["manicure","pedicure","unhas","estetica"],
+"estetica":["estetica","beleza","tratamento","depilacao"],
+"tatuagem":["tatuagem","piercing","corporal"],
+"academia":["academia","ginastica","musculacao","fitness","atividades fisicas"],
+"escola":["ensino","educacao","escola","escolar","instrucao"],
+"curso":["curso","treinamento","capacitacao","educacao profissional"],
+"autoescola":["autoescola","formacao de condutores","habilitacao"],
+"imobiliaria":["imobiliaria","imoveis","imovel","aluguel","locacao"],
+"eventos":["eventos","festas","buffet","organizacao","cerimonial"],
+"grafica":["grafica","impressao","impressos","editorial"],
+"propaganda":["publicidade","propaganda","marketing","promocao"],
+"seguranca":["vigilancia","seguranca","monitoramento","alarme"],
+"limpeza":["limpeza","conservacao","higienizacao","lavanderia"],
+"energia solar":["energia solar","fotovoltaica","instalacoes eletricas","energia"],
+"veterinario":["veterinaria","veterinario","animal","pet"],
+"mecanica":["mecanica","manutencao","reparacao","veiculos","automotivo"],
+"oficina":["oficina","manutencao","reparacao","conserto"],
+"lavagem":["lavagem","lava-jato","limpeza de veiculos"],
+"borracharia":["borracharia","pneu","pneus","vulcanizacao"],
+"serralheria":["serralheria","metalurgica","estrutura metalica"],
+"funilaria":["funilaria","lanternagem","pintura automotiva"],
+"idiomas":["idiomas","linguas","curso de linguas"],
+"vendo":["comercio","varejo","venda","vendas"],
+"faco":["servicos","prestacao","atividade"],
+"banco":["banco","bancario","financeiro","credito"],
+"factoring":["fomento","factoring","credito","financeiro"],
+"seguro":["seguros","corretagem","previdencia"],
+};
+
+// ═══ NORMALIZAÇÃO ═══
+function norm(s){return(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9\s\-\/]/g,' ').replace(/\s+/g,' ').trim();}
+function tokenize(t){return norm(t).split(/\s+/).filter(function(x){return x.length>=2;});}
+function expand(tokens){
+    var ex={},i,j,tk,k,nk,arr,dicKeys=Object.keys(DIC);
+    for(i=0;i<tokens.length;i++)ex[tokens[i]]=1;
+    for(i=0;i<tokens.length;i++){
+        tk=tokens[i];
+        if(DIC[tk]){arr=DIC[tk];for(j=0;j<arr.length;j++){var n=norm(arr[j]);if(n)ex[n]=1;}}
+        for(j=0;j<dicKeys.length;j++){k=dicKeys[j];nk=norm(k);if(nk===tk||nk.indexOf(tk)>=0||tk.indexOf(nk)>=0){arr=DIC[k];for(var m=0;m<arr.length;m++){var nn=norm(arr[m]);if(nn)ex[nn]=1;}}}
+    }
+    return Object.keys(ex);
+}
+function buildIndex(){if(!CNAE)return;cnaeIdx=[];for(var i=0;i<CNAE.length;i++){var c=CNAE[i];cnaeIdx.push({codigo:c.codigo,descricao:c.descricao,categoria:c.categoria,codigoNumerico:c.codigoNumerico,dn:norm(c.descricao),cn:norm(c.categoria),cd:(c.codigoNumerico||c.codigo.replace(/[-\/]/g,''))});}}
+
+// ═══ BUSCA ═══
+function buscar(texto){
+    if(!cnaeIdx)buildIndex();if(!cnaeIdx)return[];
+    var tn=norm(texto);if(cache.has(tn))return cache.get(tn);
+    var tokens=tokenize(texto);if(!tokens.length)return[];
+    var isCode=/^\d{4}/.test(tn.replace(/\s/g,'')),cq=tn.replace(/[\s\-\/]/g,''),expanded=expand(tokens),results=[];
+    for(var i=0;i<cnaeIdx.length;i++){
+        var it=cnaeIdx[i],score=0;
+        if(it.cd===cq||it.codigo.replace(/[-\/\s]/g,'')===cq){score=100;}
+        else if(isCode&&it.cd.indexOf(cq)===0){score=80;}
+        else{
+            var tm=0;
+            for(var t=0;t<tokens.length;t++){if(it.dn.indexOf(tokens[t])>=0){score+=25;tm++;if(it.dn.indexOf(tokens[t])===0)score+=5;}}
+            for(var e=0;e<expanded.length;e++){if(tokens.indexOf(expanded[e])<0&&it.dn.indexOf(expanded[e])>=0)score+=15;}
+            for(t=0;t<tokens.length;t++){if(it.cn.indexOf(tokens[t])>=0)score+=10;}
+            if(tokens.length>1&&tm===tokens.length)score+=30;
+        }
+        if(score>=30)results.push({codigo:it.codigo,descricao:it.descricao,categoria:it.categoria,codigoNumerico:it.codigoNumerico,score:score});
+    }
+    results.sort(function(a,b){return b.score-a.score||a.descricao.length-b.descricao.length;});
+    var top=results.slice(0,20);
+    if(cache.size>10){cache.delete(cache.keys().next().value);}
+    cache.set(tn,top);return top;
+}
+
+// ═══ CÁLCULOS ═══
+function calcSimples(fat,folha,regras){
+    var rbt12=fat*12;if(rbt12>4800000||regras.vedado)return null;
+    var fr=folha>0?folha/fat:0,anexo=regras.anexo;
+    if(regras.fatorR)anexo=(fr>=0.28)?'III':'V';
+    var tab=IF.SIMPLES_NACIONAL['ANEXO_'+anexo];if(!tab)return null;
+    var fx=tab.faixas,f=fx[fx.length-1];
+    for(var i=0;i<fx.length;i++){if(rbt12<=fx[i].limite){f=fx[i];break;}}
+    var ae=(rbt12*f.aliquota-f.deducao)/rbt12,das=fat*Math.max(0,ae),cpp=(anexo==='IV')?folha*0.278:0;
+    return{total:das+cpp,das:das,cpp:cpp,ae:ae,anexo:anexo,faixa:f.faixa};
+}
+function calcPresumido(fat,folha,regras,uf,issRate){
+    var bI=fat*regras.presuncaoIRPJ,bC=fat*regras.presuncaoCSLL;
+    var irpj=bI*0.15;if(bI>20000)irpj+=(bI-20000)*0.10;
+    var csll=bC*0.09,pis=fat*0.0065,cofins=fat*0.03,cpp=folha*0.278;
+    var est=uf?ES[uf]:null;if(est&&est.beneficios&&est.beneficios.tem_sudam)irpj*=0.25;
+    var isSrv=regras.presuncaoIRPJ>=0.32||['III','IV','V'].indexOf(regras.anexo)>=0;
+    var iss=isSrv?fat*(issRate||0.05):0;
+    var icms=!isSrv?fat*(est?est.icms.padrao:0.18)*0.3:0;
+    return{total:irpj+csll+pis+cofins+cpp+iss+icms,ae:(irpj+csll+pis+cofins+cpp+iss+icms)/fat};
+}
+function calcReal(fat,folha,regras,uf,issRate){
+    var lucro=fat*0.20,irpj=lucro*0.15;if(lucro>20000)irpj+=(lucro-20000)*0.10;
+    var csll=lucro*0.09,cr=fat*0.30,pis=Math.max(0,fat*0.0165-cr*0.0165),cofins=Math.max(0,fat*0.076-cr*0.076),cpp=folha*0.278;
+    var est=uf?ES[uf]:null;if(est&&est.beneficios&&est.beneficios.tem_sudam)irpj*=0.25;
+    var isSrv=regras.presuncaoIRPJ>=0.32;
+    var iss=isSrv?fat*(issRate||0.05):0,icms=!isSrv?fat*(est?est.icms.padrao:0.18)*0.3:0;
+    return{total:irpj+csll+pis+cofins+cpp+iss+icms,ae:(irpj+csll+pis+cofins+cpp+iss+icms)/fat};
+}
+
+// ═══ FORMATAÇÃO ═══
+function R$(n){return n==null?'—':n.toLocaleString('pt-BR',{style:'currency',currency:'BRL'});}
+function pct(n){return n==null?'—':(n*100).toFixed(2).replace('.',',')+'%';}
+function R$k(n){if(n==null)return'—';if(n>=1e6)return'R$'+(n/1e6).toFixed(1).replace('.',',')+'M';if(n>=1e3)return'R$'+(n/1e3).toFixed(0)+'k';return R$(n);}
+
+// Smart money mask
+function smartMask(el){
+    var raw=el.value.replace(/[^\d,\.]/g,'');
+    if(!raw){el.value='';return;}
+    // Remove thousand separators (dots before comma)
+    var parts=raw.split(',');
+    var intPart=parts[0].replace(/\./g,'');
+    var decPart=parts[1]?parts[1].substring(0,2):'';
+    var num=parseInt(intPart)||0;
+    var formatted=num.toLocaleString('pt-BR');
+    el.value=formatted+(decPart?','+decPart:'');
+}
+function parseMoney(el){
+    var r=(typeof el==='string'?el:el.value)||'';
+    r=r.replace(/\./g,'').replace(',','.');
+    return parseFloat(r)||0;
+}
+
+function highlight(text,q){
+    var tokens=tokenize(q),ex=expand(tokens),all=[],seen={};
+    var merged=tokens.concat(ex);
+    for(var i=0;i<merged.length;i++){if(!seen[merged[i]]){seen[merged[i]]=1;all.push(merged[i]);}}
+    all.sort(function(a,b){return b.length-a.length;});
+    var r=text;
+    for(i=0;i<all.length;i++){if(all[i].length<3)continue;var rx=new RegExp('('+all[i].replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')','gi');r=r.replace(rx,'<mark>$1</mark>');}
+    return r;
+}
+function catBadge(c){var m={'Comércio':'b-com','Indústria':'b-ind','Serviço':'b-ser','Comercio':'b-com','Industria':'b-ind','Servico':'b-ser'};return'<span class="badge '+(m[c]||'b-ser')+'">'+c+'</span>';}
+function catNorm(c){return norm(c).replace('comercio','Comércio').replace('industria','Indústria').replace('servico','Serviço');}
+
+// ═══ RENDER ═══
+function regLine(l,v,best,ved){
+    if(ved&&l==='Simples')return'<div style="display:flex;justify-content:space-between;padding:3px 0;font-size:.82rem"><span style="color:var(--text-muted)">'+l+'</span><span style="color:var(--red);font-weight:600;font-size:.78rem">⛔ Vedado</span></div>';
+    if(v==null)return'<div style="display:flex;justify-content:space-between;padding:3px 0;font-size:.82rem"><span style="color:var(--text-muted)">'+l+'</span><span style="color:var(--text-muted);font-family:var(--font-mono);font-size:.78rem">Inelegível</span></div>';
+    return'<div style="display:flex;justify-content:space-between;padding:3px 0;font-size:.82rem"><span style="color:var(--text-muted)">'+l+(best?' ✅':'')+'</span><span style="font-family:var(--font-mono);font-weight:'+(best?'700':'500')+';color:'+(best?'var(--accent)':'var(--text-primary)')+';font-size:.82rem">'+R$(v)+'</span></div>';
+}
+
+function renderResultados(items,q,uf,fat){
+    var c=$('resultsArea');
+    $('welcomeMsg').style.display='none';
+    if(!items.length){c.innerHTML='<div style="text-align:center;padding:50px 20px;color:var(--text-muted)"><div style="font-size:48px;margin-bottom:12px">🔍</div><h3 style="color:var(--text-secondary)">Nenhum CNAE encontrado para "'+q+'"</h3><p style="font-size:.85rem;margin-top:6px">Tente termos diferentes. Ex: "restaurante", "loja de roupas", "consultoria"</p></div>';c.style.display='block';return;}
+    var est=ES[uf],h='';
+
+    // ─── SUMMARY ───
+    h+='<div class="section-card" style="padding:16px 20px;margin-bottom:16px"><div style="display:flex;flex-wrap:wrap;gap:20px;align-items:center;font-size:.85rem">'
+      +'<div><span style="color:var(--text-muted)">🔍</span> <strong>"'+q+'"</strong></div>'
+      +'<div><span style="color:var(--text-muted)">📍</span> <strong>'+(est?est.nome:'—')+'</strong></div>'
+      +'<div><span style="color:var(--text-muted)">💰</span> <strong class="mono">'+R$(fat)+'/mês</strong></div>'
+      +'<div><span style="color:var(--text-muted)">📊</span> <strong style="color:var(--accent)">'+items.length+' CNAEs</strong></div>'
+      +'</div></div>';
+
+    // ─── TOP 3 ───
+    var medals=['🥇','🥈','🥉'],colors=['gold','silver','bronze'];
+    h+='<div class="top3">';
+    for(var t=0;t<Math.min(3,items.length);t++){
+        var it=items[t];
+        h+='<div class="top3-card '+colors[t]+'">'
+          +'<div class="top3-medal">'+medals[t]+'</div>'
+          +'<div class="top3-code">'+it.codigo+'</div>'
+          +'<div class="top3-desc">'+it.descricao+'</div>'
+          +'<div class="top3-val">'+R$(it.menor)+'/mês</div>'
+          +'<div class="top3-regime">'+it.melhor+'</div>'
+          +'<div class="top3-pct">Alíq. efetiva: '+pct(it.menorAe)+'</div>'
+          +'<div style="margin-top:8px;display:flex;gap:6px">'
+          +'<button onclick="window._nav(\''+it.codigo+'\',\''+it.categoria+'\')" class="btn btn-sm btn-accent">📊 Análise</button>'
+          +'<button onclick="window._copy(\''+it.codigo+'\')" class="btn btn-sm btn-outline">📋</button>'
+          +'</div></div>';
+    }
+    h+='</div>';
+
+    // ─── FILTERS ───
+    h+='<div class="filters"><span class="label">Ordenar por:</span>'
+      +'<button class="pill active" data-f="todos" onclick="window._filter(\'todos\',this)">Menor imposto</button>'
+      +'<button class="pill" data-f="simples" onclick="window._filter(\'simples\',this)">Simples Nacional</button>'
+      +'<button class="pill" data-f="presumido" onclick="window._filter(\'presumido\',this)">L. Presumido</button>'
+      +'<button class="pill" data-f="real" onclick="window._filter(\'real\',this)">L. Real</button>'
+      +'</div>';
+
+    // ─── CARDS ───
+    h+='<div class="results-grid" id="cardsGrid">';
+    for(var i=0;i<items.length;i++){
+        var item=items[i],sp=Math.min(100,Math.round(item.score/100*100));
+        h+='<div class="r-card" style="animation-delay:'+(i*40)+'ms;transform:translateY(12px)">'
+          +'<div class="pos">#'+(i+1)+'</div>'
+          +'<div style="font-family:var(--font-mono);font-size:.82rem;color:var(--accent);font-weight:600;margin-bottom:3px">'+item.codigo+'</div>'
+          +'<div style="font-size:.88rem;font-weight:600;margin-bottom:8px;padding-right:28px;line-height:1.4">'+highlight(item.descricao,q)+'</div>'
+          +'<div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px">'
+          +catBadge(item.categoria)
+          +'<span class="badge b-anexo">Anexo '+(item.regras.fatorR?item.regras.anexo+' (FR)':item.regras.anexo)+'</span>'
+          +(item.mono?'<span class="badge b-mono">💊 Mono</span>':'')
+          +(item.regras.vedado?'<span class="badge b-vedado">⛔ Vedado</span>':'')
+          +'</div>'
+          +'<div style="border-top:1px solid var(--border-light);padding-top:8px;margin-bottom:8px">'
+          +regLine('Simples',item.s?item.s.total:null,item.melhor==='Simples Nacional',item.regras.vedado)
+          +regLine('Presumido',item.p.total,item.melhor==='L. Presumido',false)
+          +regLine('L. Real',item.r.total,item.melhor==='Lucro Real',false)
+          +'</div>'
+          +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><div style="flex:1;height:4px;background:#e5e7eb;border-radius:2px;overflow:hidden"><div style="height:100%;width:'+sp+'%;background:var(--accent);border-radius:2px"></div></div><span style="font-size:.7rem;color:var(--text-muted);font-family:var(--font-mono)">'+sp+'%</span></div>'
+          +'<div style="display:flex;gap:8px;flex-wrap:wrap">'
+          +'<button onclick="window._nav(\''+item.codigo+'\',\''+item.categoria+'\')" class="btn btn-sm btn-accent">📊 Análise</button>'
+          +'<button onclick="window._copy(\''+item.codigo+'\')" class="btn btn-sm btn-outline">📋 Copiar</button></div>'
+          +((item.regras.fonte==='categoria'||item.regras.fonte==='padrao')?'<div style="margin-top:6px;font-size:.72rem;color:var(--gold)">⚠️ Classificação estimada</div>':'')
+          +'</div>';
+    }
+    h+='</div>';
+
+    // ─── TABLE + EXPORT ───
+    h+='<div style="display:flex;gap:10px;margin-bottom:10px;flex-wrap:wrap">'
+      +'<button class="btn btn-md btn-outline" onclick="var t=$(\'tComp\');t.style.display=t.style.display===\'none\'?\'block\':\'none\'">📊 Tabela Comparativa</button>'
+      +'<button class="btn btn-md btn-outline" onclick="window._exportCSV()">📥 Exportar CSV</button>'
+      +'</div>';
+    h+='<div id="tComp" style="display:none;overflow-x:auto;margin-bottom:16px"><table class="comp-table"><thead><tr><th>#</th><th>CNAE</th><th>Descrição</th><th style="text-align:center">Cat.</th><th style="text-align:center">Anexo</th><th style="text-align:right">Simples</th><th style="text-align:right">Presumido</th><th style="text-align:right">L. Real</th><th style="text-align:center">Melhor</th></tr></thead><tbody>';
+    for(i=0;i<items.length;i++){
+        var row=items[i];
+        h+='<tr'+(i===0?' style="background:var(--accent-bg)"':'')+'>'
+          +'<td class="mono" style="color:var(--text-muted)">'+(i+1)+'</td>'
+          +'<td class="mono" style="color:var(--accent);white-space:nowrap">'+row.codigo+'</td>'
+          +'<td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+row.descricao+'</td>'
+          +'<td style="text-align:center">'+catBadge(row.categoria)+'</td>'
+          +'<td style="text-align:center" class="mono">'+(row.regras.vedado?'⛔':row.regras.anexo)+(row.regras.fatorR?'*':'')+'</td>'
+          +'<td style="text-align:right" class="mono '+(row.melhor==='Simples Nacional'?'best':'')+'">'+(row.s?R$(row.s.total):(row.regras.vedado?'⛔':'—'))+'</td>'
+          +'<td style="text-align:right" class="mono '+(row.melhor==='L. Presumido'?'best':'')+'">'+R$(row.p.total)+'</td>'
+          +'<td style="text-align:right" class="mono '+(row.melhor==='Lucro Real'?'best':'')+'">'+R$(row.r.total)+'</td>'
+          +'<td style="text-align:center;font-size:.72rem;font-weight:700;color:var(--accent)">'+row.melhor+'</td></tr>';
+    }
+    h+='</tbody></table><div style="font-size:.72rem;color:var(--text-muted);margin-top:6px">* Sujeito ao Fator R (Folha/Fat ≥ 28% → Anexo III)</div></div>';
+
+    // ─── PRO TEASER ───
+    h+='<div class="pro-teaser"><h4>⭐ IMPOST. PRO — Consultor com Inteligência Artificial</h4><div class="feats"><span>✅ Resultados ilimitados</span><span>✅ IA linguagem natural</span><span>✅ Análise de risco</span><span>✅ CNAE secundário</span><span>✅ Relatório PDF</span></div><button class="btn btn-md btn-gold">🚀 Conhecer o PRO</button></div>';
+
+    c.innerHTML=h;c.style.display='block';
+    c.scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+// ─── SIDE PANEL ───
+function renderEstado(uf){
+    var p=$('statePanel');if(!uf||!ES||!ES[uf]){p.innerHTML='';return;}
+    var e=ES[uf],b=e.beneficios||{};
+    // Usar municípios do cache IBGE se disponível, senão usar estados.js
+    var allMun=_municipiosCache[uf]||(e.municipios||[]);
+    var mun=allMun.slice().sort(function(a,b){return a.iss-b.iss;}).slice(0,8);
+    var totalMun=allMun.length;
+    var h='<div class="side-card"><h4>📍 '+e.nome+' ('+uf+')</h4>'
+      +'<div class="side-row"><span>ICMS padrão</span><span>'+(e.icms.padrao*100).toFixed(0)+'%</span></div>'
+      +'<div class="side-row"><span>ICMS cesta básica</span><span>'+(e.icms.cesta_basica*100).toFixed(0)+'%</span></div>'
+      +'<div class="side-row"><span>Sublimite Simples</span><span>'+R$k(e.sublimite_simples)+'</span></div>'
+      +'<div class="side-row"><span>Municípios</span><span>'+totalMun+'</span></div></div>';
+    if(b.tem_sudam)h+='<div class="side-card" style="border-left:3px solid var(--accent)"><div style="font-weight:700;color:var(--accent);font-size:.85rem;margin-bottom:4px">✅ SUDAM ativo</div><div style="font-size:.82rem;color:var(--text-secondary)">75% desconto IRPJ (Presumido/Real)</div></div>';
+    if(b.tem_sudene)h+='<div class="side-card" style="border-left:3px solid var(--blue)"><div style="font-weight:700;color:var(--blue);font-size:.85rem;margin-bottom:4px">✅ SUDENE ativo</div><div style="font-size:.82rem;color:var(--text-secondary)">Incentivos região Nordeste</div></div>';
+    if(b.zona_franca)h+='<div class="side-card" style="border-left:3px solid var(--purple)"><div style="font-weight:700;color:var(--purple);font-size:.85rem;margin-bottom:4px">✅ Zona Franca</div><div style="font-size:.82rem;color:var(--text-secondary)">Isenção IPI + redução ICMS</div></div>';
+    if(b.dica_economia)h+='<div style="background:var(--gold-light);border-left:3px solid var(--gold);padding:10px 12px;margin-bottom:12px;font-size:.82rem;color:#92400e;border-radius:0 8px 8px 0">💡 '+b.dica_economia+'</div>';
+    if(mun.length>0){
+        h+='<div class="side-card"><h4 style="font-size:.82rem;color:var(--text-secondary)">Municípios com menor ISS</h4>';
+        for(var i=0;i<mun.length;i++){
+            var issStr=mun[i].iss.toFixed(1).replace('.',',')+('%');
+            var badge=mun[i].issConhecido?'':'<span style="font-size:.65rem;color:var(--gold);margin-left:2px" title="Alíquota estimada (padrão 5%)">≈</span>';
+            h+='<div class="side-row"><span>'+mun[i].nome+badge+'</span><span>'+issStr+'</span></div>';
+        }
+        if(totalMun>8)h+='<div style="font-size:.72rem;color:var(--text-muted);text-align:center;margin-top:6px;padding-top:6px;border-top:1px solid var(--border-light)">+ '+(totalMun-8)+' municípios no seletor acima</div>';
+        h+='</div>';
+    }
+    p.innerHTML=h;
+}
+
+// ─── FATOR R ───
+function updateFatorR(){
+    var fat=parseMoney($('inputFat')),folha=parseMoney($('inputFolha'));
+    var bar=$('fatorRBar');
+    if(fat<=0||folha<=0){bar.style.display='none';return;}
+    bar.style.display='block';
+    var fr=folha/fat,pctVal=Math.min(fr*100,100);
+    $('fatorRValue').textContent=pctVal.toFixed(1)+'%';
+    var fill=$('fatorRFill');
+    fill.style.width=Math.min(pctVal,100)+'%';
+    var info=$('fatorRInfo');
+    if(fr>=0.28){fill.style.background='var(--accent)';info.style.color='var(--accent)';info.textContent='✅ ≥ 28% — Migra do Anexo V → III (alíquota mais baixa!)';}
+    else{fill.style.background='var(--red)';info.style.color='var(--red)';info.textContent='⚠️ < 28% — Permanece no Anexo V (alíquota mais alta)';}
+}
+
+// ─── MUNICIPALITY (IBGE API + estados.js merge) ───
+var _municipiosCache = {};  // UF → [{nome, iss, issConhecido, ibgeId}]
+var _munAtual = null;       // Município selecionado atualmente
+
+async function populateMunicipios(uf) {
+    var sel = $('selMunicipio');
+    var loading = $('munLoading');
+    var countEl = $('munCount');
+    var issInfo = $('issInfo');
+
+    // Reset
+    sel.innerHTML = '<option value="">Carregando municípios...</option>';
+    sel.disabled = true;
+    if (issInfo) issInfo.style.display = 'none';
+    _munAtual = null;
+
+    if (!uf) {
+        sel.innerHTML = '<option value="">Selecione o estado</option>';
+        if (countEl) countEl.textContent = '';
+        return;
+    }
+
+    // Show loading
+    if (loading) loading.style.display = 'block';
+
+    var municipios = [];
+
+    try {
+        // Tentar API IBGE via MunicipiosIBGE (municipios.js)
+        if (window.MunicipiosIBGE) {
+            municipios = await MunicipiosIBGE.buscarMunicipios(uf, ES);
+        } else {
+            throw new Error('MunicipiosIBGE não disponível');
+        }
+    } catch (err) {
+        console.warn('⚠️ Falha API IBGE para ' + uf + ':', err.message);
+        // Fallback: usar dados de estados.js
+        if (window.MunicipiosIBGE) {
+            municipios = MunicipiosIBGE.fallbackEstadosJS(uf, ES);
+        } else if (ES && ES[uf] && ES[uf].municipios) {
+            municipios = ES[uf].municipios.map(function (m) {
+                return { nome: m.nome, iss: m.iss || 5.00, issConhecido: true, ibgeId: null };
+            });
+        }
+    }
+
+    // Hide loading
+    if (loading) loading.style.display = 'none';
+
+    // Cache
+    _municipiosCache[uf] = municipios;
+
+    // Render select
+    sel.innerHTML = '';
+    var optDefault = document.createElement('option');
+    optDefault.value = '';
+    optDefault.textContent = 'Selecione o município (' + municipios.length + ')...';
+    sel.appendChild(optDefault);
+
+    for (var i = 0; i < municipios.length; i++) {
+        var m = municipios[i];
+        var opt = document.createElement('option');
+        opt.value = JSON.stringify({ nome: m.nome, iss: m.iss, issConhecido: m.issConhecido });
+        var issStr = m.iss.toFixed(1).replace('.', ',');
+        var sufixo = m.issConhecido ? '' : ' ≈';
+        opt.textContent = m.nome + ' (ISS: ' + issStr + '%' + sufixo + ')';
+        sel.appendChild(opt);
+    }
+
+    sel.disabled = false;
+    if (countEl) countEl.textContent = '(' + municipios.length + ' municípios)';
+
+    // Bind change
+    sel.onchange = function () {
+        var val = sel.value;
+        if (!val) {
+            _munAtual = null;
+            if (issInfo) issInfo.style.display = 'none';
+            return;
+        }
+        try {
+            _munAtual = JSON.parse(val);
+        } catch (e) {
+            _munAtual = null;
+        }
+        if (_munAtual && issInfo) {
+            if (window.MunicipiosIBGE) {
+                issInfo.innerHTML = MunicipiosIBGE.gerarDicaISS(_munAtual.issConhecido, _munAtual.nome);
+            } else {
+                issInfo.innerHTML = '<span style="color:var(--accent)">✓</span> ISS de <strong>' + _munAtual.nome + '</strong>: ' + _munAtual.iss.toFixed(1).replace('.', ',') + '%';
+            }
+            issInfo.style.display = 'block';
+        }
+    };
+
+    console.log('📍 ' + uf + ': ' + municipios.length + ' municípios carregados' +
+        (municipios.length > 0 && !municipios[0].ibgeId ? ' (fallback estados.js)' : ' (API IBGE)'));
+}
+
+function getISSAtual() {
+    if (_munAtual && _munAtual.iss) return _munAtual.iss / 100;
+    return 0.05; // Padrão 5%
+}
+
+// ─── EXECUTAR BUSCA ───
+function executarBusca(){
+    var texto=$('inputBusca').value.trim(),uf=$('selUF').value,fat=parseMoney($('inputFat'));
+    if(!texto){$('inputBusca').focus();return;}
+    if(!uf){alert('Selecione o Estado (UF)');$('selUF').focus();return;}
+    if(fat<=0){alert('Informe o faturamento mensal');$('inputFat').focus();return;}
+    var folha=parseMoney($('inputFolha'));if(folha<=0)folha=fat*0.30;
+    var munSel=$('selMunicipio');var issRate=getISSAtual();
+
+    $('resultsArea').innerHTML='<div style="display:flex;flex-direction:column;align-items:center;gap:14px;padding:50px 20px"><div class="spin"></div><div style="color:var(--text-muted);font-size:.9rem">Analisando '+(CNAE?CNAE.length.toLocaleString():'7.800')+' CNAEs...</div></div>';
+    $('resultsArea').style.display='block';
+
+    setTimeout(function(){
+        var res=buscar(texto);
+        var items=[];
+        for(var i=0;i<res.length;i++){
+            var it=res[i],regras=CM.obterRegrasCNAE(it.codigo,it.categoria);
+            var s=calcSimples(fat,folha,regras),p=calcPresumido(fat,folha,regras,uf,issRate),r=calcReal(fat,folha,regras,uf,issRate);
+            var menor=Math.min(s?s.total:Infinity,p.total,r.total);
+            var menorAe=Math.min(s?s.ae:Infinity,p.ae,r.ae);
+            var melhor='Lucro Real';
+            if(p.total<=r.total&&p.total<=(s?s.total:Infinity))melhor='L. Presumido';
+            if(s&&s.total<=p.total&&s.total<=r.total)melhor='Simples Nacional';
+            items.push({codigo:it.codigo,descricao:it.descricao,categoria:it.categoria,score:it.score,regras:regras,s:s,p:p,r:r,menor:menor,menorAe:menorAe,melhor:melhor,mono:CM.isMonofasico(it.codigo)});
+        }
+        items.sort(function(a,b){return a.menor-b.menor;});
+        lastItems=items;currentFilter='todos';
+        renderResultados(items,texto,uf,fat);
+        renderEstado(uf);
+    },300);
+}
+
+// ─── FILTER ───
+window._filter=function(f,btn){
+    currentFilter=f;
+    var pills=$$('.pill');for(var i=0;i<pills.length;i++)pills[i].classList.remove('active');
+    btn.classList.add('active');
+    var sorted=lastItems.slice();
+    if(f==='simples')sorted.sort(function(a,b){return(a.s?a.s.total:Infinity)-(b.s?b.s.total:Infinity);});
+    else if(f==='presumido')sorted.sort(function(a,b){return a.p.total-b.p.total;});
+    else if(f==='real')sorted.sort(function(a,b){return a.r.total-b.r.total;});
+    else sorted.sort(function(a,b){return a.menor-b.menor;});
+    // Update cards positions
+    var grid=$('cardsGrid');if(!grid)return;
+    var cards=grid.querySelectorAll('.r-card');
+    // Simple re-render of position numbers
+    for(var j=0;j<sorted.length&&j<cards.length;j++){
+        var pos=cards[j].querySelector('.pos');if(pos)pos.textContent='#'+(j+1);
+    }
+};
+
+// ─── GLOBALS ───
+window._nav=function(cod,cat){
+    try{localStorage.setItem('impost_prefill',JSON.stringify({cnae:cod,categoria:cat,uf:$('selUF').value,faturamento:parseMoney($('inputFat')),folha:parseMoney($('inputFolha'))}));}catch(e){}
+    window.location.href='analise.html';
+};
+window._copy=function(cod){
+    navigator.clipboard.writeText(cod).then(function(){
+        var t=document.createElement('div');t.className='toast';t.textContent='✅ '+cod+' copiado!';
+        document.body.appendChild(t);setTimeout(function(){t.remove();},2000);
+    });
+};
+window._exportCSV=function(){
+    if(!lastItems.length)return;
+    var csv='Posição;CNAE;Descrição;Categoria;Anexo;Simples;Presumido;Lucro Real;Melhor Regime\n';
+    for(var i=0;i<lastItems.length;i++){
+        var it=lastItems[i];
+        csv+=(i+1)+';'+it.codigo+';"'+it.descricao+'";'+it.categoria+';'+(it.regras.vedado?'Vedado':it.regras.anexo)+';'+(it.s?it.s.total.toFixed(2):'N/A')+';'+it.p.total.toFixed(2)+';'+it.r.total.toFixed(2)+';'+it.melhor+'\n';
+    }
+    var blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'});
+    var a=document.createElement('a');a.href=URL.createObjectURL(blob);
+    a.download='consultor-cnae-resultados.csv';a.click();
+    var t=document.createElement('div');t.className='toast';t.textContent='📥 CSV exportado!';document.body.appendChild(t);setTimeout(function(){t.remove();},2000);
+};
+
+// ─── AUTOCOMPLETE ───
+var acTimer=null;
+function showAutocomplete(text){
+    var box=$('autocomplete');
+    if(!cnaeIdx||text.length<2){box.style.display='none';return;}
+    var results=buscar(text).slice(0,8);
+    if(!results.length){box.style.display='none';return;}
+    var h='';
+    for(var i=0;i<results.length;i++){
+        h+='<div class="item" data-desc="'+results[i].descricao.replace(/"/g,'&quot;')+'" data-code="'+results[i].codigo+'">'
+          +'<span>'+results[i].descricao+'</span><span class="code">'+results[i].codigo+'</span></div>';
+    }
+    box.innerHTML=h;box.style.display='block';
+    var items=box.querySelectorAll('.item');
+    for(i=0;i<items.length;i++){
+        (function(el){
+            el.addEventListener('click',function(){
+                $('inputBusca').value=el.getAttribute('data-desc');
+                box.style.display='none';
+            });
+        })(items[i]);
+    }
+}
+
+// ─── POPULAR ESTADOS ───
+function popularEstados(){
+    var sel=$('selUF'),arr=[];
+    for(var s in ES){if(ES.hasOwnProperty(s)&&ES[s].nome)arr.push({s:s,n:ES[s].nome});}
+    arr.sort(function(a,b){return a.n.localeCompare(b.n);});
+    for(var i=0;i<arr.length;i++){var o=document.createElement('option');o.value=arr[i].s;o.textContent=arr[i].n+' ('+arr[i].s+')';if(arr[i].s==='PA')o.selected=true;sel.appendChild(o);}
+}
+
+// ─── BIND ───
+function bind(){
+    $('btnBuscar').addEventListener('click',executarBusca);
+    $('inputBusca').addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();$('autocomplete').style.display='none';executarBusca();}});
+    $('inputBusca').addEventListener('input',function(){clearTimeout(acTimer);var v=$('inputBusca').value;acTimer=setTimeout(function(){showAutocomplete(v);},200);});
+    document.addEventListener('click',function(e){if(!e.target.closest('.search-box'))$('autocomplete').style.display='none';});
+
+    // Smart money masks
+    ['inputFat','inputFolha'].forEach(function(id){
+        var el=$(id);
+        el.addEventListener('blur',function(){smartMask(el);updateFatorR();});
+        el.addEventListener('keydown',function(e){if(e.key==='Enter'){smartMask(el);updateFatorR();}});
+    });
+
+    // Tags
+    var tags=$$('.tag');for(var i=0;i<tags.length;i++){(function(t){t.addEventListener('click',function(){$('inputBusca').value=t.getAttribute('data-b');$('inputBusca').focus();});})(tags[i]);}
+
+    // State → municipalities
+    $('selUF').addEventListener('change',function(){var uf=$('selUF').value;populateMunicipios(uf).then(function(){renderEstado(uf);});});
+
+    // Info modal
+    $('btnInfo').addEventListener('click',function(){$('modalRegimes').classList.add('show');});
+    $('modalRegimes').addEventListener('click',function(e){if(e.target===$('modalRegimes'))$('modalRegimes').classList.remove('show');});
+
+    // Ctrl+Enter
+    document.addEventListener('keydown',function(e){if((e.ctrlKey||e.metaKey)&&e.key==='Enter')executarBusca();});
+}
+
+// ─── INIT ───
+function init(){
+    IF=window.ImpostosFederais;CM=window.CnaeMapeamento;
+
+    // ── Tentar a API nova (window.Estados / window.EstadosBR) ──
+    var API = window.Estados || window.EstadosBR;
+    if(API && typeof API.listarSiglas === 'function'){
+        ES={};
+        var siglas = API.listarSiglas();
+        var reg, dados, nome, icmsPadrao, icmsCesta, sublimite, municipios;
+        for(var i=0;i<siglas.length;i++){
+            var s = siglas[i];
+            reg = (API.UF_REGISTRY) ? API.UF_REGISTRY[s] : null;
+            try { dados = API.getEstado(s); } catch(e){ dados = null; }
+
+            nome = (reg && reg.nome)
+                || (dados && dados.dados_gerais && dados.dados_gerais.nome)
+                || s;
+
+            // ICMS
+            icmsPadrao = 0.18; icmsCesta = 0.07;
+            if(dados && dados.icms){
+                var ic = dados.icms;
+                if(typeof ic.aliquota_padrao==='number') icmsPadrao=ic.aliquota_padrao;
+                else if(typeof ic.aliquota_interna_padrao==='number') icmsPadrao=ic.aliquota_interna_padrao;
+                else if(typeof ic.aliquota_interna==='number') icmsPadrao=ic.aliquota_interna;
+                else if(typeof ic.aliquota_geral==='number') icmsPadrao=ic.aliquota_geral;
+                else if(ic.aliquotas_internas && ic.aliquotas_internas.geral){
+                    var g=ic.aliquotas_internas.geral;
+                    icmsPadrao = typeof g==='number' ? g : (g.aliquota||0.18);
+                }
+                if(typeof ic.cesta_basica==='number') icmsCesta=ic.cesta_basica;
+                else if(ic.aliquotas_diferenciadas){
+                    var dif=ic.aliquotas_diferenciadas;
+                    if(dif.cesta_basica && typeof dif.cesta_basica.aliquota==='number') icmsCesta=dif.cesta_basica.aliquota;
+                }
+            }
+
+            // Sublimite Simples
+            sublimite = 3600000;
+            if(dados && dados.simples_nacional){
+                var sn=dados.simples_nacional;
+                if(typeof sn.sublimite==='number') sublimite=sn.sublimite;
+                else if(typeof sn.sublimite_icms_iss==='number') sublimite=sn.sublimite_icms_iss;
+            }
+
+            // Municípios (ISS)
+            municipios = [];
+            if(dados && dados.iss && dados.iss.municipios){
+                municipios = dados.iss.municipios;
+            }
+
+            // Benefícios
+            var beneficios = { tem_sudam:false, tem_sudene:false, zona_franca:false, dica_economia:'' };
+            if(dados && dados.incentivos){
+                var inc=dados.incentivos;
+                if(inc.sudam||inc.SUDAM) beneficios.tem_sudam=true;
+                if(inc.sudene||inc.SUDENE) beneficios.tem_sudene=true;
+                if(inc.zona_franca||inc.ZFM) beneficios.zona_franca=true;
+                if(inc.dica_economia) beneficios.dica_economia=inc.dica_economia;
+            }
+            if(reg){
+                var regiao=(reg.regiao||'').toLowerCase();
+                if(regiao==='norte') beneficios.tem_sudam=true;
+                if(regiao==='nordeste') beneficios.tem_sudene=true;
+            }
+
+            ES[s] = {
+                nome: nome,
+                icms: { padrao: icmsPadrao, cesta_basica: icmsCesta },
+                sublimite_simples: sublimite,
+                municipios: municipios,
+                beneficios: beneficios
+            };
+        }
+        console.log('[Consultor CNAE v3.1] ' + Object.keys(ES).length + ' estados carregados via Estados API');
+    }
+
+    // ── Fallback legado (ESTADOS maiúsculo) ──
+    if(!ES){
+        if(typeof ESTADOS!=='undefined') ES=ESTADOS;
+        else if(window.ESTADOS) ES=window.ESTADOS;
+    }
+
+    if(!window.BANCO_CNAE){window.addEventListener('cnae-loaded',init);return;}
+    CNAE=window.BANCO_CNAE;
+    console.log('%c🔍 IMPOST. Consultor CNAE v3.1 (IBGE)','color:#16a34a;font-size:16px;font-weight:bold');
+    console.log('📊 '+CNAE.length+' CNAEs | IF:'+(IF?'✅':'❌')+' CM:'+(CM?'✅':'❌')+' ES:'+(ES?'✅':'❌')+' MunicípiosIBGE:'+(window.MunicipiosIBGE?'✅':'❌'));
+    $('loadingOverlay').style.display='none';$('mainContent').style.display='block';
+    buildIndex();
+    if(ES){popularEstados();populateMunicipios('PA').then(function(){renderEstado('PA');});}
+    bind();
+    setTimeout(function(){$('inputBusca').focus();},100);
+}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
+})();
+</script>
+</body>
+</html>

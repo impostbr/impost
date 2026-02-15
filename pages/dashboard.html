@@ -1,0 +1,798 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IMPOST. — Calculadora Tributária Inteligente | Brasil 2026</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            /* === PALETTE === */
+            --white: #ffffff;
+            --bg-body: #f0f4f8;
+            --bg-card: #ffffff;
+            --bg-sidebar: #0f172a;
+            --bg-sidebar-hover: #1e293b;
+
+            --blue: #2e86de;
+            --blue-light: #e8f4fd;
+            --blue-dark: #1a5fa8;
+
+            --green: #10b981;
+            --green-light: #ecfdf5;
+            --green-dark: #059669;
+
+            --orange: #f59e0b;
+            --orange-light: #fffbeb;
+            --orange-dark: #d97706;
+
+            --red: #ef4444;
+            --red-light: #fef2f2;
+            --red-dark: #dc2626;
+
+            --purple: #7c3aed;
+            --purple-light: #f3f0ff;
+
+            --cyan: #06b6d4;
+            --cyan-light: #ecfeff;
+
+            --pink: #ec4899;
+            --pink-light: #fdf2f8;
+
+            --text-primary: #0f172a;
+            --text-secondary: #475569;
+            --text-muted: #94a3b8;
+            --text-inverse: #f8fafc;
+
+            --border: #e2e8f0;
+            --border-hover: #cbd5e1;
+
+            --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
+            --shadow-md: 0 4px 12px rgba(0,0,0,0.06);
+            --shadow-lg: 0 8px 30px rgba(0,0,0,0.08);
+            --shadow-xl: 0 20px 60px rgba(0,0,0,0.1);
+
+            --font-body: 'Plus Jakarta Sans', system-ui, sans-serif;
+            --font-mono: 'Space Mono', monospace;
+
+            --radius-sm: 10px;
+            --radius-md: 14px;
+            --radius-lg: 20px;
+            --radius-xl: 24px;
+
+            --transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        *, *::before, *::after {
+            margin: 0; padding: 0; box-sizing: border-box;
+        }
+
+        html { scroll-behavior: smooth; }
+
+        body {
+            font-family: var(--font-body);
+            background: var(--bg-body);
+            color: var(--text-primary);
+            min-height: 100vh;
+            -webkit-font-smoothing: antialiased;
+            overflow-x: hidden;
+        }
+
+        /* === ANIMATED BACKGROUND === */
+        .bg-decor {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            pointer-events: none; z-index: 0; overflow: hidden;
+        }
+        .bg-decor::before {
+            content: '';
+            position: absolute;
+            top: -30%; right: -10%;
+            width: 700px; height: 700px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(46,134,222,0.07) 0%, transparent 70%);
+            animation: floatBlob 20s ease-in-out infinite;
+        }
+        .bg-decor::after {
+            content: '';
+            position: absolute;
+            bottom: -20%; left: -5%;
+            width: 500px; height: 500px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(16,185,129,0.06) 0%, transparent 70%);
+            animation: floatBlob 25s ease-in-out infinite reverse;
+        }
+        @keyframes floatBlob {
+            0%, 100% { transform: translate(0, 0) scale(1); }
+            33% { transform: translate(30px, -40px) scale(1.05); }
+            66% { transform: translate(-20px, 20px) scale(0.95); }
+        }
+
+        /* === MAIN WRAPPER === */
+        .wrapper {
+            position: relative; z-index: 1;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 32px 40px 60px;
+        }
+
+        /* === HEADER === */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 48px;
+            animation: fadeSlideDown 0.6s ease-out;
+        }
+
+        .logo {
+            display: flex; align-items: center; gap: 14px;
+        }
+        .logo-mark {
+            width: 52px; height: 52px;
+            border-radius: var(--radius-md);
+            background: linear-gradient(135deg, var(--green-dark), var(--green));
+            display: flex; align-items: center; justify-content: center;
+            font-weight: 800; font-size: 15px; color: var(--white);
+            letter-spacing: -0.5px;
+            box-shadow: 0 4px 16px rgba(16,185,129,0.35);
+            position: relative;
+            overflow: hidden;
+        }
+        .logo-mark::after {
+            content: '';
+            position: absolute; inset: 0;
+            background: linear-gradient(135deg, transparent 40%, rgba(255,255,255,0.2));
+        }
+        .logo-text {
+            font-size: 24px; font-weight: 800; letter-spacing: -0.8px;
+            color: var(--text-primary);
+        }
+        .logo-text span { color: var(--green); }
+        .logo-sub {
+            font-size: 12px; color: var(--text-muted);
+            font-weight: 500; letter-spacing: 0.3px;
+        }
+
+        .header-right {
+            display: flex; align-items: center; gap: 10px;
+        }
+        .badge {
+            padding: 7px 14px; border-radius: 50px;
+            font-size: 11px; font-weight: 700;
+            letter-spacing: 0.4px;
+            backdrop-filter: blur(8px);
+            border: 1px solid var(--border);
+        }
+        .badge-version {
+            background: var(--green-light);
+            color: var(--green-dark);
+            border-color: rgba(16,185,129,0.2);
+        }
+        .badge-status {
+            background: var(--blue-light);
+            color: var(--blue-dark);
+            border-color: rgba(46,134,222,0.2);
+            display: flex; align-items: center; gap: 7px;
+        }
+        .badge-dot {
+            width: 7px; height: 7px; border-radius: 50%;
+            background: var(--blue);
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(0.85); }
+        }
+
+        /* === HERO === */
+        .hero {
+            text-align: center;
+            margin-bottom: 52px;
+            animation: fadeSlideDown 0.6s ease-out 0.1s both;
+        }
+        .hero h1 {
+            font-size: 40px; font-weight: 800;
+            letter-spacing: -1.2px;
+            line-height: 1.15;
+            margin-bottom: 14px;
+            color: var(--text-primary);
+        }
+        .hero h1 .hl {
+            background: linear-gradient(135deg, var(--green), var(--blue));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .hero p {
+            font-size: 16px; color: var(--text-secondary);
+            max-width: 560px; margin: 0 auto;
+            line-height: 1.7; font-weight: 400;
+        }
+
+        /* === SECTION LABEL === */
+        .section-label {
+            display: flex; align-items: center; gap: 16px;
+            margin-bottom: 24px;
+        }
+        .section-label .line {
+            flex: 1; height: 1px;
+            background: linear-gradient(90deg, var(--border), transparent);
+        }
+        .section-label .line:last-child {
+            background: linear-gradient(90deg, transparent, var(--border));
+        }
+        .section-label .text {
+            font-size: 11px; font-weight: 800;
+            letter-spacing: 2px; text-transform: uppercase;
+            color: var(--text-muted);
+            white-space: nowrap;
+            padding: 6px 16px;
+            background: var(--bg-body);
+            border-radius: 50px;
+        }
+
+        /* === CARDS GRID === */
+        .cards-grid {
+            display: grid;
+            gap: 20px;
+            margin-bottom: 40px;
+        }
+        .grid-3 { grid-template-columns: repeat(3, 1fr); }
+        .grid-4 { grid-template-columns: repeat(4, 1fr); }
+        .grid-5 { grid-template-columns: repeat(5, 1fr); }
+
+        /* === CARD BASE === */
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            padding: 28px 24px;
+            text-decoration: none;
+            color: inherit;
+            position: relative;
+            overflow: hidden;
+            transition: all var(--transition);
+            display: flex;
+            flex-direction: column;
+            cursor: pointer;
+        }
+        .card:hover {
+            transform: translateY(-6px);
+            box-shadow: var(--shadow-xl);
+        }
+
+        /* Color stripe on top */
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 4px;
+            border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+            transition: height var(--transition);
+        }
+        .card:hover::before {
+            height: 5px;
+        }
+
+        /* Subtle corner glow on hover */
+        .card::after {
+            content: '';
+            position: absolute;
+            top: -40px; right: -40px;
+            width: 140px; height: 140px;
+            border-radius: 50%;
+            opacity: 0;
+            transition: opacity var(--transition);
+            pointer-events: none;
+        }
+        .card:hover::after {
+            opacity: 1;
+        }
+
+        /* === CARD FEATURED (análise) === */
+        .card-featured {
+            padding: 32px 28px;
+        }
+
+        .card-icon-wrap {
+            width: 52px; height: 52px;
+            border-radius: var(--radius-sm);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 26px;
+            margin-bottom: 18px;
+            transition: transform var(--transition);
+        }
+        .card:hover .card-icon-wrap {
+            transform: scale(1.08);
+        }
+
+        .card-num {
+            font-family: var(--font-mono);
+            font-size: 11px;
+            color: var(--text-muted);
+            font-weight: 700;
+            margin-bottom: 14px;
+            letter-spacing: 1px;
+        }
+
+        .card-title {
+            font-size: 17px; font-weight: 700;
+            letter-spacing: -0.3px;
+            margin-bottom: 8px;
+            color: var(--text-primary);
+        }
+        .card-featured .card-title {
+            font-size: 19px;
+        }
+
+        .card-desc {
+            font-size: 13px; color: var(--text-secondary);
+            line-height: 1.65; flex: 1;
+        }
+        .card-featured .card-desc {
+            font-size: 14px;
+        }
+
+        .card-tags {
+            display: flex; flex-wrap: wrap; gap: 6px;
+            margin-top: 16px;
+        }
+        .tag {
+            font-size: 10px; font-weight: 600;
+            padding: 4px 10px; border-radius: 50px;
+            letter-spacing: 0.3px;
+        }
+
+        .card-footer {
+            margin-top: 20px;
+            display: flex; align-items: center; justify-content: space-between;
+        }
+        .card-arrow {
+            display: flex; align-items: center; gap: 6px;
+            font-size: 13px; font-weight: 600;
+            opacity: 0;
+            transform: translateX(-8px);
+            transition: all var(--transition);
+        }
+        .card:hover .card-arrow {
+            opacity: 1;
+            transform: translateX(0);
+        }
+        .card-arrow svg {
+            width: 16px; height: 16px;
+            transition: transform var(--transition);
+        }
+        .card:hover .card-arrow svg {
+            transform: translateX(3px);
+        }
+
+        .card-status {
+            padding: 4px 10px;
+            border-radius: 50px;
+            font-size: 10px; font-weight: 700;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+        }
+        .status-ready { background: var(--green-light); color: var(--green-dark); }
+        .status-dev { background: var(--orange-light); color: var(--orange-dark); }
+        .status-new { background: var(--pink-light); color: var(--pink); }
+
+        /* === CARD COLOR THEMES === */
+
+        /* Green - Análise CNPJ */
+        .card-analise::before { background: linear-gradient(90deg, var(--green), var(--green-dark)); }
+        .card-analise .card-icon-wrap { background: var(--green-light); }
+        .card-analise .tag { background: var(--green-light); color: var(--green-dark); }
+        .card-analise .card-arrow { color: var(--green); }
+        .card-analise::after { background: radial-gradient(circle, rgba(16,185,129,0.08), transparent 70%); }
+        .card-analise:hover { border-color: rgba(16,185,129,0.3); }
+
+        /* Pink - Análise PF */
+        .card-pf::before { background: linear-gradient(90deg, var(--pink), #be185d); }
+        .card-pf .card-icon-wrap { background: var(--pink-light); }
+        .card-pf .tag { background: var(--pink-light); color: var(--pink); }
+        .card-pf .card-arrow { color: var(--pink); }
+        .card-pf::after { background: radial-gradient(circle, rgba(236,72,153,0.08), transparent 70%); }
+        .card-pf:hover { border-color: rgba(236,72,153,0.3); }
+
+        /* Cyan - Consultor CNAE */
+        .card-consultor::before { background: linear-gradient(90deg, var(--cyan), #0891b2); }
+        .card-consultor .card-icon-wrap { background: var(--cyan-light); }
+        .card-consultor .tag { background: var(--cyan-light); color: #0891b2; }
+        .card-consultor .card-arrow { color: var(--cyan); }
+        .card-consultor::after { background: radial-gradient(circle, rgba(6,182,212,0.08), transparent 70%); }
+        .card-consultor:hover { border-color: rgba(6,182,212,0.3); }
+
+        .card-lucroreal::before { background: linear-gradient(90deg, var(--purple), #6d28d9); }
+        .card-lucroreal .card-icon-wrap { background: var(--purple-light); }
+        .card-lucroreal .tag { background: var(--purple-light); color: var(--purple); }
+        .card-lucroreal .card-arrow { color: var(--purple); }
+        .card-lucroreal::after { background: radial-gradient(circle, rgba(124,58,237,0.08), transparent 70%); }
+        .card-lucroreal:hover { border-color: rgba(124,58,237,0.3); }
+
+        .card-presumido::before { background: linear-gradient(90deg, var(--orange), var(--orange-dark)); }
+        .card-presumido .card-icon-wrap { background: var(--orange-light); }
+        .card-presumido .tag { background: var(--orange-light); color: var(--orange-dark); }
+        .card-presumido .card-arrow { color: var(--orange); }
+        .card-presumido::after { background: radial-gradient(circle, rgba(245,158,11,0.08), transparent 70%); }
+        .card-presumido:hover { border-color: rgba(245,158,11,0.3); }
+
+        .card-simples::before { background: linear-gradient(90deg, var(--blue), var(--blue-dark)); }
+        .card-simples .card-icon-wrap { background: var(--blue-light); }
+        .card-simples .tag { background: var(--blue-light); color: var(--blue-dark); }
+        .card-simples .card-arrow { color: var(--blue); }
+        .card-simples::after { background: radial-gradient(circle, rgba(46,134,222,0.08), transparent 70%); }
+        .card-simples:hover { border-color: rgba(46,134,222,0.3); }
+
+        .card-mei::before { background: linear-gradient(90deg, #14b8a6, #0d9488); }
+        .card-mei .card-icon-wrap { background: #f0fdfa; }
+        .card-mei .tag { background: #f0fdfa; color: #0d9488; }
+        .card-mei .card-arrow { color: #14b8a6; }
+        .card-mei::after { background: radial-gradient(circle, rgba(20,184,166,0.08), transparent 70%); }
+        .card-mei:hover { border-color: rgba(20,184,166,0.3); }
+
+        /* Blue - Simulação */
+        .card-simulacao::before { background: linear-gradient(90deg, var(--blue), var(--blue-dark)); }
+        .card-simulacao .card-icon-wrap { background: var(--blue-light); }
+        .card-simulacao .card-arrow { color: var(--blue); }
+        .card-simulacao::after { background: radial-gradient(circle, rgba(46,134,222,0.08), transparent 70%); }
+        .card-simulacao:hover { border-color: rgba(46,134,222,0.3); }
+
+        /* Purple - CNAEs */
+        .card-cnaes::before { background: linear-gradient(90deg, var(--purple), #5b21b6); }
+        .card-cnaes .card-icon-wrap { background: var(--purple-light); }
+        .card-cnaes .card-arrow { color: var(--purple); }
+        .card-cnaes::after { background: radial-gradient(circle, rgba(124,58,237,0.08), transparent 70%); }
+        .card-cnaes:hover { border-color: rgba(124,58,237,0.3); }
+
+        /* Orange - Municípios */
+        .card-municipios::before { background: linear-gradient(90deg, var(--orange), var(--orange-dark)); }
+        .card-municipios .card-icon-wrap { background: var(--orange-light); }
+        .card-municipios .card-arrow { color: var(--orange); }
+        .card-municipios::after { background: radial-gradient(circle, rgba(245,158,11,0.08), transparent 70%); }
+        .card-municipios:hover { border-color: rgba(245,158,11,0.3); }
+
+        /* Red - Relatório */
+        .card-relatorio::before { background: linear-gradient(90deg, var(--red), var(--red-dark)); }
+        .card-relatorio .card-icon-wrap { background: var(--red-light); }
+        .card-relatorio .card-arrow { color: var(--red); }
+        .card-relatorio::after { background: radial-gradient(circle, rgba(239,68,68,0.08), transparent 70%); }
+        .card-relatorio:hover { border-color: rgba(239,68,68,0.3); }
+
+        /* Green dark - Legislação */
+        .card-legislacao::before { background: linear-gradient(90deg, #065f46, #047857); }
+        .card-legislacao .card-icon-wrap { background: #ecfdf5; }
+        .card-legislacao .card-arrow { color: #047857; }
+        .card-legislacao::after { background: radial-gradient(circle, rgba(4,120,87,0.08), transparent 70%); }
+        .card-legislacao:hover { border-color: rgba(4,120,87,0.3); }
+
+        /* === FOOTER === */
+        .footer {
+            text-align: center;
+            padding: 24px 0 0;
+            border-top: 1px solid var(--border);
+        }
+        .footer-inner {
+            font-size: 12px; color: var(--text-muted);
+            line-height: 2;
+        }
+        .footer a {
+            color: var(--green);
+            text-decoration: none;
+            font-weight: 600;
+        }
+        .footer a:hover {
+            text-decoration: underline;
+        }
+        .footer-brand {
+            font-weight: 800;
+            font-size: 13px;
+            color: var(--text-secondary);
+            letter-spacing: -0.3px;
+        }
+
+        /* === STAGGER ANIMATIONS === */
+        @keyframes fadeSlideDown {
+            from { opacity: 0; transform: translateY(-16px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes fadeSlideUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .section-anim { animation: fadeSlideUp 0.5s ease-out both; }
+        .section-anim:nth-child(1) { animation-delay: 0.15s; }
+        .section-anim:nth-child(2) { animation-delay: 0.25s; }
+        .section-anim:nth-child(3) { animation-delay: 0.35s; }
+
+        .card { animation: fadeSlideUp 0.5s ease-out both; }
+        .cards-grid .card:nth-child(1) { animation-delay: 0.2s; }
+        .cards-grid .card:nth-child(2) { animation-delay: 0.3s; }
+        .cards-grid .card:nth-child(3) { animation-delay: 0.4s; }
+        .cards-grid .card:nth-child(4) { animation-delay: 0.5s; }
+        .cards-grid .card:nth-child(5) { animation-delay: 0.6s; }
+        .cards-grid .card:nth-child(6) { animation-delay: 0.7s; }
+        .cards-grid .card:nth-child(7) { animation-delay: 0.8s; }
+
+        /* === RESPONSIVE === */
+        @media (max-width: 1024px) {
+            .grid-3 { grid-template-columns: repeat(2, 1fr); }
+            .grid-4 { grid-template-columns: repeat(2, 1fr); }
+            .grid-5 { grid-template-columns: repeat(3, 1fr); }
+        }
+        @media (max-width: 768px) {
+            .wrapper { padding: 24px 20px 48px; }
+            .header { flex-direction: column; gap: 16px; align-items: flex-start; margin-bottom: 36px; }
+            .hero { margin-bottom: 36px; text-align: left; }
+            .hero h1 { font-size: 30px; }
+            .hero p { margin: 0; }
+            .grid-3, .grid-4, .grid-5 { grid-template-columns: 1fr; }
+            .card-featured { padding: 24px 20px; }
+        }
+        @media (max-width: 480px) {
+            .hero h1 { font-size: 26px; }
+            .header-right { flex-wrap: wrap; }
+        }
+
+        /* === KEYBOARD HINT === */
+        .kbd-hint {
+            position: fixed;
+            bottom: 20px; right: 20px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            padding: 10px 14px;
+            font-size: 11px;
+            color: var(--text-muted);
+            box-shadow: var(--shadow-md);
+            opacity: 0;
+            transform: translateY(8px);
+            transition: all var(--transition);
+            pointer-events: none;
+        }
+        .kbd-hint.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        kbd {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 4px;
+            background: var(--bg-body);
+            border: 1px solid var(--border);
+            font-family: var(--font-mono);
+            font-size: 10px;
+            font-weight: 700;
+            color: var(--text-secondary);
+        }
+    </style>
+</head>
+<body>
+
+<div class="bg-decor"></div>
+
+<div class="wrapper">
+
+    <!-- ═══ HEADER ═══ -->
+    <header class="header">
+        <div class="logo">
+            <div class="logo-mark">IM</div>
+            <div>
+                <div class="logo-text">IMPOST<span>.</span></div>
+                <div class="logo-sub">Inteligência Tributária</div>
+            </div>
+        </div>
+        <div class="header-right">
+            <div class="badge badge-version">v2.0 · Fev/2026</div>
+            <div class="badge badge-status"><span class="badge-dot"></span> Brasil</div>
+        </div>
+    </header>
+
+    <!-- ═══ HERO ═══ -->
+    <div class="hero">
+        <h1>Calculadora Tributária <span class="hl">Inteligente</span></h1>
+        <p>Compare regimes tributários, simule cenários e descubra a melhor opção fiscal para sua empresa ou pessoa física.</p>
+    </div>
+
+    <!-- ═══ SEÇÃO: ANÁLISE TRIBUTÁRIA ═══ -->
+    <div class="section-label section-anim">
+        <span class="line"></span>
+        <span class="text">Análise Tributária</span>
+        <span class="line"></span>
+    </div>
+
+    <div class="cards-grid grid-3" style="margin-bottom:40px">
+        <a class="card card-analise card-featured" href="analise.html">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">
+                <div class="card-num">01</div>
+                <span class="card-status status-ready">Pronto</span>
+            </div>
+            <div class="card-icon-wrap">🏢</div>
+            <div class="card-title">Análise Inicial — CNPJ</div>
+            <div class="card-desc">Compare Simples Nacional, Lucro Presumido e Lucro Real. Cálculo completo com CNAE, Fator R, SUDAM e impacto no bolso do sócio.</div>
+            <div class="card-tags">
+                <span class="tag">Simples Nacional</span>
+                <span class="tag">Lucro Presumido</span>
+                <span class="tag">Lucro Real</span>
+                <span class="tag">Fator R</span>
+            </div>
+            <div class="card-footer">
+                <div class="card-arrow">
+                    Abrir módulo
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+                </div>
+            </div>
+        </a>
+
+        <a class="card card-pf card-featured" href="analise-pf.html">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">
+                <div class="card-num">02</div>
+                <span class="card-status status-ready">Pronto</span>
+            </div>
+            <div class="card-icon-wrap">👤</div>
+            <div class="card-title">Análise Inicial — Pessoa Física</div>
+            <div class="card-desc">Compare CLT, Autônomo RPA, MEI e PJ. Descubra quanto sobra no bolso em cada cenário com IRPF 2026 e redutor atualizado.</div>
+            <div class="card-tags">
+                <span class="tag">CLT</span>
+                <span class="tag">Autônomo RPA</span>
+                <span class="tag">MEI</span>
+                <span class="tag">IRPF 2026</span>
+            </div>
+            <div class="card-footer">
+                <div class="card-arrow">
+                    Abrir módulo
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+                </div>
+            </div>
+        </a>
+
+        <a class="card card-consultor card-featured" href="consultor-cnae.html">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">
+                <div class="card-num">03</div>
+                <span class="card-status status-ready">Pronto</span>
+            </div>
+            <div class="card-icon-wrap">🔍</div>
+            <div class="card-title">Consultor de CNAE</div>
+            <div class="card-desc">Descreva o que sua empresa faz e descubra os CNAEs com menor imposto. Ranking automático nos 3 regimes tributários.</div>
+            <div class="card-tags">
+                <span class="tag">7.800 CNAEs</span>
+                <span class="tag">Ranking</span>
+                <span class="tag">3 Regimes</span>
+                <span class="tag">Offline</span>
+            </div>
+            <div class="card-footer">
+                <div class="card-arrow">
+                    Abrir módulo
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+                </div>
+            </div>
+        </a>
+    </div>
+
+    <!-- ═══ SEÇÃO: ESTUDOS DETALHADOS ═══ -->
+    <div class="section-label section-anim">
+        <span class="line"></span>
+        <span class="text">Estudos Detalhados</span>
+        <span class="line"></span>
+    </div>
+
+    <div class="cards-grid grid-4" style="margin-bottom:40px">
+        <a class="card card-lucroreal card-featured" href="lucro-real-estudos.html">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">
+                <div class="card-num">04</div>
+                <span class="card-status status-ready">Pronto</span>
+            </div>
+            <div class="card-icon-wrap">📊</div>
+            <div class="card-title">Estudo Lucro Real</div>
+            <div class="card-desc">Análise detalhada do regime de Lucro Real. Simule DRE, apuração trimestral/anual, IRPJ, CSLL, PIS/COFINS e compare cenários.</div>
+            <div class="card-tags">
+                <span class="tag">Lucro Real</span>
+                <span class="tag">IRPJ/CSLL</span>
+                <span class="tag">DRE</span>
+                <span class="tag">PIS/COFINS</span>
+            </div>
+            <div class="card-footer">
+                <div class="card-arrow">
+                    Abrir módulo
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+                </div>
+            </div>
+        </a>
+
+        <a class="card card-presumido card-featured" href="lucro-presumido-estudos.html">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">
+                <div class="card-num">05</div>
+                <span class="card-status status-ready">Pronto</span>
+            </div>
+            <div class="card-icon-wrap">📋</div>
+            <div class="card-title">Estudo Lucro Presumido</div>
+            <div class="card-desc">Simulação completa do Lucro Presumido. Presunções por atividade, IRPJ, CSLL, PIS, COFINS e adicional de IR com comparativos.</div>
+            <div class="card-tags">
+                <span class="tag">Lucro Presumido</span>
+                <span class="tag">Presunção</span>
+                <span class="tag">IRPJ/CSLL</span>
+                <span class="tag">Trimestral</span>
+            </div>
+            <div class="card-footer">
+                <div class="card-arrow">
+                    Abrir módulo
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+                </div>
+            </div>
+        </a>
+
+        <a class="card card-simples card-featured" href="simples-estudos.html">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">
+                <div class="card-num">06</div>
+                <span class="card-status status-ready">Pronto</span>
+            </div>
+            <div class="card-icon-wrap">📘</div>
+            <div class="card-title">Estudo Simples Nacional</div>
+            <div class="card-desc">Cálculo detalhado do Simples Nacional. Anexos I a V, Fator R, faixas progressivas, sublimite ICMS/ISS e partilha de tributos.</div>
+            <div class="card-tags">
+                <span class="tag">Simples Nacional</span>
+                <span class="tag">Anexos I-V</span>
+                <span class="tag">Fator R</span>
+                <span class="tag">Partilha</span>
+            </div>
+            <div class="card-footer">
+                <div class="card-arrow">
+                    Abrir módulo
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+                </div>
+            </div>
+        </a>
+
+        <a class="card card-mei card-featured" href="mei-estudos.html">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">
+                <div class="card-num">07</div>
+                <span class="card-status status-ready">Pronto</span>
+            </div>
+            <div class="card-icon-wrap">🧾</div>
+            <div class="card-title">Estudo MEI</div>
+            <div class="card-desc">Análise completa do MEI. Limites de faturamento, DAS mensal, atividades permitidas, obrigações e transição para ME.</div>
+            <div class="card-tags">
+                <span class="tag">MEI</span>
+                <span class="tag">DAS</span>
+                <span class="tag">Limite R$ 81k</span>
+                <span class="tag">Transição ME</span>
+            </div>
+            <div class="card-footer">
+                <div class="card-arrow">
+                    Abrir módulo
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+                </div>
+            </div>
+        </a>
+    </div>
+
+    <!-- ═══ FOOTER ═══ -->
+    <footer class="footer">
+        <div class="footer-inner">
+            <span class="footer-brand">IMPOST.</span> — Inteligência em Modelagem e Otimização Tributária<br>
+            Desenvolvido por <a href="#">AGROGEO BRASIL</a> · Novo Progresso — PA<br>
+            Dados atualizados para o exercício fiscal 2026
+        </div>
+    </footer>
+
+</div>
+
+<!-- Keyboard hint -->
+<div class="kbd-hint" id="kbdHint">
+    <kbd>Alt</kbd> + <kbd>1-8</kbd> navegar &nbsp;|&nbsp; <kbd>Alt</kbd> + <kbd>B</kbd> sidebar
+</div>
+
+<script>
+// Show keyboard hint briefly
+setTimeout(() => {
+    const hint = document.getElementById('kbdHint');
+    if (hint) { hint.classList.add('show'); }
+    setTimeout(() => { if (hint) hint.classList.remove('show'); }, 4000);
+}, 2000);
+</script>
+
+</body>
+</html>

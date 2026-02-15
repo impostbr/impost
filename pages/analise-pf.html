@@ -1,0 +1,1481 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IMPOST. — Inteligência Tributária | Análise PF 2026</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root {
+  --bg-page: #f0f2f5;
+  --bg-card: #ffffff;
+  --bg-input: #f8f9fa;
+  --border: #e0e0e0;
+  --border-focus: #4CAF50;
+  --text-dark: #1a1a2e;
+  --text-body: #333333;
+  --text-muted: #777777;
+  --text-light: #999999;
+  --blue: #2196F3;
+  --blue-light: #E3F2FD;
+  --blue-dark: #1565C0;
+  --green: #4CAF50;
+  --green-light: #E8F5E9;
+  --green-dark: #2E7D32;
+  --green-btn: #3D9970;
+  --orange: #FF9800;
+  --orange-light: #FFF3E0;
+  --orange-dark: #E65100;
+  --red: #F44336;
+  --red-light: #FFEBEE;
+  --red-dark: #C62828;
+  --yellow: #FFC107;
+  --yellow-light: #FFFDE7;
+  --teal: #26A69A;
+  --purple: #7E57C2;
+  --shadow-sm: 0 1px 3px rgba(0,0,0,.08);
+  --shadow-md: 0 4px 12px rgba(0,0,0,.1);
+  --shadow-lg: 0 8px 30px rgba(0,0,0,.12);
+  --font: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --mono: 'JetBrains Mono', monospace;
+  --radius: 10px;
+  --radius-sm: 6px;
+  --radius-lg: 14px;
+  --transition: .25s ease;
+}
+*, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+html { scroll-behavior:smooth; }
+body { font-family:var(--font); background:var(--bg-page); color:var(--text-body); line-height:1.6; min-height:100vh; }
+
+/* ═══ LAYOUT ═══ */
+.container { max-width:960px; margin:0 auto; padding:20px 16px 60px; }
+
+/* ═══ HEADER ═══ */
+.topbar {
+  background:var(--bg-card); border-bottom:1px solid var(--border);
+  box-shadow:var(--shadow-sm); padding:14px 24px; display:flex;
+  align-items:center; justify-content:space-between; margin-bottom:24px;
+  border-radius:var(--radius-lg); position:sticky; top:8px; z-index:100;
+}
+.topbar-brand { display:flex; align-items:center; gap:12px; }
+.topbar-brand h1 { font-size:1.5rem; font-weight:900; letter-spacing:-.02em; color:var(--text-dark); }
+.topbar-brand h1 span { color:var(--green); }
+.topbar-brand .pipe { color:var(--border); font-weight:300; margin:0 4px; }
+.topbar-brand .sub { font-size:.85rem; font-weight:500; color:var(--text-muted); }
+.btn-back {
+  display:inline-flex; align-items:center; gap:6px; padding:8px 18px;
+  background:var(--green-btn); color:#fff; border:none; border-radius:25px;
+  font-family:var(--font); font-size:.85rem; font-weight:600;
+  cursor:pointer; transition:all var(--transition); text-decoration:none;
+}
+.btn-back:hover { background:var(--green-dark); transform:translateY(-1px); box-shadow:var(--shadow-md); }
+
+.page-title {
+  text-align:center; margin-bottom:28px;
+}
+.page-title h2 { font-size:1.6rem; font-weight:800; color:var(--text-dark); }
+.page-title p { color:var(--text-muted); font-size:.9rem; margin-top:2px; }
+.badge-lei {
+  display:inline-block; background:var(--green-light); color:var(--green-dark);
+  font-size:.72rem; font-weight:700; font-family:var(--mono); padding:4px 12px;
+  border-radius:20px; margin-top:8px; letter-spacing:.03em;
+  border:1px solid rgba(76,175,80,.2);
+}
+
+/* ═══ SECTIONS ═══ */
+.section {
+  background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-lg);
+  padding:24px; margin-bottom:16px; box-shadow:var(--shadow-sm);
+  transition:box-shadow var(--transition);
+}
+.section:hover { box-shadow:var(--shadow-md); }
+.section-header {
+  display:flex; align-items:center; gap:10px; margin-bottom:20px;
+  padding-bottom:12px; border-bottom:2px solid var(--bg-page);
+}
+.section-num {
+  width:28px; height:28px; border-radius:50%; display:flex;
+  align-items:center; justify-content:center; font-family:var(--mono);
+  font-size:.8rem; font-weight:700; color:#fff; flex-shrink:0;
+}
+.section-num.n1 { background:var(--blue); }
+.section-num.n2 { background:var(--green); }
+.section-num.n3 { background:var(--orange); }
+.section-title { font-size:1rem; font-weight:700; color:var(--text-dark); }
+
+/* ═══ FORM ═══ */
+.field { margin-bottom:14px; }
+.field-row { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+@media(max-width:640px){ .field-row{grid-template-columns:1fr} }
+label { display:block; font-size:.82rem; font-weight:600; color:var(--text-muted); margin-bottom:5px; }
+label .hint { font-weight:400; color:var(--text-light); font-size:.75rem; }
+input[type="text"], input[type="number"], select {
+  width:100%; padding:10px 14px; background:var(--bg-input); border:1.5px solid var(--border);
+  border-radius:var(--radius-sm); color:var(--text-body); font-family:var(--font);
+  font-size:.92rem; outline:none; transition:all var(--transition);
+}
+input:focus, select:focus { border-color:var(--green); box-shadow:0 0 0 3px rgba(76,175,80,.15); }
+input.money { font-family:var(--mono); font-weight:600; font-size:.95rem; color:var(--green-dark); }
+select {
+  cursor:pointer; appearance:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23777' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat:no-repeat; background-position:right 12px center; padding-right:36px;
+}
+input::placeholder { color:var(--text-light); }
+
+.slider-group { display:flex; align-items:center; gap:12px; }
+.slider-group input[type="range"] {
+  flex:1; height:6px; -webkit-appearance:none; background:var(--border);
+  border-radius:3px; outline:none;
+}
+.slider-group input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance:none; width:22px; height:22px; border-radius:50%;
+  background:var(--green); cursor:pointer; box-shadow:0 2px 6px rgba(76,175,80,.3);
+}
+.slider-value {
+  font-family:var(--mono); font-weight:700; color:var(--green-dark);
+  font-size:1.1rem; min-width:24px; text-align:center;
+  background:var(--green-light); padding:2px 10px; border-radius:20px;
+}
+
+/* ═══ BUTTONS ═══ */
+.btn-calcular {
+  width:100%; padding:15px; background:var(--green-btn); color:#fff;
+  font-family:var(--font); font-size:1.05rem; font-weight:700; border:none;
+  border-radius:25px; cursor:pointer; transition:all var(--transition);
+  letter-spacing:.02em; margin-top:8px; box-shadow:var(--shadow-sm);
+}
+.btn-calcular:hover:not(:disabled) { background:var(--green-dark); transform:translateY(-2px); box-shadow:var(--shadow-lg); }
+.btn-calcular:disabled { opacity:.45; cursor:not-allowed; }
+
+.btn-action {
+  display:inline-flex; align-items:center; gap:8px; padding:10px 22px;
+  border:none; border-radius:25px; font-family:var(--font); font-size:.88rem;
+  font-weight:600; cursor:pointer; transition:all var(--transition);
+  box-shadow:var(--shadow-sm);
+}
+.btn-action:hover { transform:translateY(-1px); box-shadow:var(--shadow-md); }
+.btn-action.primary { background:var(--green-btn); color:#fff; }
+.btn-action.primary:hover { background:var(--green-dark); }
+.btn-action.blue { background:var(--blue); color:#fff; }
+.btn-action.blue:hover { background:var(--blue-dark); }
+.btn-action.orange { background:var(--orange); color:#fff; }
+.btn-action.orange:hover { background:var(--orange-dark); }
+.btn-action.outline { background:#fff; color:var(--text-body); border:1.5px solid var(--border); }
+.btn-action.outline:hover { border-color:var(--green); color:var(--green-dark); }
+
+/* ═══ RESULTS ═══ */
+.winner-card {
+  background:linear-gradient(135deg, var(--green-light), #f0fff4);
+  border:2px solid var(--green); border-radius:var(--radius-lg);
+  padding:28px; text-align:center; margin-bottom:20px; box-shadow:var(--shadow-md);
+}
+.winner-label { font-size:.72rem; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:var(--green-dark); margin-bottom:4px; }
+.winner-regime { font-size:1.5rem; font-weight:900; color:var(--text-dark); margin-bottom:4px; }
+.winner-value { font-family:var(--mono); font-size:1.4rem; font-weight:700; color:var(--green-dark); }
+.winner-sub { color:var(--text-muted); font-size:.82rem; margin-top:6px; }
+
+.regime-cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:14px; margin-bottom:20px; }
+.regime-card {
+  background:var(--bg-card); border:1.5px solid var(--border); border-radius:var(--radius);
+  padding:18px; position:relative; transition:all var(--transition); box-shadow:var(--shadow-sm);
+}
+.regime-card:hover { box-shadow:var(--shadow-md); }
+.regime-card.pos-1 { border-color:var(--green); border-width:2px; box-shadow:0 4px 16px rgba(76,175,80,.15); }
+.regime-card.pos-2 { border-color:var(--blue); }
+.regime-card.pos-3 { border-color:var(--orange); }
+.regime-name { font-weight:700; font-size:.92rem; color:var(--text-dark); margin-bottom:6px; }
+.regime-total { font-family:var(--mono); font-size:1.15rem; font-weight:700; color:var(--green-dark); }
+.regime-aliq { color:var(--text-muted); font-size:.78rem; margin-top:2px; font-family:var(--mono); }
+.regime-breakdown { margin-top:10px; border-top:1px solid var(--bg-page); padding-top:10px; }
+.regime-ineligible { color:var(--red); font-size:.82rem; font-style:italic; }
+.medal { position:absolute; top:10px; right:12px; font-size:1.2rem; }
+.bk-row { display:flex; justify-content:space-between; font-size:.8rem; padding:2px 0; color:var(--text-muted); }
+
+/* Tables */
+.detail-table { width:100%; border-collapse:collapse; margin:16px 0; font-size:.82rem; background:var(--bg-card); border-radius:var(--radius); overflow:hidden; box-shadow:var(--shadow-sm); }
+.detail-table th { background:var(--green-btn); color:#fff; padding:12px 14px; text-align:left; font-weight:700; }
+.detail-table td { padding:11px 14px; border-bottom:1px solid var(--bg-page); font-family:var(--mono); font-size:.8rem; }
+.detail-table tr:last-child td { border-bottom:none; }
+.detail-table tr:hover td { background:var(--green-light); }
+
+/* Chart */
+.chart-section { text-align:center; margin:20px 0; }
+.chart-title { font-size:.9rem; font-weight:700; color:var(--text-dark); margin-bottom:12px; }
+.chart-bars { display:flex; align-items:flex-end; justify-content:center; gap:24px; min-height:200px; }
+.chart-bar-item { display:flex; flex-direction:column; align-items:center; gap:6px; }
+.chart-bar { width:60px; border-radius:8px 8px 0 0; transition:height .6s cubic-bezier(.34,1.56,.64,1); min-height:4px; }
+.chart-bar-label { font-size:.72rem; color:var(--text-muted); text-align:center; max-width:90px; font-weight:600; }
+.chart-bar-value { font-family:var(--mono); font-size:.75rem; font-weight:700; color:var(--text-dark); }
+
+/* Info cards */
+.info-card {
+  background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius);
+  padding:18px; margin-bottom:14px; box-shadow:var(--shadow-sm);
+}
+.info-card h4 { font-size:.9rem; font-weight:700; color:var(--text-dark); margin-bottom:12px; padding-bottom:8px; border-bottom:2px solid var(--bg-page); }
+.info-card h4 .icon { margin-right:6px; }
+.info-row { display:flex; justify-content:space-between; padding:5px 0; font-size:.82rem; color:var(--text-muted); }
+.info-row.total { border-top:2px solid var(--bg-page); margin-top:6px; padding-top:8px; font-weight:700; color:var(--text-dark); }
+
+/* Alerts */
+.alert-item { padding:8px 12px; font-size:.8rem; margin-bottom:5px; border-radius:0 var(--radius-sm) var(--radius-sm) 0; }
+.alert-item.warn { background:var(--orange-light); border-left:3px solid var(--orange); color:var(--orange-dark); }
+.alert-item.info { background:var(--blue-light); border-left:3px solid var(--blue); color:var(--blue-dark); }
+.alert-item.good { background:var(--green-light); border-left:3px solid var(--green); color:var(--green-dark); }
+
+/* Actions */
+.action-bar { display:flex; gap:10px; margin-top:24px; flex-wrap:wrap; align-items:center; }
+
+/* Disclaimer */
+.disclaimer {
+  background:var(--blue-light); border:1px solid rgba(33,150,243,.2);
+  border-radius:var(--radius); padding:16px; margin-top:20px;
+  font-size:.78rem; color:var(--blue-dark); line-height:1.7;
+}
+.disclaimer strong { color:var(--blue); }
+
+/* Didatic explainer */
+.explainer {
+  background:var(--yellow-light); border:1px solid rgba(255,193,7,.3);
+  border-radius:var(--radius); padding:16px 18px; margin-bottom:16px;
+}
+.explainer h4 { font-size:.88rem; color:var(--orange-dark); margin-bottom:6px; }
+.explainer p { font-size:.82rem; color:var(--text-body); line-height:1.6; }
+.explainer ul { font-size:.82rem; margin:6px 0 0 18px; color:var(--text-body); }
+.explainer ul li { margin-bottom:3px; }
+
+/* Tabs */
+.tabs-nav {
+  display:flex; gap:4px; background:var(--bg-card); border:1px solid var(--border);
+  border-radius:var(--radius-lg); padding:5px; margin-bottom:16px; box-shadow:var(--shadow-sm);
+}
+.tab-btn {
+  flex:1; padding:12px 16px; border:none; border-radius:10px; background:transparent;
+  font-family:var(--font); font-size:.88rem; font-weight:600; color:var(--text-muted);
+  cursor:pointer; transition:all var(--transition); text-align:center;
+}
+.tab-btn:hover { background:var(--bg-page); color:var(--text-body); }
+.tab-btn.active { background:var(--green-btn); color:#fff; box-shadow:var(--shadow-sm); }
+
+/* ═══ ESTADO INFO PANEL ═══ */
+#estadoInfoPanel {
+  display:none; background:var(--bg-input); border:1px solid rgba(76,175,80,.25);
+  border-radius:var(--radius); padding:18px; margin-top:14px;
+  animation:fadeSlideIn .3s ease;
+}
+@keyframes fadeSlideIn { from{opacity:0;transform:translateY(-6px)} to{opacity:1;transform:translateY(0)} }
+.estado-panel-header {
+  display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;
+}
+.estado-panel-header h4 {
+  font-size:.95rem; font-weight:700; color:var(--green-dark);
+  display:flex; align-items:center; gap:8px;
+}
+.estado-panel-header .regiao-badge {
+  font-size:.68rem; font-weight:700; padding:2px 10px; border-radius:10px;
+  background:var(--green-light); color:var(--green-dark);
+}
+.estado-panel-header .status-badge {
+  font-size:.68rem; font-weight:600; padding:2px 8px; border-radius:10px;
+}
+.estado-panel-header .status-badge.ok { background:var(--green-light); color:var(--green-dark); }
+.estado-panel-header .status-badge.warn { background:var(--orange-light); color:var(--orange-dark); }
+.estado-grid {
+  display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px;
+}
+@media(max-width:640px){ .estado-grid{grid-template-columns:1fr 1fr} }
+@media(max-width:420px){ .estado-grid{grid-template-columns:1fr} }
+.estado-imposto-card {
+  background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-sm);
+  padding:12px; transition:border-color var(--transition);
+}
+.estado-imposto-card:hover { border-color:var(--green); }
+.estado-imposto-card .card-label {
+  font-size:.7rem; font-weight:700; color:var(--text-muted);
+  text-transform:uppercase; letter-spacing:.05em; margin-bottom:3px;
+}
+.estado-imposto-card .card-value {
+  font-family:var(--mono); font-size:1.05rem; font-weight:700; color:var(--text-dark);
+}
+.estado-imposto-card .card-detail {
+  font-size:.72rem; color:var(--text-light); margin-top:2px;
+}
+.estado-incentivos { margin-top:12px; display:flex; flex-wrap:wrap; gap:6px; }
+.incentivo-tag {
+  font-size:.7rem; font-weight:700; padding:3px 10px; border-radius:10px;
+  display:inline-flex; align-items:center; gap:4px;
+}
+.incentivo-tag.ativo { background:var(--green-light); color:var(--green-dark); }
+.incentivo-tag.inativo { background:var(--bg-page); color:var(--text-light); }
+.estado-dicas {
+  margin-top:12px; padding:10px 14px; background:var(--blue-light);
+  border-left:3px solid var(--blue); border-radius:0 var(--radius-sm) var(--radius-sm) 0;
+  font-size:.82rem; color:var(--text-body); line-height:1.6;
+}
+.estado-dicas strong { color:var(--blue-dark); }
+.estado-st-alert {
+  margin-top:8px; padding:8px 12px; background:var(--orange-light);
+  border-left:3px solid var(--orange); border-radius:0 var(--radius-sm) var(--radius-sm) 0;
+  font-size:.78rem; color:var(--text-body);
+}
+/* Ranking ICMS Mini */
+.ranking-mini {
+  background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-sm);
+  padding:12px; margin-top:14px;
+}
+.ranking-mini h5 { font-size:.82rem; font-weight:700; color:var(--green-dark); margin-bottom:10px; }
+.ranking-row { display:flex; align-items:center; gap:8px; padding:4px 0; font-size:.8rem; }
+.ranking-row .rank-pos {
+  font-family:var(--mono); font-size:.72rem; font-weight:700;
+  width:22px; height:22px; border-radius:50%;
+  display:flex; align-items:center; justify-content:center; flex-shrink:0;
+}
+.ranking-row .rank-pos.pos-1 { background:var(--green-light); color:var(--green-dark); }
+.ranking-row .rank-pos.pos-2 { background:var(--blue-light); color:var(--blue-dark); }
+.ranking-row .rank-pos.pos-3 { background:var(--orange-light); color:var(--orange-dark); }
+.ranking-row .rank-pos.pos-other { background:var(--bg-page); color:var(--text-light); }
+.ranking-row .rank-uf { font-weight:600; color:var(--text-dark); min-width:32px; }
+.ranking-row .rank-bar { flex:1; height:6px; background:var(--border); border-radius:3px; overflow:hidden; }
+.ranking-row .rank-bar-fill { height:100%; border-radius:3px; transition:width .5s ease; }
+.ranking-row .rank-value { font-family:var(--mono); font-weight:600; font-size:.78rem; min-width:50px; text-align:right; }
+.ranking-row.current { background:var(--green-light); border-radius:4px; padding:4px 6px; }
+.ranking-row.current .rank-uf { color:var(--green-dark); }
+
+.hidden { display:none !important; }
+@keyframes fadeIn { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
+.fade-in { animation:fadeIn .5s ease forwards; }
+@media print { .topbar,.action-bar,.btn-calcular{display:none!important} body{background:#fff} .container{padding:0} }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <!-- ═══ TOPBAR ═══ -->
+  <div class="topbar">
+    <div class="topbar-brand">
+      <h1>IMPOST<span>.</span></h1>
+      <span class="pipe">|</span>
+      <span class="sub">Inteligência Tributária</span>
+    </div>
+    <a href="dashboard.html" class="btn-back">← Voltar ao Dashboard</a>
+  </div>
+
+  <!-- ═══ TITLE ═══ -->
+  <div class="page-title">
+    <h2>📊 Simulador de Impostos — Pessoa Física 2026</h2>
+    <p>Compare CLT, Autônomo, MEI e PJ Simples Nacional em segundos + impacto da Reforma Tributária</p>
+    <div class="badge-lei">LEI Nº 15.270/2025 · PORTARIA MPS/MF 13/2026 · EC 132/2023 · LC 214/2025 · ATUALIZADO FEV/2026</div>
+  </div>
+
+  <!-- ═══ FORM ═══ -->
+  <div id="formArea">
+
+    <!-- Explainer didático -->
+    <div class="explainer">
+      <h4>💡 Como funciona?</h4>
+      <p>Preencha sua <strong>renda bruta mensal</strong> e os parâmetros desejados. O sistema calcula automaticamente os impostos em <strong>4 cenários diferentes</strong> e mostra qual é o mais vantajoso para você:</p>
+      <ul>
+        <li><strong>CLT</strong> — Empregado com carteira, INSS progressivo + IRPF</li>
+        <li><strong>Autônomo (RPA)</strong> — Recibo de Pagamento, INSS 20% + IRPF + ISS</li>
+        <li><strong>MEI</strong> — DAS fixo ~R$ 86/mês (limite R$ 81 mil/ano)</li>
+        <li><strong>PJ Simples Nacional</strong> — Anexo III ou V, pró-labore + dividendos</li>
+      </ul>
+    </div>
+
+    <div class="section">
+      <div class="section-header">
+        <span class="section-num n1">1</span>
+        <span class="section-title">Dados da Renda e Deduções</span>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label for="inputRenda">Renda Bruta Mensal <span class="hint">(obrigatório)</span></label>
+          <input type="text" id="inputRenda" class="money" placeholder="R$ 0,00" data-type="money">
+        </div>
+        <div class="field">
+          <label for="selectAtividade">Tipo de Atividade</label>
+          <select id="selectAtividade">
+            <option value="servico" selected>Serviço (prestação geral)</option>
+            <option value="comercio">Comércio</option>
+            <option value="industria">Indústria</option>
+            <option value="liberal">Profissão regulamentada</option>
+          </select>
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label for="sliderDependentes">Dependentes (IRPF)</label>
+          <div class="slider-group">
+            <input type="range" id="sliderDependentes" min="0" max="8" value="0" step="1">
+            <span class="slider-value" id="dependentesValue">0</span>
+          </div>
+        </div>
+        <div class="field">
+          <label for="inputPensao">Pensão Alimentícia Judicial <span class="hint">(mensal)</span></label>
+          <input type="text" id="inputPensao" class="money" placeholder="R$ 0,00" data-type="money">
+        </div>
+      </div>
+      <div class="field">
+        <label for="inputDespMedicas">Despesas Médicas Anuais <span class="hint">(dedução sem limite)</span></label>
+        <input type="text" id="inputDespMedicas" class="money" placeholder="R$ 0,00" data-type="money">
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-header">
+        <span class="section-num n2">2</span>
+        <span class="section-title">Parâmetros CLT</span>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label for="selectVT">Vale Transporte</label>
+          <select id="selectVT"><option value="0">Não utiliza</option><option value="1" selected>Sim (desc. 6%)</option></select>
+        </div>
+        <div class="field">
+          <label for="inputVA">Vale Alimentação/Refeição <span class="hint">(mensal)</span></label>
+          <input type="text" id="inputVA" class="money" placeholder="R$ 0,00" data-type="money" value="R$ 600,00">
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label for="selectFGTS">Considerar FGTS</label>
+          <select id="selectFGTS"><option value="1" selected>Sim (8%)</option><option value="0">Não</option></select>
+        </div>
+        <div class="field">
+          <label for="selectFerias13">Considerar 13° e Férias</label>
+          <select id="selectFerias13"><option value="1" selected>Sim (média mensal)</option><option value="0">Não</option></select>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-header">
+        <span class="section-num n3">3</span>
+        <span class="section-title">Parâmetros PJ (Simples Nacional)</span>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label for="inputProLabore">Pró-labore desejado <span class="hint">(mín. 1 SM = R$ 1.621)</span></label>
+          <input type="text" id="inputProLabore" class="money" placeholder="R$ 1.621,00" data-type="money">
+        </div>
+        <div class="field">
+          <label for="inputDespPJ">Despesas Operacionais PJ <span class="hint">(contador, alvará, etc.)</span></label>
+          <input type="text" id="inputDespPJ" class="money" placeholder="R$ 500,00" data-type="money">
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label for="selectUF">Estado (UF)</label>
+          <select id="selectUF">
+            <option value="">Selecione o estado...</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="selectMunicipio">Município <span id="munLoading" class="hint hidden" style="color:var(--green)">⏳ Carregando...</span></label>
+          <select id="selectMunicipio" disabled>
+            <option value="">Selecione o estado primeiro</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- ═══ Painel de Informações Tributárias do Estado ═══ -->
+      <div id="estadoInfoPanel">
+        <div class="estado-panel-header">
+          <h4>
+            <span id="estadoNomePanel">—</span>
+            <span id="estadoRegiaoPanel" class="regiao-badge"></span>
+          </h4>
+          <span id="estadoStatusPanel" class="status-badge"></span>
+        </div>
+        <div class="estado-grid">
+          <div class="estado-imposto-card">
+            <div class="card-label">ICMS Padrão</div>
+            <div class="card-value" id="estadoICMS">—</div>
+            <div class="card-detail" id="estadoICMSDetail"></div>
+          </div>
+          <div class="estado-imposto-card">
+            <div class="card-label">ICMS Efetivo</div>
+            <div class="card-value" id="estadoICMSEfetivo">—</div>
+            <div class="card-detail" id="estadoFECOPDetail"></div>
+          </div>
+          <div class="estado-imposto-card">
+            <div class="card-label">ISS (Capital)</div>
+            <div class="card-value" id="estadoISS">—</div>
+            <div class="card-detail" id="estadoISSDetail"></div>
+          </div>
+          <div class="estado-imposto-card">
+            <div class="card-label">IPVA Automóvel</div>
+            <div class="card-value" id="estadoIPVA">—</div>
+            <div class="card-detail" id="estadoIPVADetail"></div>
+          </div>
+          <div class="estado-imposto-card">
+            <div class="card-label">ITBI (Capital)</div>
+            <div class="card-value" id="estadoITBI">—</div>
+            <div class="card-detail" id="estadoITBIDetail"></div>
+          </div>
+          <div class="estado-imposto-card">
+            <div class="card-label">Sublimite Simples</div>
+            <div class="card-value" id="estadoSublimite">—</div>
+            <div class="card-detail" id="estadoSublimiteDetail"></div>
+          </div>
+        </div>
+        <div class="estado-incentivos" id="estadoIncentivos"></div>
+        <div id="estadoDicas" class="estado-dicas" style="display:none;"></div>
+        <div id="estadoSTAlert" class="estado-st-alert" style="display:none;"></div>
+        <div class="ranking-mini" id="rankingICMSMini">
+          <h5>📊 Ranking ICMS — Menor Carga (Top 5 + sua UF)</h5>
+          <div id="rankingICMSRows"></div>
+        </div>
+      </div>
+      <div class="iss-info" id="issInfoBox" style="background:var(--blue-light);border:1px solid rgba(33,150,243,.2);border-radius:var(--radius-sm);padding:10px 14px;margin-bottom:14px;font-size:.8rem;color:var(--blue-dark);line-height:1.6;">
+        <strong>ℹ️ ISS Municipal:</strong> A alíquota do ISS varia entre <strong>2% e 5%</strong> conforme o município.
+        <span id="issAutoMsg">Informe a alíquota do seu município abaixo. Se não souber, o padrão de <strong>5%</strong> (teto legal) será usado.</span>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label for="inputISSAliq">Alíquota ISS do seu Município <span class="hint">(% — padrão: 5%)</span></label>
+          <input type="text" id="inputISSAliq" value="5,00" style="font-family:var(--mono)" placeholder="Ex: 2,00 a 5,00">
+        </div>
+        <div class="field">
+          <label for="selectSudam">Incentivo SUDAM/SUDENE <span id="sudamAutoMsg" class="hint"></span></label>
+          <select id="selectSudam"><option value="0">Não</option><option value="1">Sim (−75% IRPJ)</option></select>
+        </div>
+      </div>
+    </div>
+
+    <button id="btnCalcular" class="btn-calcular" disabled>✅ Comparar Cenários — Pessoa Física 2026</button>
+  </div>
+
+  <!-- ═══ RESULTS ═══ -->
+  <div id="resultArea" class="hidden">
+    <!-- ═══ TABS ═══ -->
+    <div class="tabs-nav" id="tabsNav">
+      <button class="tab-btn active" data-tab="tabAnalise" onclick="switchTab('tabAnalise')">📊 Análise Tributária</button>
+      <button class="tab-btn" data-tab="tabReformaPF" onclick="switchTab('tabReformaPF')">🏛️ Reforma Tributária</button>
+    </div>
+
+    <div id="tabAnalise" class="tab-content active">
+      <div id="resultContent"></div>
+    </div>
+
+    <div id="tabReformaPF" class="tab-content" style="display:none;"></div>
+
+    <div class="disclaimer">
+      <strong>⚠ Aviso Legal:</strong> Esta ferramenta é uma <strong>simulação estimada</strong> com base na legislação vigente em fev/2026
+      (Lei nº 15.270/2025, Portaria MPS/MF 13/2026, LC 123/2006, EC 132/2023, LC 214/2025). Os valores são aproximados e podem divergir
+      do cálculo oficial da Receita Federal. <strong>Não substitui consultoria contábil ou fiscal profissional.</strong>
+      <br>Tabelas: INSS 2026 (SM R$ 1.621 · Teto R$ 8.475,55) · IRPF 2026 (isenção até R$ 5.000 · redutor até R$ 7.350) ·
+      Simples Nacional vigente · MEI teto R$ 81.000/ano · Reforma Tributária (IVA ~26,5%).
+    </div>
+
+    <div class="action-bar">
+      <button id="btnVoltar" class="btn-action outline">← Refazer Simulação</button>
+      <button id="btnPDF" class="btn-action primary">📄 Exportar PDF</button>
+      <button id="btnExcel" class="btn-action blue">📊 Exportar Excel</button>
+      <button id="btnCopiar" class="btn-action orange">📋 Copiar Texto</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ Scripts de Estados — Base Tributária Completa (27 UFs) ═══ -->
+<script src="../scripts/acre.js"></script>
+<script src="../scripts/alagoas.js"></script>
+<script src="../scripts/amapa.js"></script>
+<script src="../scripts/amazonas.js"></script>
+<script src="../scripts/bahia.js"></script>
+<script src="../scripts/ceara.js"></script>
+<script src="../scripts/distrito_federal.js"></script>
+<script src="../scripts/espirito_santo.js"></script>
+<script src="../scripts/goias.js"></script>
+<script src="../scripts/maranhao.js"></script>
+<script src="../scripts/mato_grosso.js"></script>
+<script src="../scripts/mato_grosso_do_sul.js"></script>
+<script src="../scripts/minas_gerais.js"></script>
+<script src="../scripts/para.js"></script>
+<script src="../scripts/paraiba.js"></script>
+<script src="../scripts/parana.js"></script>
+<script src="../scripts/pernambuco.js"></script>
+<script src="../scripts/piaui.js"></script>
+<script src="../scripts/rio_de_janeiro.js"></script>
+<script src="../scripts/rio_grande_do_norte.js"></script>
+<script src="../scripts/rio_grande_do_sul.js"></script>
+<script src="../scripts/rondonia.js"></script>
+<script src="../scripts/roraima.js"></script>
+<script src="../scripts/santa_catarina.js"></script>
+<script src="../scripts/sao_paulo.js"></script>
+<script src="../scripts/sergipe.js"></script>
+<script src="../scripts/tocantins.js"></script>
+<!-- ═══ Agregador Central ═══ -->
+<script src="../scripts/estados.js"></script>
+
+<script src="../scripts/reforma-tributaria.js"></script>
+
+<!-- ═══ INTEGRAÇÃO ESTADOS.JS → Painel Estadual PF ═══ -->
+<script>
+(function(){
+  'use strict';
+
+  // ── Aguardar carregamento dos estados ──
+  function waitForEstados(cb){
+    if(window.Estados||window.EstadosBR) return cb();
+    var attempts=0;
+    var iv=setInterval(function(){
+      attempts++;
+      if(window.Estados||window.EstadosBR){clearInterval(iv);cb();}
+      else if(attempts>50){
+        clearInterval(iv);
+        console.warn('[PF-Estados] Estados.js não carregou após 5s. Painel desabilitado.');
+      }
+    },100);
+  }
+
+  waitForEstados(function(){
+    var ES=window.Estados||window.EstadosBR;
+    window._ESTADOS_PF=ES;
+
+    // ── Preencher select de estados com optgroup por região ──
+    var sel=document.getElementById('selectUF');
+    if(sel&&ES.opcoesSelectPorRegiao){
+      var regioes=ES.opcoesSelectPorRegiao();
+      while(sel.options.length>1) sel.remove(1);
+      var ordem=['Norte','Nordeste','Centro-Oeste','Sudeste','Sul'];
+      ordem.forEach(function(regiao){
+        if(regioes[regiao]&&regioes[regiao].length>0){
+          var og=document.createElement('optgroup');
+          og.label=regiao;
+          regioes[regiao].forEach(function(e){
+            var opt=document.createElement('option');
+            opt.value=e.value;
+            opt.textContent=e.label;
+            og.appendChild(opt);
+          });
+          sel.appendChild(og);
+        }
+      });
+    }
+
+    // ── Carregar todos para ranking ──
+    if(ES.carregarTodos) ES.carregarTodos();
+
+    // ── Escutar mudança de estado ──
+    if(sel){
+      sel.addEventListener('change',function(){
+        atualizarPainelEstadoPF(this.value,ES);
+      });
+    }
+  });
+
+  // ═══ ATUALIZAR PAINEL ESTADUAL PF ═══
+  function atualizarPainelEstadoPF(sigla,ES){
+    var panel=document.getElementById('estadoInfoPanel');
+    if(!panel) return;
+    if(!sigla){panel.style.display='none';return;}
+
+    // ── Buscar dados normalizados ──
+    var icmsN = ES.getICMSNormalizado    ? ES.getICMSNormalizado(sigla)    : null;
+    var issN  = ES.getISSNormalizado     ? ES.getISSNormalizado(sigla)     : null;
+    var snN   = ES.getSimplesNacionalNormalizado ? ES.getSimplesNacionalNormalizado(sigla) : null;
+    var ipvaN = ES.getIPVANormalizado    ? ES.getIPVANormalizado(sigla)    : null;
+    var incN  = ES.getIncentivosNormalizado ? ES.getIncentivosNormalizado(sigla) : null;
+    var dadosG= ES.getDadosGerais        ? ES.getDadosGerais(sigla)        : null;
+    var estado= ES.getEstado             ? ES.getEstado(sigla)             : null;
+    var reg   = ES.UF_REGISTRY           ? ES.UF_REGISTRY[sigla]           : null;
+
+    if(!estado&&!reg){panel.style.display='none';return;}
+    panel.style.display='block';
+
+    // ── Header ──
+    setText('estadoNomePanel', reg ? reg.nome+' ('+sigla+')' : sigla);
+    var regBadge=document.getElementById('estadoRegiaoPanel');
+    if(regBadge&&reg){regBadge.textContent=reg.regiao;regBadge.style.display='';}
+
+    // Status
+    var statusEl=document.getElementById('estadoStatusPanel');
+    if(statusEl){
+      var cob=estado&&estado.cobertura?estado.cobertura.completude_estimada:null;
+      if(cob){
+        var pctN=parseInt(cob);
+        statusEl.textContent=cob;
+        statusEl.className='status-badge '+(pctN>=80?'ok':'warn');
+      } else {
+        statusEl.textContent='Dados carregados';
+        statusEl.className='status-badge ok';
+      }
+    }
+
+    // ── ICMS ──
+    if(icmsN){
+      setText('estadoICMS',icmsN.aliquota_padrao_percentual||'N/D');
+      setText('estadoICMSDetail',icmsN.base_legal||'');
+      setText('estadoICMSEfetivo',icmsN.aliquota_efetiva_percentual||'N/D');
+      var fecopText=icmsN.fecop&&icmsN.fecop.existe
+        ? icmsN.fecop.nome+' +'+(icmsN.fecop.adicional*100).toFixed(0)+'%'
+        : 'Sem FECOP adicional';
+      setText('estadoFECOPDetail',fecopText);
+    } else {
+      setText('estadoICMS','N/D');setText('estadoICMSEfetivo','N/D');
+      setText('estadoICMSDetail','');setText('estadoFECOPDetail','');
+    }
+
+    // ── ISS — Auto-fill alíquota ──
+    if(issN){
+      setText('estadoISS',issN.aliquota_geral_percentual||'N/D');
+      var issMun=issN.municipio_referencia||'Capital';
+      var issServ=issN.total_servicos_detalhados||0;
+      setText('estadoISSDetail',issMun+(issServ>0?' · '+issServ+' serviços mapeados':''));
+      // Auto-preencher campo ISS
+      if(issN.aliquota_geral!=null){
+        var issInput=document.getElementById('inputISSAliq');
+        if(issInput){
+          issInput.value=(issN.aliquota_geral*100).toFixed(2).replace('.',',');
+        }
+        var issMsg=document.getElementById('issAutoMsg');
+        if(issMsg) issMsg.innerHTML='ISS da capital: <strong>'+(issN.aliquota_geral*100).toFixed(1)+'%</strong> ('+issMun+'). Ajuste conforme seu município.';
+      }
+    } else {
+      setText('estadoISS','N/D');setText('estadoISSDetail','');
+    }
+
+    // ── Sublimite Simples ──
+    if(snN){
+      var sub=snN.sublimite_estadual;
+      if(sub){
+        setText('estadoSublimite','R$ '+formatNum(sub));
+        setText('estadoSublimiteDetail',sub<3600000?'⚠ Sublimite reduzido':'Teto máximo');
+      } else {
+        setText('estadoSublimite','R$ 3.600.000');
+        setText('estadoSublimiteDetail','Teto máximo (padrão)');
+      }
+    } else {
+      setText('estadoSublimite','R$ 3.600.000');
+      setText('estadoSublimiteDetail','Padrão federal');
+    }
+
+    // ── IPVA ──
+    if(ipvaN&&ipvaN.automovel!=null){
+      setText('estadoIPVA',(ipvaN.automovel*100).toFixed(1)+'%');
+      var ipvaMoto=ipvaN.motocicleta!=null?' · Moto: '+(ipvaN.motocicleta*100).toFixed(1)+'%':'';
+      setText('estadoIPVADetail','Sobre valor venal'+ipvaMoto);
+    } else {
+      setText('estadoIPVA','N/D');setText('estadoIPVADetail','');
+    }
+
+    // ── ITBI ──
+    var itbi=estado?(estado.itbi||null):null;
+    if(itbi){
+      var aliqITBI=itbi.aliquota_geral||itbi.aliquota||null;
+      if(aliqITBI!=null){
+        setText('estadoITBI',(aliqITBI*100).toFixed(1)+'%');
+        setText('estadoITBIDetail',itbi.municipio_referencia||'Capital');
+      } else { setText('estadoITBI','N/D');setText('estadoITBIDetail',''); }
+    } else { setText('estadoITBI','N/D');setText('estadoITBIDetail',''); }
+
+    // ── Incentivos ──
+    renderIncentivos(sigla,incN,dadosG);
+
+    // ── Auto-detect SUDAM/SUDENE ──
+    autoDetectSudam(incN,dadosG);
+
+    // ── Dicas contextuais ──
+    renderDicas(sigla,icmsN,incN,reg);
+
+    // ── Ranking ICMS ──
+    renderRankingICMS(sigla,ES);
+  }
+
+  // ═══ RENDER INCENTIVOS ═══
+  function renderIncentivos(sigla,incN,dadosG){
+    var container=document.getElementById('estadoIncentivos');
+    if(!container) return;
+    var tags=[];
+    var incentivos=[
+      {key:'sudam',label:'SUDAM (-75% IRPJ)'},
+      {key:'sudene',label:'SUDENE (-75% IRPJ)'},
+      {key:'sudeco',label:'SUDECO'},
+      {key:'zona_franca',label:'Zona Franca'},
+      {key:'suframa',label:'SUFRAMA'},
+      {key:'alc',label:'ALC'},
+    ];
+    incentivos.forEach(function(inc){
+      var dados=null;
+      if(incN&&incN[inc.key]) dados=incN[inc.key];
+      else if(dadosG&&dadosG[inc.key]) dados=dadosG[inc.key];
+      if(dados&&(dados.ativo===true||dados.existe===true)){
+        var parcial=dados.abrangencia_parcial?' (parcial)':'';
+        tags.push('<span class="incentivo-tag ativo">✓ '+inc.label+parcial+'</span>');
+      }
+    });
+    if(incN&&incN.incentivos_estaduais){
+      var ie=incN.incentivos_estaduais;
+      var progs=typeof ie==='object'?Object.keys(ie):[];
+      progs.slice(0,3).forEach(function(prog){
+        var p=ie[prog];
+        if(p&&(p.ativo!==false)){
+          var nome=p.nome||p.programa||prog;
+          tags.push('<span class="incentivo-tag ativo">⚡ '+nome+'</span>');
+        }
+      });
+    }
+    container.innerHTML=tags.length>0?tags.join(''):'<span class="incentivo-tag inativo">Sem incentivos especiais identificados</span>';
+  }
+
+  // ═══ AUTO-DETECT SUDAM/SUDENE ═══
+  function autoDetectSudam(incN,dadosG){
+    var sel=document.getElementById('selectSudam');
+    var msg=document.getElementById('sudamAutoMsg');
+    if(!sel) return;
+    var hasSudam=false,hasSudene=false;
+    if(incN){
+      if(incN.sudam&&(incN.sudam.ativo||incN.sudam.existe)) hasSudam=true;
+      if(incN.sudene&&(incN.sudene.ativo||incN.sudene.existe)) hasSudene=true;
+    }
+    if(dadosG){
+      if(dadosG.sudam&&(dadosG.sudam.ativo||dadosG.sudam.existe)) hasSudam=true;
+      if(dadosG.sudene&&(dadosG.sudene.ativo||dadosG.sudene.existe)) hasSudene=true;
+    }
+    if(hasSudam||hasSudene){
+      sel.value='1';
+      if(msg) msg.textContent='✅ Detectado: '+(hasSudam?'SUDAM':'SUDENE');
+      if(msg) msg.style.color='var(--green-dark)';
+    } else {
+      sel.value='0';
+      if(msg) msg.textContent='';
+    }
+  }
+
+  // ═══ DICAS CONTEXTUAIS ═══
+  function renderDicas(sigla,icmsN,incN,reg){
+    var dicasEl=document.getElementById('estadoDicas');
+    var stEl=document.getElementById('estadoSTAlert');
+    if(!dicasEl||!stEl) return;
+    var dicas=[];
+    if(incN){
+      if(incN.sudam&&(incN.sudam.ativo||incN.sudam.existe))
+        dicas.push('<strong>💡 Incentivo SUDAM:</strong> Redução de 75% do IRPJ para empresas na área de atuação da SUDAM. Marcado automaticamente acima.');
+      if(incN.sudene&&(incN.sudene.ativo||incN.sudene.existe))
+        dicas.push('<strong>💡 Incentivo SUDENE:</strong> Redução de 75% do IRPJ para empresas na área de atuação da SUDENE.');
+      if(incN.zona_franca&&(incN.zona_franca.ativo||incN.zona_franca.existe))
+        dicas.push('<strong>💡 Zona Franca:</strong> Isenção de IPI + redução de ICMS + créditos SUFRAMA. Pode ser muito vantajoso para PJ.');
+    }
+    if(icmsN&&icmsN.aliquota_efetiva!=null&&icmsN.aliquota_efetiva>0.19)
+      dicas.push('<strong>⚠ ICMS elevado ('+icmsN.aliquota_efetiva_percentual+'):</strong> Verifique se há redução de base de cálculo para seu CNAE.');
+
+    dicasEl.innerHTML=dicas.length>0?dicas.join('<br><br>'):'';
+    dicasEl.style.display=dicas.length>0?'block':'none';
+
+    if(icmsN&&icmsN.substituicao_tributaria){
+      stEl.innerHTML='<strong>⚠ Substituição Tributária:</strong> Este estado possui regras de ICMS-ST. Consulte o NCM/produto aplicável.';
+      stEl.style.display='block';
+    } else {
+      stEl.style.display='none';
+    }
+  }
+
+  // ═══ RANKING ICMS MINI ═══
+  function renderRankingICMS(siglaAtual,ES){
+    var container=document.getElementById('rankingICMSRows');
+    if(!container||!ES.compararICMS) return;
+    var ranking=ES.compararICMS();
+    if(!ranking||ranking.length===0){
+      container.innerHTML='<div style="font-size:.82rem;color:var(--text-muted)">Dados insuficientes para ranking</div>';
+      return;
+    }
+    var posAtual=-1;
+    for(var i=0;i<ranking.length;i++){if(ranking[i].sigla===siglaAtual){posAtual=i;break;}}
+    var exibir=ranking.slice(0,5);
+    var atualIncluido=posAtual>=0&&posAtual<5;
+    if(!atualIncluido&&posAtual>=0) exibir.push(ranking[posAtual]);
+    var maxICMS=0;
+    exibir.forEach(function(e){if(e.icms_efetivo!=null&&e.icms_efetivo>maxICMS) maxICMS=e.icms_efetivo;});
+    if(maxICMS===0) maxICMS=0.20;
+    var html='';
+    exibir.forEach(function(e,idx){
+      var pos=idx+1;
+      if(!atualIncluido&&idx===exibir.length-1) pos=posAtual+1;
+      var posClass=pos<=3?'pos-'+pos:'pos-other';
+      var isCurrent=e.sigla===siglaAtual;
+      var rowClass=isCurrent?'ranking-row current':'ranking-row';
+      var icmsEf=e.icms_efetivo!=null?e.icms_efetivo:(e.icms_padrao||0);
+      var pctV=maxICMS>0?(icmsEf/maxICMS*100).toFixed(0):0;
+      var percText=e.icms_efetivo_percentual||e.icms_percentual||'N/D';
+      var barColor=pos===1?'var(--green)':pos===2?'var(--blue)':pos===3?'var(--orange)':'var(--text-light)';
+      if(isCurrent&&pos>3) barColor='var(--green)';
+      var separator='';
+      if(!atualIncluido&&idx===exibir.length-1) separator='<div style="border-top:1px dashed var(--border);margin:6px 0"></div>';
+      html+=separator;
+      html+='<div class="'+rowClass+'">';
+      html+='<span class="rank-pos '+posClass+'">'+pos+'°</span>';
+      html+='<span class="rank-uf">'+e.sigla+'</span>';
+      html+='<div class="rank-bar"><div class="rank-bar-fill" style="width:'+pctV+'%;background:'+barColor+'"></div></div>';
+      html+='<span class="rank-value">'+percText+'</span>';
+      html+='</div>';
+    });
+    container.innerHTML=html;
+  }
+
+  // ── Helpers ──
+  function setText(id,text){var el=document.getElementById(id);if(el) el.textContent=text||'';}
+  function formatNum(n){if(n==null)return'0';return n.toLocaleString('pt-BR',{minimumFractionDigits:0,maximumFractionDigits:0});}
+})();
+</script>
+<script>
+"use strict";
+
+// ╔══════════════════════════════════════════════════════════════════╗
+// ║  CONSTANTES TRIBUTÁRIAS BRASIL 2026                              ║
+// ║  Fontes: Portaria MPS/MF 13/2026, Lei 15.270/2025, LC 123/2006 ║
+// ╚══════════════════════════════════════════════════════════════════╝
+const T = {
+  SM: 1621.00,
+  INSS: {
+    faixas: [
+      { limite: 1621.00, aliq: 0.075 },
+      { limite: 2902.87, aliq: 0.09  },
+      { limite: 3857.40, aliq: 0.12  },
+      { limite: 8475.55, aliq: 0.14  },
+    ],
+    teto: 8475.55,
+    patronal_estimado: 0.286,
+    autonomo_aliq: 0.20,
+    autonomo_simplificado: 0.11,
+    mei_valor: 81.05, mei_iss: 5.00, mei_icms: 1.00, fgts: 0.08,
+  },
+  IRPF: {
+    faixas: [
+      { limite: 2428.80,  aliq: 0.000, parcela: 0.00    },
+      { limite: 2826.65,  aliq: 0.075, parcela: 182.16  },
+      { limite: 3751.05,  aliq: 0.15,  parcela: 394.16  },
+      { limite: 4664.68,  aliq: 0.225, parcela: 675.49  },
+      { limite: Infinity,  aliq: 0.275, parcela: 908.73  },
+    ],
+    desconto_simplificado: 607.20,
+    deducao_dependente: 189.59,
+    reducao_max: 312.89,
+    reducao_limite_isencao: 5000.00,
+    reducao_limite_parcial: 7350.00,
+    reducao_coef_a: 978.62,
+    reducao_coef_b: 0.133145,
+    limite_educacao_anual: 3561.50,
+    desconto_simplificado_anual: 17640.00,
+    deducao_dependente_anual: 2275.08,
+  },
+  SIMPLES: {
+    teto: 4800000,
+    ANEXO_I:{faixas:[{limite:180000,aliq:.04,ded:0},{limite:360000,aliq:.073,ded:5940},{limite:720000,aliq:.095,ded:13860},{limite:1800000,aliq:.107,ded:22500},{limite:3600000,aliq:.143,ded:87300},{limite:4800000,aliq:.19,ded:378000}]},
+    ANEXO_II:{faixas:[{limite:180000,aliq:.045,ded:0},{limite:360000,aliq:.078,ded:5940},{limite:720000,aliq:.10,ded:13860},{limite:1800000,aliq:.112,ded:22500},{limite:3600000,aliq:.147,ded:85500},{limite:4800000,aliq:.30,ded:720000}]},
+    ANEXO_III:{faixas:[{limite:180000,aliq:.06,ded:0},{limite:360000,aliq:.112,ded:9360},{limite:720000,aliq:.135,ded:17640},{limite:1800000,aliq:.16,ded:35640},{limite:3600000,aliq:.21,ded:125640},{limite:4800000,aliq:.33,ded:648000}]},
+    ANEXO_V:{faixas:[{limite:180000,aliq:.155,ded:0},{limite:360000,aliq:.18,ded:4500},{limite:720000,aliq:.195,ded:9900},{limite:1800000,aliq:.205,ded:17100},{limite:3600000,aliq:.23,ded:62100},{limite:4800000,aliq:.305,ded:540000}]},
+  },
+  MEI: { teto_anual: 81000 },
+  DIVIDENDOS: { limite_mensal_isento: 50000, aliquota_retencao: 0.10 },
+};
+
+// ╔═══════════════════════════════════╗
+// ║  FUNÇÕES DE CÁLCULO               ║
+// ╚═══════════════════════════════════╝
+function calcINSSEmpregado(sal){ let c=0,a=0; for(const f of T.INSS.faixas){if(sal<=a)break;c+=(Math.min(sal,f.limite)-a)*f.aliq;a=f.limite;} return c; }
+function calcINSSAutonomo(r){ return Math.min(r,T.INSS.teto)*T.INSS.autonomo_aliq; }
+function calcINSSProLabore(p){ return Math.min(p,T.INSS.teto)*T.INSS.autonomo_simplificado; }
+
+function calcIRPFMensal(renda, opts={}){
+  const inss=opts.inss||0, deps=opts.dependentes||0, pensao=opts.pensao||0;
+  const dedLegal=inss+(deps*T.IRPF.deducao_dependente)+pensao;
+  const dedSimpl=T.IRPF.desconto_simplificado;
+  const ded=Math.max(dedLegal,dedSimpl);
+  const tipoDed=dedSimpl>dedLegal?'simplificado':'legal';
+  const bc=Math.max(0,renda-ded);
+  let imp=0;
+  for(const f of T.IRPF.faixas){if(bc<=f.limite||f.limite===Infinity){imp=bc*f.aliq-f.parcela;break;}}
+  imp=Math.max(0,imp);
+  let red=0,isento=false;
+  if(renda<=T.IRPF.reducao_limite_isencao){red=Math.min(T.IRPF.reducao_max,imp);isento=true;}
+  else if(renda<=T.IRPF.reducao_limite_parcial){red=Math.max(0,T.IRPF.reducao_coef_a-(T.IRPF.reducao_coef_b*renda));red=Math.min(red,imp);}
+  return{rendaBruta:renda,deducao:ded,tipoDeducao:tipoDed,baseCalculo:bc,impostoTabela:imp,reducao_2026:red,isento,ir_devido:Math.max(0,imp-red)};
+}
+
+function calcSimplesNacional(fat,anx){
+  const RBT12=fat*12;const tab=T.SIMPLES['ANEXO_'+anx];if(!tab)return{aliqEfetiva:0,DAS:0};
+  let fx=tab.faixas[tab.faixas.length-1],fn=tab.faixas.length;
+  for(let i=0;i<tab.faixas.length;i++){if(RBT12<=tab.faixas[i].limite){fx=tab.faixas[i];fn=i+1;break;}}
+  const ae=Math.max(0,(RBT12*fx.aliq-fx.ded)/RBT12);
+  return{aliqEfetiva:ae,DAS:fat*ae,faixa:fn,RBT12};
+}
+
+// ╔═══════════════════════════════════╗
+// ║  CENÁRIOS                          ║
+// ╚═══════════════════════════════════╝
+function calcCLT(d){
+  const sal=d.renda,inss=calcINSSEmpregado(sal);
+  const irpf=calcIRPFMensal(sal,{inss,dependentes:d.dependentes,pensao:d.pensao});
+  const ir=irpf.ir_devido,vt=d.valeTransporte?sal*.06:0;
+  const liq=sal-inss-ir-vt-d.pensao;
+  let ben=0,bd=[];
+  if(d.valeAlimentacao>0){ben+=d.valeAlimentacao;bd.push({nome:'VA/VR',valor:d.valeAlimentacao});}
+  if(d.considerarFGTS){const f=sal*T.INSS.fgts;ben+=f;bd.push({nome:'FGTS (8%)',valor:f});}
+  if(d.considerarFerias13){const e=(sal+sal/3)/12;ben+=e;bd.push({nome:'13°+Férias (média)',valor:e});}
+  const custoEmp=sal+sal*T.INSS.patronal_estimado+sal*T.INSS.fgts+(sal*(1+1/3)/12)+(d.valeAlimentacao||0);
+  const al=[];
+  if(irpf.isento)al.push({tipo:'good',msg:'IRPF isento pela Lei 15.270/2025 (renda ≤ R$ 5.000).'});
+  else if(irpf.reducao_2026>0)al.push({tipo:'info',msg:`Redutor 2026 aplicado: ${fmt(irpf.reducao_2026)} de desconto no IRPF.`});
+  if(sal>T.INSS.teto)al.push({tipo:'info',msg:`Salário acima do teto INSS. INSS limitado a ${fmt(calcINSSEmpregado(T.INSS.teto))}.`});
+  return{cenario:'CLT (Empregado)',salarioBruto:sal,inss,irpf:ir,irpfDetail:irpf,descontoVT:vt,pensao:d.pensao,liquido:liq,beneficios:ben,beneficiosDetail:bd,totalEfetivo:liq+ben,custoEmpregador:custoEmp,cargaTributaria:(inss+ir)/sal,alertas:al,elegivel:true};
+}
+
+function calcAutonomo(d){
+  const r=d.renda,inss=calcINSSAutonomo(r);
+  const irpf=calcIRPFMensal(r,{inss,dependentes:d.dependentes,pensao:d.pensao});
+  const ir=irpf.ir_devido;
+  const iss=(d.atividade==='servico'||d.atividade==='liberal')?r*d.issAliquota:0;
+  const liq=r-inss-ir-iss-d.pensao;
+  const al=[];
+  al.push({tipo:'info',msg:`INSS autônomo: 20% sobre ${fmt(Math.min(r,T.INSS.teto))} (teto ${fmt(T.INSS.teto)}).`});
+  if(iss>0){
+    const issP=((d.issAliquota||0.05)*100).toFixed(2).replace('.',',');
+    al.push({tipo:'info',msg:`ISS: ${issP}%${d.cidade?' ('+d.cidade+')':''} = ${fmt(iss)}/mês.`});
+  }
+  if(r*12<=T.MEI.teto_anual)al.push({tipo:'good',msg:'Renda dentro do limite MEI. Considere abrir MEI.'});
+  if(d.atividade==='liberal')al.push({tipo:'warn',msg:'Profissão regulamentada: contribuição ao conselho de classe não incluída.'});
+  if(irpf.isento)al.push({tipo:'good',msg:'IRPF isento pela Lei 15.270/2025.'});
+  else if(irpf.reducao_2026>0)al.push({tipo:'info',msg:`Redutor 2026: ${fmt(irpf.reducao_2026)} de desconto.`});
+  return{cenario:'Autônomo (RPA)',rendaBruta:r,inss,irpf:ir,irpfDetail:irpf,iss,pensao:d.pensao,liquido:liq,beneficios:0,beneficiosDetail:[],totalEfetivo:liq,cargaTributaria:(inss+ir+iss)/r,alertas:al,elegivel:true};
+}
+
+function calcMEI(d){
+  const r=d.renda,ra=r*12;
+  if(ra>T.MEI.teto_anual)return{cenario:'MEI',elegivel:false,motivo:`Renda anual (${fmt(ra)}) excede teto MEI (${fmt(T.MEI.teto_anual)}).`,totalEfetivo:0};
+  const inss=T.INSS.mei_valor;
+  let dasAd=(d.atividade==='comercio'||d.atividade==='industria')?T.INSS.mei_icms:T.INSS.mei_iss;
+  const das=inss+dasAd;
+  let pi=(d.atividade==='comercio'||d.atividade==='industria')?.08:.32;
+  const pt=Math.max(0,r-r*pi-das);
+  const irpf=calcIRPFMensal(pt,{dependentes:d.dependentes,pensao:d.pensao});
+  const ir=irpf.ir_devido;
+  const liq=r-das-ir-d.pensao;
+  const al=[];
+  al.push({tipo:'good',msg:'DAS fixo mensal. Sem IRPJ, CSLL, PIS, COFINS.'});
+  if(ra>T.MEI.teto_anual*.8)al.push({tipo:'warn',msg:'Faturamento próximo do teto MEI (80%). Risco de desenquadramento.'});
+  al.push({tipo:'info',msg:'INSS MEI (5% SM) = aposentadoria por idade no piso. Complementar com +15% para por tempo.'});
+  if(d.atividade==='liberal')al.push({tipo:'warn',msg:'Maioria das profissões regulamentadas NÃO pode ser MEI.'});
+  return{cenario:'MEI',elegivel:true,rendaBruta:r,das,inss,dasAdicional:dasAd,irpf:ir,pensao:d.pensao,liquido:liq,beneficios:0,beneficiosDetail:[],totalEfetivo:liq,cargaTributaria:(das+ir)/r,alertas:al};
+}
+
+function calcPJ(d){
+  const fat=d.renda,RBT12=fat*12;
+  if(RBT12>T.SIMPLES.teto)return{cenario:'PJ (Simples Nacional)',elegivel:false,motivo:`RBT12 (${fmt(RBT12)}) excede teto Simples (${fmt(T.SIMPLES.teto)}).`,totalEfetivo:0};
+  let anx='III';
+  if(d.atividade==='comercio')anx='I';else if(d.atividade==='industria')anx='II';else if(d.atividade==='liberal')anx='V';
+  const sn=calcSimplesNacional(fat,anx);const DAS=sn.DAS;
+  const pl=Math.max(d.proLabore,T.SM),insPL=calcINSSProLabore(pl);
+  const irpfPL=calcIRPFMensal(pl,{inss:insPL,dependentes:d.dependentes,pensao:d.pensao});
+  const irPL=irpfPL.ir_devido,desp=d.despPJ;
+  const lucro=fat-DAS-pl-desp,div=Math.max(0,lucro);
+  let irDiv=0;if(div>T.DIVIDENDOS.limite_mensal_isento)irDiv=(div-T.DIVIDENDOS.limite_mensal_isento)*T.DIVIDENDOS.aliquota_retencao;
+  const plLiq=pl-insPL-irPL-d.pensao,divLiq=div-irDiv,tot=plLiq+divLiq;
+  const al=[];
+  al.push({tipo:'info',msg:`Simples Anexo ${anx} — Alíq. efetiva ${pct(sn.aliqEfetiva)}.`});
+  if(anx==='V')al.push({tipo:'warn',msg:'Anexo V (mais caro). Se folha/fat ≥ 28% (Fator R), migraria para Anexo III.'});
+  if(d.sudam)al.push({tipo:'info',msg:'SUDAM não reduz DAS do Simples. Benefício apenas no Presumido/Real.'});
+  al.push({tipo:'info',msg:`Despesas PJ: ${fmt(desp)}/mês (contador, alvará, certificado digital, etc.)`});
+  if(irpfPL.isento)al.push({tipo:'good',msg:'IRPF pró-labore isento (Lei 15.270/2025).'});
+  return{cenario:'PJ (Simples Nacional)',elegivel:true,faturamento:fat,anexo:anx,faixa:sn.faixa,aliqEfetiva:sn.aliqEfetiva,DAS,proLabore:pl,inssPL:insPL,irpfPL:irPL,irpfPLDetail:irpfPL,despPJ:desp,lucro,dividendos:div,irDividendos:irDiv,proLaboreLiquido:plLiq,dividendosLiquidos:divLiq,totalBolso:tot,liquido:tot,beneficios:0,beneficiosDetail:[],totalEfetivo:tot,cargaTributaria:(DAS+insPL+irPL+irDiv)/fat,alertas:al};
+}
+
+// ╔═══════════════════════════════════╗
+// ║  HELPERS                           ║
+// ╚═══════════════════════════════════╝
+function fmt(n){return(n||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}
+function fmtNum(n){return(n||0).toFixed(2).replace('.',',')}
+function pct(n){return((n||0)*100).toFixed(2).replace('.',',')+' %'}
+const $=id=>document.getElementById(id);
+
+function aplicarMascaraMoney(el){let v=el.value.replace(/\D/g,'');if(!v){el.value='';return;}v=(parseInt(v,10)/100).toFixed(2);const p=v.split('.');p[0]=p[0].replace(/\B(?=(\d{3})+(?!\d))/g,'.');el.value='R$ '+p.join(',');}
+function parseMoney(el){return parseFloat((typeof el==='string'?el:el.value).replace(/R\$\s?/g,'').replace(/\./g,'').replace(',','.'))||0;}
+
+// ╔═══════════════════════════════════╗
+// ║  API IBGE — MUNICÍPIOS             ║
+// ╚═══════════════════════════════════╝
+const municipiosCache={};
+
+async function carregarMunicipios(uf){
+  const sel=$('selectMunicipio');
+  const loader=$('munLoading');
+  if(!uf){sel.innerHTML='<option value="">Selecione o estado primeiro</option>';sel.disabled=true;return;}
+  if(municipiosCache[uf]){preencherMunicipios(municipiosCache[uf]);return;}
+  sel.disabled=true;sel.innerHTML='<option value="">Carregando municípios...</option>';
+  if(loader)loader.classList.remove('hidden');
+  try{
+    const resp=await fetch(`https://servicodados.ibge.gov.br/api/v1/localidades/estados/${uf}/municipios?orderBy=nome`);
+    if(!resp.ok)throw new Error('Erro IBGE');
+    const data=await resp.json();
+    municipiosCache[uf]=data;
+    preencherMunicipios(data);
+  }catch(err){
+    console.error('Erro ao carregar municípios:',err);
+    sel.innerHTML='<option value="">Erro ao carregar — verifique a conexão</option>';sel.disabled=false;
+  }finally{if(loader)loader.classList.add('hidden');}
+}
+
+function preencherMunicipios(municipios){
+  const sel=$('selectMunicipio');
+  sel.innerHTML='<option value="">Selecione o município</option>';
+  municipios.forEach(m=>{const opt=document.createElement('option');opt.value=m.nome;opt.textContent=m.nome;sel.appendChild(opt);});
+  sel.disabled=false;
+}
+
+function coletarInputs(){
+  const uf=$('selectUF').value||'';
+  const mun=$('selectMunicipio').value||'';
+  const cidade=mun&&uf?`${mun}/${uf}`:uf||'';
+  return{
+  renda:parseMoney($('inputRenda')),atividade:$('selectAtividade').value,
+  dependentes:parseInt($('sliderDependentes').value)||0,pensao:parseMoney($('inputPensao')),
+  despMedicas:parseMoney($('inputDespMedicas')),valeTransporte:$('selectVT').value==='1',
+  valeAlimentacao:parseMoney($('inputVA')),considerarFGTS:$('selectFGTS').value==='1',
+  considerarFerias13:$('selectFerias13').value==='1',proLabore:parseMoney($('inputProLabore'))||T.SM,
+  despPJ:parseMoney($('inputDespPJ'))||500,
+  issAliquota:parseFloat($('inputISSAliq').value.replace(',','.'))/100||.05,
+  sudam:$('selectSudam').value==='1',
+  uf,municipio:mun,cidade,
+};}
+
+// ╔═══════════════════════════════════╗
+// ║  RENDER                            ║
+// ╚═══════════════════════════════════╝
+function renderResultados(ranking, inelegiveis, dados){
+  const c=$('resultContent');
+  if(!ranking.length){c.innerHTML='<p style="text-align:center;color:var(--text-muted)">Nenhum cenário calculável.</p>';return;}
+  const w=ranking[0],s=ranking[1];const econ=s?(w.totalEfetivo-s.totalEfetivo)*12:0;
+  const medals=['🥇','🥈','🥉','4°'];const colors=['#4CAF50','#2196F3','#FF9800','#7E57C2'];
+  let h='';
+
+  h+=`<div class="winner-card fade-in"><div class="winner-label">✅ CENÁRIO MAIS VANTAJOSO</div><div class="winner-regime">${w.cenario}</div><div class="winner-value">${fmt(w.totalEfetivo)}/mês no bolso</div><div class="winner-sub">${pct(w.cargaTributaria)} de carga tributária${econ>0?` · Economia de ${fmt(econ)}/ano vs ${s.cenario}`:''}</div></div>`;
+
+  h+='<div class="regime-cards">';
+  ranking.forEach((r,i)=>{
+    h+=`<div class="regime-card ${i===0?'pos-1':i===1?'pos-2':i===2?'pos-3':''}"><span class="medal">${medals[i]||''}</span><div class="regime-name">${r.cenario}</div><div class="regime-total">${fmt(r.totalEfetivo)}/mês</div><div class="regime-aliq">${pct(r.cargaTributaria)} carga</div><div class="regime-breakdown">`;
+    if(r.cenario.includes('CLT')){
+      h+=`<div class="bk-row"><span>Salário bruto</span><span>${fmt(r.salarioBruto)}</span></div><div class="bk-row"><span>(−) INSS</span><span style="color:var(--red)">${fmt(r.inss)}</span></div><div class="bk-row"><span>(−) IRPF</span><span style="color:var(--red)">${fmt(r.irpf)}</span></div>${r.descontoVT>0?`<div class="bk-row"><span>(−) VT 6%</span><span style="color:var(--red)">${fmt(r.descontoVT)}</span></div>`:''}<div class="bk-row"><span>Líquido</span><span><strong>${fmt(r.liquido)}</strong></span></div>${r.beneficios>0?`<div class="bk-row"><span>(+) Benefícios</span><span style="color:var(--green-dark)">${fmt(r.beneficios)}</span></div>`:''}`;
+    }else if(r.cenario.includes('Autônomo')){
+      h+=`<div class="bk-row"><span>Renda bruta</span><span>${fmt(r.rendaBruta)}</span></div><div class="bk-row"><span>(−) INSS 20%</span><span style="color:var(--red)">${fmt(r.inss)}</span></div><div class="bk-row"><span>(−) IRPF</span><span style="color:var(--red)">${fmt(r.irpf)}</span></div>${r.iss>0?`<div class="bk-row"><span>(−) ISS</span><span style="color:var(--red)">${fmt(r.iss)}</span></div>`:''}`;
+    }else if(r.cenario==='MEI'){
+      h+=`<div class="bk-row"><span>Renda bruta</span><span>${fmt(r.rendaBruta)}</span></div><div class="bk-row"><span>(−) DAS fixo</span><span style="color:var(--red)">${fmt(r.das)}</span></div><div class="bk-row"><span>(−) IRPF</span><span style="color:var(--red)">${fmt(r.irpf)}</span></div>`;
+    }else if(r.cenario.includes('PJ')){
+      h+=`<div class="bk-row"><span>Faturamento</span><span>${fmt(r.faturamento)}</span></div><div class="bk-row"><span>(−) DAS</span><span style="color:var(--red)">${fmt(r.DAS)}</span></div><div class="bk-row"><span>PL líquido</span><span>${fmt(r.proLaboreLiquido)}</span></div><div class="bk-row"><span>Dividendos liq.</span><span style="color:var(--green-dark)">${fmt(r.dividendosLiquidos)}</span></div>`;
+    }
+    h+='</div>';
+    if(r.alertas?.length){h+='<div style="margin-top:10px">';r.alertas.forEach(a=>{h+=`<div class="alert-item ${a.tipo}">${a.msg}</div>`;});h+='</div>';}
+    h+='</div>';
+  });
+  inelegiveis.forEach(r=>{h+=`<div class="regime-card"><div class="regime-name" style="color:var(--text-light)">${r.cenario}</div><div class="regime-ineligible">${r.motivo}</div></div>`;});
+  h+='</div>';
+
+  // Tabela
+  h+='<table class="detail-table"><thead><tr><th>Item</th>';
+  ranking.forEach(r=>{h+=`<th>${r.cenario.split('(')[0].trim()}</th>`;});
+  h+='</tr></thead><tbody>';
+  h+='<tr><td>Renda Bruta</td>';ranking.forEach(()=>h+=`<td>${fmt(dados.renda)}</td>`);h+='</tr>';
+  h+='<tr><td>Total Descontos</td>';ranking.forEach(r=>{h+=`<td style="color:var(--red)">${fmt(dados.renda-r.liquido)}</td>`;});h+='</tr>';
+  h+='<tr><td>Líquido</td>';ranking.forEach(r=>h+=`<td>${fmt(r.liquido)}</td>`);h+='</tr>';
+  h+='<tr><td>Benefícios</td>';ranking.forEach(r=>h+=`<td style="${r.beneficios>0?'color:var(--green-dark)':''}">${fmt(r.beneficios)}</td>`);h+='</tr>';
+  h+='<tr><td><strong>Total Efetivo</strong></td>';ranking.forEach(r=>h+=`<td><strong>${fmt(r.totalEfetivo)}</strong></td>`);h+='</tr>';
+  h+='<tr><td>Carga Tributária</td>';ranking.forEach(r=>h+=`<td>${pct(r.cargaTributaria)}</td>`);h+='</tr>';
+  h+='</tbody></table>';
+
+  // Gráfico
+  const mx=Math.max(...ranking.map(r=>r.totalEfetivo));
+  h+='<div class="chart-section"><div class="chart-title">📊 Total no Bolso (mensal)</div><div class="chart-bars">';
+  ranking.forEach((r,i)=>{const ht=mx>0?(r.totalEfetivo/mx)*170:4;h+=`<div class="chart-bar-item"><div class="chart-bar" style="height:${Math.max(4,ht)}px;background:${colors[i]}"></div><div class="chart-bar-label">${r.cenario.split('(')[0].trim()}</div><div class="chart-bar-value">${fmt(r.totalEfetivo)}</div></div>`;});
+  h+='</div></div>';
+
+  // Detalhes CLT
+  const clt=ranking.find(r=>r.cenario.includes('CLT'));
+  if(clt?.beneficiosDetail?.length){
+    h+=`<div class="info-card"><h4><span class="icon">🏢</span>Benefícios CLT — Detalhe</h4>`;
+    clt.beneficiosDetail.forEach(b=>{h+=`<div class="info-row"><span>${b.nome}</span><span style="color:var(--green-dark)">+${fmt(b.valor)}</span></div>`;});
+    h+=`<div class="info-row total"><span>Total benefícios</span><span>${fmt(clt.beneficios)}</span></div><div class="info-row"><span>Custo para o empregador</span><span style="color:var(--orange)">${fmt(clt.custoEmpregador)}</span></div></div>`;
+  }
+
+  // Detalhes PJ
+  const pj=ranking.find(r=>r.cenario.includes('PJ'));
+  if(pj){
+    h+=`<div class="info-card"><h4><span class="icon">🏭</span>PJ Simples Nacional — Fluxo Completo</h4>
+    <div class="info-row"><span>Faturamento</span><span>${fmt(pj.faturamento)}</span></div>
+    <div class="info-row"><span>DAS (Anexo ${pj.anexo}, Faixa ${pj.faixa})</span><span style="color:var(--red)">−${fmt(pj.DAS)}</span></div>
+    <div class="info-row"><span>Pró-labore bruto</span><span>−${fmt(pj.proLabore)}</span></div>
+    <div class="info-row"><span>  └ INSS (11%)</span><span style="color:var(--red)">−${fmt(pj.inssPL)}</span></div>
+    <div class="info-row"><span>  └ IRPF</span><span style="color:var(--red)">−${fmt(pj.irpfPL)}</span></div>
+    <div class="info-row"><span>Despesas PJ</span><span style="color:var(--red)">−${fmt(pj.despPJ)}</span></div>
+    <div class="info-row"><span>Dividendos brutos</span><span>${fmt(pj.dividendos)}</span></div>
+    ${pj.irDividendos>0?`<div class="info-row"><span>IR Dividendos (10%)</span><span style="color:var(--red)">−${fmt(pj.irDividendos)}</span></div>`:`<div class="info-row"><span>IR Dividendos</span><span style="color:var(--green-dark)">Isento (< R$ 50k)</span></div>`}
+    <div class="info-row total"><span>Total no bolso (PL + Div)</span><span>${fmt(pj.totalBolso)}</span></div></div>`;
+  }
+
+  // IRPF detalhe
+  if(clt){const ir=clt.irpfDetail;
+    h+=`<div class="info-card"><h4><span class="icon">🧾</span>IRPF Mensal — Memória de Cálculo (CLT)</h4>
+    <div class="info-row"><span>Renda bruta mensal</span><span>${fmt(ir.rendaBruta)}</span></div>
+    <div class="info-row"><span>Dedução (${ir.tipoDeducao})</span><span>−${fmt(ir.deducao)}</span></div>
+    <div class="info-row"><span>Base de cálculo</span><span>${fmt(ir.baseCalculo)}</span></div>
+    <div class="info-row"><span>Imposto pela tabela progressiva</span><span>${fmt(ir.impostoTabela)}</span></div>
+    <div class="info-row"><span>Redução Lei 15.270/2025</span><span style="color:var(--green-dark)">−${fmt(ir.reducao_2026)}</span></div>
+    <div class="info-row total"><span>IRPF devido</span><span>${fmt(ir.ir_devido)}</span></div></div>`;
+  }
+
+  // Projeção anual
+  h+=`<div class="info-card"><h4><span class="icon">📅</span>Projeção Anual (12 meses)</h4>`;
+  ranking.forEach(r=>{h+=`<div class="info-row"><span>${r.cenario}</span><span>${fmt(r.totalEfetivo*12)}</span></div>`;});
+  if(ranking.length>=2){const df=(ranking[0].totalEfetivo-ranking[ranking.length-1].totalEfetivo)*12;h+=`<div class="info-row total"><span>Diferença (melhor vs pior)</span><span style="color:var(--green-dark)">${fmt(df)}/ano</span></div>`;}
+  h+='</div>';
+
+  // Bases legais
+  h+=`<div class="info-card"><h4><span class="icon">📋</span>Bases Legais Utilizadas</h4>
+  <div class="info-row"><span>INSS 2026</span><span>Portaria MPS/MF nº 13/2026</span></div>
+  <div class="info-row"><span>IRPF 2026</span><span>Lei 15.270/2025 + Tabela mai/2025</span></div>
+  <div class="info-row"><span>Simples Nacional</span><span>LC 123/2006 (vigente)</span></div>
+  <div class="info-row"><span>MEI</span><span>LC 123/2006 · Teto R$ 81k/ano</span></div>
+  <div class="info-row"><span>Salário Mínimo 2026</span><span>${fmt(T.SM)}</span></div>
+  <div class="info-row"><span>Teto INSS 2026</span><span>${fmt(T.INSS.teto)}</span></div></div>`;
+
+  c.innerHTML=h;
+  window._R=ranking; window._D=dados;
+}
+
+// ╔═══════════════════════════════════╗
+// ║  TABS                              ║
+// ╚═══════════════════════════════════╝
+function switchTab(tabId){
+  document.querySelectorAll('.tab-content').forEach(el=>{el.style.display='none';});
+  document.querySelectorAll('.tab-btn').forEach(el=>{el.classList.remove('active');});
+  const tab=document.getElementById(tabId);
+  if(tab)tab.style.display='block';
+  const btn=document.querySelector(`.tab-btn[data-tab="${tabId}"]`);
+  if(btn)btn.classList.add('active');
+}
+
+// ╔═══════════════════════════════════╗
+// ║  FLUXO PRINCIPAL                   ║
+// ╚═══════════════════════════════════╝
+function calcular(){
+  const d=coletarInputs(); if(d.renda<=0)return;
+  const todos=[calcCLT(d),calcAutonomo(d),calcMEI(d),calcPJ(d)];
+  const ranking=todos.filter(c=>c.elegivel!==false).sort((a,b)=>b.totalEfetivo-a.totalEfetivo).map((c,i)=>({...c,posicao:i+1}));
+  const inel=todos.filter(c=>c.elegivel===false);
+  renderResultados(ranking,inel,d);
+  // Render Reforma Tributária PF
+  if(typeof ReformaTributaria!=='undefined'&&ReformaTributaria.renderPF){
+    ReformaTributaria.renderPF({renda:d.renda,sm:T.SM,containerID:'tabReformaPF'});
+  }
+  switchTab('tabAnalise');
+  $('formArea').style.display='none';$('resultArea').classList.remove('hidden');
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+// ╔═══════════════════════════════════╗
+// ║  EXPORTAR PDF                      ║
+// ╚═══════════════════════════════════╝
+function exportarPDF(){
+  if(!window._R)return;
+  const{jsPDF}=window.jspdf;
+  const doc=new jsPDF('p','mm','a4');
+  const r=window._R, d=window._D;
+  const data=new Date().toLocaleDateString('pt-BR');
+  const pg={w:210,m:15};
+  let y=20;
+
+  // Header
+  doc.setFillColor(61,153,112);doc.rect(0,0,210,38,'F');
+  doc.setTextColor(255);doc.setFontSize(18);doc.setFont('helvetica','bold');
+  doc.text('IMPOST.',pg.m,16);
+  doc.setFontSize(10);doc.setFont('helvetica','normal');
+  doc.text('Inteligência Tributária — Análise Pessoa Física 2026',pg.m,24);
+  doc.setFontSize(8);doc.text(`Gerado em: ${data} | Lei 15.270/2025 · Port. MPS/MF 13/2026`,pg.m,32);
+  y=46;
+
+  // Dados do contribuinte
+  doc.setTextColor(30);doc.setFontSize(11);doc.setFont('helvetica','bold');
+  doc.text('DADOS DA SIMULAÇÃO',pg.m,y);y+=8;
+  doc.setFontSize(9);doc.setFont('helvetica','normal');doc.setTextColor(60);
+  doc.text(`Renda Bruta Mensal: ${fmt(d.renda)}`,pg.m,y);y+=5;
+  doc.text(`Atividade: ${d.atividade} | Dependentes: ${d.dependentes}${d.cidade?' | Local: '+d.cidade:''}`,pg.m,y);y+=10;
+
+  // Ranking
+  doc.setTextColor(30);doc.setFontSize(11);doc.setFont('helvetica','bold');
+  doc.text('RANKING DE CENÁRIOS',pg.m,y);y+=4;
+
+  const tabData=r.map((c,i)=>[
+    `${i+1}° ${c.cenario}`,fmt(c.liquido),fmt(c.beneficios),fmt(c.totalEfetivo),pct(c.cargaTributaria),fmt(c.totalEfetivo*12)
+  ]);
+
+  doc.autoTable({
+    startY:y,margin:{left:pg.m,right:pg.m},
+    head:[['Cenário','Líquido/mês','Benefícios/mês','Total Efetivo/mês','Carga Tribut.','Total Anual']],
+    body:tabData,
+    headStyles:{fillColor:[61,153,112],fontSize:7.5,font:'helvetica',fontStyle:'bold'},
+    bodyStyles:{fontSize:7.5,font:'helvetica'},
+    alternateRowStyles:{fillColor:[240,255,244]},
+    styles:{cellPadding:3},
+  });
+  y=doc.lastAutoTable.finalY+10;
+
+  // Vencedor
+  const w=r[0];
+  doc.setFillColor(232,245,233);doc.roundedRect(pg.m,y,pg.w-2*pg.m,18,3,3,'F');
+  doc.setTextColor(46,125,50);doc.setFontSize(10);doc.setFont('helvetica','bold');
+  doc.text(`✅ MELHOR CENÁRIO: ${w.cenario} — ${fmt(w.totalEfetivo)}/mês (${pct(w.cargaTributaria)} carga)`,pg.m+5,y+7);
+  if(r.length>=2){const df=(r[0].totalEfetivo-r[r.length-1].totalEfetivo)*12;
+    doc.setFontSize(8);doc.text(`Economia de ${fmt(df)}/ano comparado ao pior cenário`,pg.m+5,y+13);}
+  y+=24;
+
+  // Detalhes por cenário
+  r.forEach(c=>{
+    if(y>250){doc.addPage();y=20;}
+    doc.setTextColor(30);doc.setFontSize(10);doc.setFont('helvetica','bold');
+    doc.text(c.cenario,pg.m,y);y+=6;
+    const rows=[];
+    if(c.cenario.includes('CLT')){
+      rows.push(['Salário Bruto',fmt(c.salarioBruto)],['(−) INSS',fmt(c.inss)],['(−) IRPF',fmt(c.irpf)]);
+      if(c.descontoVT>0)rows.push(['(−) Vale Transporte 6%',fmt(c.descontoVT)]);
+      rows.push(['Líquido',fmt(c.liquido)],['(+) Benefícios',fmt(c.beneficios)],['Total Efetivo',fmt(c.totalEfetivo)]);
+    }else if(c.cenario.includes('Autônomo')){
+      rows.push(['Renda Bruta',fmt(c.rendaBruta)],['(−) INSS 20%',fmt(c.inss)],['(−) IRPF',fmt(c.irpf)]);
+      if(c.iss>0)rows.push(['(−) ISS',fmt(c.iss)]);
+      rows.push(['Líquido',fmt(c.liquido)]);
+    }else if(c.cenario==='MEI'){
+      rows.push(['Renda Bruta',fmt(c.rendaBruta)],['(−) DAS fixo',fmt(c.das)],['(−) IRPF',fmt(c.irpf)],['Líquido',fmt(c.liquido)]);
+    }else if(c.cenario.includes('PJ')){
+      rows.push(['Faturamento',fmt(c.faturamento)],['(−) DAS',fmt(c.DAS)],['(−) Pró-labore',fmt(c.proLabore)],['(−) Despesas PJ',fmt(c.despPJ)],['Dividendos líquidos',fmt(c.dividendosLiquidos)],['PL líquido',fmt(c.proLaboreLiquido)],['Total no bolso',fmt(c.totalBolso)]);
+    }
+    doc.autoTable({startY:y,margin:{left:pg.m,right:pg.m},body:rows,
+      columnStyles:{0:{cellWidth:80},1:{halign:'right'}},
+      bodyStyles:{fontSize:8,font:'helvetica'},alternateRowStyles:{fillColor:[248,249,250]},
+      styles:{cellPadding:2.5},didParseCell:function(data){if(data.row.index===rows.length-1){data.cell.styles.fontStyle='bold';data.cell.styles.fillColor=[232,245,233];}}
+    });
+    y=doc.lastAutoTable.finalY+8;
+  });
+
+  // Rodapé
+  if(y>265){doc.addPage();y=20;}
+  doc.setFontSize(7);doc.setTextColor(150);
+  doc.text('AVISO: Simulação estimada. Não substitui consultoria contábil/fiscal profissional.',pg.m,y);y+=3.5;
+  doc.text(`Bases: INSS (Port. MPS/MF 13/2026) | IRPF (Lei 15.270/2025) | Simples (LC 123/2006) | SM ${fmt(T.SM)} | Teto INSS ${fmt(T.INSS.teto)}`,pg.m,y);
+
+  doc.save(`Analise_Tributaria_PF_${new Date().toISOString().slice(0,10)}.pdf`);
+}
+
+// ╔═══════════════════════════════════╗
+// ║  EXPORTAR EXCEL                    ║
+// ╚═══════════════════════════════════╝
+function exportarExcel(){
+  if(!window._R)return;
+  const r=window._R,d=window._D;
+  const wb=XLSX.utils.book_new();
+
+  // Aba Resumo
+  const resumo=[
+    ['IMPOST. — Inteligência Tributária | Análise PF 2026'],
+    [`Data: ${new Date().toLocaleDateString('pt-BR')}`,'','','Lei 15.270/2025 · Port. MPS/MF 13/2026'],
+    [],
+    ['DADOS DA SIMULAÇÃO'],
+    ['Renda Bruta Mensal',d.renda],['Atividade',d.atividade],['Dependentes',d.dependentes],
+    [],
+    ['RANKING DE CENÁRIOS'],
+    ['Pos.','Cenário','Líquido/mês','Benefícios/mês','Total Efetivo/mês','Carga Tribut.','Total Anual'],
+    ...r.map((c,i)=>[i+1,c.cenario,c.liquido,c.beneficios,c.totalEfetivo,c.cargaTributaria,c.totalEfetivo*12]),
+    [],
+    ['MELHOR CENÁRIO',r[0].cenario,`Total: ${fmt(r[0].totalEfetivo)}/mês`],
+  ];
+  const ws1=XLSX.utils.aoa_to_sheet(resumo);
+  ws1['!cols']=[{wch:8},{wch:25},{wch:16},{wch:16},{wch:18},{wch:14},{wch:18}];
+  XLSX.utils.book_append_sheet(wb,ws1,'Resumo');
+
+  // Aba por cenário
+  r.forEach(c=>{
+    const rows=[
+      [c.cenario],[''],['Item','Valor R$'],
+    ];
+    if(c.cenario.includes('CLT')){
+      rows.push(['Salário Bruto',c.salarioBruto],['(−) INSS',c.inss],['(−) IRPF',c.irpf]);
+      if(c.descontoVT>0)rows.push(['(−) VT 6%',c.descontoVT]);
+      rows.push(['(=) Líquido',c.liquido],['(+) Benefícios',c.beneficios],['(=) Total Efetivo',c.totalEfetivo]);
+      rows.push([],['Custo p/ Empregador',c.custoEmpregador]);
+      if(c.beneficiosDetail?.length){rows.push([],['Detalhamento Benefícios','Valor']);c.beneficiosDetail.forEach(b=>rows.push([b.nome,b.valor]));}
+    }else if(c.cenario.includes('Autônomo')){
+      rows.push(['Renda Bruta',c.rendaBruta],['(−) INSS 20%',c.inss],['(−) IRPF',c.irpf]);
+      if(c.iss>0)rows.push(['(−) ISS',c.iss]);
+      rows.push(['(=) Líquido',c.liquido]);
+    }else if(c.cenario==='MEI'){
+      rows.push(['Renda Bruta',c.rendaBruta],['(−) DAS fixo',c.das],['(−) IRPF',c.irpf],['(=) Líquido',c.liquido]);
+    }else if(c.cenario.includes('PJ')){
+      rows.push(['Faturamento',c.faturamento],['(−) DAS',c.DAS],['(−) Pró-labore',c.proLabore],['  INSS PL (11%)',c.inssPL],['  IRPF PL',c.irpfPL],['(−) Despesas PJ',c.despPJ],['Dividendos brutos',c.dividendos],['IR Dividendos',c.irDividendos],['Dividendos líquidos',c.dividendosLiquidos],['PL líquido',c.proLaboreLiquido],['(=) Total no bolso',c.totalBolso]);
+    }
+    rows.push([],['Carga Tributária',c.cargaTributaria],['Total Anual',c.totalEfetivo*12]);
+    const ws=XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols']=[{wch:28},{wch:18}];
+    XLSX.utils.book_append_sheet(wb,ws,c.cenario.split('(')[0].trim().slice(0,30));
+  });
+
+  // Aba Tabelas Referência
+  const ref=[
+    ['TABELAS TRIBUTÁRIAS — REFERÊNCIA 2026'],
+    [],
+    ['INSS 2026 — Empregado (Progressivo)'],
+    ['Faixa','Limite','Alíquota'],
+    ['1ª','R$ 1.621,00','7,5%'],['2ª','R$ 2.902,87','9,0%'],['3ª','R$ 3.857,40','12,0%'],['4ª','R$ 8.475,55','14,0%'],
+    [],
+    ['IRPF 2026 — Tabela Progressiva Mensal'],
+    ['Faixa','Limite','Alíquota','Parcela Deduzir'],
+    ['1ª','R$ 2.428,80','0%','R$ 0,00'],['2ª','R$ 2.826,65','7,5%','R$ 182,16'],
+    ['3ª','R$ 3.751,05','15%','R$ 394,16'],['4ª','R$ 4.664,68','22,5%','R$ 675,49'],
+    ['5ª','Acima','27,5%','R$ 908,73'],
+    [],
+    ['REDUÇÃO LEI 15.270/2025'],
+    ['Renda até R$ 5.000','Redução de até R$ 312,89 (zera imposto)'],
+    ['Renda R$ 5.001 a R$ 7.350','Redução parcial: R$ 978,62 − (0,133145 × renda)'],
+    ['Renda acima de R$ 7.350','Sem redução'],
+  ];
+  const ws3=XLSX.utils.aoa_to_sheet(ref);
+  ws3['!cols']=[{wch:26},{wch:20},{wch:12},{wch:16}];
+  XLSX.utils.book_append_sheet(wb,ws3,'Tabelas Referência');
+
+  XLSX.writeFile(wb,`Analise_Tributaria_PF_${new Date().toISOString().slice(0,10)}.xlsx`);
+}
+
+// ╔═══════════════════════════════════╗
+// ║  COPIAR TEXTO                      ║
+// ╚═══════════════════════════════════╝
+function copiarTexto(){
+  if(!window._R)return;
+  const r=window._R,d=window._D;
+  let t=`IMPOST. — INTELIGÊNCIA TRIBUTÁRIA | ANÁLISE PF 2026\n${'═'.repeat(50)}\nData: ${new Date().toLocaleDateString('pt-BR')}\nRenda Bruta Mensal: ${fmt(d.renda)} | Atividade: ${d.atividade} | Dependentes: ${d.dependentes}\n\nRANKING:\n`;
+  r.forEach((c,i)=>{t+=`\n${i+1}° ${c.cenario}\n   Líquido: ${fmt(c.liquido)}/mês | Benefícios: ${fmt(c.beneficios)}\n   Total Efetivo: ${fmt(c.totalEfetivo)}/mês (${fmt(c.totalEfetivo*12)}/ano)\n   Carga: ${pct(c.cargaTributaria)}\n`;});
+  t+=`\n${'═'.repeat(50)}\nBases: INSS (Port. MPS/MF 13/2026) | IRPF (Lei 15.270/2025) | Simples (LC 123/2006)\nSimulação estimada. Não substitui consultoria profissional.\n`;
+  navigator.clipboard.writeText(t).then(()=>{const b=$('btnCopiar');b.textContent='✅ Copiado!';setTimeout(()=>{b.textContent='📋 Copiar Texto';},2000);});
+}
+
+// ╔═══════════════════════════════════╗
+// ║  INIT                              ║
+// ╚═══════════════════════════════════╝
+document.addEventListener('DOMContentLoaded',()=>{
+  document.querySelectorAll('[data-type="money"]').forEach(el=>{el.addEventListener('input',()=>{aplicarMascaraMoney(el);atBtn();});});
+  $('inputRenda').addEventListener('input',atBtn);
+  $('sliderDependentes').addEventListener('input',()=>{$('dependentesValue').textContent=$('sliderDependentes').value;});
+  // IBGE: Estado → Municípios
+  $('selectUF').addEventListener('change',()=>carregarMunicipios($('selectUF').value));
+  $('btnCalcular').addEventListener('click',calcular);
+  $('btnVoltar').addEventListener('click',()=>{$('resultArea').classList.add('hidden');$('formArea').style.display='block';window.scrollTo({top:0,behavior:'smooth'});});
+  $('btnPDF').addEventListener('click',exportarPDF);
+  $('btnExcel').addEventListener('click',exportarExcel);
+  $('btnCopiar').addEventListener('click',copiarTexto);
+  document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key==='Enter'&&!$('btnCalcular').disabled&&$('formArea').style.display!=='none')calcular();});
+  atBtn();
+});
+function atBtn(){$('btnCalcular').disabled=!(parseMoney($('inputRenda'))>0);}
+</script>
+</body>
+</html>

@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IMPOST. — Calculadora Tributária Inteligente | Pará 2026</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+
+    <style>
+        body {
+            margin: 0;
+            font-family: 'DM Sans', sans-serif;
+            background: #0a0f1a;
+            color: #f1f5f9;
+            display: flex;
+        }
+        .sidebar {
+            width: 250px;
+            background: #111827;
+            height: 100vh;
+            padding: 20px;
+        }
+        .sidebar h2 {
+            color: #10b981;
+            margin-bottom: 20px;
+        }
+        .nav-btn {
+            display: block;
+            margin-bottom: 10px;
+            padding: 10px;
+            background: #1e293b;
+            border-radius: 8px;
+            color: #94a3b8;
+            cursor: pointer;
+        }
+        .nav-btn:hover { background: #243049; }
+        .main {
+            flex: 1;
+            padding: 40px;
+        }
+        .card {
+            background: #161e31;
+            padding: 30px;
+            border-radius: 16px;
+            border: 1px solid #243049;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="sidebar">
+        <h2>IMPOST.</h2>
+        <div class="nav-btn">📊 Análise Inicial</div>
+        <div class="nav-btn">⚡ Simulação</div>
+        <div class="nav-btn">🏷️ CNAEs</div>
+        <div class="nav-btn">📍 Municípios</div>
+        <div class="nav-btn">📄 Relatório</div>
+        <div class="nav-btn">📚 Legislação</div>
+    </div>
+
+    <div class="main">
+        <div class="card">
+            <h1>IMPOST. — Calculadora Tributária Inteligente</h1>
+            <p>Sistema de comparação tributária para o Estado do Pará (2026).</p>
+            <p>Simples Nacional • Lucro Presumido • Lucro Real</p>
+        </div>
+    </div>
+
+    <script src="dashboard.js"></script>
+</body>
+</html>

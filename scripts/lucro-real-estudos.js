@@ -1,0 +1,6574 @@
+/**
+ * ╔══════════════════════════════════════════════════════════════════════════════╗
+ * ║  LUCRO REAL — ESTUDOS TRIBUTÁRIOS  v2.1  (ARQUIVO UNIFICADO)              ║
+ * ║  Wizard 7 etapas + Motor de diagnóstico + Exportação PDF/Excel            ║
+ * ║  100% LUCRO REAL — Sem comparativo com Simples/Presumido                   ║
+ * ║  Motor: cruza respostas do usuário com LucroRealMap (LR.calcular.*)        ║
+ * ║  Produto comercial por assinatura — ZERO referência a empresa específica   ║
+ * ╚══════════════════════════════════════════════════════════════════════════════╝
+ *
+ * DEPENDÊNCIAS (carregar ANTES deste arquivo):
+ *   1. estados.js              → window.ESTADOS (dados de estados, ICMS, ISS)
+ *   2. municipios.js           → window.MunicipiosIBGE (municípios via API IBGE)
+ *   3. lucro-real-mapeamento.js → window.LR / window.LucroRealMap
+ *   4. Chart.js (CDN)          → gráficos no relatório
+ *   5. html2pdf.js (CDN)       → exportação PDF profissional
+ *   6. SheetJS / XLSX (CDN)    → exportação Excel (.xlsx)
+ *
+ * EXPORTA:
+ *   window.LucroRealEstudos  — API principal (inclui .pdfSimplificado, .pdfCompleto, .exportarExcel)
+ *   window.IMPOSTExport      — alias de compatibilidade para exportação
+ *
+ * IMPOST. — Inteligência em Modelagem de Otimização Tributária
+ * Versão: 2.1.0 | Data: Fevereiro/2026
+ *
+ * NOTA: Este arquivo unifica os antigos lucro-real-estudos.js + lucro-real-estudos-export.js
+ *       Não é mais necessário carregar o arquivo de exportação separadamente.
+ */
+(function () {
+  "use strict";
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  CONSTANTES E HELPERS
+  // ═══════════════════════════════════════════════════════════════════════════
+  const VERSAO = "2.1.0";
+  const LS_KEY_DADOS = "impost_lr_dados";
+  const LS_KEY_STEP = "impost_lr_step";
+  const LS_KEY_RESULTADOS = "impost_lr_resultados";
+
+  const $ = (id) => document.getElementById(id);
+  const $$ = (sel) => document.querySelectorAll(sel);
+  const _r = (v) => Math.round((v || 0) * 100) / 100;
+  const _m = (v) =>
+    "R$\u00a0" +
+    (v || 0).toLocaleString("pt-BR", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+  const _p = (v) => ((v || 0) * 100).toFixed(2) + "%";
+  const _n = (v) => parseFloat(v) || 0;
+
+  /**
+   * Formata número como moeda brasileira para exibição em inputs.
+   * Ex: 3000000 → "3.000.000,00"   |   1234.5 → "1.234,50"
+   * Recebe valor numérico (ou string de dígitos), retorna string formatada.
+   */
+  function _fmtBRL(v) {
+    if (v === "" || v === undefined || v === null) return "";
+    var n = typeof v === "number" ? v : parseFloat(String(v).replace(/\./g, "").replace(",", ".")) || 0;
+    if (n === 0 && String(v) !== "0") return "";
+    var parts = n.toFixed(2).split(".");
+    var inteiro = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+    return inteiro + "," + parts[1];
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  SIGLAS — Dicionário e helpers (Correção 8)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  var _SIGLAS = {
+    LALUR:  "Livro de Apuração do Lucro Real",
+    LACS:   "Livro de Apuração da Contribuição Social",
+    DRE:    "Demonstração do Resultado do Exercício",
+    PL:     "Patrimônio Líquido",
+    JCP:    "Juros sobre Capital Próprio",
+    TJLP:   "Taxa de Juros de Longo Prazo",
+    IRPJ:   "Imposto de Renda Pessoa Jurídica",
+    CSLL:   "Contribuição Social sobre o Lucro Líquido",
+    PIS:    "Programa de Integração Social",
+    COFINS: "Contribuição p/ Financiamento da Seguridade Social",
+    DARF:   "Documento de Arrecadação de Receitas Federais",
+    ISS:    "Imposto sobre Serviços",
+    ICMS:   "Imposto sobre Circulação de Mercadorias e Serviços",
+    CPP:    "Contribuição Previdenciária Patronal",
+    CPRB:   "Contribuição Previdenciária sobre Receita Bruta",
+    PDD:    "Provisão para Devedores Duvidosos",
+    ECF:    "Escrituração Contábil Fiscal",
+    SPED:   "Sistema Público de Escrituração Digital",
+    RIR:    "Regulamento do Imposto de Renda",
+  };
+
+  /**
+   * Retorna HTML inline com tooltip para uma sigla.
+   * Ex: _sigla("LALUR") → '<span class="sigla-help">LALUR <small class="sigla-desc">(Livro de Apuração do Lucro Real)</small></span>'
+   */
+  function _sigla(code) {
+    var desc = _SIGLAS[code];
+    if (!desc) return code;
+    return '<span class="sigla-help">' + code +
+      ' <small class="sigla-desc">(' + desc + ')</small></span>';
+  }
+
+  /**
+   * Processa HTML de uma etapa e substitui a PRIMEIRA ocorrência de cada sigla
+   * por sua versão com tooltip. Apenas texto visível (entre tags) é processado.
+   */
+  function _applySiglas(html) {
+    var used = {};
+    var allSiglas = Object.keys(_SIGLAS).sort(function (a, b) {
+      return b.length - a.length; // mais longas primeiro para evitar conflitos
+    });
+    var pattern = new RegExp("\\b(" + allSiglas.join("|") + ")\\b", "g");
+
+    return html.replace(/(>[^<]+)/g, function (match) {
+      var gt = match[0];
+      var text = match.slice(1);
+      text = text.replace(pattern, function (sigla) {
+        if (used[sigla]) return sigla;
+        used[sigla] = true;
+        return _sigla(sigla);
+      });
+      return gt + text;
+    });
+  }
+
+  var _siglaCSSInjected = false;
+
+  function _injectSiglaCSS() {
+    if (_siglaCSSInjected) return;
+    _siglaCSSInjected = true;
+    var style = document.createElement("style");
+    style.textContent =
+      ".sigla-help{position:relative;border-bottom:1px dotted rgba(46,204,113,0.5);cursor:help;}" +
+      ".sigla-desc{font-weight:400;color:#8b95a5;font-size:0.82em;white-space:nowrap;}";
+    document.head.appendChild(style);
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  CONFIGURAÇÃO WHITE-LABEL (defaults)
+  // ═══════════════════════════════════════════════════════════════════════════
+  const CONFIG_DEFAULTS = {
+    nomeProduto: "IMPOST.",
+    subtitulo: "Inteligência em Modelagem de Otimização Tributária",
+    versao: VERSAO,
+    corPrimaria: "#1A3C6E",
+    corSecundaria: "#E8A838",
+    corAcento: "#2ECC71",
+    logoURL: "",
+    elaboradoPor: { nome: "", registro: "", email: "", telefone: "" },
+    disclaimer:
+      "Este estudo é uma estimativa automatizada para fins de planejamento tributário. Consulte um profissional habilitado para validação e implementação.",
+    mostrarMarcaImpost: true,
+  };
+
+  let CONFIG = Object.assign({}, CONFIG_DEFAULTS);
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  7 ETAPAS DO WIZARD
+  // ═══════════════════════════════════════════════════════════════════════════
+  const ETAPAS = [
+    {
+      id: "empresa",
+      titulo: "Dados da Empresa e Regime",
+      icone: "🏢",
+      descricao:
+        "Identificação, atividade, localização com ISS automático e forma de apuração",
+    },
+    {
+      id: "receitas",
+      titulo: "Receitas e Faturamento",
+      icone: "💰",
+      descricao: "Receita bruta detalhada por natureza — base para todos os cálculos",
+    },
+    {
+      id: "custos",
+      titulo: "Custos, Despesas e Adições/Exclusões",
+      icone: "📋",
+      descricao: "DRE e LALUR — a etapa mais importante do wizard",
+    },
+    {
+      id: "patrimonio",
+      titulo: "Patrimônio, JCP e Prejuízos",
+      icone: "🏦",
+      descricao:
+        "JCP e compensação de prejuízos — as duas maiores fontes de economia",
+    },
+    {
+      id: "retencoes",
+      titulo: "Retenções na Fonte e Créditos PIS/COFINS",
+      icone: "🔒",
+      descricao:
+        "Antecipações compensáveis e créditos não-cumulativos sobre insumos",
+    },
+    {
+      id: "ativos",
+      titulo: "Ativos, Depreciação e Incentivos",
+      icone: "🏗️",
+      descricao:
+        "Bens depreciáveis, turnos, SUDAM/SUDENE e todos os incentivos fiscais",
+    },
+    {
+      id: "revisao",
+      titulo: "Revisão, Cenários e Configuração",
+      icone: "📈",
+      descricao:
+        "Revisar dados, configurar cenários e personalizar relatório antes de gerar",
+    },
+  ];
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  ESTADO GLOBAL
+  // ═══════════════════════════════════════════════════════════════════════════
+  let currentStep = 0;
+  let dadosEmpresa = {};
+  let resultadosCache = null;
+  let LR = null;
+  let ESTADOS = null;
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  HELPERS DE CAMPO — _field (todos os tipos)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /**
+   * Gera select de UFs a partir de ESTADOS (estados.js)
+   */
+  function _selectUF(selected) {
+    if (!ESTADOS) return '<option value="">Carregando estados...</option>';
+    var html = '<option value="">Selecione um estado...</option>';
+    // Tentar listar estados de diferentes formatos
+    if (ESTADOS.listarEstados) {
+      // Formato estados.js UMD (window.Estados)
+      var lista = ESTADOS.listarEstados();
+      lista.forEach(function (e) {
+        html +=
+          '<option value="' +
+          e.sigla +
+          '" ' +
+          (e.sigla === selected ? "selected" : "") +
+          ">" +
+          e.sigla +
+          " — " +
+          e.nome +
+          "</option>";
+      });
+    } else {
+      // Formato simples: ESTADOS["PA"] = { nome: "Pará", ... }
+      var siglas = Object.keys(ESTADOS).sort();
+      siglas.forEach(function (uf) {
+        var nome = ESTADOS[uf].nome || uf;
+        html +=
+          '<option value="' +
+          uf +
+          '" ' +
+          (uf === selected ? "selected" : "") +
+          ">" +
+          uf +
+          " — " +
+          nome +
+          "</option>";
+      });
+    }
+    return html;
+  }
+
+  /**
+   * Gera select de tipos de atividade agrupados por optgroup
+   */
+  function _selectAtividades(selected) {
+    if (!LR || !LR.presuncoes) return '<option value="">Carregando...</option>';
+    var grupos = {
+      Serviços: [
+        "SERVICOS_GERAL",
+        "SERVICOS_HOSPITALARES",
+        "INTERMEDIACAO_NEGOCIOS",
+        "ADMINISTRACAO_LOCACAO",
+      ],
+      "Comércio/Indústria": [
+        "COMERCIO_INDUSTRIA",
+        "REVENDA_COMBUSTIVEIS",
+        "ATIVIDADE_IMOBILIARIA",
+      ],
+      Transporte: ["TRANSPORTE_CARGA", "TRANSPORTE_PASSAGEIROS"],
+      "⚠️ Obrigatório LR": ["FACTORING", "INSTITUICOES_FINANCEIRAS"],
+    };
+    var html = '<option value="">Selecione a atividade...</option>';
+    Object.keys(grupos).forEach(function (grupo) {
+      html += '<optgroup label="' + grupo + '">';
+      grupos[grupo].forEach(function (k) {
+        if (LR.presuncoes[k]) {
+          html +=
+            '<option value="' +
+            k +
+            '" ' +
+            (k === selected ? "selected" : "") +
+            ">" +
+            LR.presuncoes[k].label +
+            "</option>";
+        }
+      });
+      html += "</optgroup>";
+    });
+    // Adicionar quaisquer presunções não classificadas
+    var usados = [].concat.apply([], Object.values(grupos));
+    Object.keys(LR.presuncoes).forEach(function (k) {
+      if (usados.indexOf(k) === -1) {
+        html +=
+          '<option value="' +
+          k +
+          '" ' +
+          (k === selected ? "selected" : "") +
+          ">" +
+          LR.presuncoes[k].label +
+          "</option>";
+      }
+    });
+    return html;
+  }
+
+  /**
+   * Gerador universal de campo
+   * Suporta: text, number, money, percent, select, checkbox, radio, textarea
+   */
+  function _field(id, label, type, opts) {
+    opts = opts || {};
+    var val =
+      dadosEmpresa[id] !== undefined ? dadosEmpresa[id] : opts.default || "";
+    var ph = opts.placeholder || "";
+    var tip = opts.tip
+      ? '<span class="wz-tip">' + opts.tip + "</span>"
+      : "";
+    var req = opts.required ? "required" : "";
+    var cls = opts.className || "";
+    var cond = opts.condition
+      ? 'data-condition="' + opts.condition + '" style="display:none"'
+      : "";
+    var extra = opts.extra || "";
+    var disabled = opts.disabled ? "disabled" : "";
+
+    if (type === "select") {
+      return (
+        '<div class="wz-field ' + cls + '" ' + cond + ">" +
+        '<label for="' + id + '">' + label + "</label>" + tip +
+        '<select id="' + id + '" name="' + id + '" class="wz-input" ' +
+        req + " " + disabled +
+        " onchange=\"LucroRealEstudos.saveField('" + id + "',this.value)\">" +
+        (opts.options || "") +
+        "</select>" + extra + "</div>"
+      );
+    }
+
+    if (type === "checkbox") {
+      var chk =
+        val === true || val === "true" || val === "on" ? "checked" : "";
+      return (
+        '<div class="wz-field wz-field-check ' + cls + '" ' + cond + ">" +
+        '<label class="wz-check-label">' +
+        '<input type="checkbox" id="' + id + '" name="' + id + '" ' + chk +
+        " onchange=\"LucroRealEstudos.saveField('" + id + "',this.checked)\">" +
+        '<span class="wz-checkmark"></span>' + label +
+        "</label>" + tip + "</div>"
+      );
+    }
+
+    if (type === "radio") {
+      var radios = (opts.options || [])
+        .map(function (o) {
+          return (
+            '<label class="wz-radio-label">' +
+            '<input type="radio" name="' + id + '" value="' + o.value + '" ' +
+            (String(val) === String(o.value) ? "checked" : "") +
+            " onchange=\"LucroRealEstudos.saveField('" +
+            id + "','" + o.value + "')\">" +
+            '<span class="wz-radio-mark"></span>' + o.label +
+            "</label>"
+          );
+        })
+        .join("");
+      return (
+        '<div class="wz-field ' + cls + '" ' + cond + ">" +
+        "<label>" + label + "</label>" + tip +
+        '<div class="wz-radio-group">' + radios + "</div></div>"
+      );
+    }
+
+    if (type === "money") {
+      var fmtVal = val ? _fmtBRL(val) : "";
+      return (
+        '<div class="wz-field ' + cls + '" ' + cond + ">" +
+        '<label for="' + id + '">' + label + "</label>" + tip +
+        '<div class="wz-input-prefix"><span>R$</span>' +
+        '<input type="text" id="' + id + '" name="' + id +
+        '" class="wz-input" placeholder="' + ph + '" value="' + fmtVal +
+        "\" oninput=\"LucroRealEstudos.saveMoney('" + id + "',this)\" " +
+        req + " " + disabled + ">" +
+        "</div>" + extra + "</div>"
+      );
+    }
+
+    if (type === "percent") {
+      return (
+        '<div class="wz-field ' + cls + '" ' + cond + ">" +
+        '<label for="' + id + '">' + label + "</label>" + tip +
+        '<div class="wz-input-suffix">' +
+        '<input type="number" id="' + id + '" name="' + id +
+        '" class="wz-input" placeholder="' + ph + '" value="' + val +
+        '" step="0.01" min="0" max="100"' +
+        " oninput=\"LucroRealEstudos.saveField('" + id + "',this.value)\" " +
+        req + ">" +
+        "<span>%</span></div></div>"
+      );
+    }
+
+    if (type === "textarea") {
+      return (
+        '<div class="wz-field ' + cls + '" ' + cond + ">" +
+        '<label for="' + id + '">' + label + "</label>" + tip +
+        '<textarea id="' + id + '" name="' + id +
+        '" class="wz-input" placeholder="' + ph + '" rows="3"' +
+        " oninput=\"LucroRealEstudos.saveField('" + id + "',this.value)\" " +
+        req + ">" + (val || "") + "</textarea></div>"
+      );
+    }
+
+    // default: text / number
+    return (
+      '<div class="wz-field ' + cls + '" ' + cond + ">" +
+      '<label for="' + id + '">' + label + "</label>" + tip +
+      '<input type="' + type + '" id="' + id + '" name="' + id +
+      '" class="wz-input" placeholder="' + ph + '" value="' + val +
+      "\" oninput=\"LucroRealEstudos.saveField('" + id + "',this.value)\" " +
+      req + ">" + extra + "</div>"
+    );
+  }
+
+  function _sectionTitle(text) {
+    return '<h3 class="wz-section-title">' + text + "</h3>";
+  }
+
+  function _infoBox(text, cls) {
+    return '<div class="wz-info-box ' + (cls || "") + '">' + text + "</div>";
+  }
+
+  function _row(content) {
+    return '<div class="wz-row">' + content + "</div>";
+  }
+
+  function _autoCalcBox(id) {
+    return '<div class="wz-auto-calc" id="' + id + '"></div>';
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  AUTOCOMPLETE CNAE — Correção 1
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  var _cnaeDropdownCSS = false;
+
+  function _injectCnaeCSS() {
+    if (_cnaeDropdownCSS) return;
+    _cnaeDropdownCSS = true;
+    var style = document.createElement("style");
+    style.textContent =
+      ".cnae-ac-wrap{position:relative;}" +
+      ".cnae-dropdown{position:absolute;top:100%;left:0;right:0;z-index:1000;max-height:300px;overflow-y:auto;" +
+      "background:#1a2236;border:1px solid rgba(255,255,255,0.12);border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,0.5);" +
+      "margin-top:2px;display:none;}" +
+      ".cnae-dropdown.open{display:block;}" +
+      ".cnae-dropdown-item{padding:10px 14px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,0.05);" +
+      "font-size:13px;color:#ccc;transition:background .15s;}" +
+      ".cnae-dropdown-item:last-child{border-bottom:none;}" +
+      ".cnae-dropdown-item:hover,.cnae-dropdown-item.active{background:rgba(46,204,113,0.15);color:#fff;}" +
+      ".cnae-dropdown-item .cnae-code{font-family:'JetBrains Mono',monospace;color:#2ECC71;margin-right:8px;font-weight:600;}" +
+      ".cnae-dropdown-item .cnae-cat{font-size:11px;color:#888;margin-left:6px;}" +
+      ".cnae-dropdown-empty{padding:12px 14px;color:#777;font-style:italic;font-size:13px;}";
+    document.head.appendChild(style);
+  }
+
+  function buscarCnae(texto) {
+    var banco = window.CNAE || window.BANCO_CNAE;
+    if (!banco || !texto || texto.length < 2) return [];
+    var norm = texto.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    var isCode = /^\d{2,}/.test(norm.replace(/[\s\-\/]/g, ""));
+    var codeQ = norm.replace(/[\s\-\/]/g, "");
+
+    return banco.filter(function (c) {
+      if (isCode) return c.codigo.replace(/[\-\/]/g, "").indexOf(codeQ) === 0;
+      var descNorm = c.descricao.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      return norm.split(/\s+/).every(function (t) { return descNorm.indexOf(t) >= 0; });
+    }).slice(0, 15);
+  }
+
+  var _cnaeDebounceTimers = {};
+  var _cnaeActiveIdx = {};
+
+  function _initCnaeAutocomplete() {
+    _injectCnaeCSS();
+    _setupCnaeField("cnaePrincipal", false);
+    _setupCnaeField("cnaesSecundarios", true);
+  }
+
+  function _setupCnaeField(fieldId, multi) {
+    var input = $(fieldId);
+    if (!input) return;
+
+    // Evitar duplicar dropdowns
+    if (input.parentNode.querySelector(".cnae-dropdown")) return;
+
+    // Envolver input em wrapper relativo
+    var wrapper = input.parentNode;
+    if (!wrapper.classList.contains("cnae-ac-wrap")) {
+      wrapper.style.position = "relative";
+      wrapper.classList.add("cnae-ac-wrap");
+    }
+
+    // Criar dropdown
+    var dd = document.createElement("div");
+    dd.className = "cnae-dropdown";
+    dd.id = "cnaeDD_" + fieldId;
+    wrapper.appendChild(dd);
+
+    _cnaeActiveIdx[fieldId] = -1;
+
+    // Input handler com debounce
+    input.addEventListener("input", function () {
+      clearTimeout(_cnaeDebounceTimers[fieldId]);
+      _cnaeDebounceTimers[fieldId] = setTimeout(function () {
+        var texto = input.value;
+        if (multi) {
+          var parts = texto.split(",");
+          texto = parts[parts.length - 1].trim();
+        }
+        _renderCnaeDropdown(dd, fieldId, texto, input, multi);
+      }, 250);
+    });
+
+    // Paste handler
+    input.addEventListener("paste", function () {
+      setTimeout(function () {
+        var texto = input.value;
+        if (multi) {
+          var parts = texto.split(",");
+          texto = parts[parts.length - 1].trim();
+        }
+        _renderCnaeDropdown(dd, fieldId, texto, input, multi);
+      }, 50);
+    });
+
+    // Keyboard navigation
+    input.addEventListener("keydown", function (e) {
+      if (!dd.classList.contains("open")) return;
+      var items = dd.querySelectorAll(".cnae-dropdown-item");
+      if (!items.length) return;
+
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        _cnaeActiveIdx[fieldId] = Math.min(_cnaeActiveIdx[fieldId] + 1, items.length - 1);
+        _highlightCnaeItem(items, _cnaeActiveIdx[fieldId]);
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        _cnaeActiveIdx[fieldId] = Math.max(_cnaeActiveIdx[fieldId] - 1, 0);
+        _highlightCnaeItem(items, _cnaeActiveIdx[fieldId]);
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        if (_cnaeActiveIdx[fieldId] >= 0 && items[_cnaeActiveIdx[fieldId]]) {
+          items[_cnaeActiveIdx[fieldId]].click();
+        }
+      } else if (e.key === "Escape") {
+        dd.classList.remove("open");
+        _cnaeActiveIdx[fieldId] = -1;
+      }
+    });
+
+    // Fechar ao clicar fora
+    document.addEventListener("click", function (e) {
+      if (!wrapper.contains(e.target)) {
+        dd.classList.remove("open");
+        _cnaeActiveIdx[fieldId] = -1;
+      }
+    });
+  }
+
+  function _renderCnaeDropdown(dd, fieldId, texto, input, multi) {
+    _cnaeActiveIdx[fieldId] = -1;
+    if (!texto || texto.length < 2) {
+      dd.classList.remove("open");
+      dd.innerHTML = "";
+      return;
+    }
+    var resultados = buscarCnae(texto);
+    if (resultados.length === 0) {
+      dd.innerHTML = '<div class="cnae-dropdown-empty">Nenhum CNAE encontrado para "' + texto + '"</div>';
+      dd.classList.add("open");
+      return;
+    }
+    var html = "";
+    resultados.forEach(function (c, idx) {
+      html += '<div class="cnae-dropdown-item" data-idx="' + idx + '" data-codigo="' + c.codigo + '" data-descricao="' + c.descricao.replace(/"/g, "&quot;") + '">' +
+        '<span class="cnae-code">' + c.codigo + '</span>' + c.descricao +
+        '<span class="cnae-cat">' + (c.categoria || "") + '</span></div>';
+    });
+    dd.innerHTML = html;
+    dd.classList.add("open");
+
+    // Click handler para cada item
+    dd.querySelectorAll(".cnae-dropdown-item").forEach(function (item) {
+      item.addEventListener("click", function () {
+        var codigo = item.getAttribute("data-codigo");
+        var descricao = item.getAttribute("data-descricao");
+        var valor = codigo + " - " + descricao;
+
+        if (multi) {
+          var parts = input.value.split(",");
+          parts[parts.length - 1] = " " + valor;
+          input.value = parts.join(",").replace(/^,?\s*/, "");
+        } else {
+          input.value = valor;
+        }
+
+        dadosEmpresa[fieldId] = input.value;
+        saveToLS();
+        dd.classList.remove("open");
+        dd.innerHTML = "";
+        _cnaeActiveIdx[fieldId] = -1;
+
+        // Auto-detectar CPRB se CNAE principal começa com 62
+        if (fieldId === "cnaePrincipal" && codigo.replace(/[\-\/]/g, "").substring(0, 2) === "62") {
+          _sugerirCPRB();
+        }
+      });
+    });
+  }
+
+  function _highlightCnaeItem(items, idx) {
+    items.forEach(function (it, i) {
+      it.classList.toggle("active", i === idx);
+    });
+    if (items[idx]) items[idx].scrollIntoView({ block: "nearest" });
+  }
+
+  function _sugerirCPRB() {
+    // Sugere CPRB na etapa 4 — será implementado na Correção 4
+    // Marcar flag para mostrar badge informativo
+    dadosEmpresa._cprbSugerida = true;
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  RENDER WIZARD (com progress bar)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  function renderWizard() {
+    var container = $("wizardContainer");
+    if (!container) return;
+
+    // Esconder resultados se visíveis
+    var resContainer = $("resultadosContainer");
+    if (resContainer) resContainer.style.display = "none";
+    container.style.display = "";
+
+    // ── Progress bar clicável ──
+    var progressHTML = '<div class="wz-progress">';
+    ETAPAS.forEach(function (e, i) {
+      var estado =
+        i < currentStep ? "done" : i === currentStep ? "active" : "";
+      progressHTML +=
+        '<div class="wz-step-indicator ' + estado +
+        '" data-step="' + i +
+        '" onclick="LucroRealEstudos.goToStep(' + i + ')" title="' +
+        e.titulo + '">' +
+        '<div class="wz-step-num">' +
+        (i < currentStep ? "✓" : i + 1) + "</div>" +
+        '<div class="wz-step-label">' + e.titulo + "</div></div>";
+      if (i < ETAPAS.length - 1) {
+        progressHTML +=
+          '<div class="wz-step-line ' +
+          (i < currentStep ? "done" : "") + '"></div>';
+      }
+    });
+    progressHTML += "</div>";
+
+    // ── Conteúdo da etapa atual ──
+    var etapa = ETAPAS[currentStep];
+    var formHTML = renderEtapa(currentStep);
+
+    // ── Navegação ──
+    var navHTML = '<div class="wz-nav">';
+    if (currentStep > 0) {
+      navHTML +=
+        '<button class="wz-btn wz-btn-back" onclick="LucroRealEstudos.prevStep()">← Voltar</button>';
+    }
+    navHTML +=
+      '<button class="wz-btn wz-btn-fill" onclick="LucroRealEstudos.preencherExemplo()" title="Carregar dados de exemplo para demonstração">⚡ Carregar Exemplo</button>';
+    if (currentStep < ETAPAS.length - 1) {
+      navHTML +=
+        '<button class="wz-btn wz-btn-next" onclick="LucroRealEstudos.nextStep()">Próximo →</button>';
+    } else {
+      navHTML +=
+        '<button class="wz-btn wz-btn-analyze" onclick="LucroRealEstudos.analisar()">🔍 GERAR ESTUDO COMPLETO</button>';
+    }
+    navHTML += "</div>";
+
+    container.innerHTML =
+      progressHTML +
+      '<div class="wz-content">' +
+      '<div class="wz-header">' +
+      '<span class="wz-header-icon">' + etapa.icone + "</span>" +
+      "<div>" +
+      '<h2 class="wz-title">Etapa ' + (currentStep + 1) + " de " +
+      ETAPAS.length + " — " + etapa.titulo + "</h2>" +
+      '<p class="wz-subtitle">' + etapa.descricao + "</p>" +
+      "</div></div>" +
+      '<div class="wz-form">' + formHTML + "</div>" +
+      navHTML +
+      "</div>";
+
+    restoreValues();
+    bindConditionals();
+    updateAutoCalcs();
+
+    // Integração de municípios: se estamos na etapa 0 e tem UF, carregar municípios
+    if (currentStep === 0 && dadosEmpresa.uf) {
+      _carregarMunicipios(dadosEmpresa.uf);
+    }
+
+    // Autocomplete CNAE na etapa 0
+    if (currentStep === 0) {
+      _initCnaeAutocomplete();
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  RENDER DE CADA ETAPA (0 a 6)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  function renderEtapa(step) {
+    var html;
+    switch (step) {
+      case 0: html = renderEtapa0(); break;
+      case 1: html = renderEtapa1(); break;
+      case 2: html = renderEtapa2(); break;
+      case 3: html = renderEtapa3(); break;
+      case 4: html = renderEtapa4(); break;
+      case 5: html = renderEtapa5(); break;
+      case 6: html = renderEtapa6(); break;
+      default: html = "";
+    }
+    return _applySiglas(html);
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  //  ETAPA 0 — Dados da Empresa e Regime
+  // ──────────────────────────────────────────────────────────────────────────
+  function renderEtapa0() {
+    var h = "";
+    h += _sectionTitle("Identificação da Empresa");
+    h += _row(
+      _field("razaoSocial", "Razão Social", "text", {
+        required: true,
+        placeholder: "Nome da empresa",
+      }) +
+      _field("cnpj", "CNPJ", "text", {
+        placeholder: "XX.XXX.XXX/XXXX-XX",
+        extra: '<script>document.getElementById("cnpj")&&document.getElementById("cnpj").addEventListener("input",function(e){var v=e.target.value.replace(/\\D/g,"");if(v.length>14)v=v.substr(0,14);v=v.replace(/(\\d{2})(\\d)/,"$1.$2").replace(/(\\d{3})(\\d)/,"$1.$2").replace(/(\\d{3})(\\d)/,"$1/$2").replace(/(\\d{4})(\\d)/,"$1-$2");e.target.value=v;})<\/script>',
+      })
+    );
+    h += _row(
+      _field("cnaePrincipal", "CNAE Principal", "text", {
+        placeholder: 'Ex: 7119-7/99',
+      }) +
+      _field("cnaesSecundarios", "CNAEs Secundários", "text", {
+        placeholder: "Separados por vírgula",
+      })
+    );
+
+    h += _sectionTitle("Localização");
+    h += _row(
+      _field("uf", "UF", "select", {
+        required: true,
+        options: _selectUF(dadosEmpresa.uf),
+        extra: '<div id="ufBadge"></div>',
+      }) +
+      '<div class="wz-field">' +
+        '<label for="municipio">Município</label>' +
+        '<span class="wz-tip">Selecione o estado primeiro — os municípios serão carregados automaticamente via API IBGE</span>' +
+        '<select id="municipio" name="municipio" class="wz-input" required ' +
+        'onchange="LucroRealEstudos.onMunicipioChanged(this)">' +
+        '<option value="">Selecione o estado primeiro...</option>' +
+        '</select>' +
+        '<div id="municipioLoading" class="wz-municipio-loading" style="display:none">Carregando municípios...</div>' +
+      '</div>'
+    );
+    h += _row(
+      _field("tipoServicoISS", "Tipo de serviço (LC 116/2003)", "select", {
+        tip: "Influencia a faixa de alíquota ISS. Selecione o item da lista de serviços mais adequado.",
+        options:
+          '<option value="">Selecione (padrão: 5%)</option>' +
+          '<option value="informatica" ' + (dadosEmpresa.tipoServicoISS === "informatica" ? "selected" : "") + '>Item 1 — Informática (2% a 5%)</option>' +
+          '<option value="saude" ' + (dadosEmpresa.tipoServicoISS === "saude" ? "selected" : "") + '>Item 4 — Saúde (2% a 3%)</option>' +
+          '<option value="engenharia" ' + (dadosEmpresa.tipoServicoISS === "engenharia" ? "selected" : "") + '>Item 7 — Engenharia/Arquitetura (2% a 5%)</option>' +
+          '<option value="educacao" ' + (dadosEmpresa.tipoServicoISS === "educacao" ? "selected" : "") + '>Item 8 — Educação (2% a 5%)</option>' +
+          '<option value="contabilidade" ' + (dadosEmpresa.tipoServicoISS === "contabilidade" ? "selected" : "") + '>Item 17 — Contabilidade/Auditoria (2% a 5%)</option>' +
+          '<option value="advocacia" ' + (dadosEmpresa.tipoServicoISS === "advocacia" ? "selected" : "") + '>Item 17 — Advocacia (2% a 5%)</option>' +
+          '<option value="consultoria" ' + (dadosEmpresa.tipoServicoISS === "consultoria" ? "selected" : "") + '>Item 17 — Consultoria (2% a 5%)</option>' +
+          '<option value="construcao" ' + (dadosEmpresa.tipoServicoISS === "construcao" ? "selected" : "") + '>Item 7 — Construção civil (2% a 5%)</option>' +
+          '<option value="transporte" ' + (dadosEmpresa.tipoServicoISS === "transporte" ? "selected" : "") + '>Item 16 — Transporte municipal (2% a 5%)</option>' +
+          '<option value="outros" ' + (dadosEmpresa.tipoServicoISS === "outros" ? "selected" : "") + '>Outros serviços (2% a 5%)</option>',
+      }) +
+      _field("issAliquota", "Alíquota ISS do município (%)", "percent", {
+        default: "5",
+        tip: "Pré-preenchido pelo município selecionado. Editável manualmente (2% a 5%).",
+      })
+    );
+    h += '<div class="wz-field"><div id="dicaISS" class="wz-iss-dica"></div></div>';
+
+    // SUP — Sociedade Uniprofissional
+    h += _field("ehSUP", "Sociedade Uniprofissional (SUP)?", "checkbox", {
+      tip: "Sociedades de profissionais liberais (médicos, advogados, contadores, engenheiros) podem recolher ISS fixo por profissional, sem alíquota percentual.",
+    });
+    h += '<div data-condition="ehSUP" style="display:none">';
+    h += _row(
+      _field("issFixoPorProfissional", "ISS fixo anual por profissional (R$)", "money", {
+        tip: "Valor fixo anual por sócio/profissional habilitado. Varia por município (ex: SP ≈ R$ 800/ano por profissional).",
+        default: "800",
+      }) +
+      _field("numProfissionaisSUP", "Nº de profissionais habilitados", "number", {
+        default: "2",
+        tip: "Número de sócios ou profissionais que exercem atividade na sociedade",
+      })
+    );
+    h += _autoCalcBox("calcISSSUP");
+    h += "</div>";
+
+    h += _sectionTitle("Atividade e Regime");
+    h += _row(
+      _field("tipoAtividade", "Tipo de Atividade Principal", "select", {
+        required: true,
+        options: _selectAtividades(dadosEmpresa.tipoAtividade),
+      }) +
+      _field("atividadeMista", "Atividade mista?", "checkbox", {
+        tip: "Se a empresa tem mais de um tipo de atividade com receitas relevantes",
+      })
+    );
+    h += '<div data-condition="atividadeMista" style="display:none">';
+    h += _row(
+      _field("atividadeSecundaria", "Atividade Secundária", "select", {
+        options: _selectAtividades(dadosEmpresa.atividadeSecundaria),
+      }) +
+      _field("percentReceitaSecundaria", "% da receita da atividade secundária", "percent", {
+        placeholder: "30",
+      })
+    );
+    h += "</div>";
+
+    h += _row(
+      _field("anoBase", "Ano-Base do Estudo", "select", {
+        options:
+          '<option value="2024" ' + (dadosEmpresa.anoBase === "2024" ? "selected" : "") + ">2024</option>" +
+          '<option value="2025" ' + (dadosEmpresa.anoBase === "2025" ? "selected" : "") + ">2025</option>" +
+          '<option value="2026" ' + ((!dadosEmpresa.anoBase || dadosEmpresa.anoBase === "2026") ? "selected" : "") + ">2026</option>",
+      }) +
+      _field("apuracaoLR", "Forma de Apuração", "select", {
+        required: true,
+        options:
+          '<option value="">Selecione...</option>' +
+          '<option value="trimestral" ' + (dadosEmpresa.apuracaoLR === "trimestral" ? "selected" : "") + ">Trimestral (definitiva — apura a cada 3 meses)</option>" +
+          '<option value="anual_estimativa" ' + (dadosEmpresa.apuracaoLR === "anual_estimativa" ? "selected" : "") + ">Anual por Estimativa (antecipações mensais + ajuste no ano)</option>" +
+          '<option value="anual_suspensao" ' + (dadosEmpresa.apuracaoLR === "anual_suspensao" ? "selected" : "") + ">Anual com Suspensão/Redução (balancetes mensais)</option>",
+        tip: "Trimestral: apuração definitiva a cada trimestre. Anual Estimativa: paga antecipações mensais e ajusta no final. Suspensão/Redução: pode suspender pagamento com balancete mensal.",
+      })
+    );
+
+    h += _sectionTitle("Informações Complementares");
+    h += _row(
+      _field("numSocios", "Nº de Sócios", "number", { default: "2" }) +
+      _field("numFuncionarios", "Nº de Funcionários", "number", { default: "0" })
+    );
+    h += _row(
+      _field("prestaServPublico", "Presta serviço p/ órgão público?", "checkbox") +
+      _field("ehFinanceira", "É instituição financeira?", "checkbox")
+    );
+
+    h += '<div id="alertaObrigatoriedade"></div>';
+    return h;
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  //  ETAPA 1 — Receitas e Faturamento
+  // ──────────────────────────────────────────────────────────────────────────
+  function renderEtapa1() {
+    var h = "";
+
+    h += _sectionTitle("Receita Bruta (obrigatória)");
+    h += _infoBox(
+      "Informe a receita bruta total anual. Opcionalmente, detalhe por tipo de receita ou preencha mês a mês para análise de sazonalidade.",
+      "wz-info-default"
+    );
+
+    // Modo simplificado (padrão)
+    h += _field("receitaBrutaAnual", "Receita Bruta Total Anual", "money", {
+      required: true,
+      placeholder: "3.000.000",
+    });
+
+    // Toggle detalhamento
+    h += _field("detalharReceita", 'Detalhar por tipo de receita', "checkbox");
+    h += '<div data-condition="detalharReceita" style="display:none">';
+    h += _row(
+      _field("receitaServicos", "Receita de Serviços", "money") +
+      _field("receitaComercio", "Receita de Comércio/Mercadorias", "money")
+    );
+    h += _row(
+      _field("receitaFinanceiras", "Receita de Aplicações Financeiras", "money", {
+        tip: "Tributadas mas NÃO entram no lucro da exploração (SUDAM/SUDENE)",
+      }) +
+      _field("receitaAlugueis", "Receita de Aluguéis", "money")
+    );
+    h += _field("outrasReceitas", "Outras Receitas Operacionais", "money");
+    h += _autoCalcBox("calcSomaReceitas");
+    h += "</div>";
+
+    // Modo mês a mês
+    h += _field("preencherMesAMes", "Preencher mês a mês (para análise de sazonalidade)", "checkbox");
+    h += '<div data-condition="preencherMesAMes" style="display:none">';
+    var meses = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+    for (var i = 0; i < 12; i += 2) {
+      h += _row(
+        _field("receitaMes" + (i + 1), meses[i], "money") +
+        (i + 1 < 12 ? _field("receitaMes" + (i + 2), meses[i + 1], "money") : "")
+      );
+    }
+    h += _autoCalcBox("calcSomaMeses");
+    h += "</div>";
+
+    h += _sectionTitle("Receitas Especiais");
+    h += _row(
+      _field("receitasIsentas", "Receitas isentas de PIS/COFINS", "money", {
+        tip: "Exportação, alíquota zero, receitas suspensas",
+      }) +
+      _field("receitaExportacao", "Receitas de exportação", "money", {
+        tip: "Isentas de PIS/COFINS — Lei 10.637/02 art. 5º",
+      })
+    );
+    h += _row(
+      _field("receitasMonofasicas", "Receitas monofásicas", "money", {
+        tip: "Combustíveis, farmacêuticos, cosméticos — tributação concentrada",
+      }) +
+      _field("receitasFinanceirasEspeciais", "Receitas financeiras", "money", {
+        tip: "Aplicações, rendimentos, juros — tributadas mas NÃO entram no lucro da exploração (SUDAM)",
+      })
+    );
+    h += _row(
+      _field("receitasExteriorAnual", "Receitas do exterior", "money", {
+        tip: "Se > 0, empresa é OBRIGADA ao Lucro Real (Art. 257, III)",
+        extra: '<div id="alertaExterior"></div>',
+      }) +
+      _field("temCreditoImpExterior", "Tem crédito de imposto pago no exterior?", "checkbox", {
+        condition: "receitasExteriorAnual",
+      })
+    );
+    h += _field("percentReceitaPublico", "% da receita de órgãos públicos", "percent", {
+      default: "0",
+      tip: "Para estimar retenções na fonte automaticamente",
+    });
+
+    h += _autoCalcBox("calcReceitas");
+    return h;
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  //  ETAPA 2 — Custos, Despesas e Adições/Exclusões
+  // ──────────────────────────────────────────────────────────────────────────
+  function renderEtapa2() {
+    var h = "";
+
+    // ── Custos Operacionais ──
+    h += _sectionTitle("Custos Operacionais");
+    h += _field("folhaPagamentoAnual", "Custo com Pessoal (total c/ encargos)", "money", {
+      required: true,
+      tip: "Valor consolidado. Ou detalhe abaixo.",
+    });
+    h += _field("detalharFolha", "Detalhar folha de pagamento", "checkbox");
+    h += '<div data-condition="detalharFolha" style="display:none">';
+    h += _row(
+      _field("salariosBrutos", "Salários brutos", "money") +
+      _field("proLabore", "Pró-labore dos sócios", "money", {
+        tip: "DEDUTÍVEL no Lucro Real — destaque como despesa operacional",
+        extra: '<span class="wz-badge wz-badge-green">Dedutível</span>',
+      })
+    );
+    h += _row(
+      _field("inssPatronal", "INSS patronal (≈28%)", "money") +
+      _field("fgts", "FGTS (8%)", "money")
+    );
+    h += _row(
+      _field("decimoTerceiro", "13º provisão", "money") +
+      _field("feriasProvisao", "Férias + 1/3 provisão", "money")
+    );
+    h += "</div>";
+
+    h += _row(
+      _field("cmv", "CMV / Custos com Mercadorias", "money") +
+      _field("servicosTerceiros", "Custos com Serviços de Terceiros", "money")
+    );
+    h += _row(
+      _field("freteComprasVendas", "Frete sobre vendas/compras", "money") +
+      _field("outrosCustosOp", "Outros Custos Operacionais", "money")
+    );
+
+    // ── Despesas Operacionais ──
+    h += _sectionTitle("Despesas Operacionais");
+    h += _row(
+      _field("aluguelAnual", "Aluguel de imóveis", "money") +
+      _field("energiaAnual", "Energia elétrica", "money")
+    );
+    h += _row(
+      _field("telecomAnual", "Telecomunicações", "money") +
+      _field("manutencaoConservacao", "Manutenção e conservação", "money")
+    );
+    h += _row(
+      _field("segurosAnual", "Seguros", "money") +
+      _field("despesasVeiculos", "Despesas com veículos", "money")
+    );
+    h += _row(
+      _field("honorariosContabeis", "Honorários (contábeis/advocatícios)", "money") +
+      _field("marketingPublicidade", "Marketing e publicidade", "money")
+    );
+    h += _row(
+      _field("despesasViagem", "Viagens", "money") +
+      _field("materialEscritorio", "Material de escritório", "money")
+    );
+    h += _field("outrasDespesasOp", "Outras despesas operacionais", "money");
+
+    // ── Adições ao LALUR ──
+    h += _sectionTitle("Despesas Indedutíveis → Adições ao LALUR");
+    h += _infoBox(
+      "Despesas que NÃO podem ser deduzidas do Lucro Real. Cada R$ 1,00 indedutível gera R$ 0,34 a mais de imposto (25% IRPJ + 9% CSLL). Marque apenas as que se aplicam.",
+      "wz-info-warning"
+    );
+
+    h += _field("temMultas", "Multas punitivas", "checkbox");
+    h += _field("multasPunitivas", "Valor das multas punitivas", "money", {
+      condition: "temMultas",
+      tip: "Indedutível (Art. 311, §5º). Multas COMPENSATÓRIAS são dedutíveis.",
+      extra: '<div class="wz-badge wz-badge-red" data-condition="temMultas" style="display:none">Impacto: <span id="impactoMultas"></span></div>',
+    });
+
+    h += _field("temBrindes", "Brindes", "checkbox");
+    h += _field("brindes", "Valor dos brindes", "money", {
+      condition: "temBrindes",
+      tip: "Indedutível (Art. 13, Lei 9.249). Estratégia: reclassificar como propaganda.",
+    });
+
+    h += _field("temAlimSocios", "Alimentação de sócios/administradores", "checkbox");
+    h += _field("alimentacaoSocios", "Valor da alimentação de sócios", "money", {
+      condition: "temAlimSocios",
+      tip: "Indedutível (Art. 260, §ú, IV). Use PAT para funcionários.",
+    });
+
+    h += _field("temGratificacaoAdm", "Gratificações a administradores", "checkbox");
+    h += _field("gratificacoesAdm", "Valor das gratificações", "money", {
+      condition: "temGratificacaoAdm",
+      tip: "Indedutível (Art. 358, §1º). Estratégia: converter em pró-labore (dedutível).",
+      extra: '<div class="wz-badge wz-badge-green" data-condition="temGratificacaoAdm" style="display:none">💡 Converter para pró-labore economiza <span id="econGratif"></span></div>',
+    });
+
+    h += _field("temDoacoesFora", "Doações fora dos limites legais", "checkbox");
+    h += _field("doacoesIrregulares", "Valor das doações irregulares", "money", {
+      condition: "temDoacoesFora",
+      tip: "Limite: 2% do lucro operacional (Art. 377-385)",
+    });
+
+    h += _field("temDespSemNF", "Despesas sem comprovante/NF", "checkbox");
+    h += _field("despesasSemNF", "Valor sem comprovante", "money", {
+      condition: "temDespSemNF",
+      tip: "Indedutível (Art. 311). SEMPRE manter documentação fiscal.",
+    });
+
+    h += _field("temProvisoes", "Provisões não dedutíveis", "checkbox");
+    h += _field("provisoesIndedutiveis", "Valor das provisões", "money", {
+      condition: "temProvisoes",
+      tip: "Adição TEMPORÁRIA — excluir quando realizada (Art. 340-352)",
+      extra: '<span class="wz-badge wz-badge-gray" data-condition="temProvisoes" style="display:none">Tipo T — vai para Parte B do LALUR</span>',
+    });
+
+    h += _field("temMEPNeg", "Resultado negativo de equivalência patrimonial", "checkbox");
+    h += _field("mepNegativo", "Valor do MEP negativo", "money", {
+      condition: "temMEPNeg",
+      tip: "Adição temporária (Art. 389). Controlado na Parte B.",
+    });
+
+    h += _field("temDepContMaior", "Depreciação contábil > fiscal", "checkbox");
+    h += _field("depContabilMaiorFiscal", "Diferença depreciação contábil vs fiscal", "money", {
+      condition: "temDepContMaior",
+      tip: "Diferença entre depreciação IFRS e fiscal. Adição temporária.",
+    });
+
+    h += _field("temOutrasAdicoes", "Outras adições", "checkbox");
+    h += '<div data-condition="temOutrasAdicoes" style="display:none">';
+    h += _field("outrasAdicoes", "Valor de outras adições", "money");
+    h += _field("descOutrasAdicoes", "Descrição das outras adições", "textarea");
+    h += "</div>";
+
+    h += _autoCalcBox("calcTotalAdicoes");
+
+    // ── Exclusões ──
+    h += _sectionTitle("Exclusões do Lucro Real");
+    h += _infoBox(
+      "Valores que REDUZEM a base de cálculo. Cada R$ 1,00 de exclusão economiza R$ 0,34 em impostos.",
+      "wz-info-success"
+    );
+
+    h += _field("temDividendos", "Dividendos recebidos de PJ brasileira", "checkbox");
+    h += _field("dividendosRecebidos", "Valor dos dividendos", "money", {
+      condition: "temDividendos",
+      tip: "Art. 261, II + Lei 9.249, art. 10",
+    });
+
+    h += _field("temMEPPos", "Resultado positivo de equivalência patrimonial", "checkbox");
+    h += _field("mepPositivo", "Valor do MEP positivo", "money", {
+      condition: "temMEPPos",
+      tip: "Art. 389",
+    });
+
+    h += _field("temReversaoProvisao", "Reversão de provisões antes adicionadas", "checkbox");
+    h += _field("reversaoProvisoes", "Valor das reversões", "money", {
+      condition: "temReversaoProvisao",
+      tip: "Art. 261, §ú, V — era Parte B, agora exclui",
+    });
+
+    h += _field("temSubvencao", "Subvenção para investimento", "checkbox");
+    h += _field("subvencaoInvestimento", "Valor da subvenção", "money", {
+      condition: "temSubvencao",
+      tip: "Lei 12.973, art. 30 — verificar Lei 14.789/2023",
+    });
+
+    h += _field("temDepAcelIncentivada", "Depreciação acelerada incentivada", "checkbox");
+    h += _field("depAceleradaIncentivadaExclusao", "Valor da exclusão por depreciação incentivada", "money", {
+      condition: "temDepAcelIncentivada",
+      tip: "Art. 324-329 — SUDAM/SUDENE ou atividade rural",
+    });
+
+    h += _field("temOutrasExclusoes", "Outras exclusões", "checkbox");
+    h += _field("outrasExclusoes", "Valor de outras exclusões", "money", {
+      condition: "temOutrasExclusoes",
+    });
+
+    // ── PDD Fiscal — Perdas no Recebimento de Créditos ──
+    h += _sectionTitle("Perdas no Recebimento de Créditos (PDD Fiscal)");
+    h += _infoBox(
+      "Créditos vencidos há mais de 6 meses e com providências de cobrança podem ser " +
+      "excluídos da base do IRPJ/CSLL (Art. 340-342, RIR/2018). " +
+      "NÃO são adições temporárias — são exclusões definitivas quando os requisitos são cumpridos.",
+      "wz-info-success"
+    );
+    h += _field("temPDD", "Possui perdas no recebimento de créditos?", "checkbox");
+    h += '<div data-condition="temPDD" style="display:none">';
+    h += _row(
+      _field("perdasCreditos6Meses", "Créditos vencidos > 6 meses (com cobrança)", "money", {
+        tip: "Créditos até R$ 15.000 por devedor: basta vencimento + provisão contábil. " +
+             "Acima de R$ 15.000: necessário protesto, ação judicial, ou declaração de insolvência.",
+      }) +
+      _field("perdasCreditosJudicial", "Créditos em cobrança judicial", "money", {
+        tip: "Independente do valor — basta ajuizamento da ação",
+      })
+    );
+    h += _field("perdasCreditosFalencia", "Créditos com devedor em falência/recuperação", "money", {
+      tip: "Dedutível a partir da sentença declaratória de falência ou deferimento da recuperação",
+    });
+    h += _autoCalcBox("calcPDD");
+    h += "</div>";
+
+    h += _autoCalcBox("calcTotalExclusoes");
+    h += _autoCalcBox("calcCustos");
+    return h;
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  //  ETAPA 3 — Patrimônio, JCP e Prejuízos
+  // ──────────────────────────────────────────────────────────────────────────
+  function renderEtapa3() {
+    var h = "";
+
+    // ── Patrimônio Líquido ──
+    h += _sectionTitle("Patrimônio Líquido");
+    h += _infoBox(
+      "O Patrimônio Líquido é a base para cálculo dos Juros sobre Capital Próprio (JCP). Informe o PL total ou detalhe os componentes.",
+      ""
+    );
+    h += _field("patrimonioLiquido", "PL total (se souber diretamente)", "money", {
+      tip: "Se preenchido, prevalece sobre os componentes abaixo.",
+    });
+    h += _field("detalharPL", "Ou detalhar componentes", "checkbox");
+    h += '<div data-condition="detalharPL" style="display:none">';
+    h += _row(
+      _field("capitalSocial", "Capital Social Integralizado", "money") +
+      _field("reservasCapital", "Reservas de Capital", "money")
+    );
+    h += _row(
+      _field("reservasLucros", "Reservas de Lucros", "money") +
+      _field("lucrosAcumulados", "Lucros Acumulados", "money")
+    );
+    h += _field("ajustesAvaliacaoPatrimonial", "Ajustes de Avaliação Patrimonial", "money", {
+      tip: "Pode ser positivo ou negativo. CPC/Lei 6.404 Art. 182 §3°. Inclui: ajustes a valor justo de instrumentos financeiros, variações cambiais de investimentos no exterior, etc.",
+    });
+    h += _field("prejuizosContabeis", "(-) Prejuízos Acumulados (contábil)", "money");
+    h += "</div>";
+    h += _autoCalcBox("calcPL");
+
+    // ── JCP ──
+    h += _sectionTitle("Juros sobre Capital Próprio (JCP)");
+    h += _infoBox(
+      'O JCP permite DEDUZIR até PL × TJLP da base do IRPJ+CSLL. Para cada R$ 1,00 de JCP pago, a empresa economiza até R$ 0,19 líquido (34% de IRPJ+CSLL economizados − 15% de IRRF retido na distribuição). <strong>É a ferramenta de planejamento tributário mais poderosa do Lucro Real.</strong>',
+      "wz-info-success"
+    );
+    // Aviso se só PL total preenchido (sem detalhamento)
+    if (_n(dadosEmpresa.patrimonioLiquido) > 0 && !(dadosEmpresa.detalharPL === true || dadosEmpresa.detalharPL === "true")) {
+      h += _infoBox(
+        'Para cálculo preciso do JCP, detalhe os componentes do PL. O Limite 2 depende especificamente de Lucros Acumulados + Reservas de Lucros.',
+        "wz-info-warning"
+      );
+    }
+    h += _field("tjlp", "TJLP anual vigente (%)", "percent", {
+      default: "6",
+      tip: "Taxa de Juros de Longo Prazo. Consultar Banco Central para valor vigente.",
+    });
+    h += _autoCalcBox("calcJCP");
+
+    // ── Prejuízos Fiscais ──
+    h += _sectionTitle("Prejuízos Fiscais");
+    h += _infoBox(
+      "Prejuízos fiscais podem ser compensados com até 30% do lucro ajustado por período. <strong>Não prescrevem.</strong>",
+      ""
+    );
+    h += _row(
+      _field("prejuizoFiscal", "Prejuízo Fiscal acumulado (IRPJ)", "money", {
+        tip: "Saldo da Parte B do LALUR. Não prescreve.",
+      }) +
+      _field("baseNegativaCSLL", "Base Negativa de CSLL acumulada", "money", {
+        tip: "Saldo acumulado. Trava de 30% aplica-se separadamente.",
+      })
+    );
+    h += _field("temMudancaControle", "Houve mudança de controle societário?", "checkbox");
+    h += _field("temMudancaRamo", "Houve mudança de ramo de atividade?", "checkbox", {
+      condition: "temMudancaControle",
+    });
+    h += '<div data-condition="temMudancaControle" style="display:none">';
+    h += _infoBox(
+      '⚠️ Combinada com mudança de ramo, VEDA compensação (Art. 584)',
+      "wz-info-warning"
+    );
+    h += "</div>";
+
+    h += _field("tipoReorganizacao", "Houve incorporação/fusão/cisão?", "select", {
+      options:
+        '<option value="">Não</option>' +
+        '<option value="incorporacao" ' + (dadosEmpresa.tipoReorganizacao === "incorporacao" ? "selected" : "") + ">Incorporação</option>" +
+        '<option value="fusao" ' + (dadosEmpresa.tipoReorganizacao === "fusao" ? "selected" : "") + ">Fusão</option>" +
+        '<option value="cisao_total" ' + (dadosEmpresa.tipoReorganizacao === "cisao_total" ? "selected" : "") + ">Cisão Total</option>" +
+        '<option value="cisao_parcial" ' + (dadosEmpresa.tipoReorganizacao === "cisao_parcial" ? "selected" : "") + ">Cisão Parcial</option>",
+    });
+    h += _field("percentPLRemanescente", "% PL remanescente (cisão parcial)", "percent", {
+      condition: "tipoReorganizacao",
+      placeholder: "70",
+    });
+
+    h += _autoCalcBox("calcPrejuizos");
+
+    // ── Estimativas já pagas ──
+    // Seção só faz sentido para apuração anual (estimativa ou suspensão/redução)
+    var apLR = dadosEmpresa.apuracaoLR || "";
+    if (apLR === "anual_estimativa" || apLR === "anual_suspensao") {
+      h += _sectionTitle("Estimativas já Pagas");
+      h += _infoBox(
+        "No regime anual por estimativa, antecipações mensais de IRPJ e CSLL são descontadas no ajuste anual.",
+        ""
+      );
+      h += _field("pagouEstimativas", "Pagou estimativas mensais no período?", "checkbox");
+      h += '<div data-condition="pagouEstimativas" style="display:none">';
+      h += _row(
+        _field("estimativasIRPJPagas", "Total estimativas IRPJ pagas", "money", {
+          tip: "Estimativas pagas são descontadas do imposto devido no ajuste anual",
+        }) +
+        _field("estimativasCSLLPagas", "Total estimativas CSLL pagas", "money")
+      );
+      h += _field("estimativasPISCOFINSPagas", "Total estimativas PIS/COFINS pagas", "money", {
+        tip: "Se aplicável ao regime anual por estimativa",
+      });
+      h += "</div>";
+    } else if (apLR === "trimestral") {
+      // Trimestral — não tem estimativas, mas permite informar antecipações
+      h += _sectionTitle("Antecipações");
+      h += _infoBox(
+        "Na apuração trimestral, não há estimativas mensais. Antecipações ocorrem somente via retenções na fonte (informar na Etapa 5).",
+        "wz-info-gray"
+      );
+    } else {
+      // Sem apuração selecionada — mostra seção genérica
+      h += _sectionTitle("Estimativas já Pagas");
+      h += _infoBox(
+        "Selecione a forma de apuração na Etapa 1 para habilitar os campos de estimativas.",
+        "wz-info-gray"
+      );
+    }
+
+    return h;
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  //  ETAPA 4 — Retenções na Fonte e Créditos PIS/COFINS
+  // ──────────────────────────────────────────────────────────────────────────
+  function renderEtapa4() {
+    var h = "";
+
+    // ── Retenções ──
+    h += _sectionTitle("Retenções na Fonte");
+    h += _infoBox(
+      '<strong>No Lucro Real, retenções são ANTECIPAÇÕES 100% compensáveis.</strong> Cada R$ 1 retido é R$ 1 a menos de imposto a pagar. Se retenções > imposto, gera saldo negativo (restituição via PER/DCOMP).',
+      "wz-info-success"
+    );
+
+    // Modo automático baseado em % receita pública
+    var percPub = _n(dadosEmpresa.percentReceitaPublico);
+    if (percPub > 0) {
+      var rbEst = _n(dadosEmpresa.receitaBrutaAnual);
+      var irrfEst = _r(rbEst * (percPub / 100) * 0.048);
+      var csrfEst = _r(rbEst * (percPub / 100) * 0.0465);
+      h += _infoBox(
+        '<strong>Estimativa automática</strong> (baseada em ' + percPub + '% de receita pública):<br>' +
+        'IRRF estimado (4,8%): ' + _m(irrfEst) + ' | CSRF estimado (4,65%): ' + _m(csrfEst) +
+        '<br><em>Edite os valores abaixo se necessário.</em>',
+        "wz-info-default"
+      );
+    }
+
+    h += _row(
+      _field("irrfRetidoPrivado", "IRRF retido por empresas privadas (1,5%)", "money", {
+        tip: "Art. 714 — Retenção sobre serviços profissionais",
+      }) +
+      _field("irrfRetidoPublico", "IRRF retido por órgãos públicos (4,8%)", "money", {
+        tip: "Art. 720 + IN RFB 1.234/12",
+      })
+    );
+    h += _row(
+      _field("pisRetido", "PIS retido (0,65%)", "money") +
+      _field("cofinsRetido", "COFINS retido (3,0%)", "money")
+    );
+    h += _row(
+      _field("csllRetido", "CSLL retido (1,0%)", "money") +
+      _field("issRetido", "ISS retido na fonte", "money")
+    );
+
+    h += _autoCalcBox("calcRetencoes");
+
+    // ── CPRB — Desoneração da Folha ──
+    h += _sectionTitle("Desoneração da Folha (CPRB)");
+    h += _infoBox(
+      "Empresas de TI, construção civil, comunicação e outros setores podem optar pela CPRB. " +
+      "Substitui a CPP patronal de 20% por alíquota sobre receita bruta (Lei 12.546/2011).",
+      ""
+    );
+    // Auto-detectar elegibilidade pelo CNAE principal
+    var cnaePri = (dadosEmpresa.cnaePrincipal || "").replace(/[\s\-\/]/g, "");
+    if (cnaePri.substring(0, 2) === "62" || dadosEmpresa._cprbSugerida) {
+      h += _infoBox(
+        'CNAE de TI detectado — sua empresa é elegível à CPRB (alíquota 4,5% sobre receita bruta em vez de 20% sobre folha). Avalie abaixo.',
+        "wz-info-success"
+      );
+    }
+    h += _field("optouCPRB", "Empresa optou pela CPRB?", "checkbox");
+    h += '<div data-condition="optouCPRB" style="display:none">';
+    h += _row(
+      _field("aliquotaCPRB", "Alíquota CPRB (%)", "percent", {
+        default: "4.5",
+        tip: "TI/Serviços: 4,5%. Construção/Transporte: 1% a 3%. Verificar Lei 12.546/2011 e alterações.",
+      }) +
+      _field("receitaBrutaCPRB", "Base de cálculo CPRB (receita bruta do período)", "money", {
+        tip: "Se igual à receita bruta total, pode deixar em branco (usará a receita bruta informada na Etapa 2)",
+      })
+    );
+    h += _autoCalcBox("calcCPRB");
+    h += "</div>";
+
+    // ── Créditos PIS/COFINS ──
+    h += _sectionTitle("Créditos de PIS/COFINS (Não-Cumulativo)");
+    h += _infoBox(
+      '<strong>No Lucro Real, PIS/COFINS são não-cumulativos:</strong> alíquota de 9,25% sobre receita, mas com DIREITO A CRÉDITOS sobre insumos, energia, aluguéis, depreciação etc. Se seus custos com crédito são altos, a alíquota efetiva pode ser MUITO menor que 9,25%.',
+      "wz-info-default"
+    );
+
+    h += _row(
+      _field("comprasMercadoriasAnual", "Compras de mercadorias/insumos", "money", {
+        tip: "Art. 3º, I — Bens para revenda e insumos",
+      }) +
+      _field("energiaCredito", "Energia elétrica", "money", {
+        tip: "Art. 3º, III — Energia consumida na atividade",
+      })
+    );
+    h += _row(
+      _field("alugueisPJCredito", "Aluguéis pagos a PJ", "money", {
+        tip: "Art. 3º, IV",
+      }) +
+      _field("leasingCredito", "Contraprestação de leasing", "money", {
+        tip: "Art. 3º, V — Arrendamento mercantil operacional",
+      })
+    );
+    h += _row(
+      _field("depreciacaoBensCredito", "Depreciação de máquinas na produção", "money", {
+        tip: "Art. 3º, VI",
+      }) +
+      _field("depreciacaoEdifCredito", "Depreciação de edificações", "money", {
+        tip: "Art. 3º, VII",
+      })
+    );
+    h += _row(
+      _field("freteVendasAnual", "Fretes sobre vendas", "money", {
+        tip: "Art. 3º, IX",
+      }) +
+      _field("armazenagemCredito", "Armazenagem", "money", {
+        tip: "Art. 3º, IX",
+      })
+    );
+    h += _row(
+      _field("valeTranspAlim", "Vale-transporte/alimentação funcionários", "money") +
+      _field("manutencaoMaquinas", "Manutenção de máquinas", "money")
+    );
+    h += _row(
+      _field("devolucoesVendas", "Devoluções de vendas", "money") +
+      _field("outrosCreditosPC", "Outros custos com crédito", "money")
+    );
+    h += _field("creditoEstoqueAbertura", "Crédito sobre estoque de abertura", "money", {
+      tip: "Se migrou recentemente para Lucro Real, tem direito a crédito sobre estoques existentes — 1/12 por mês durante 12 meses",
+    });
+
+    h += _autoCalcBox("calcPisCofins");
+    return h;
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  //  ETAPA 5 — Ativos, Depreciação e Incentivos
+  // ──────────────────────────────────────────────────────────────────────────
+  function renderEtapa5() {
+    var h = "";
+    var uf = dadosEmpresa.uf || "";
+    var isSUDAM = LR && LR.helpers ? LR.helpers.ehSUDAM(uf) : false;
+    var isSUDENE = LR && LR.helpers ? LR.helpers.ehSUDENE(uf) : false;
+    if (!isSUDAM && LR && LR.sudam) isSUDAM = LR.sudam.estados.indexOf(uf) >= 0;
+    if (!isSUDENE && LR && LR.sudene) isSUDENE = LR.sudene.estados.indexOf(uf) >= 0;
+
+    // ── Bens do ativo ──
+    h += _sectionTitle("Bens do Ativo Imobilizado");
+    h += _infoBox(
+      "Informe o valor original total dos bens por categoria. A depreciação será calculada automaticamente com base nas taxas fiscais. Dados de LR.depreciacao.tabela.",
+      ""
+    );
+    h += _row(
+      _field("valorVeiculos", "Veículos (20% a.a. — 5 anos)", "money") +
+      _field("valorMaquinas", "Máquinas e Equipamentos (10% a.a. — 10 anos)", "money")
+    );
+    h += _row(
+      _field("valorComputadores", "Computadores/Periféricos (20% a.a. — 5 anos)", "money") +
+      _field("valorMoveis", "Móveis e Utensílios (10% a.a. — 10 anos)", "money")
+    );
+    h += _row(
+      _field("valorEdificios", "Edifícios/Construções (4% a.a. — 25 anos)", "money") +
+      _field("valorDrones", "Drones/GPS/Equip. técnicos (20% a.a. — 5 anos)", "money")
+    );
+    h += _row(
+      _field("valorTratores", "Tratores (25% a.a. — 4 anos)", "money") +
+      _field("valorSoftware", "Software adquirido (20% a.a. — 5 anos)", "money")
+    );
+    h += _row(
+      _field("valorInstalacoes", "Instalações (10% a.a. — 10 anos)", "money") +
+      _field("valorOutrosBens", "Outros bens (10% a.a. default)", "money")
+    );
+    h += _field("bensSmallValue", "Bens de pequeno valor (≤ R$ 1.200)", "money", {
+      tip: "Podem ser lançados diretamente como despesa no período (Art. 313, §1º)",
+    });
+
+    // ── Depreciação acelerada por turnos ──
+    h += _sectionTitle("Depreciação Acelerada (Turnos) — Art. 323");
+    h += _field("turnosOperacao", "Turnos de operação por dia", "radio", {
+      options: [
+        { value: "1", label: "1 turno (8h) — multiplicador 1,0×" },
+        { value: "2", label: "2 turnos (16h) — multiplicador 1,5×" },
+        { value: "3", label: "3 turnos (24h) — multiplicador 2,0×" },
+      ],
+      default: "1",
+      tip: "Art. 323 — Mais turnos = depreciação mais rápida = menor base tributável",
+    });
+
+    // ── Depreciação incentivada SUDAM/SUDENE ──
+    if (isSUDAM || isSUDENE) {
+      h += _sectionTitle("Depreciação Acelerada Incentivada (SUDAM/SUDENE)");
+      h += _infoBox(
+        "Como sua empresa está em área " + (isSUDAM ? "SUDAM" : "SUDENE") +
+        ", bens NOVOS adquiridos podem ter depreciação integral (100%) no ano de aquisição — Art. 329 RIR/2018.",
+        "wz-info-success"
+      );
+      h += _field("temBensNovos", "Adquiriu bens NOVOS nos últimos 12 meses?", "checkbox");
+      h += _field("valorBensNovos", "Valor dos bens novos", "money", {
+        condition: "temBensNovos",
+        tip: "Depreciação integral (100%) no ano de aquisição",
+      });
+    }
+
+    // ── Incentivos Regionais ──
+    h += _sectionTitle("Incentivos Regionais (SUDAM/SUDENE)");
+    if (isSUDAM) {
+      h += _infoBox(
+        '✅ <strong>' + uf + ' — Área SUDAM (Amazônia Legal)</strong> — elegível a redução de até 75% do IRPJ sobre o lucro da exploração, com prazo de 10 anos. É o maior incentivo fiscal disponível no Brasil.',
+        "wz-info-success"
+      );
+    } else if (isSUDENE) {
+      h += _infoBox(
+        '✅ <strong>' + uf + ' — Área SUDENE</strong> — elegível a redução de até 75% do IRPJ sobre o lucro da exploração.',
+        "wz-info-success"
+      );
+    } else {
+      h += _infoBox(
+        'A UF selecionada (' + (uf || "nenhuma") + ') não está em área SUDAM nem SUDENE. Incentivos regionais não se aplicam.',
+        "wz-info-gray"
+      );
+    }
+    h += _field("temProjetoAprovado", "Tem projeto aprovado na " + (isSUDAM ? "SUDAM" : isSUDENE ? "SUDENE" : "SUDAM/SUDENE") + "?", "checkbox");
+    h += '<div data-condition="temProjetoAprovado" style="display:none">';
+    h += _row(
+      _field("setorPrioritario", "Setor prioritário do projeto", "select", {
+        options: '<option value="">Selecione...</option>' +
+          (LR && LR.sudam && LR.sudam.setoresPrioritarios
+            ? LR.sudam.setoresPrioritarios.map(function (s) {
+                return '<option value="' + s.id + '" ' +
+                  (dadosEmpresa.setorPrioritario === s.id ? "selected" : "") +
+                  ">" + s.label + "</option>";
+              }).join("")
+            : ""),
+      }) +
+      _field("percentualReducao", "Percentual de redução IRPJ", "select", {
+        options:
+          '<option value="75">75% (padrão)</option>' +
+          '<option value="50" ' + (dadosEmpresa.percentualReducao === "50" ? "selected" : "") + ">50%</option>" +
+          '<option value="25" ' + (dadosEmpresa.percentualReducao === "25" ? "selected" : "") + ">25%</option>",
+      })
+    );
+    h += _row(
+      _field("possuiLaudoConstitutivo", "Possui Laudo Constitutivo emitido?", "checkbox") +
+      _field("possuiReconhecimentoSRF", "Possui reconhecimento da SRF?", "checkbox")
+    );
+    h += _field("usarReinvestimento30", "Utiliza reinvestimento de 30%?", "checkbox", {
+      tip: "30% do IRPJ sobre lucro da exploração depositado em banco oficial. 50% pode ser usado como capital de giro (Lei 13.799/2019)",
+    });
+    h += "</div>";
+
+    // ── Incentivos Fiscais Diretos ──
+    h += _sectionTitle("Incentivos Fiscais (Dedução do IRPJ)");
+    h += _infoBox(
+      'Incentivos fiscais são deduções DIRETAS do IRPJ normal (15%). Cada um tem limite individual e o somatório não pode ultrapassar o IRPJ normal.',
+      ""
+    );
+
+    h += _field("usaPAT", "PAT — Programa de Alimentação do Trabalhador (até 4% IRPJ)", "checkbox");
+    h += _field("valorPAT", "Valor investido no PAT", "money", { condition: "usaPAT" });
+
+    h += _field("usaFIA", "FIA — Fundo da Infância e Adolescência (até 1%)", "checkbox");
+    h += _field("valorFIA", "Valor doado ao FIA", "money", { condition: "usaFIA" });
+
+    h += _field("usaFundoIdoso", "Fundo do Idoso (até 1%)", "checkbox");
+    h += _field("valorFundoIdoso", "Valor doado ao Fundo do Idoso", "money", { condition: "usaFundoIdoso" });
+
+    h += _field("usaRouanet", "Lei Rouanet — Cultura (até 4%)", "checkbox");
+    h += _field("valorRouanet", "Valor investido em cultura", "money", { condition: "usaRouanet" });
+
+    h += _field("usaEsporte", "Lei do Esporte (até 1%)", "checkbox");
+    h += _field("valorEsporte", "Valor investido em esporte", "money", { condition: "usaEsporte" });
+
+    h += _field("usaPRONON", "PRONON — Oncologia (até 1%)", "checkbox");
+    h += _field("valorPRONON", "Valor investido PRONON", "money", { condition: "usaPRONON" });
+
+    h += _field("usaPRONAS", "PRONAS/PCD — Pessoa com Deficiência (até 1%)", "checkbox");
+    h += _field("valorPRONAS", "Valor investido PRONAS/PCD", "money", { condition: "usaPRONAS" });
+
+    h += _field("usaEmpresaCidada", "Empresa Cidadã — prorrogação licença-maternidade (valor integral)", "checkbox");
+
+    h += _sectionTitle("Lei do Bem (Pesquisa & Desenvolvimento)");
+    h += _field("investePD", "Investe em P&D (Lei do Bem)?", "checkbox");
+    h += _field("valorPD", "Valor anual investido em P&D", "money", {
+      condition: "investePD",
+      tip: "Exclusão de 60% a 80% dos gastos da base IRPJ+CSLL — Lei 11.196/2005",
+    });
+
+    h += _autoCalcBox("calcDepreciacao");
+    return h;
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  //  ETAPA 6 — Revisão, Cenários e Configuração do Relatório
+  // ──────────────────────────────────────────────────────────────────────────
+  function renderEtapa6() {
+    var h = "";
+    var d = dadosEmpresa;
+
+    // ── Resumo dos dados ──
+    h += _sectionTitle("Resumo dos Dados");
+    h += '<div class="wz-resumo">';
+    h += '<table class="wz-resumo-table">';
+    h += '<tr><td><strong>Empresa:</strong></td><td>' + (d.razaoSocial || "—") + '</td>';
+    h += '<td><strong>UF/Município:</strong></td><td>' + (d.uf || "—") + " / " + (d.municipio || "—") + " (ISS: " + (d.issAliquota || "5") + "%)" + '</td></tr>';
+    h += '<tr><td><strong>Atividade:</strong></td><td>' + _nomeAtividade(d.tipoAtividade) + '</td>';
+    h += '<td><strong>Apuração:</strong></td><td>' + _nomeApuracao(d.apuracaoLR) + '</td></tr>';
+    h += '<tr><td><strong>Receita Bruta:</strong></td><td>' + _m(_n(d.receitaBrutaAnual)) + '</td>';
+    h += '<td><strong>Custos+Despesas:</strong></td><td>' + _m(_calcTotalCustos() + _calcTotalDespesas()) + '</td></tr>';
+
+    var ll = _calcLL();
+    var adj = _calcLucroAjustado();
+    h += '<tr><td><strong>Lucro Líquido:</strong></td><td>' + _m(ll) + '</td>';
+    h += '<td><strong>Lucro Ajustado:</strong></td><td>' + _m(adj) + '</td></tr>';
+
+    var plVal = _calcPL();
+    h += '<tr><td><strong>PL:</strong></td><td>' + _m(plVal) + '</td>';
+    h += '<td><strong>Prejuízo Fiscal:</strong></td><td>' + _m(_n(d.prejuizoFiscal)) + '</td></tr>';
+
+    var retTotal = _n(d.irrfRetidoPrivado) + _n(d.irrfRetidoPublico) + _n(d.pisRetido) + _n(d.cofinsRetido) + _n(d.csllRetido);
+    h += '<tr><td><strong>Retenções:</strong></td><td>' + _m(retTotal) + '</td>';
+    h += '<td><strong>Créditos PIS/COFINS:</strong></td><td>' + _m(_calcBaseCreditos()) + '</td></tr>';
+    h += '</table>';
+
+    // Botões de editar por etapa
+    h += '<div class="wz-resumo-editar">';
+    for (var i = 0; i < ETAPAS.length - 1; i++) {
+      h += '<button class="wz-btn wz-btn-small" onclick="LucroRealEstudos.goToStep(' + i + ')">✏️ ' + ETAPAS[i].titulo + '</button>';
+    }
+    h += '</div>';
+    h += '</div>';
+
+    // ── Cenários ──
+    h += _sectionTitle("Configuração de Cenários");
+    h += _field("gerarCenarios", "Gerar cenários de sensibilidade?", "checkbox", {
+      default: true,
+    });
+    h += '<div data-condition="gerarCenarios" style="display:none">';
+    h += _field("variacaoMargemCenario", "Variação de margem para cenários (pontos percentuais)", "percent", {
+      default: "5",
+      tip: "Pessimista: margem - X pp | Base: margem informada | Otimista: margem + X pp",
+    });
+    h += "</div>";
+
+    h += _field("gerarProjecao", "Gerar projeção plurianual?", "checkbox", {
+      default: true,
+    });
+    h += '<div data-condition="gerarProjecao" style="display:none">';
+    h += _row(
+      _field("taxaCrescimentoAnual", "Taxa de crescimento anual da receita (%)", "percent", {
+        default: "10",
+      }) +
+      _field("horizonteProjecao", "Horizonte de projeção", "select", {
+        options:
+          '<option value="3" ' + (dadosEmpresa.horizonteProjecao === "3" ? "selected" : "") + ">3 anos</option>" +
+          '<option value="5" ' + ((!dadosEmpresa.horizonteProjecao || dadosEmpresa.horizonteProjecao === "5") ? "selected" : "") + ">5 anos</option>" +
+          '<option value="10" ' + (dadosEmpresa.horizonteProjecao === "10" ? "selected" : "") + ">10 anos</option>",
+      })
+    );
+    h += "</div>";
+
+    // ── Personalização do relatório ──
+    h += _sectionTitle("Personalização do Relatório");
+    h += _row(
+      _field("nomeElaborador", "Nome do elaborador", "text", {
+        tip: "Aparece no cabeçalho do relatório impresso",
+      }) +
+      _field("registroProfissional", "Registro profissional (CRC/OAB)", "text")
+    );
+    h += _row(
+      _field("emailContato", "Email de contato", "text") +
+      _field("telefoneContato", "Telefone", "text")
+    );
+    h += _field("logoURL", "Logo (URL da imagem)", "text", {
+      tip: "URL de imagem para cabeçalho do relatório (opcional)",
+      placeholder: "https://...",
+    });
+
+    return h;
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  INTEGRAÇÃO COM MunicipiosIBGE — select dinâmico de municípios
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /**
+   * Chamado quando a UF muda na etapa 0
+   */
+  async function _carregarMunicipios(uf) {
+    var selectMun = $("municipio");
+    var loading = $("municipioLoading");
+    if (!selectMun || !uf) return;
+
+    // Mostrar loading
+    selectMun.innerHTML = '<option value="">Carregando municípios...</option>';
+    selectMun.disabled = true;
+    if (loading) loading.style.display = "";
+
+    try {
+      if (window.MunicipiosIBGE) {
+        var municipios = await window.MunicipiosIBGE.buscarMunicipios(uf, ESTADOS);
+        window.MunicipiosIBGE.renderizarSelect(selectMun, municipios, { mostrarISS: true });
+      } else {
+        // Fallback: select vazio editável
+        selectMun.innerHTML = '<option value="">MunicipiosIBGE não disponível</option>';
+        selectMun.disabled = false;
+      }
+    } catch (e) {
+      console.warn("[LREstudos] Falha API IBGE, usando fallback:", e);
+      try {
+        if (window.MunicipiosIBGE) {
+          var fallback = window.MunicipiosIBGE.fallbackEstadosJS(uf, ESTADOS);
+          window.MunicipiosIBGE.renderizarSelect(selectMun, fallback, { mostrarISS: true });
+        }
+      } catch (e2) {
+        selectMun.innerHTML = '<option value="">Erro ao carregar municípios</option>';
+        selectMun.disabled = false;
+      }
+    }
+
+    if (loading) loading.style.display = "none";
+
+    // Se já tinha município salvo, restaurar seleção
+    if (dadosEmpresa.municipio) {
+      for (var i = 0; i < selectMun.options.length; i++) {
+        if (selectMun.options[i].value === dadosEmpresa.municipio) {
+          selectMun.selectedIndex = i;
+          break;
+        }
+      }
+    }
+  }
+
+  /**
+   * Chamado quando o município é selecionado
+   */
+  function onMunicipioChanged(selectEl) {
+    var opt = selectEl.selectedOptions[0];
+    if (opt && opt.value) {
+      dadosEmpresa.municipio = opt.value;
+      if (opt.dataset.iss) {
+        dadosEmpresa.issAliquota = parseFloat(opt.dataset.iss);
+        dadosEmpresa.issConhecido = opt.dataset.issConhecido === "1";
+        // Atualizar campo ISS
+        var issInput = $("issAliquota");
+        if (issInput) issInput.value = dadosEmpresa.issAliquota;
+      }
+      // Atualizar dica ISS
+      var dicaEl = $("dicaISS");
+      if (dicaEl && window.MunicipiosIBGE) {
+        dicaEl.innerHTML = window.MunicipiosIBGE.gerarDicaISS(
+          dadosEmpresa.issConhecido,
+          opt.value
+        );
+      }
+      saveToLS();
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  SAVE / RESTORE / LOCALSTORAGE
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  function saveField(id, val) {
+    dadosEmpresa[id] = val;
+    saveToLS();
+    bindConditionals();
+    updateAutoCalcs();
+
+    // Tratamento especial: ao mudar UF, carregar municípios e mostrar badge
+    if (id === "uf" && val) {
+      _carregarMunicipios(val);
+      _atualizarBadgeUF(val);
+    }
+
+    // Tratamento: alertas de obrigatoriedade
+    if (id === "ehFinanceira" || id === "tipoAtividade") {
+      _verificarAlertaObrigatoriedade();
+    }
+
+    // Tratamento: ao mudar tipo de serviço ISS, atualizar dica de faixa
+    if (id === "tipoServicoISS") {
+      var dicaEl2 = $("dicaISS");
+      if (dicaEl2) {
+        var faixas = {
+          informatica: { min: 2, max: 5, desc: "Informática (Item 1)" },
+          saude: { min: 2, max: 3, desc: "Saúde (Item 4)" },
+          engenharia: { min: 2, max: 5, desc: "Engenharia/Arquitetura (Item 7)" },
+          educacao: { min: 2, max: 5, desc: "Educação (Item 8)" },
+          contabilidade: { min: 2, max: 5, desc: "Contabilidade (Item 17)" },
+          advocacia: { min: 2, max: 5, desc: "Advocacia (Item 17)" },
+          consultoria: { min: 2, max: 5, desc: "Consultoria (Item 17)" },
+          construcao: { min: 2, max: 5, desc: "Construção civil (Item 7)" },
+          transporte: { min: 2, max: 5, desc: "Transporte municipal (Item 16)" },
+          outros: { min: 2, max: 5, desc: "Outros serviços" },
+        };
+        var f = faixas[val];
+        if (f) {
+          dicaEl2.innerHTML = '<span style="color:#3498db;">Faixa ISS para ' + f.desc + ': ' + f.min + '% a ' + f.max + '%. Verifique a alíquota específica do seu município.</span>';
+        }
+      }
+    }
+
+    // Tratamento: validar ISS manualmente alterado
+    if (id === "issAliquota" && window.MunicipiosIBGE) {
+      var validacao = window.MunicipiosIBGE.validarISS(val);
+      var dicaEl = $("dicaISS");
+      if (dicaEl && !validacao.valido) {
+        dicaEl.innerHTML = '<span style="color:#f59e0b;">⚠️ ' + validacao.msg + '</span>';
+      }
+    }
+
+    // Alerta receita exterior
+    if (id === "receitasExteriorAnual" && _n(val) > 0) {
+      var alertaExt = $("alertaExterior");
+      if (alertaExt) {
+        alertaExt.innerHTML = '<div class="wz-badge wz-badge-red">⚠️ Receitas do exterior tornam o Lucro Real OBRIGATÓRIO (Art. 257, III)</div>';
+      }
+    }
+  }
+
+  function saveMoney(id, el) {
+    // Extrair apenas dígitos (e vírgula/ponto decimal) para obter o valor numérico
+    var raw = el.value.replace(/[^\d]/g, "");
+    // Interpretar como centavos: 3000000 digitado = 30.000,00
+    // Mas para UX: tratar como inteiro enquanto não tem vírgula
+    // Abordagem: remover tudo que não é dígito, tratar como centavos
+    var centavos = parseInt(raw, 10) || 0;
+    var valor = centavos / 100;
+    dadosEmpresa[id] = valor;
+
+    // Aplicar máscara brasileira no input mantendo cursor funcional
+    var formatted = _fmtBRL(valor);
+    el.value = formatted;
+
+    saveToLS();
+    updateAutoCalcs();
+  }
+
+  function saveToLS() {
+    try {
+      localStorage.setItem(LS_KEY_DADOS, JSON.stringify(dadosEmpresa));
+      localStorage.setItem(LS_KEY_STEP, String(currentStep));
+    } catch (e) { /* ignore */ }
+  }
+
+  function loadFromLS() {
+    try {
+      var savedDados = localStorage.getItem(LS_KEY_DADOS);
+      if (savedDados) dadosEmpresa = JSON.parse(savedDados);
+      var savedStep = localStorage.getItem(LS_KEY_STEP);
+      if (savedStep !== null) currentStep = parseInt(savedStep) || 0;
+    } catch (e) { /* ignore */ }
+  }
+
+  function restoreValues() {
+    Object.keys(dadosEmpresa).forEach(function (id) {
+      var el = $(id);
+      if (!el) return;
+      var val = dadosEmpresa[id];
+      if (el.type === "checkbox") {
+        el.checked = val === true || val === "true" || val === "on";
+      } else if (el.closest && el.closest(".wz-input-prefix")) {
+        el.value = val ? _fmtBRL(val) : "";
+      } else {
+        el.value = val !== undefined ? val : "";
+      }
+    });
+    // Restaurar radio groups
+    Object.keys(dadosEmpresa).forEach(function (id) {
+      var radios = document.querySelectorAll('input[name="' + id + '"]');
+      if (radios.length > 0) {
+        radios.forEach(function (r) {
+          r.checked = r.value === String(dadosEmpresa[id]);
+        });
+      }
+    });
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  BIND CONDITIONALS
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  function bindConditionals() {
+    $$("[data-condition]").forEach(function (el) {
+      var condId = el.getAttribute("data-condition");
+      var val = dadosEmpresa[condId];
+      var visible = false;
+
+      if (condId === "tipoReorganizacao") {
+        visible = val === "cisao_parcial";
+      } else if (condId === "receitasExteriorAnual") {
+        visible = _n(val) > 0;
+      } else {
+        visible =
+          val === true ||
+          val === "true" ||
+          val === "on" ||
+          (val && val !== "false" && val !== "" && val !== "0" && val !== 0);
+      }
+
+      el.style.display = visible ? "" : "none";
+    });
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  CÁLCULOS EM TEMPO REAL — updateAutoCalcs
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  function updateAutoCalcs() {
+    if (!LR) return;
+    var d = dadosEmpresa;
+
+    // ── Soma receitas detalhadas ──
+    var calcSomaRec = $("calcSomaReceitas");
+    if (calcSomaRec) {
+      var soma = _n(d.receitaServicos) + _n(d.receitaComercio) + _n(d.receitaFinanceiras) + _n(d.receitaAlugueis) + _n(d.outrasReceitas);
+      calcSomaRec.innerHTML = '<strong>Soma das receitas detalhadas: ' + _m(soma) + '</strong>';
+    }
+
+    // ── Soma meses ──
+    var calcSomaMeses = $("calcSomaMeses");
+    if (calcSomaMeses) {
+      var somaMes = 0;
+      for (var m = 1; m <= 12; m++) somaMes += _n(d["receitaMes" + m]);
+      calcSomaMeses.innerHTML = '<strong>Soma 12 meses: ' + _m(somaMes) + '</strong>';
+    }
+
+    // ── Prévia Receitas (etapa 1) ──
+    var calcReceitas = $("calcReceitas");
+    if (calcReceitas) {
+      var rb = _n(d.receitaBrutaAnual);
+      var isentas = _n(d.receitasIsentas) + _n(d.receitaExportacao) + _n(d.receitasMonofasicas);
+      var tributavel = Math.max(rb - isentas, 0);
+      var percPub = _n(d.percentReceitaPublico);
+      var irrfEst = percPub > 0 ? _r(rb * (percPub / 100) * 0.048) : 0;
+      var csrfEst = percPub > 0 ? _r(rb * (percPub / 100) * 0.0465) : 0;
+      calcReceitas.innerHTML =
+        '<strong>📊 Prévia de Receita</strong><br>' +
+        'Receita Bruta Total: <strong>' + _m(rb) + '</strong><br>' +
+        'Receita Tributável PIS/COFINS: <strong>' + _m(tributavel) + '</strong>' +
+        (percPub > 0
+          ? '<br>Estimativa retenções órgãos públicos: IRRF (4,8%): ' + _m(irrfEst) + ' | CSRF (4,65%): ' + _m(csrfEst)
+          : "");
+    }
+
+    // ── Total Adições (etapa 2) ──
+    var calcTotAd = $("calcTotalAdicoes");
+    if (calcTotAd) {
+      var totalAd = _calcTotalAdicoes();
+      calcTotAd.innerHTML =
+        '<strong>TOTAL DE ADIÇÕES: ' + _m(totalAd) + '</strong>' +
+        (totalAd > 0 ? '<br>Impacto fiscal das adições: ' + _m(totalAd) + ' × 34% = <strong>' + _m(totalAd * 0.34) + '</strong>' : '');
+    }
+
+    // ── PDD Fiscal (etapa 2) ──
+    var calcPDD = $("calcPDD");
+    if (calcPDD) {
+      var totalPDD = _n(d.perdasCreditos6Meses) + _n(d.perdasCreditosJudicial) + _n(d.perdasCreditosFalencia);
+      if (totalPDD > 0) {
+        var econPDD = _r(totalPDD * 0.34);
+        calcPDD.innerHTML =
+          '<strong>Total PDD Fiscal (exclusão do lucro real): ' + _m(totalPDD) + '</strong><br>' +
+          'Economia potencial (25% IRPJ + 9% CSLL): <span style="color:#2ECC71"><strong>' + _m(econPDD) + '</strong></span>';
+      } else {
+        calcPDD.innerHTML = "";
+      }
+    }
+
+    // ── Total Exclusões (etapa 2) ──
+    var calcTotEx = $("calcTotalExclusoes");
+    if (calcTotEx) {
+      var totalEx = _calcTotalExclusoes();
+      calcTotEx.innerHTML =
+        '<strong>TOTAL DE EXCLUSÕES: ' + _m(totalEx) + '</strong>' +
+        (totalEx > 0 ? '<br>Economia das exclusões: ' + _m(totalEx) + ' × 34% = <strong style="color:#2ECC71">' + _m(totalEx * 0.34) + '</strong>' : '');
+    }
+
+    // ── Prévia LALUR (etapa 2) ──
+    var calcCustos = $("calcCustos");
+    if (calcCustos) {
+      var rb2 = _n(d.receitaBrutaAnual);
+      var custos = _calcTotalCustos();
+      var despesas = _calcTotalDespesas();
+      var ll = rb2 - custos - despesas;
+      var margem = rb2 > 0 ? (ll / rb2 * 100) : 0;
+      var adicoes = _calcTotalAdicoes();
+      var exclusoes = _calcTotalExclusoes();
+      var lucroAjustado = ll + adicoes - exclusoes;
+      var alertas = "";
+      if (margem > 50 && d.tipoAtividade === "COMERCIO_INDUSTRIA") alertas += '<br><span style="color:#e67e22">⚠️ Margem > 50% para comércio é incomum — confirme</span>';
+      if (margem > 80) alertas += '<br><span style="color:#e67e22">⚠️ Margem > 80% é atípica — verifique custos e despesas</span>';
+      if (ll > rb2 && rb2 > 0) alertas += '<br><span style="color:#c0392b">⚠️ Lucro > Receita — há inconsistência</span>';
+      if (custos === 0 && rb2 > 0) alertas += '<br><span style="color:#e67e22">⚠️ Nenhum custo informado — o estudo pode ficar impreciso</span>';
+
+      calcCustos.innerHTML =
+        '<strong>📊 Prévia do LALUR</strong><br>' +
+        'Receita Bruta: ' + _m(rb2) + '<br>' +
+        '(-) Custos Totais: ' + _m(custos) + '<br>' +
+        '(-) Despesas Totais: ' + _m(despesas) + '<br>' +
+        '<strong>= LUCRO LÍQUIDO CONTÁBIL: ' + _m(ll) + '</strong><br>' +
+        '(+) Total de Adições: ' + _m(adicoes) + '<br>' +
+        '(-) Total de Exclusões: ' + _m(exclusoes) + '<br>' +
+        '<strong>= LUCRO AJUSTADO: ' + _m(lucroAjustado) + '</strong><br>' +
+        'Margem de Lucro: ' + margem.toFixed(1) + '%' +
+        alertas;
+    }
+
+    // ── PL (etapa 3) ──
+    var calcPL = $("calcPL");
+    if (calcPL) {
+      var pl = _calcPL();
+      calcPL.innerHTML = '<strong>= PATRIMÔNIO LÍQUIDO: ' + _m(pl) + '</strong>';
+    }
+
+    // ── JCP (etapa 3) ──
+    var calcJCP = $("calcJCP");
+    if (calcJCP && LR.calcular) {
+      var plVal = _calcPL();
+      var llVal = _calcLL();
+      if (plVal > 0 && llVal > 0) {
+        try {
+          var jcpRes = LR.calcular.jcp({
+            patrimonioLiquido: plVal,
+            capitalSocial: _n(d.capitalSocial) || null,
+            reservasCapital: _n(d.reservasCapital),
+            reservasLucros: _n(d.reservasLucros),
+            lucrosAcumulados: _n(d.lucrosAcumulados),
+            prejuizosAcumulados: _n(d.prejuizosContabeis),
+            tjlp: (_n(d.tjlp) || 6) / 100,
+            lucroLiquidoAntes: llVal,
+            numMeses: 12,
+          });
+          calcJCP.innerHTML =
+            '<strong>💰 Simulação de JCP</strong><br>' +
+            'JCP máximo (PL × TJLP): ' + _m(jcpRes.jcpMaximoTJLP) + '<br>' +
+            'Limite 1 — 50% lucro líquido: ' + _m(jcpRes.limite50LL) + '<br>' +
+            'Limite 2 — 50% lucros acum. + reservas: ' + _m(jcpRes.limite50Reservas) + '<br>' +
+            '<strong>JCP dedutível (menor dos 3): ' + _m(jcpRes.jcpDedutivel) + '</strong><br>' +
+            'Economia IRPJ (25%): ' + _m(jcpRes.economiaIRPJ) + '<br>' +
+            'Economia CSLL (9%): ' + _m(jcpRes.economiaCSLL) + '<br>' +
+            '(-) Custo IRRF (15%): ' + _m(jcpRes.custoIRRF) + '<br>' +
+            '<span style="color:#2ECC71"><strong>✅ ECONOMIA LÍQUIDA: ' + _m(jcpRes.economiaLiquida) + ' /ano</strong></span>';
+        } catch (e) {
+          calcJCP.innerHTML = '<em>Erro ao calcular JCP: ' + e.message + '</em>';
+        }
+      } else {
+        calcJCP.innerHTML = '<em>Preencha o Patrimônio Líquido (> 0) e a Receita para simular JCP.</em>';
+      }
+    }
+
+    // ── Prejuízos (etapa 3) ──
+    var calcPrej = $("calcPrejuizos");
+    if (calcPrej) {
+      var pfIRPJ = _n(d.prejuizoFiscal);
+      var bnCSLL = _n(d.baseNegativaCSLL);
+      var lucroAj = _calcLucroAjustado();
+      if (pfIRPJ > 0 || bnCSLL > 0) {
+        var maxComp = Math.max(lucroAj, 0) * 0.30;
+        var compIRPJ = Math.min(maxComp, pfIRPJ, Math.max(lucroAj, 0));
+        var compCSLL = Math.min(maxComp, bnCSLL, Math.max(lucroAj, 0));
+        var economiaIRPJ = compIRPJ * 0.25;
+        var economiaCSLL = compCSLL * 0.09;
+        var periodosIRPJ = maxComp > 0 ? Math.ceil(pfIRPJ / maxComp) : "∞";
+        calcPrej.innerHTML =
+          '<strong>📉 Simulação de Compensação de Prejuízos</strong><br>' +
+          'Lucro Ajustado (antes comp.): ' + _m(lucroAj) + '<br>' +
+          'Trava 30%: ' + _m(maxComp) + '<br>' +
+          'Prejuízo fiscal disponível: ' + _m(pfIRPJ) + '<br>' +
+          'Compensação efetiva: ' + _m(compIRPJ) + ' | Saldo remanescente: ' + _m(pfIRPJ - compIRPJ) + '<br>' +
+          'Economia IRPJ: ' + _m(economiaIRPJ) + ' | Economia CSLL: ' + _m(economiaCSLL) + '<br>' +
+          'Períodos para esgotar saldo: ~' + periodosIRPJ + ' anos';
+      } else {
+        calcPrej.innerHTML = '<em>Nenhum prejuízo fiscal informado.</em>';
+      }
+    }
+
+    // ── Retenções (etapa 4) ──
+    var calcRet = $("calcRetencoes");
+    if (calcRet) {
+      var totalIRRF = _n(d.irrfRetidoPrivado) + _n(d.irrfRetidoPublico);
+      var totalCSRF = _n(d.pisRetido) + _n(d.cofinsRetido) + _n(d.csllRetido);
+      var totalISS = _n(d.issRetido);
+      var totalRet = totalIRRF + totalCSRF + totalISS;
+      calcRet.innerHTML =
+        '<strong>Total de Retenções Compensáveis:</strong><br>' +
+        'IRRF retido: ' + _m(totalIRRF) + '<br>' +
+        'CSRF retido (PIS+COFINS+CSLL): ' + _m(totalCSRF) + '<br>' +
+        'ISS retido: ' + _m(totalISS) + '<br>' +
+        '<strong>TOTAL RETENÇÕES: ' + _m(totalRet) + '/ano</strong>';
+    }
+
+    // ── PIS/COFINS (etapa 4) ──
+    var calcPC = $("calcPisCofins");
+    if (calcPC && LR.calcular) {
+      var rb3 = _n(d.receitaBrutaAnual);
+      var recTrib = Math.max(rb3 - _n(d.receitasIsentas) - _n(d.receitaExportacao) - _n(d.receitasMonofasicas), 0);
+      var baseCred = _calcBaseCreditos();
+      var debPIS = _r(recTrib * 0.0165);
+      var debCOF = _r(recTrib * 0.076);
+      var credPIS = _r(baseCred * 0.0165);
+      var credCOF = _r(baseCred * 0.076);
+      var aPagarPIS = Math.max(debPIS - credPIS, 0);
+      var aPagarCOF = Math.max(debCOF - credCOF, 0);
+      var totalPC = _r(aPagarPIS + aPagarCOF);
+      var aliqEfetiva = rb3 > 0 ? (totalPC / rb3 * 100).toFixed(2) : "0.00";
+      var aproveitamento = (debPIS + debCOF) > 0 ? ((credPIS + credCOF) / (debPIS + debCOF) * 100).toFixed(1) : "0.0";
+
+      calcPC.innerHTML =
+        '<strong>📊 Simulação PIS/COFINS em Tempo Real</strong><br>' +
+        'Receita tributável: ' + _m(recTrib) + '<br>' +
+        'Débito PIS (1,65%): ' + _m(debPIS) + ' | Débito COFINS (7,6%): ' + _m(debCOF) + '<br>' +
+        'Total débitos: ' + _m(debPIS + debCOF) + '<br><br>' +
+        'Base de créditos: ' + _m(baseCred) + '<br>' +
+        'Crédito PIS (1,65%): ' + _m(credPIS) + ' | Crédito COFINS (7,6%): ' + _m(credCOF) + '<br>' +
+        'Total créditos: ' + _m(credPIS + credCOF) + '<br><br>' +
+        '<strong>PIS/COFINS a pagar: ' + _m(totalPC) + '</strong><br>' +
+        '<strong>ALÍQUOTA EFETIVA: ' + aliqEfetiva + '%</strong> (de 9,25% nominal)<br>' +
+        'Aproveitamento de créditos: ' + aproveitamento + '%' +
+        (parseFloat(aproveitamento) < 30 && baseCred > 0
+          ? '<br><span style="color:#e67e22">⚠️ Aproveitamento baixo — revise se há insumos não classificados que geram crédito</span>'
+          : "");
+    }
+
+    // ── Depreciação e Incentivos (etapa 5) ──
+    var calcDep = $("calcDepreciacao");
+    if (calcDep) {
+      var turnos = parseInt(d.turnosOperacao) || 1;
+      var mult = turnos === 3 ? 2.0 : turnos === 2 ? 1.5 : 1.0;
+      var depNormal = _calcDepNormal();
+      var depAcelerada = depNormal * mult;
+      var depIncentivada = 0;
+      var uf = d.uf || "";
+      var isSUD = (LR && LR.helpers && (LR.helpers.ehSUDAM(uf) || LR.helpers.ehSUDENE(uf))) ||
+                  (LR && LR.sudam && LR.sudam.estados.indexOf(uf) >= 0) ||
+                  (LR && LR.sudene && LR.sudene.estados.indexOf(uf) >= 0);
+      if (isSUD && _n(d.valorBensNovos) > 0) {
+        depIncentivada = _n(d.valorBensNovos);
+      }
+      var depTotal = depAcelerada + depIncentivada + _n(d.bensSmallValue);
+
+      calcDep.innerHTML =
+        '<strong>🏗️ Prévia de Depreciação e Incentivos</strong><br>' +
+        'Depreciação Normal: ' + _m(depNormal) + '/ano<br>' +
+        (mult > 1 ? 'Depreciação Acelerada (×' + mult + '): ' + _m(depAcelerada) + '/ano<br>' : '') +
+        (depIncentivada > 0 ? 'Depreciação Incentivada SUDAM/SUDENE (100%): ' + _m(depIncentivada) + '<br>' : '') +
+        (_n(d.bensSmallValue) > 0 ? 'Bens de pequeno valor (despesa direta): ' + _m(_n(d.bensSmallValue)) + '<br>' : '') +
+        '<strong>Economia fiscal depreciação: ' + _m(depTotal * 0.34) + ' (×34%)</strong>';
+    }
+
+    // ── ISS SUP (etapa 0) ──
+    var calcISSSUP = $("calcISSSUP");
+    if (calcISSSUP) {
+      var ehSUP = d.ehSUP === true || d.ehSUP === "true";
+      if (ehSUP) {
+        var issFixo = _n(d.issFixoPorProfissional) || 800;
+        var numProf = parseInt(d.numProfissionaisSUP) || 2;
+        var issFixoTotal = _r(issFixo * numProf);
+        var recServISS = _n(d.receitaBrutaAnual) || 0;
+        var issPercentual = _r(recServISS * (_n(d.issAliquota) || 5) / 100);
+        var econISSSUP = _r(issPercentual - issFixoTotal);
+        calcISSSUP.innerHTML =
+          '<strong>Comparativo ISS</strong><br>' +
+          'ISS por alíquota (' + (_n(d.issAliquota) || 5) + '%): ' + _m(issPercentual) + '/ano<br>' +
+          'ISS fixo SUP (' + numProf + ' × ' + _m(issFixo) + '): ' + _m(issFixoTotal) + '/ano<br>' +
+          (econISSSUP > 0
+            ? '<span style="color:#2ECC71"><strong>Economia com SUP: ' + _m(econISSSUP) + '/ano</strong></span>'
+            : '<span style="color:#e67e22">SUP mais caro em ' + _m(Math.abs(econISSSUP)) + ' — não compensa</span>');
+      } else {
+        calcISSSUP.innerHTML = "";
+      }
+    }
+
+    // ── CPRB (etapa 4) ──
+    var calcCPRB = $("calcCPRB");
+    if (calcCPRB) {
+      var optouCPRB = d.optouCPRB === true || d.optouCPRB === "true";
+      if (optouCPRB) {
+        var aliqCPRB = (_n(d.aliquotaCPRB) || 4.5) / 100;
+        var baseCPRB = _n(d.receitaBrutaCPRB) || _n(d.receitaBrutaAnual);
+        var custoCPRB = _r(baseCPRB * aliqCPRB);
+        var folhaBruta = _n(d.folhaPagamentoAnual) || (_n(d.salariosBrutos) + _n(d.proLabore));
+        var cppNormal = _r(folhaBruta * 0.20);
+        var economiaCPRB = _r(cppNormal - custoCPRB);
+        calcCPRB.innerHTML =
+          '<strong>Simulação CPRB</strong><br>' +
+          'CPP normal (20% sobre folha): ' + _m(cppNormal) + '<br>' +
+          'CPRB (' + (_n(d.aliquotaCPRB) || 4.5) + '% sobre receita): ' + _m(custoCPRB) + '<br>' +
+          (economiaCPRB > 0
+            ? '<span style="color:#2ECC71"><strong>Economia com CPRB: ' + _m(economiaCPRB) + '/ano</strong></span>'
+            : '<span style="color:#e67e22">CPRB mais cara que CPP normal em ' + _m(Math.abs(economiaCPRB)) + ' — não compensa</span>');
+      } else {
+        calcCPRB.innerHTML = "";
+      }
+    }
+
+    // ── Impacto badges dinâmicos ──
+    var impMultas = $("impactoMultas");
+    if (impMultas) impMultas.textContent = _m(_n(d.multasPunitivas) * 0.34);
+    var econGrat = $("econGratif");
+    if (econGrat) econGrat.textContent = _m(_n(d.gratificacoesAdm) * 0.34);
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  HELPERS DE CÁLCULO INTERMEDIÁRIOS
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  function _calcTotalCustos() {
+    var d = dadosEmpresa;
+    var folha = _n(d.folhaPagamentoAnual) ||
+      (_n(d.salariosBrutos) + _n(d.inssPatronal) + _n(d.fgts) + _n(d.decimoTerceiro) + _n(d.feriasProvisao) + _n(d.proLabore));
+    return folha + _n(d.cmv) + _n(d.servicosTerceiros) + _n(d.freteComprasVendas) + _n(d.outrosCustosOp);
+  }
+
+  function _calcTotalDespesas() {
+    var d = dadosEmpresa;
+    return _n(d.aluguelAnual) + _n(d.energiaAnual) + _n(d.telecomAnual) +
+      _n(d.manutencaoConservacao) + _n(d.segurosAnual) + _n(d.despesasVeiculos) +
+      _n(d.honorariosContabeis) + _n(d.marketingPublicidade) + _n(d.despesasViagem) +
+      _n(d.materialEscritorio) + _n(d.outrasDespesasOp);
+  }
+
+  function _calcTotalAdicoes() {
+    var d = dadosEmpresa;
+    return _n(d.multasPunitivas) + _n(d.brindes) + _n(d.alimentacaoSocios) +
+      _n(d.gratificacoesAdm) + _n(d.doacoesIrregulares) + _n(d.despesasSemNF) +
+      _n(d.provisoesIndedutiveis) + _n(d.mepNegativo) + _n(d.depContabilMaiorFiscal) +
+      _n(d.outrasAdicoes);
+  }
+
+  function _calcTotalExclusoes() {
+    var d = dadosEmpresa;
+    return _n(d.dividendosRecebidos) + _n(d.mepPositivo) + _n(d.reversaoProvisoes) +
+      _n(d.subvencaoInvestimento) + _n(d.depAceleradaIncentivadaExclusao) + _n(d.outrasExclusoes) +
+      _n(d.perdasCreditos6Meses) + _n(d.perdasCreditosJudicial) + _n(d.perdasCreditosFalencia);
+  }
+
+  function _calcLL() {
+    return _n(dadosEmpresa.receitaBrutaAnual) - _calcTotalCustos() - _calcTotalDespesas();
+  }
+
+  function _calcLucroAjustado() {
+    return _calcLL() + _calcTotalAdicoes() - _calcTotalExclusoes();
+  }
+
+  function _calcPL() {
+    var d = dadosEmpresa;
+    if (_n(d.patrimonioLiquido) > 0) return _n(d.patrimonioLiquido);
+    return _n(d.capitalSocial) + _n(d.reservasCapital) + _n(d.reservasLucros) +
+      _n(d.lucrosAcumulados) + _n(d.ajustesAvaliacaoPatrimonial) - _n(d.prejuizosContabeis);
+  }
+
+  function _calcDepNormal() {
+    var d = dadosEmpresa;
+    return _n(d.valorVeiculos) * 0.20 + _n(d.valorMaquinas) * 0.10 +
+      _n(d.valorComputadores) * 0.20 + _n(d.valorMoveis) * 0.10 +
+      _n(d.valorEdificios) * 0.04 + _n(d.valorDrones) * 0.20 +
+      _n(d.valorTratores) * 0.25 + _n(d.valorSoftware) * 0.20 +
+      _n(d.valorInstalacoes) * 0.10 + _n(d.valorOutrosBens) * 0.10;
+  }
+
+  function _calcBaseCreditos() {
+    var d = dadosEmpresa;
+    return _n(d.comprasMercadoriasAnual) + _n(d.energiaCredito) + _n(d.alugueisPJCredito) +
+      _n(d.leasingCredito) + _n(d.depreciacaoBensCredito) + _n(d.depreciacaoEdifCredito) +
+      _n(d.freteVendasAnual) + _n(d.armazenagemCredito) + _n(d.valeTranspAlim) +
+      _n(d.manutencaoMaquinas) + _n(d.devolucoesVendas) + _n(d.outrosCreditosPC) +
+      _n(d.creditoEstoqueAbertura);
+  }
+
+  function _nomeAtividade(tipo) {
+    if (!tipo) return "—";
+    if (LR && LR.presuncoes && LR.presuncoes[tipo]) return LR.presuncoes[tipo].label;
+    return tipo;
+  }
+
+  function _nomeApuracao(ap) {
+    if (ap === "trimestral") return "Trimestral (definitiva)";
+    if (ap === "anual_estimativa") return "Anual por Estimativa";
+    if (ap === "anual_suspensao") return "Anual com Suspensão/Redução";
+    return "—";
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  HELPERS DE UI
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  function _atualizarBadgeUF(uf) {
+    var badge = $("ufBadge");
+    if (!badge) return;
+    var isSUDAM = false;
+    var isSUDENE = false;
+    if (LR) {
+      if (LR.helpers && LR.helpers.ehSUDAM) isSUDAM = LR.helpers.ehSUDAM(uf);
+      else if (LR.sudam) isSUDAM = LR.sudam.estados.indexOf(uf) >= 0;
+      if (LR.helpers && LR.helpers.ehSUDENE) isSUDENE = LR.helpers.ehSUDENE(uf);
+      else if (LR.sudene) isSUDENE = LR.sudene.estados.indexOf(uf) >= 0;
+    }
+    if (isSUDAM) {
+      badge.innerHTML = '<div class="wz-badge wz-badge-green">✅ Área SUDAM — Amazônia Legal — elegível a incentivos regionais</div>';
+    } else if (isSUDENE) {
+      badge.innerHTML = '<div class="wz-badge wz-badge-green">✅ Área SUDENE — elegível a incentivos regionais</div>';
+    } else {
+      badge.innerHTML = "";
+    }
+
+    // Alerta obrigatoriedade por atividade
+    _verificarAlertaObrigatoriedade();
+  }
+
+  function _verificarAlertaObrigatoriedade() {
+    var alerta = $("alertaObrigatoriedade");
+    if (!alerta) return;
+    var d = dadosEmpresa;
+    var msgs = [];
+    if (d.tipoAtividade === "FACTORING" || d.tipoAtividade === "INSTITUICOES_FINANCEIRAS") {
+      msgs.push('⚠️ Lucro Real é OBRIGATÓRIO para esta atividade (Art. 257)');
+    }
+    if (d.ehFinanceira === true || d.ehFinanceira === "true") {
+      msgs.push('⚠️ Instituições financeiras são OBRIGADAS ao Lucro Real');
+    }
+    alerta.innerHTML = msgs.map(function (m) {
+      return '<div class="wz-badge wz-badge-red">' + m + '</div>';
+    }).join("");
+  }
+
+  function mostrarErro(msg) {
+    var container = $("wizardContainer");
+    if (container) {
+      container.innerHTML =
+        '<div class="wz-error"><h2>Erro de Inicialização</h2><p>' + msg + '</p></div>';
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  NAVEGAÇÃO
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  function nextStep() {
+    if (currentStep < ETAPAS.length - 1) {
+      currentStep++;
+      saveToLS();
+      renderWizard();
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  }
+
+  function prevStep() {
+    if (currentStep > 0) {
+      currentStep--;
+      saveToLS();
+      renderWizard();
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  }
+
+  function goToStep(n) {
+    if (n >= 0 && n < ETAPAS.length) {
+      currentStep = n;
+      saveToLS();
+      renderWizard();
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  }
+
+  function voltarWizard() {
+    renderWizard();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  MOTOR DE ANÁLISE — analisar() — PLACEHOLDER PARTE 2
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  function analisar() {
+    var d = dadosEmpresa;
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  PASSO 0 — Validar campos obrigatórios
+    // ═══════════════════════════════════════════════════════════════════════
+    var erros = _validarObrigatorios();
+    if (erros.length > 0) {
+      alert("Campos obrigatórios faltando:\n\n• " + erros.join("\n• "));
+      return;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  PASSO 1 — Validação cruzada (alertas amarelos, não bloqueiam)
+    // ═══════════════════════════════════════════════════════════════════════
+    var alertas = _validacaoCruzada();
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  PASSO 2 — Montar DRE (Receita → Lucro Líquido Contábil)
+    // ═══════════════════════════════════════════════════════════════════════
+    var receitaBruta = _n(d.receitaBrutaAnual);
+    var custosTotais = _calcTotalCustos();
+    var despesasTotais = _calcTotalDespesas();
+    var depAnual = _calcDepNormal();
+    var turnos = parseInt(d.turnosOperacao) || 1;
+    var multTurnos = turnos === 3 ? 2.0 : turnos === 2 ? 1.5 : 1.0;
+    var depAcelerada = _r(depAnual * multTurnos);
+    var receitaFinanceiras = _n(d.receitaFinanceiras) + _n(d.receitasFinanceirasEspeciais);
+    var receitaServicos = _n(d.receitaServicos) || (d.tipoAtividade && d.tipoAtividade.indexOf("SERVICO") >= 0 ? receitaBruta : 0);
+    var receitaComercio = _n(d.receitaComercio) || (d.tipoAtividade === "COMERCIO_INDUSTRIA" ? receitaBruta : 0);
+    // Se não detalharam, usar a receita toda como do tipo de atividade
+    if (!d.detalharReceita && !_n(d.receitaServicos) && !_n(d.receitaComercio)) {
+      if (d.tipoAtividade && d.tipoAtividade.indexOf("COMERCIO") >= 0) {
+        receitaComercio = receitaBruta;
+      } else {
+        receitaServicos = receitaBruta;
+      }
+    }
+    var lucroLiquido = _r(receitaBruta - custosTotais - despesasTotais);
+    var margemLucro = receitaBruta > 0 ? _r(lucroLiquido / receitaBruta * 100) : 0;
+
+    var dre = {
+      receitaBruta: receitaBruta,
+      receitaServicos: receitaServicos,
+      receitaComercio: receitaComercio,
+      receitaFinanceiras: receitaFinanceiras,
+      receitaAlugueis: _n(d.receitaAlugueis),
+      outrasReceitas: _n(d.outrasReceitas),
+      custosTotais: custosTotais,
+      folhaPagamento: _n(d.folhaPagamentoAnual) || (_n(d.salariosBrutos) + _n(d.proLabore) + _n(d.inssPatronal) + _n(d.fgts) + _n(d.decimoTerceiro) + _n(d.feriasProvisao)),
+      cmv: _n(d.cmv),
+      servicosTerceiros: _n(d.servicosTerceiros),
+      despesasTotais: despesasTotais,
+      depreciacao: depAcelerada,
+      lucroLiquido: lucroLiquido,
+      margemLucro: margemLucro
+    };
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  PASSO 3 — Montar LALUR (LL + Adições - Exclusões = Lucro Ajustado)
+    // ═══════════════════════════════════════════════════════════════════════
+    var totalAdicoes = _calcTotalAdicoes();
+    var totalExclusoes = _calcTotalExclusoes();
+    var lucroAjustado = _r(lucroLiquido + totalAdicoes - totalExclusoes);
+
+    // Detalhe de adições com artigo
+    var adicoesDetalhe = [];
+    if (_n(d.multasPunitivas) > 0) adicoesDetalhe.push({ desc: "Multas punitivas", valor: _n(d.multasPunitivas), artigo: "Art. 311, §5º", tipo: "D" });
+    if (_n(d.brindes) > 0) adicoesDetalhe.push({ desc: "Brindes", valor: _n(d.brindes), artigo: "Art. 13, Lei 9.249", tipo: "D" });
+    if (_n(d.alimentacaoSocios) > 0) adicoesDetalhe.push({ desc: "Alimentação de sócios/adm.", valor: _n(d.alimentacaoSocios), artigo: "Art. 260, §ú, IV", tipo: "D" });
+    if (_n(d.gratificacoesAdm) > 0) adicoesDetalhe.push({ desc: "Gratificações a administradores", valor: _n(d.gratificacoesAdm), artigo: "Art. 358, §1º", tipo: "D" });
+    if (_n(d.doacoesIrregulares) > 0) adicoesDetalhe.push({ desc: "Doações fora dos limites legais", valor: _n(d.doacoesIrregulares), artigo: "Art. 377-385", tipo: "D" });
+    if (_n(d.despesasSemNF) > 0) adicoesDetalhe.push({ desc: "Despesas sem comprovante/NF", valor: _n(d.despesasSemNF), artigo: "Art. 311", tipo: "D" });
+    if (_n(d.provisoesIndedutiveis) > 0) adicoesDetalhe.push({ desc: "Provisões não dedutíveis", valor: _n(d.provisoesIndedutiveis), artigo: "Art. 340-352", tipo: "T" });
+    if (_n(d.mepNegativo) > 0) adicoesDetalhe.push({ desc: "Resultado negativo MEP", valor: _n(d.mepNegativo), artigo: "Art. 389", tipo: "T" });
+    if (_n(d.depContabilMaiorFiscal) > 0) adicoesDetalhe.push({ desc: "Depreciação contábil > fiscal", valor: _n(d.depContabilMaiorFiscal), artigo: "Art. 283-285", tipo: "T" });
+    if (_n(d.outrasAdicoes) > 0) adicoesDetalhe.push({ desc: d.descOutrasAdicoes || "Outras adições", valor: _n(d.outrasAdicoes), artigo: "—", tipo: "D" });
+
+    var exclusoesDetalhe = [];
+    if (_n(d.dividendosRecebidos) > 0) exclusoesDetalhe.push({ desc: "Dividendos recebidos de PJ brasileira", valor: _n(d.dividendosRecebidos), artigo: "Art. 261, II + Lei 9.249, art. 10" });
+    if (_n(d.mepPositivo) > 0) exclusoesDetalhe.push({ desc: "Resultado positivo MEP", valor: _n(d.mepPositivo), artigo: "Art. 389" });
+    if (_n(d.reversaoProvisoes) > 0) exclusoesDetalhe.push({ desc: "Reversão de provisões antes adicionadas", valor: _n(d.reversaoProvisoes), artigo: "Art. 261, §ú, V" });
+    if (_n(d.subvencaoInvestimento) > 0) exclusoesDetalhe.push({ desc: "Subvenção para investimento", valor: _n(d.subvencaoInvestimento), artigo: "Lei 12.973, art. 30" });
+    if (_n(d.depAceleradaIncentivadaExclusao) > 0) exclusoesDetalhe.push({ desc: "Depreciação acelerada incentivada", valor: _n(d.depAceleradaIncentivadaExclusao), artigo: "Art. 324-329" });
+    if (_n(d.outrasExclusoes) > 0) exclusoesDetalhe.push({ desc: "Outras exclusões", valor: _n(d.outrasExclusoes), artigo: "—" });
+
+    // PDD Fiscal
+    var totalPDDAnalise = _n(d.perdasCreditos6Meses) + _n(d.perdasCreditosJudicial) + _n(d.perdasCreditosFalencia);
+    if (_n(d.perdasCreditos6Meses) > 0) exclusoesDetalhe.push({ desc: "PDD — Créditos vencidos > 6 meses", valor: _n(d.perdasCreditos6Meses), artigo: "Art. 340, RIR/2018" });
+    if (_n(d.perdasCreditosJudicial) > 0) exclusoesDetalhe.push({ desc: "PDD — Créditos em cobrança judicial", valor: _n(d.perdasCreditosJudicial), artigo: "Art. 340, §1º" });
+    if (_n(d.perdasCreditosFalencia) > 0) exclusoesDetalhe.push({ desc: "PDD — Créditos c/ devedor em falência/recuperação", valor: _n(d.perdasCreditosFalencia), artigo: "Art. 341" });
+
+    var lalur = {
+      lucroLiquido: lucroLiquido,
+      adicoes: adicoesDetalhe,
+      totalAdicoes: totalAdicoes,
+      exclusoes: exclusoesDetalhe,
+      totalExclusoes: totalExclusoes,
+      lucroAjustado: lucroAjustado
+    };
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  PASSO 4 — Compensação de prejuízos → LR.calcular.compensarIntegrado()
+    // ═══════════════════════════════════════════════════════════════════════
+    var prejuizoFiscal = _n(d.prejuizoFiscal);
+    var baseNegCSLL = _n(d.baseNegativaCSLL);
+    var compensacao = null;
+    var vedacoes = null;
+
+    // Verificar vedações
+    if (LR.validar && LR.validar.vedacoesCompensacao) {
+      try {
+        vedacoes = LR.validar.vedacoesCompensacao({
+          houveMudancaControle: d.temMudancaControle === true || d.temMudancaControle === "true",
+          houveMudancaRamo: d.temMudancaRamo === true || d.temMudancaRamo === "true",
+          tipoReorganizacao: d.tipoReorganizacao || "",
+          percentPLRemanescente: _n(d.percentPLRemanescente)
+        });
+      } catch (e) { vedacoes = null; }
+    }
+
+    var vedaCompensacao = vedacoes && vedacoes.compensacaoPermitida === false;
+
+    if (LR.calcular.compensarIntegrado && (prejuizoFiscal > 0 || baseNegCSLL > 0) && lucroAjustado > 0 && !vedaCompensacao) {
+      try {
+        compensacao = LR.calcular.compensarIntegrado({
+          lucroLiquido: lucroLiquido,
+          adicoes: totalAdicoes,
+          exclusoes: totalExclusoes,
+          saldoPrejuizoOperacional: prejuizoFiscal,
+          saldoBaseNegativaCSLL: baseNegCSLL,
+          trimestral: d.apuracaoLR === "trimestral"
+        });
+      } catch (e) {
+        compensacao = null;
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  PASSO 5 — Lucro Real final (Lucro Ajustado - Compensação)
+    // ═══════════════════════════════════════════════════════════════════════
+    var lucroRealFinal = compensacao
+      ? (compensacao.resumo ? compensacao.resumo.lucroRealFinal : Math.max(lucroAjustado, 0))
+      : Math.max(lucroAjustado, 0);
+    var baseCSLLFinal = compensacao
+      ? (compensacao.resumo ? compensacao.resumo.baseCSLLFinal : lucroRealFinal)
+      : lucroRealFinal;
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  PASSO 6 — IRPJ → LR.calcular.irpj()
+    // ═══════════════════════════════════════════════════════════════════════
+    var ehFinanceira = d.ehFinanceira === true || d.ehFinanceira === "true" || d.tipoAtividade === "INSTITUICOES_FINANCEIRAS";
+    var totalIRRF = _n(d.irrfRetidoPrivado) + _n(d.irrfRetidoPublico);
+    var estimIRPJPagas = _n(d.estimativasIRPJPagas);
+    var estimCSLLPagas = _n(d.estimativasCSLLPagas);
+    var estimPISCOFINSPagas = _n(d.estimativasPISCOFINSPagas);
+
+    // Calcular incentivos primeiro para ter valor de deduções
+    var irpjNormalPrevia = _r(lucroRealFinal * 0.15);
+    var despesasIncentivos = {};
+    if (d.usaPAT === true || d.usaPAT === "true") despesasIncentivos.PAT = _n(d.valorPAT);
+    if (d.usaFIA === true || d.usaFIA === "true") despesasIncentivos.FIA = _n(d.valorFIA);
+    if (d.usaFundoIdoso === true || d.usaFundoIdoso === "true") despesasIncentivos.FUNDO_IDOSO = _n(d.valorFundoIdoso);
+    if (d.usaRouanet === true || d.usaRouanet === "true") despesasIncentivos.ROUANET = _n(d.valorRouanet);
+    if (d.usaEsporte === true || d.usaEsporte === "true") despesasIncentivos.ESPORTE = _n(d.valorEsporte);
+    if (d.usaPRONON === true || d.usaPRONON === "true") despesasIncentivos.PRONON = _n(d.valorPRONON);
+    if (d.usaPRONAS === true || d.usaPRONAS === "true") despesasIncentivos.PRONAS_PCD = _n(d.valorPRONAS);
+    if (d.investePD === true || d.investePD === "true") despesasIncentivos.PD_LEI_BEM = _n(d.valorPD);
+
+    var incentivosFiscais = null;
+    if (LR.calcular.incentivos) {
+      try {
+        incentivosFiscais = LR.calcular.incentivos({
+          irpjNormal: irpjNormalPrevia,
+          despesas: despesasIncentivos
+        });
+      } catch (e) { incentivosFiscais = null; }
+    }
+
+    var totalDeducoesIncentivos = incentivosFiscais ? incentivosFiscais.totalDeducaoFinal : 0;
+
+    // SUDAM/SUDENE — Redução do IRPJ
+    var uf = d.uf || "";
+    var isSUDAM = (LR.helpers && LR.helpers.ehSUDAM) ? LR.helpers.ehSUDAM(uf) : (LR.sudam && LR.sudam.estados.indexOf(uf) >= 0);
+    var isSUDENE = (LR.helpers && LR.helpers.ehSUDENE) ? LR.helpers.ehSUDENE(uf) : (LR.sudene && LR.sudene.estados.indexOf(uf) >= 0);
+    var temProjetoSUDAM = (isSUDAM || isSUDENE) && (d.temProjetoAprovado === true || d.temProjetoAprovado === "true");
+
+    var sudamResult = null;
+    var reducaoSUDAM = 0;
+    if (temProjetoSUDAM && LR.simular && LR.simular.incentivosRegionais) {
+      try {
+        sudamResult = LR.simular.incentivosRegionais({
+          lucroLiquido: lucroLiquido,
+          receitasFinanceiras: receitaFinanceiras,
+          receitaLiquidaTotal: receitaBruta,
+          receitaLiquidaIncentivada: receitaBruta - receitaFinanceiras,
+          adicoes: totalAdicoes,
+          exclusoes: totalExclusoes,
+          csllDevida: _r(baseCSLLFinal * (ehFinanceira ? 0.15 : 0.09)),
+          percentualReducao: (_n(d.percentualReducao) || 75) / 100,
+          usarReinvestimento: d.usarReinvestimento30 === true || d.usarReinvestimento30 === "true",
+          superintendencia: isSUDAM ? "SUDAM" : "SUDENE",
+          anual: d.apuracaoLR !== "trimestral"
+        });
+        if (sudamResult && sudamResult.resumo) {
+          reducaoSUDAM = sudamResult.resumo.economiaReducao75 || 0;
+        }
+      } catch (e) { sudamResult = null; }
+    }
+
+    var irpjResult = LR.calcular.irpj({
+      lucroLiquido: lucroLiquido,
+      adicoes: totalAdicoes,
+      exclusoes: totalExclusoes,
+      prejuizoFiscal: vedaCompensacao ? 0 : prejuizoFiscal,
+      numMeses: 12,
+      incentivos: totalDeducoesIncentivos,
+      retencoesFonte: totalIRRF,
+      estimativasPagas: estimIRPJPagas,
+      apuracao: d.apuracaoLR === "trimestral" ? "TRIMESTRAL" : "ANUAL"
+    });
+
+    // Aplicar redução SUDAM/SUDENE sobre o IRPJ
+    var irpjAntesReducao = irpjResult.irpjDevido;
+    var irpjAposReducao = _r(Math.max(irpjAntesReducao - reducaoSUDAM, 0));
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  PASSO 7 — CSLL → LR.calcular.csll()
+    // ═══════════════════════════════════════════════════════════════════════
+    var csllResult = LR.calcular.csll({
+      lucroLiquido: lucroLiquido,
+      adicoes: totalAdicoes,
+      exclusoes: totalExclusoes,
+      baseNegativa: vedaCompensacao ? 0 : baseNegCSLL,
+      financeira: ehFinanceira,
+      tipoAtividade: d.tipoAtividade || ""
+    });
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  PASSO 8 — PIS/COFINS → LR.calcular.pisCofins()
+    // ═══════════════════════════════════════════════════════════════════════
+    var receitasIsentas = _n(d.receitasIsentas) + _n(d.receitaExportacao) + _n(d.receitasMonofasicas);
+    var baseCreditos = _calcBaseCreditos();
+
+    var pisCofinsResult = LR.calcular.pisCofins({
+      receitaBruta: receitaBruta,
+      isentas: receitasIsentas,
+      exportacao: 0, // já incluída em isentas acima
+      comprasBensRevenda: _n(d.comprasMercadoriasAnual),
+      energiaEletrica: _n(d.energiaCredito),
+      alugueisPJ: _n(d.alugueisPJCredito),
+      depreciacaoBens: _n(d.depreciacaoBensCredito) + _n(d.depreciacaoEdifCredito),
+      freteArmazenagem: _n(d.freteVendasAnual) + _n(d.armazenagemCredito),
+      leasing: _n(d.leasingCredito),
+      valeTransporteRefeicao: _n(d.valeTranspAlim),
+      devolucoes: _n(d.devolucoesVendas),
+      outrosCreditos: _n(d.outrosCreditosPC) + _n(d.manutencaoMaquinas) + _n(d.creditoEstoqueAbertura)
+    });
+
+    // Normalizar propriedades flat para evitar crash no render
+    // O motor LR pode retornar debitos/creditos como objetos aninhados ou propriedades planas
+    if (!pisCofinsResult.debitos) pisCofinsResult.debitos = { pis: 0, cofins: 0 };
+    if (!pisCofinsResult.creditos) pisCofinsResult.creditos = { pis: 0, cofins: 0 };
+    if (!pisCofinsResult.aPagar) pisCofinsResult.aPagar = { pis: 0, cofins: 0 };
+
+    // Garantir flat props a partir de aninhados (ou vice-versa)
+    var _recTrib = pisCofinsResult.receitaTributavel || _r(receitaBruta - receitasIsentas);
+    pisCofinsResult.receitaTributavel = _recTrib;
+    pisCofinsResult.debitoPIS    = pisCofinsResult.debitoPIS    || pisCofinsResult.debitos.pis    || _r(_recTrib * 0.0165);
+    pisCofinsResult.debitoCOFINS = pisCofinsResult.debitoCOFINS || pisCofinsResult.debitos.cofins || _r(_recTrib * 0.076);
+    pisCofinsResult.debitos.pis    = pisCofinsResult.debitos.pis    || pisCofinsResult.debitoPIS;
+    pisCofinsResult.debitos.cofins = pisCofinsResult.debitos.cofins || pisCofinsResult.debitoCOFINS;
+
+    // Créditos: replicar lógica do simulador da Etapa 5
+    var _totalCredBase = baseCreditos;
+    pisCofinsResult.creditoPIS    = pisCofinsResult.creditoPIS    || pisCofinsResult.creditos.pis    || _r(_totalCredBase * 0.0165);
+    pisCofinsResult.creditoCOFINS = pisCofinsResult.creditoCOFINS || pisCofinsResult.creditos.cofins || _r(_totalCredBase * 0.076);
+    pisCofinsResult.creditos.pis    = pisCofinsResult.creditos.pis    || pisCofinsResult.creditoPIS;
+    pisCofinsResult.creditos.cofins = pisCofinsResult.creditos.cofins || pisCofinsResult.creditoCOFINS;
+
+    // A pagar líquido
+    var _pisAP  = _r(Math.max(pisCofinsResult.debitoPIS - pisCofinsResult.creditoPIS, 0));
+    var _cofAP  = _r(Math.max(pisCofinsResult.debitoCOFINS - pisCofinsResult.creditoCOFINS, 0));
+    pisCofinsResult.pisAPagar      = pisCofinsResult.pisAPagar    || pisCofinsResult.aPagar.pis    || _pisAP;
+    pisCofinsResult.cofinsAPagar   = pisCofinsResult.cofinsAPagar || pisCofinsResult.aPagar.cofins || _cofAP;
+    pisCofinsResult.aPagar.pis     = pisCofinsResult.aPagar.pis     || pisCofinsResult.pisAPagar;
+    pisCofinsResult.aPagar.cofins  = pisCofinsResult.aPagar.cofins  || pisCofinsResult.cofinsAPagar;
+    pisCofinsResult.totalAPagar    = pisCofinsResult.totalAPagar || _r(pisCofinsResult.pisAPagar + pisCofinsResult.cofinsAPagar);
+
+    // Economia com créditos (débitos totais - a pagar = quanto os créditos economizaram)
+    var _totalDebitos = _r(pisCofinsResult.debitoPIS + pisCofinsResult.debitoCOFINS);
+    pisCofinsResult.economiaCreditos = pisCofinsResult.economiaCreditos || _r(Math.max(_totalDebitos - pisCofinsResult.totalAPagar, 0));
+    pisCofinsResult.receitasIsentas  = pisCofinsResult.receitasIsentas || receitasIsentas;
+    pisCofinsResult.aliquotaEfetiva  = pisCofinsResult.aliquotaEfetiva || (receitaBruta > 0 ? _pp(_r(pisCofinsResult.totalAPagar / receitaBruta * 100)) : '0.00%');
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  PASSO 9 — ISS mensal
+    // ═══════════════════════════════════════════════════════════════════════
+    var issAliquota = _n(d.issAliquota) || 5;
+    var ehSUP = d.ehSUP === true || d.ehSUP === "true";
+    var issAnual, issMensal, issModalidade;
+    if (ehSUP) {
+      var issFixoProf = _n(d.issFixoPorProfissional) || 800;
+      var nProf = parseInt(d.numProfissionaisSUP) || 2;
+      issAnual = _r(issFixoProf * nProf);
+      issMensal = _r(issAnual / 12);
+      issModalidade = "SUP (fixo por profissional)";
+    } else {
+      issAnual = _r(receitaServicos * issAliquota / 100);
+      issMensal = _r(issAnual / 12);
+      issModalidade = "Percentual";
+    }
+    var issResult = {
+      receitaServicos: receitaServicos,
+      aliquota: ehSUP ? 0 : issAliquota,
+      municipio: d.municipio || "—",
+      issAnual: issAnual,
+      issMensal: issMensal,
+      modalidade: issModalidade,
+      ehSUP: ehSUP,
+      tipoServico: d.tipoServicoISS || "",
+      baseLegal: "LC 116/2003"
+    };
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  PASSO 9.1 — CPRB (Desoneração da Folha)
+    // ═══════════════════════════════════════════════════════════════════════
+    var cprbResult = null;
+    var optouCPRB = d.optouCPRB === true || d.optouCPRB === "true";
+    if (optouCPRB) {
+      var aliqCPRB = (_n(d.aliquotaCPRB) || 4.5) / 100;
+      var baseCPRB = _n(d.receitaBrutaCPRB) || receitaBruta;
+      var custoCPRB = _r(baseCPRB * aliqCPRB);
+      var folhaBrutaCPRB = _n(d.folhaPagamentoAnual) || (_n(d.salariosBrutos) + _n(d.proLabore));
+      var cppNormal = _r(folhaBrutaCPRB * 0.20);
+      var economiaCPRB = _r(cppNormal - custoCPRB);
+      cprbResult = {
+        optou: true,
+        aliquota: aliqCPRB,
+        baseCPRB: baseCPRB,
+        custoCPRB: custoCPRB,
+        cppNormal: cppNormal,
+        economia: Math.max(economiaCPRB, 0),
+        compensa: economiaCPRB > 0
+      };
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  PASSO 10 — JCP → LR.calcular.jcp()
+    // ═══════════════════════════════════════════════════════════════════════
+    var plVal = _calcPL();
+    var jcpResult = null;
+    if (plVal > 0 && lucroLiquido > 0) {
+      try {
+        jcpResult = LR.calcular.jcp({
+          patrimonioLiquido: plVal,
+          capitalSocial: _n(d.capitalSocial) || null,
+          reservasCapital: _n(d.reservasCapital),
+          reservasLucros: _n(d.reservasLucros),
+          lucrosAcumulados: _n(d.lucrosAcumulados),
+          prejuizosAcumulados: _n(d.prejuizosContabeis),
+          tjlp: (_n(d.tjlp) || 6) / 100,
+          lucroLiquidoAntes: lucroLiquido,
+          numMeses: 12
+        });
+      } catch (e) { jcpResult = null; }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  PASSO 11 — Incentivos fiscais (já calculados no passo 6)
+    // ═══════════════════════════════════════════════════════════════════════
+    // incentivosFiscais já foi calculado acima
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  PASSO 12 — SUDAM/SUDENE (já calculado no passo 6)
+    // ═══════════════════════════════════════════════════════════════════════
+    // sudamResult já foi calculado acima
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  PASSO 13 — Depreciação → LR.calcular.depreciacaoCompleta()
+    // ═══════════════════════════════════════════════════════════════════════
+    var bensConfig = [
+      { campo: "valorVeiculos", tipo: "VEICULOS", taxa: 0.20 },
+      { campo: "valorMaquinas", tipo: "MAQUINAS", taxa: 0.10 },
+      { campo: "valorComputadores", tipo: "COMPUTADORES", taxa: 0.20 },
+      { campo: "valorMoveis", tipo: "MOVEIS", taxa: 0.10 },
+      { campo: "valorEdificios", tipo: "EDIFICIOS", taxa: 0.04 },
+      { campo: "valorDrones", tipo: "DRONES", taxa: 0.20 },
+      { campo: "valorTratores", tipo: "TRATORES", taxa: 0.25 },
+      { campo: "valorSoftware", tipo: "SOFTWARE", taxa: 0.20 },
+      { campo: "valorInstalacoes", tipo: "INSTALACOES", taxa: 0.10 },
+      { campo: "valorOutrosBens", tipo: "OUTROS", taxa: 0.10 }
+    ];
+    var depreciacaoDetalhe = [];
+    var totalDepNormal = 0;
+    var totalDepAcelerada = 0;
+    bensConfig.forEach(function (bc) {
+      var valor = _n(d[bc.campo]);
+      if (valor > 0) {
+        var depN = _r(valor * bc.taxa);
+        var depA = _r(depN * multTurnos);
+        totalDepNormal += depN;
+        totalDepAcelerada += depA;
+        depreciacaoDetalhe.push({
+          tipo: bc.tipo, valorOriginal: valor, taxa: bc.taxa,
+          depreciaNormal: depN, depreciaAcelerada: depA, turnos: turnos
+        });
+      }
+    });
+    var depBensNovos = 0;
+    if ((isSUDAM || isSUDENE) && _n(d.valorBensNovos) > 0) {
+      depBensNovos = _n(d.valorBensNovos);
+    }
+    var depBensSmall = _n(d.bensSmallValue);
+    var depreciacaoTotal = _r(totalDepAcelerada + depBensNovos + depBensSmall);
+    var depreciacaoResult = {
+      bens: depreciacaoDetalhe,
+      depreciaNormal: totalDepNormal,
+      depreciaAcelerada: totalDepAcelerada,
+      depBensNovos: depBensNovos,
+      depBensSmall: depBensSmall,
+      total: depreciacaoTotal,
+      economiaFiscal: _r(depreciacaoTotal * 0.34),
+      turnos: turnos,
+      multiplicador: multTurnos
+    };
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  PASSO 14 — Retenções compensáveis → LR.calcular.compensarRetencoes()
+    // ═══════════════════════════════════════════════════════════════════════
+    var retencoesResult = null;
+    var totalCSRF = _n(d.pisRetido) + _n(d.cofinsRetido) + _n(d.csllRetido);
+    if (LR.calcular.compensarRetencoes) {
+      try {
+        retencoesResult = LR.calcular.compensarRetencoes({
+          retencoesSofridas: {
+            irrf: totalIRRF,
+            pis: _n(d.pisRetido),
+            cofins: _n(d.cofinsRetido),
+            csll: _n(d.csllRetido)
+          },
+          tributosDevidos: {
+            irpj: irpjAposReducao,
+            csll: csllResult.csllDevida,
+            pis: pisCofinsResult.pisAPagar || pisCofinsResult.aPagar.pis,
+            cofins: pisCofinsResult.cofinsAPagar || pisCofinsResult.aPagar.cofins
+          }
+        });
+      } catch (e) { retencoesResult = null; }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  PASSO 15 — Saldo negativo → LR.calcular.saldoNegativo()
+    // ═══════════════════════════════════════════════════════════════════════
+    var saldoNegResult = null;
+    if (LR.calcular.saldoNegativo) {
+      try {
+        saldoNegResult = LR.calcular.saldoNegativo({
+          irpjDevido: irpjAposReducao,
+          retencoesFonte: totalIRRF,
+          estimativasPagas: estimIRPJPagas
+        });
+      } catch (e) { saldoNegResult = null; }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  PASSO 16 — Simulação TRIMESTRAL
+    // ═══════════════════════════════════════════════════════════════════════
+    var simTrimestral = _simularTrimestral(d, lucroAjustado, prejuizoFiscal, baseNegCSLL, vedaCompensacao, ehFinanceira);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  PASSO 17 — Simulação ANUAL POR ESTIMATIVA
+    // ═══════════════════════════════════════════════════════════════════════
+    var simAnual = _simularAnualEstimativa(d, receitaBruta, lucroRealFinal, ehFinanceira);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  PASSO 18 — Suspensão/redução (informativo)
+    // ═══════════════════════════════════════════════════════════════════════
+    var simSuspensao = _simularSuspensaoReducao(d, receitaBruta, lucroRealFinal, ehFinanceira);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  PASSO 19 — Recomendação de melhor forma de apuração
+    // ═══════════════════════════════════════════════════════════════════════
+    var recomendacao = _recomendarApuracao(simTrimestral, simAnual, simSuspensao, d);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  PRÉ-CÁLCULO — Totais de economia (necessário para projeção)
+    // ═══════════════════════════════════════════════════════════════════════
+    var economiaJCP = jcpResult ? (jcpResult.economiaLiquida || 0) : 0;
+    var economiaPrejuizo = compensacao ? (compensacao.resumo.economia.total || 0) : 0;
+    var economiaSUDAM = reducaoSUDAM;
+    var economiaIncentivos = incentivosFiscais ? (incentivosFiscais.economiaTotal || 0) : 0;
+    var economiaDepreciacao = depreciacaoResult.economiaFiscal;
+    var economiaPisCofins = pisCofinsResult.economiaCreditos || 0;
+    var economiaGratificacao = _n(d.gratificacoesAdm) > 0 ? _r(_n(d.gratificacoesAdm) * 0.34) : 0;
+    var economiaCPRBFinal = cprbResult ? cprbResult.economia : 0;
+    var totalPDDEcon = _r((_n(d.perdasCreditos6Meses) + _n(d.perdasCreditosJudicial) + _n(d.perdasCreditosFalencia)) * 0.34);
+    var totalEconomias = _r(economiaJCP + economiaPrejuizo + economiaSUDAM + economiaIncentivos + economiaDepreciacao + economiaPisCofins + economiaCPRBFinal + totalPDDEcon);
+    if (_n(d.gratificacoesAdm) > 0) totalEconomias += economiaGratificacao;
+
+    // Carga tributária bruta e otimizada
+    var cargaBruta = _r(irpjAntesReducao + csllResult.csllDevida + pisCofinsResult.totalAPagar + issAnual);
+    var cargaOtimizada = _r(Math.max(cargaBruta - totalEconomias, 0));
+    var aliquotaEfetiva = receitaBruta > 0 ? _r(cargaBruta / receitaBruta * 100) : 0;
+    var aliquotaOtimizada = receitaBruta > 0 ? _r(cargaOtimizada / receitaBruta * 100) : 0;
+
+    // Retenções totais
+    var totalRetencoes = totalIRRF + totalCSRF + _n(d.issRetido);
+
+    // Saldo a pagar efetivo
+    var saldoEfetivo = retencoesResult
+      ? (retencoesResult.tributosARecolher ? retencoesResult.tributosARecolher.total : _r(cargaBruta - totalRetencoes))
+      : _r(cargaBruta - totalRetencoes);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  PASSO 20 — Cenários (pessimista / base / otimista)
+    // ═══════════════════════════════════════════════════════════════════════
+    var cenarios = null;
+    if (d.gerarCenarios === true || d.gerarCenarios === "true") {
+      cenarios = _gerarCenarios(d, dre, lalur, ehFinanceira, prejuizoFiscal, baseNegCSLL, vedaCompensacao);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  PASSO 21 — Projeção plurianual
+    // ═══════════════════════════════════════════════════════════════════════
+    var projecao = null;
+    if (d.gerarProjecao === true || d.gerarProjecao === "true") {
+      var taxa = (_n(d.taxaCrescimentoAnual) || 10) / 100;
+      var horizonte = parseInt(d.horizonteProjecao) || 5;
+      if (LR.simular && LR.simular.compensacaoPluranual) {
+        try {
+          projecao = LR.simular.compensacaoPluranual({
+            saldoPrejuizoFiscal: compensacao ? (compensacao.resumo.saldosPosCompensacao.prejuizoOperacional || 0) : prejuizoFiscal,
+            saldoBaseNegativaCSLL: compensacao ? (compensacao.resumo.saldosPosCompensacao.baseNegativaCSLL || 0) : baseNegCSLL,
+            lucroProjetadoAnual: lucroAjustado,
+            anosProjecao: horizonte
+          });
+        } catch (e) { projecao = null; }
+      }
+      // Projeção de carga tributária com crescimento
+      var projecaoCarga = [];
+      var receitaProj = receitaBruta;
+      var econAcum = 0;
+      for (var aP = 0; aP < horizonte; aP++) {
+        if (aP > 0) receitaProj = _r(receitaProj * (1 + taxa));
+        var fator = receitaProj / (receitaBruta || 1);
+        var cargaAno = _r((irpjAposReducao + csllResult.csllDevida + pisCofinsResult.totalAPagar + issAnual) * fator);
+        var econAno = _r(totalEconomias * fator);
+        econAcum += econAno;
+        projecaoCarga.push({
+          ano: aP + 1,
+          receita: receitaProj,
+          carga: cargaAno,
+          economiaAno: econAno,
+          economiaAcumulada: _r(econAcum)
+        });
+      }
+      projecao = projecao || {};
+      projecao.projecaoCarga = projecaoCarga;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  PASSO 22 — Fluxo de caixa tributário mensal
+    // ═══════════════════════════════════════════════════════════════════════
+    var fluxoCaixa = _gerarFluxoCaixaMensal(d, receitaBruta, receitaServicos, issAliquota, irpjAposReducao, csllResult.csllDevida, pisCofinsResult);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  PASSO 23 — Detector de oportunidades
+    // ═══════════════════════════════════════════════════════════════════════
+    var oportunidades = _detectarOportunidades(d, {
+      lucroLiquido: lucroLiquido,
+      lucroAjustado: lucroAjustado,
+      lucroRealFinal: lucroRealFinal,
+      plVal: plVal,
+      jcpResult: jcpResult,
+      compensacao: compensacao,
+      irpjResult: irpjResult,
+      irpjNormalPrevia: irpjNormalPrevia,
+      irpjAposReducao: irpjAposReducao,
+      csllResult: csllResult,
+      pisCofinsResult: pisCofinsResult,
+      incentivosFiscais: incentivosFiscais,
+      sudamResult: sudamResult,
+      retencoesResult: retencoesResult,
+      saldoNegResult: saldoNegResult,
+      depreciacaoResult: depreciacaoResult,
+      totalIRRF: totalIRRF,
+      totalCSRF: totalCSRF,
+      baseCreditos: baseCreditos,
+      receitaServicos: receitaServicos,
+      isSUDAM: isSUDAM,
+      isSUDENE: isSUDENE,
+      temProjetoSUDAM: temProjetoSUDAM,
+      ehFinanceira: ehFinanceira,
+      despesasIncentivos: despesasIncentivos
+    });
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  PASSO 24 — Compliance e obrigatoriedade
+    // ═══════════════════════════════════════════════════════════════════════
+    var obrigatoriedade = null;
+    if (LR.validar && LR.validar.obrigatoriedade) {
+      try {
+        obrigatoriedade = LR.validar.obrigatoriedade({
+          receitaTotalAnterior: receitaBruta,
+          ehInstituicaoFinanceira: ehFinanceira,
+          temRendimentosExterior: _n(d.receitasExteriorAnual) > 0,
+          tipoAtividade: d.tipoAtividade || ""
+        });
+      } catch (e) { obrigatoriedade = null; }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  PASSO 25 — Obrigações acessórias
+    // ═══════════════════════════════════════════════════════════════════════
+    var obrigacoes = LR.obrigacoes || [];
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  PASSO 26 — Códigos DARF
+    // ═══════════════════════════════════════════════════════════════════════
+    var darfs = [];
+    if (LR.darf) {
+      if (d.apuracaoLR === "trimestral") {
+        darfs.push(LR.darf.irpjTrimestral);
+        darfs.push(LR.darf.csllTrimestral);
+      } else {
+        darfs.push(LR.darf.irpjMensal);
+        darfs.push(LR.darf.csllMensal);
+        darfs.push(LR.darf.irpjAnualAjuste);
+        darfs.push(LR.darf.csllAnualAjuste);
+      }
+      darfs.push(LR.darf.pisNaoCumulativo);
+      darfs.push(LR.darf.cofinsNaoCumulativo);
+      if (jcpResult && jcpResult.jcpDedutivel > 0) darfs.push(LR.darf.jcpIrrf);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  PASSO 27 — Objeto resultados completo
+    // ═══════════════════════════════════════════════════════════════════════
+    var resultados = {
+      versao: VERSAO,
+      dataGeracao: new Date().toISOString(),
+      config: CONFIG,
+      dadosEmpresa: Object.assign({}, d),
+
+      // Seção 2: Painel resumo
+      resumo: {
+        economiaTotal: totalEconomias,
+        numOportunidades: oportunidades.length,
+        cargaBruta: cargaBruta,
+        cargaBrutaMensal: _r(cargaBruta / 12),
+        aliquotaEfetiva: aliquotaEfetiva,
+        cargaOtimizada: cargaOtimizada,
+        aliquotaOtimizada: aliquotaOtimizada,
+        totalRetencoes: totalRetencoes,
+        saldoEfetivo: saldoEfetivo
+      },
+
+      // Seção 3: DRE + LALUR
+      dre: dre,
+      lalur: lalur,
+      lucroRealFinal: lucroRealFinal,
+      baseCSLLFinal: baseCSLLFinal,
+
+      // Seção 4: Tributos detalhados
+      irpj: irpjResult,
+      irpjAntesReducao: irpjAntesReducao,
+      irpjAposReducao: irpjAposReducao,
+      reducaoSUDAM: reducaoSUDAM,
+      csll: csllResult,
+      pisCofins: pisCofinsResult,
+      iss: issResult,
+
+      // Seção 5: Composição da carga
+      composicao: {
+        irpj: { valor: irpjAposReducao, percentual: cargaBruta > 0 ? _r(irpjAntesReducao / cargaBruta * 100) : 0 },
+        csll: { valor: csllResult.csllDevida, percentual: cargaBruta > 0 ? _r(csllResult.csllDevida / cargaBruta * 100) : 0 },
+        pisCofins: { valor: pisCofinsResult.totalAPagar, percentual: cargaBruta > 0 ? _r(pisCofinsResult.totalAPagar / cargaBruta * 100) : 0 },
+        iss: { valor: issAnual, percentual: cargaBruta > 0 ? _r(issAnual / cargaBruta * 100) : 0 }
+      },
+
+      // Seção 6: Mapa de economia
+      economia: {
+        jcp: economiaJCP,
+        prejuizo: economiaPrejuizo,
+        sudam: economiaSUDAM,
+        incentivos: economiaIncentivos,
+        depreciacao: economiaDepreciacao,
+        pisCofinsCreditos: economiaPisCofins,
+        gratificacao: economiaGratificacao,
+        cprb: economiaCPRBFinal,
+        pddFiscal: totalPDDEcon,
+        total: totalEconomias
+      },
+
+      // Seção 7: Oportunidades
+      oportunidades: oportunidades,
+
+      // Seção 8: Trimestral vs Anual
+      comparativoApuracao: {
+        trimestral: simTrimestral,
+        anual: simAnual,
+        suspensao: simSuspensao,
+        recomendacao: recomendacao
+      },
+
+      // Seção 9: Cenários
+      cenarios: cenarios,
+      projecao: projecao,
+
+      // Seção 10: Fluxo de caixa
+      fluxoCaixa: fluxoCaixa,
+
+      // Demais seções
+      jcpDetalhado: jcpResult,
+      compensacao: compensacao,
+      vedacoes: vedacoes,
+      depreciacaoDetalhada: depreciacaoResult,
+      retencoes: {
+        irrf: totalIRRF,
+        pis: _n(d.pisRetido),
+        cofins: _n(d.cofinsRetido),
+        csll: _n(d.csllRetido),
+        iss: _n(d.issRetido),
+        total: totalRetencoes
+      },
+      retencoesCompensadas: retencoesResult,
+      saldoNegativo: saldoNegResult,
+      sudamDetalhado: sudamResult,
+      incentivosFiscais: incentivosFiscais,
+      cprb: cprbResult,
+      obrigatoriedade: obrigatoriedade,
+      obrigacoes: obrigacoes,
+      darfs: darfs,
+      alertas: alertas
+    };
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  PASSO 28 — Cache
+    // ═══════════════════════════════════════════════════════════════════════
+    resultadosCache = resultados;
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  PASSO 29 — Salvar localStorage
+    // ═══════════════════════════════════════════════════════════════════════
+    try {
+      localStorage.setItem(LS_KEY_RESULTADOS, JSON.stringify(resultados));
+    } catch (e) { /* ignora se exceder quota */ }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  PASSO 30 — Renderizar resultados
+    // ═══════════════════════════════════════════════════════════════════════
+    renderResultados(resultados);
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  VALIDAÇÃO DE CAMPOS OBRIGATÓRIOS
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  function _validarObrigatorios() {
+    var d = dadosEmpresa;
+    var erros = [];
+    if (!d.razaoSocial || !d.razaoSocial.trim()) erros.push("Razão Social (Etapa 0)");
+    if (!d.uf) erros.push("UF (Etapa 0)");
+    if (!d.municipio) erros.push("Município (Etapa 0)");
+    if (!d.tipoAtividade) erros.push("Tipo de Atividade (Etapa 0)");
+    if (!d.apuracaoLR) erros.push("Forma de Apuração (Etapa 0)");
+    var rb = _n(d.receitaBrutaAnual);
+    // Tentar somar meses se preencheu mês a mês
+    if (rb <= 0 && (d.preencherMesAMes === true || d.preencherMesAMes === "true")) {
+      var somaMes = 0;
+      for (var m = 1; m <= 12; m++) somaMes += _n(d["receitaMes" + m]);
+      if (somaMes > 0) rb = somaMes;
+    }
+    if (rb <= 0) erros.push("Receita Bruta Anual (Etapa 1)");
+    // Pelo menos um campo de custo/despesa
+    if (_calcTotalCustos() + _calcTotalDespesas() <= 0) {
+      erros.push("Pelo menos um campo de custo ou despesa (Etapa 2)");
+    }
+    return erros;
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  VALIDAÇÃO CRUZADA (alertas amarelos)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  function _validacaoCruzada() {
+    var d = dadosEmpresa;
+    var alertas = [];
+    var rb = _n(d.receitaBrutaAnual);
+    var ll = _calcLL();
+    var margem = rb > 0 ? (ll / rb * 100) : 0;
+    var custoTotal = _calcTotalCustos() + _calcTotalDespesas();
+    var numFunc = parseInt(d.numFuncionarios) || 0;
+    var folha = _n(d.folhaPagamentoAnual);
+    var plVal = _calcPL();
+    var totalRet = _n(d.irrfRetidoPrivado) + _n(d.irrfRetidoPublico) + _n(d.pisRetido) + _n(d.cofinsRetido) + _n(d.csllRetido);
+    var issAliq = _n(d.issAliquota);
+    var pf = _n(d.prejuizoFiscal);
+
+    if (ll > rb && rb > 0) {
+      alertas.push({ tipo: "aviso", msg: "Lucro informado é MAIOR que a receita — verifique os dados" });
+    }
+    if (ll < 0 && pf === 0) {
+      alertas.push({ tipo: "aviso", msg: "Prejuízo contábil mas sem prejuízo fiscal informado — confirme" });
+    }
+    if (margem > 50 && d.tipoAtividade === "COMERCIO_INDUSTRIA") {
+      alertas.push({ tipo: "aviso", msg: "Margem > 50% para comércio é incomum — confirme" });
+    }
+    if (margem > 80) {
+      alertas.push({ tipo: "aviso", msg: "Margem > 80% é atípica — verifique custos e despesas" });
+    }
+    if (custoTotal === 0 && rb > 0) {
+      alertas.push({ tipo: "aviso", msg: "Nenhum custo informado — o estudo pode ficar impreciso" });
+    }
+    if (folha === 0 && numFunc > 0) {
+      alertas.push({ tipo: "aviso", msg: "Tem " + numFunc + " funcionários mas folha de pagamento = R$ 0" });
+    }
+    if (plVal > 0 && ll > 0 && !(_n(d.tjlp) > 0)) {
+      alertas.push({ tipo: "economia", msg: "Há economia de JCP não aproveitada — informe a TJLP" });
+    }
+    if (totalRet > 0) {
+      // IRPJ+CSLL estimados simplificados para comparação
+      var irpjEst = _r(Math.max(_calcLucroAjustado(), 0) * 0.25);
+      var csllEst = _r(Math.max(_calcLucroAjustado(), 0) * 0.09);
+      if (totalRet > irpjEst + csllEst && irpjEst + csllEst > 0) {
+        alertas.push({ tipo: "info", msg: "Retenções excedem imposto estimado — pode gerar saldo negativo (PER/DCOMP)" });
+      }
+    }
+    if ((d.atividadeMista === true || d.atividadeMista === "true") && !_n(d.percentReceitaSecundaria)) {
+      alertas.push({ tipo: "aviso", msg: "Atividade mista selecionada mas sem % de receita secundária" });
+    }
+    if (window.MunicipiosIBGE && issAliq > 0) {
+      if (issAliq < (window.MunicipiosIBGE.ISS_MIN || 2) || issAliq > (window.MunicipiosIBGE.ISS_MAX || 5)) {
+        alertas.push({ tipo: "aviso", msg: "Alíquota ISS (" + issAliq + "%) fora dos limites legais (2% a 5%)" });
+      }
+    }
+    return alertas;
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  DETECTOR DE 22 OPORTUNIDADES
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  function _detectarOportunidades(d, ctx) {
+    var ops = [];
+
+    // #1 — JCP
+    if (ctx.plVal > 0 && ctx.lucroLiquido > 0 && ctx.jcpResult && ctx.jcpResult.economiaLiquida > 0) {
+      ops.push({
+        id: "JCP", titulo: "Juros sobre Capital Próprio",
+        tipo: "Dedução", complexidade: "Baixa", risco: "Baixo",
+        economiaAnual: ctx.jcpResult.economiaLiquida,
+        descricao: "JCP dedutível de " + _m(ctx.jcpResult.jcpDedutivel) + " gera economia líquida de " + _m(ctx.jcpResult.economiaLiquida) + "/ano (34% de economia - 15% IRRF).",
+        baseLegal: "Art. 355-358 do RIR/2018",
+        acaoRecomendada: "Deliberar distribuição de JCP aos sócios. Formalizar via ata e pagar IRRF (DARF 5706).",
+        prazoImplementacao: "Imediato",
+        detalhes: ctx.jcpResult
+      });
+    }
+
+    // #2 — Prejuízo Fiscal
+    if (_n(d.prejuizoFiscal) > 0 && ctx.lucroAjustado > 0 && ctx.compensacao) {
+      var econPrej = ctx.compensacao.resumo ? ctx.compensacao.resumo.economia.irpj : 0;
+      if (econPrej > 0) {
+        ops.push({
+          id: "PREJUIZO_FISCAL", titulo: "Compensação de Prejuízo Fiscal",
+          tipo: "Compensação", complexidade: "Baixa", risco: "Baixo",
+          economiaAnual: econPrej,
+          descricao: "Prejuízo fiscal acumulado de " + _m(_n(d.prejuizoFiscal)) + " permite compensar até 30% do lucro ajustado, economizando " + _m(econPrej) + " em IRPJ.",
+          baseLegal: "Art. 579-586 do RIR/2018",
+          acaoRecomendada: "Manter controle na Parte B do LALUR. Verificar vedações de compensação.",
+          prazoImplementacao: "Imediato",
+          detalhes: ctx.compensacao.resumo
+        });
+      }
+    }
+
+    // #3 — Base Negativa CSLL
+    if (_n(d.baseNegativaCSLL) > 0 && ctx.lucroAjustado > 0 && ctx.compensacao) {
+      var econCSLL = ctx.compensacao.resumo ? ctx.compensacao.resumo.economia.csll : 0;
+      if (econCSLL > 0) {
+        ops.push({
+          id: "BASE_NEGATIVA_CSLL", titulo: "Compensação de Base Negativa CSLL",
+          tipo: "Compensação", complexidade: "Baixa", risco: "Baixo",
+          economiaAnual: econCSLL,
+          descricao: "Base negativa de " + _m(_n(d.baseNegativaCSLL)) + " permite compensar até 30% da base de CSLL, economizando " + _m(econCSLL) + ".",
+          baseLegal: "Art. 580-586 do RIR/2018",
+          acaoRecomendada: "Manter controle no LACS. Verificar vedações.",
+          prazoImplementacao: "Imediato",
+          detalhes: {}
+        });
+      }
+    }
+
+    // #4 — SUDAM 75% (com projeto)
+    if (ctx.isSUDAM && ctx.temProjetoSUDAM && ctx.sudamResult && ctx.sudamResult.resumo) {
+      var econSudam = ctx.sudamResult.resumo.economiaReducao75 || 0;
+      if (econSudam > 0) {
+        ops.push({
+          id: "SUDAM_75", titulo: "Redução 75% IRPJ — SUDAM",
+          tipo: "Redução", complexidade: "Média", risco: "Baixo",
+          economiaAnual: econSudam,
+          descricao: "Projeto SUDAM aprovado permite reduzir 75% do IRPJ sobre o lucro da exploração, economizando " + _m(econSudam) + "/ano.",
+          baseLegal: "Art. 627-637 do RIR/2018",
+          acaoRecomendada: "Manter laudo constitutivo e reconhecimento da SRF atualizados.",
+          prazoImplementacao: "Imediato",
+          detalhes: ctx.sudamResult.resumo
+        });
+      }
+    }
+
+    // #5 — SUDENE 75% (com projeto)
+    if (ctx.isSUDENE && ctx.temProjetoSUDAM && ctx.sudamResult && ctx.sudamResult.resumo) {
+      var econSudene = ctx.sudamResult.resumo.economiaReducao75 || 0;
+      if (econSudene > 0) {
+        ops.push({
+          id: "SUDENE_75", titulo: "Redução 75% IRPJ — SUDENE",
+          tipo: "Redução", complexidade: "Média", risco: "Baixo",
+          economiaAnual: econSudene,
+          descricao: "Projeto SUDENE aprovado permite reduzir 75% do IRPJ sobre o lucro da exploração, economizando " + _m(econSudene) + "/ano.",
+          baseLegal: "Art. 627-637 do RIR/2018",
+          acaoRecomendada: "Manter laudo constitutivo e reconhecimento da SRF atualizados.",
+          prazoImplementacao: "Imediato",
+          detalhes: ctx.sudamResult.resumo
+        });
+      }
+    }
+
+    // #6 — SUDAM/SUDENE potencial (sem projeto)
+    if ((ctx.isSUDAM || ctx.isSUDENE) && !ctx.temProjetoSUDAM && ctx.lucroRealFinal > 0) {
+      var nomeSup = ctx.isSUDAM ? "SUDAM" : "SUDENE";
+      var econPotencial = _r(ctx.irpjNormalPrevia * 0.75);
+      if (econPotencial > 500) {
+        ops.push({
+          id: ctx.isSUDAM ? "SUDAM_POTENCIAL" : "SUDENE_POTENCIAL",
+          titulo: "Potencial: Projeto " + nomeSup + " (sem projeto aprovado)",
+          tipo: "Potencial", complexidade: "Alta", risco: "Médio",
+          economiaAnual: econPotencial,
+          descricao: "A empresa está em área " + nomeSup + " mas NÃO tem projeto aprovado. Economia potencial de até " + _m(econPotencial) + "/ano com redução de 75% do IRPJ.",
+          baseLegal: "Art. 627-637 do RIR/2018",
+          acaoRecomendada: "Consultar contador especializado para elaboração e protocolo do projeto junto à superintendência regional.",
+          prazoImplementacao: "6 meses",
+          detalhes: {}
+        });
+      }
+    }
+
+    // #7 — Créditos PIS/COFINS
+    if (ctx.baseCreditos > 0 && ctx.pisCofinsResult) {
+      var econPC = ctx.pisCofinsResult.economiaCreditos || _r((ctx.pisCofinsResult.creditoPIS || 0) + (ctx.pisCofinsResult.creditoCOFINS || 0));
+      if (econPC > 0) {
+        ops.push({
+          id: "CREDITOS_PIS_COFINS", titulo: "Créditos de PIS/COFINS Não-Cumulativo",
+          tipo: "Crédito", complexidade: "Baixa", risco: "Baixo",
+          economiaAnual: econPC,
+          descricao: "Créditos sobre insumos de " + _m(ctx.baseCreditos) + " geram economia de " + _m(econPC) + " em PIS/COFINS. Alíquota efetiva: " + (ctx.pisCofinsResult.aliquotaEfetiva || "—"),
+          baseLegal: "Lei 10.637/2002 + Lei 10.833/2003, Art. 3º",
+          acaoRecomendada: "Mapear todos os insumos elegíveis. Revisar classificação de despesas.",
+          prazoImplementacao: "Imediato",
+          detalhes: ctx.pisCofinsResult
+        });
+      }
+    }
+
+    // #8 — Depreciação acelerada por turnos
+    var turnosVal = parseInt(d.turnosOperacao) || 1;
+    if (turnosVal > 1 && ctx.depreciacaoResult.depreciaNormal > 0) {
+      var econTurnos = _r((ctx.depreciacaoResult.depreciaAcelerada - ctx.depreciacaoResult.depreciaNormal) * 0.34);
+      if (econTurnos > 0) {
+        ops.push({
+          id: "DEPRECIACAO_TURNOS", titulo: "Depreciação Acelerada por Turnos",
+          tipo: "Dedução", complexidade: "Baixa", risco: "Baixo",
+          economiaAnual: econTurnos,
+          descricao: "Operação em " + turnosVal + " turnos permite depreciação acelerada (×" + ctx.depreciacaoResult.multiplicador + "), economia fiscal de " + _m(econTurnos) + ".",
+          baseLegal: "Art. 323 do RIR/2018",
+          acaoRecomendada: "Documentar turnos de operação. Manter controles de horas trabalhadas.",
+          prazoImplementacao: "Imediato",
+          detalhes: {}
+        });
+      }
+    }
+
+    // #9 — Depreciação incentivada SUDAM/SUDENE
+    if ((ctx.isSUDAM || ctx.isSUDENE) && _n(d.valorBensNovos) > 0) {
+      var econDepInc = _r(_n(d.valorBensNovos) * 0.34);
+      ops.push({
+        id: "DEPRECIACAO_INCENTIVADA", titulo: "Depreciação Incentivada SUDAM/SUDENE (100%)",
+        tipo: "Dedução", complexidade: "Média", risco: "Baixo",
+        economiaAnual: econDepInc,
+        descricao: "Bens novos de " + _m(_n(d.valorBensNovos)) + " podem ser depreciados integralmente no ano de aquisição, economia de " + _m(econDepInc) + ".",
+        baseLegal: "Art. 329 do RIR/2018",
+        acaoRecomendada: "Registrar bens como novos e vincular ao projeto SUDAM/SUDENE.",
+        prazoImplementacao: "Imediato",
+        detalhes: {}
+      });
+    }
+
+    // #10 — Bens de pequeno valor
+    if (_n(d.bensSmallValue) > 0) {
+      var econSmall = _r(_n(d.bensSmallValue) * 0.34);
+      ops.push({
+        id: "BENS_PEQUENO_VALOR", titulo: "Dedução Integral de Bens de Pequeno Valor",
+        tipo: "Dedução", complexidade: "Baixa", risco: "Baixo",
+        economiaAnual: econSmall,
+        descricao: "Bens ≤ R$ 1.200 podem ser deduzidos integralmente como despesa, economia de " + _m(econSmall) + ".",
+        baseLegal: "Art. 313, §1º do RIR/2018",
+        acaoRecomendada: "Classificar bens de pequeno valor como despesa operacional direta.",
+        prazoImplementacao: "Imediato",
+        detalhes: {}
+      });
+    }
+
+    // #11-15 — Incentivos não usados (PAT, FIA, Fundo Idoso, Rouanet, Esporte)
+    var incentivosNaoUsados = [
+      { id: "PAT_NAO_USADO", campo: "usaPAT", nome: "PAT — Programa de Alimentação do Trabalhador", limite: 0.04 },
+      { id: "FIA_NAO_USADO", campo: "usaFIA", nome: "FIA — Fundo da Infância e Adolescência", limite: 0.01 },
+      { id: "FUNDO_IDOSO_NAO_USADO", campo: "usaFundoIdoso", nome: "Fundo do Idoso", limite: 0.01 },
+      { id: "ROUANET_NAO_USADA", campo: "usaRouanet", nome: "Lei Rouanet — Cultura", limite: 0.04 },
+      { id: "ESPORTE_NAO_USADO", campo: "usaEsporte", nome: "Lei do Esporte", limite: 0.01 }
+    ];
+    incentivosNaoUsados.forEach(function (inc) {
+      var usado = d[inc.campo] === true || d[inc.campo] === "true";
+      if (!usado && ctx.irpjNormalPrevia > 0) {
+        var potencial = _r(ctx.irpjNormalPrevia * inc.limite);
+        if (potencial > 500) {
+          ops.push({
+            id: inc.id, titulo: inc.nome + " (não utilizado)",
+            tipo: "Dedução", complexidade: "Média", risco: "Baixo",
+            economiaAnual: potencial,
+            descricao: "O incentivo " + inc.nome + " permite deduzir até " + _m(potencial) + " do IRPJ normal.",
+            baseLegal: "Art. 625-646 do RIR/2018",
+            acaoRecomendada: "Avaliar adesão ao programa e realizar doações/investimentos dentro do período.",
+            prazoImplementacao: "90 dias",
+            detalhes: {}
+          });
+        }
+      }
+    });
+
+    // #16 — Lei do Bem (P&D)
+    if ((d.investePD === true || d.investePD === "true") && _n(d.valorPD) > 0) {
+      var econPD = _r(_n(d.valorPD) * 0.60 * 0.34);
+      ops.push({
+        id: "LEI_BEM_PD", titulo: "Lei do Bem — Pesquisa & Desenvolvimento",
+        tipo: "Exclusão", complexidade: "Média", risco: "Baixo",
+        economiaAnual: econPD,
+        descricao: "Investimento em P&D de " + _m(_n(d.valorPD)) + " permite exclusão de 60% da base de IRPJ/CSLL, economia de " + _m(econPD) + ".",
+        baseLegal: "Lei 11.196/2005 (Lei do Bem)",
+        acaoRecomendada: "Manter documentação de projetos de P&D. Enviar relatório ao MCTI.",
+        prazoImplementacao: "30 dias",
+        detalhes: {}
+      });
+    }
+
+    // #17 — Converter gratificação em pró-labore
+    if ((d.temGratificacaoAdm === true || d.temGratificacaoAdm === "true") && _n(d.gratificacoesAdm) > 0) {
+      var econGrat = _r(_n(d.gratificacoesAdm) * 0.34);
+      ops.push({
+        id: "CONVERTER_GRATIFICACAO", titulo: "Converter Gratificação de Administradores em Pró-labore",
+        tipo: "Dedução", complexidade: "Baixa", risco: "Baixo",
+        economiaAnual: econGrat,
+        descricao: "Gratificação de " + _m(_n(d.gratificacoesAdm)) + " é indedutível. Convertendo em pró-labore, economia de " + _m(econGrat) + " (passa a ser dedutível).",
+        baseLegal: "Art. 358, §1º do RIR/2018",
+        acaoRecomendada: "Alterar contrato social. Formalizar pró-labore mensal com folha de pagamento.",
+        prazoImplementacao: "30 dias",
+        detalhes: {}
+      });
+    }
+
+    // #18 — Retenções a compensar
+    if (ctx.totalIRRF + ctx.totalCSRF > 0 && ctx.retencoesResult) {
+      var compRetTotal = ctx.retencoesResult.compensacao ? ctx.retencoesResult.compensacao.totalCompensado : 0;
+      if (compRetTotal > 0) {
+        ops.push({
+          id: "RETENCOES_COMPENSAR", titulo: "Retenções na Fonte Compensáveis",
+          tipo: "Compensação", complexidade: "Baixa", risco: "Baixo",
+          economiaAnual: compRetTotal,
+          descricao: "Total de " + _m(ctx.totalIRRF + ctx.totalCSRF) + " em retenções sofridas, " + _m(compRetTotal) + " compensáveis diretamente com tributos devidos.",
+          baseLegal: "Art. 717 (IRRF); Lei 10.833/2003, art. 36 (CSRF)",
+          acaoRecomendada: "Manter controle detalhado de notas fiscais com retenções. Escriturar na EFD-Reinf.",
+          prazoImplementacao: "Imediato",
+          detalhes: ctx.retencoesResult
+        });
+      }
+    }
+
+    // #19 — Saldo negativo
+    if (ctx.saldoNegResult && ctx.saldoNegResult.temSaldoNegativo) {
+      ops.push({
+        id: "SALDO_NEGATIVO", titulo: "Saldo Negativo de IRPJ — Restituição/Compensação",
+        tipo: "Compensação", complexidade: "Média", risco: "Baixo",
+        economiaAnual: ctx.saldoNegResult.valorOriginal,
+        descricao: "Retenções + estimativas excedem o IRPJ devido em " + _m(ctx.saldoNegResult.valorOriginal) + ". Pode ser compensado via PER/DCOMP ou pedido de restituição.",
+        baseLegal: "Art. 235 do RIR/2018",
+        acaoRecomendada: "Transmitir PER/DCOMP para compensar com outros tributos federais. Prazo decadencial: 5 anos.",
+        prazoImplementacao: "30 dias",
+        detalhes: ctx.saldoNegResult
+      });
+    }
+
+    // #20 — Crédito sobre estoque de abertura
+    if (_n(d.creditoEstoqueAbertura) > 0) {
+      var econEstoque = _r(_n(d.creditoEstoqueAbertura) * 0.0925);
+      ops.push({
+        id: "ESTOQUE_ABERTURA", titulo: "Crédito sobre Estoque de Abertura (Migração)",
+        tipo: "Crédito", complexidade: "Média", risco: "Baixo",
+        economiaAnual: econEstoque,
+        descricao: "Crédito de PIS/COFINS sobre estoque de " + _m(_n(d.creditoEstoqueAbertura)) + " na migração para Lucro Real, " + _m(econEstoque) + "/ano (1/12 por mês).",
+        baseLegal: "Art. 12 da Lei 10.637/2002",
+        acaoRecomendada: "Levantar inventário na data da migração. Apropriar 1/12 por mês durante 12 meses.",
+        prazoImplementacao: "Imediato",
+        detalhes: {}
+      });
+    }
+
+    // #21 — Reinvestimento 30% (SUDAM/SUDENE)
+    if (ctx.temProjetoSUDAM && (d.usarReinvestimento30 === true || d.usarReinvestimento30 === "true") && ctx.sudamResult && ctx.sudamResult.resumo) {
+      var econReinv = ctx.sudamResult.resumo.economiaReinvestimento30 || 0;
+      if (econReinv > 0) {
+        ops.push({
+          id: "REINVESTIMENTO_30", titulo: "Reinvestimento 30% IRPJ — SUDAM/SUDENE",
+          tipo: "Redução", complexidade: "Média", risco: "Baixo",
+          economiaAnual: econReinv,
+          descricao: "Depósito de 30% do IRPJ sobre lucro da exploração em banco oficial, economia de " + _m(econReinv) + ". 50% pode ser usado como capital de giro.",
+          baseLegal: "Lei 13.799/2019",
+          acaoRecomendada: "Efetuar depósito no banco oficial da superintendência. Vincular ao projeto aprovado.",
+          prazoImplementacao: "30 dias",
+          detalhes: {}
+        });
+      }
+    }
+
+    // #22 — PDD Fiscal
+    var totalPDDOp = _n(d.perdasCreditos6Meses) + _n(d.perdasCreditosJudicial) + _n(d.perdasCreditosFalencia);
+    if (totalPDDOp > 0) {
+      var econPDDOp = _r(totalPDDOp * 0.34);
+      ops.push({
+        id: "PDD_FISCAL", titulo: "PDD Fiscal — Perdas no Recebimento de Créditos",
+        tipo: "Exclusão", complexidade: "Baixa", risco: "Baixo",
+        economiaAnual: econPDDOp,
+        descricao: "Perdas totais de " + _m(totalPDDOp) + " podem ser excluídas do lucro real, gerando economia de " + _m(econPDDOp) + " (25% IRPJ + 9% CSLL).",
+        baseLegal: "Art. 340-342 do RIR/2018 (Decreto 9.580/2018)",
+        acaoRecomendada: "Manter documentação comprobatória: protestos, ajuizamento de ações, sentença de falência. Controlar na Parte A do LALUR.",
+        prazoImplementacao: "Imediato",
+        detalhes: {
+          creditos6Meses: _n(d.perdasCreditos6Meses),
+          creditosJudicial: _n(d.perdasCreditosJudicial),
+          creditosFalencia: _n(d.perdasCreditosFalencia),
+        }
+      });
+    }
+
+    // #23 — CPRB (Desoneração da Folha)
+    var cnaePriStr = (d.cnaePrincipal || "").replace(/[\s\-\/]/g, "");
+    var elegCPRB = cnaePriStr.substring(0, 2) === "62" || d._cprbSugerida;
+    if (elegCPRB && !(d.optouCPRB === true || d.optouCPRB === "true")) {
+      var folhaCPRBPot = _n(d.folhaPagamentoAnual) || (_n(d.salariosBrutos) + _n(d.proLabore));
+      var cppPot = _r(folhaCPRBPot * 0.20);
+      var cprbPot = _r((_n(d.receitaBrutaAnual) || 0) * 0.045);
+      var econCPRBPot = _r(cppPot - cprbPot);
+      if (econCPRBPot > 0) {
+        ops.push({
+          id: "CPRB_POTENCIAL", titulo: "CPRB — Desoneração da Folha (não optada)",
+          tipo: "Potencial", complexidade: "Baixa", risco: "Baixo",
+          economiaAnual: econCPRBPot,
+          descricao: "Empresa de TI elegível à CPRB. Alíquota de 4,5% sobre receita bruta em vez de 20% sobre folha. Economia potencial de " + _m(econCPRBPot) + "/ano.",
+          baseLegal: "Lei 12.546/2011",
+          acaoRecomendada: "Avaliar opção pela CPRB na Etapa 5 do wizard. A opção é feita via GFIP/eSocial no início do ano.",
+          prazoImplementacao: "Imediato (início do ano-calendário)",
+          detalhes: {}
+        });
+      }
+    }
+
+    // #23 — Pró-labore como dedução
+    if ((parseInt(d.numSocios) || 0) > 0 && _n(d.proLabore) > 0) {
+      var econProLabore = _r(_n(d.proLabore) * 0.34);
+      ops.push({
+        id: "PROLABORE_DEDUCAO", titulo: "Pró-labore dos Sócios como Despesa Dedutível",
+        tipo: "Dedução", complexidade: "Baixa", risco: "Baixo",
+        economiaAnual: econProLabore,
+        descricao: "Pró-labore de " + _m(_n(d.proLabore)) + "/ano é despesa 100% dedutível no Lucro Real, gerando economia de " + _m(econProLabore) + ".",
+        baseLegal: "Art. 357 do RIR/2018",
+        acaoRecomendada: "Formalizar pró-labore em folha de pagamento. Recolher INSS e IRRF na fonte.",
+        prazoImplementacao: "Imediato",
+        detalhes: {}
+      });
+    }
+
+    // Ordenar por economia anual descrescente e atribuir ranking
+    ops.sort(function (a, b) { return b.economiaAnual - a.economiaAnual; });
+    ops.forEach(function (op, i) { op.ranking = i + 1; });
+
+    return ops;
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  SIMULAÇÃO TRIMESTRAL vs ANUAL
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  function _simularTrimestral(d, lucroAjustado, prejuizoFiscal, baseNegCSLL, vedaCompensacao, ehFinanceira) {
+    var trimestres = [];
+    var totalIRPJ = 0;
+    var totalCSLL = 0;
+    var saldoPF = vedaCompensacao ? 0 : prejuizoFiscal;
+    var saldoBN = vedaCompensacao ? 0 : baseNegCSLL;
+    var aliqCSLL = ehFinanceira ? 0.15 : 0.09;
+
+    // Se temos meses preenchidos, usar dados reais por trimestre
+    var temMes = d.preencherMesAMes === true || d.preencherMesAMes === "true";
+    for (var tri = 0; tri < 4; tri++) {
+      var lucroTri;
+      if (temMes) {
+        var recTri = 0;
+        for (var m = tri * 3 + 1; m <= tri * 3 + 3; m++) recTri += _n(d["receitaMes" + m]);
+        var fator = _n(d.receitaBrutaAnual) > 0 ? recTri / _n(d.receitaBrutaAnual) : 0.25;
+        lucroTri = _r(lucroAjustado * fator);
+      } else {
+        lucroTri = _r(lucroAjustado / 4);
+      }
+
+      // Compensação 30% por trimestre
+      var compTri = 0;
+      if (lucroTri > 0 && saldoPF > 0) {
+        var maxComp = _r(lucroTri * 0.30);
+        compTri = Math.min(maxComp, saldoPF);
+        saldoPF = _r(saldoPF - compTri);
+      }
+      var lucroRealTri = Math.max(lucroTri - compTri, 0);
+
+      // IRPJ trimestral (adicional sobre R$ 60.000)
+      var irpjN = _r(lucroRealTri * 0.15);
+      var irpjA = _r(Math.max(lucroRealTri - 60000, 0) * 0.10);
+      var irpjTri = _r(irpjN + irpjA);
+
+      // CSLL trimestral com compensação
+      var compCSLLTri = 0;
+      if (lucroTri > 0 && saldoBN > 0) {
+        var maxCompBN = _r(lucroTri * 0.30);
+        compCSLLTri = Math.min(maxCompBN, saldoBN);
+        saldoBN = _r(saldoBN - compCSLLTri);
+      }
+      var baseCSLLTri = Math.max(lucroTri - compCSLLTri, 0);
+      var csllTri = _r(baseCSLLTri * aliqCSLL);
+
+      totalIRPJ += irpjTri;
+      totalCSLL += csllTri;
+
+      trimestres.push({
+        trimestre: tri + 1,
+        lucroAjustado: lucroTri,
+        compensacaoPrejuizo: compTri,
+        lucroReal: lucroRealTri,
+        irpjNormal: irpjN,
+        irpjAdicional: irpjA,
+        irpjTotal: irpjTri,
+        compensacaoCSLL: compCSLLTri,
+        baseCSLL: baseCSLLTri,
+        csll: csllTri
+      });
+    }
+
+    return {
+      trimestres: trimestres,
+      totalIRPJ: _r(totalIRPJ),
+      totalCSLL: _r(totalCSLL),
+      total: _r(totalIRPJ + totalCSLL),
+      saldoPrejuizoRemanescente: _r(saldoPF),
+      saldoBaseNegRemanescente: _r(saldoBN)
+    };
+  }
+
+  function _simularAnualEstimativa(d, receitaBruta, lucroRealFinal, ehFinanceira) {
+    var meses = [];
+    var totalEstimIRPJ = 0;
+    var totalEstimCSLL = 0;
+    var tipo = d.tipoAtividade || "SERVICOS_GERAL";
+    var temMes = d.preencherMesAMes === true || d.preencherMesAMes === "true";
+
+    // Presunções para fallback (RIR/2018 Art. 591-593)
+    var presIRPJ = 0.32; // Serviços
+    var presCSLL = 0.32;
+    if (tipo === "COMERCIO_INDUSTRIA" || tipo === "INDUSTRIA" || tipo === "TRANSPORTE_CARGA") {
+      presIRPJ = 0.08;
+      presCSLL = 0.12;
+    } else if (tipo === "TRANSPORTE_PASSAGEIROS") {
+      presIRPJ = 0.16;
+      presCSLL = 0.12;
+    } else if (tipo === "SERVICOS_HOSPITALARES") {
+      presIRPJ = 0.08;
+      presCSLL = 0.12;
+    } else if (tipo === "REVENDA_COMBUSTIVEIS") {
+      presIRPJ = 0.016;
+      presCSLL = 0.12;
+    }
+    // Buscar presunção do LR.presuncoes se disponível
+    if (LR && LR.presuncoes && LR.presuncoes[tipo]) {
+      var pData = LR.presuncoes[tipo];
+      if (pData.irpj) presIRPJ = pData.irpj;
+      if (pData.csll) presCSLL = pData.csll;
+    }
+
+    for (var m = 1; m <= 12; m++) {
+      var recMes = temMes ? _n(d["receitaMes" + m]) : _r(receitaBruta / 12);
+      var est = null;
+      if (LR.calcular.estimativaMensal) {
+        try {
+          est = LR.calcular.estimativaMensal({
+            receitaBruta: recMes,
+            tipoAtividade: tipo,
+            mes: m,
+            financeira: ehFinanceira
+          });
+        } catch (e) { est = null; }
+      }
+      var irpjMes = est ? (est.irpjDevido || (est.irpj && est.irpj.devido) || 0) : 0;
+      var csllMes = est ? (est.csllDevida || (est.csll && est.csll.devida) || 0) : 0;
+
+      // Fallback: calcular estimativa por presunção se o motor não retornou valores
+      if (irpjMes === 0 && csllMes === 0 && recMes > 0) {
+        var baseIRPJMes = _r(recMes * presIRPJ);
+        irpjMes = _r(baseIRPJMes * 0.15 + Math.max(baseIRPJMes - 20000, 0) * 0.10);
+        var baseCSLLMes = _r(recMes * presCSLL);
+        csllMes = _r(baseCSLLMes * (ehFinanceira ? 0.15 : 0.09));
+      }
+
+      totalEstimIRPJ += irpjMes;
+      totalEstimCSLL += csllMes;
+
+      meses.push({
+        mes: m, receitaBruta: recMes,
+        irpjEstimativa: _r(irpjMes),
+        csllEstimativa: _r(csllMes),
+        totalMes: _r(irpjMes + csllMes)
+      });
+    }
+
+    // Ajuste anual: IRPJ real - estimativas
+    var irpjRealAnual = _r(lucroRealFinal * 0.15 + Math.max(lucroRealFinal - 240000, 0) * 0.10);
+    var csllRealAnual = _r(lucroRealFinal * (ehFinanceira ? 0.15 : 0.09));
+    var ajusteIRPJ = _r(irpjRealAnual - totalEstimIRPJ);
+    var ajusteCSLL = _r(csllRealAnual - totalEstimCSLL);
+
+    return {
+      meses: meses,
+      totalEstimativasIRPJ: _r(totalEstimIRPJ),
+      totalEstimativasCSLL: _r(totalEstimCSLL),
+      totalEstimativas: _r(totalEstimIRPJ + totalEstimCSLL),
+      irpjRealAnual: irpjRealAnual,
+      csllRealAnual: csllRealAnual,
+      ajusteIRPJ: ajusteIRPJ,
+      ajusteCSLL: ajusteCSLL,
+      ajusteTotal: _r(ajusteIRPJ + ajusteCSLL),
+      saldoACompensar: ajusteIRPJ < 0 ? _r(Math.abs(ajusteIRPJ)) : 0
+    };
+  }
+
+  function _simularSuspensaoReducao(d, receitaBruta, lucroRealFinal, ehFinanceira) {
+    if (!LR.calcular.suspensaoReducao) return null;
+    var meses = [];
+    var irpjPagoAcum = 0;
+    var csllPagaAcum = 0;
+    var tipo = d.tipoAtividade || "SERVICOS_GERAL";
+    var mesesSuspensos = 0;
+    var economiaSuspensao = 0;
+    var temMes = d.preencherMesAMes === true || d.preencherMesAMes === "true";
+
+    // Presunções para fallback
+    var presIRPJ = 0.32;
+    var presCSLL = 0.32;
+    if (tipo === "COMERCIO_INDUSTRIA" || tipo === "INDUSTRIA" || tipo === "TRANSPORTE_CARGA") {
+      presIRPJ = 0.08; presCSLL = 0.12;
+    } else if (tipo === "TRANSPORTE_PASSAGEIROS") {
+      presIRPJ = 0.16; presCSLL = 0.12;
+    } else if (tipo === "SERVICOS_HOSPITALARES") {
+      presIRPJ = 0.08; presCSLL = 0.12;
+    } else if (tipo === "REVENDA_COMBUSTIVEIS") {
+      presIRPJ = 0.016; presCSLL = 0.12;
+    }
+    if (LR && LR.presuncoes && LR.presuncoes[tipo]) {
+      if (LR.presuncoes[tipo].irpj) presIRPJ = LR.presuncoes[tipo].irpj;
+      if (LR.presuncoes[tipo].csll) presCSLL = LR.presuncoes[tipo].csll;
+    }
+
+    for (var m = 1; m <= 12; m++) {
+      var recMes = temMes ? _n(d["receitaMes" + m]) : _r(receitaBruta / 12);
+      var est = null;
+      try {
+        est = LR.calcular.estimativaMensal({ receitaBruta: recMes, tipoAtividade: tipo, mes: m, financeira: ehFinanceira });
+      } catch (e) { /* ignore */ }
+      var estimIRPJMes = est ? (est.irpjDevido || 0) : 0;
+      var estimCSLLMes = est ? (est.csllDevida || 0) : 0;
+
+      // Fallback por presunção
+      if (estimIRPJMes === 0 && estimCSLLMes === 0 && recMes > 0) {
+        var baseEstIRPJ = _r(recMes * presIRPJ);
+        estimIRPJMes = _r(baseEstIRPJ * 0.15 + Math.max(baseEstIRPJ - 20000, 0) * 0.10);
+        var baseEstCSLL = _r(recMes * presCSLL);
+        estimCSLLMes = _r(baseEstCSLL * (ehFinanceira ? 0.15 : 0.09));
+      }
+
+      // IRPJ real acumulado até o mês (proporcional)
+      var irpjRealAcum = _r((lucroRealFinal * 0.15 + Math.max(lucroRealFinal - 240000, 0) * 0.10) * m / 12);
+      var csllRealAcum = _r(lucroRealFinal * (ehFinanceira ? 0.15 : 0.09) * m / 12);
+
+      var sr = null;
+      try {
+        sr = LR.calcular.suspensaoReducao({
+          estimativaDevidaMes: estimIRPJMes,
+          irpjRealAcumulado: irpjRealAcum,
+          irpjPagoAcumulado: irpjPagoAcum,
+          estimativaCSLLMes: estimCSLLMes,
+          csllRealAcumulada: csllRealAcum,
+          csllPagaAcumulada: csllPagaAcum,
+          mesReferencia: m
+        });
+      } catch (e) { sr = null; }
+
+      var irpjPago = sr ? (sr.irpj ? sr.irpj.valorAPagar : estimIRPJMes) : estimIRPJMes;
+      var csllPaga = sr ? (sr.csll ? sr.csll.valorAPagar : estimCSLLMes) : estimCSLLMes;
+      irpjPagoAcum += irpjPago;
+      csllPagaAcum += csllPaga;
+
+      var situacao = sr ? (sr.irpj ? sr.irpj.situacao : "INTEGRAL") : "INTEGRAL";
+      if (situacao === "SUSPENSAO") mesesSuspensos++;
+      var econMes = sr ? (sr.economiaMes || (estimIRPJMes - irpjPago + estimCSLLMes - csllPaga)) : 0;
+      economiaSuspensao += Math.max(econMes, 0);
+
+      meses.push({
+        mes: m, situacao: situacao,
+        estimativaIRPJ: _r(estimIRPJMes), irpjPago: _r(irpjPago),
+        estimativaCSLL: _r(estimCSLLMes), csllPaga: _r(csllPaga),
+        economia: _r(Math.max(econMes, 0))
+      });
+    }
+
+    return {
+      meses: meses,
+      mesesSuspensos: mesesSuspensos,
+      economiaTotalSuspensao: _r(economiaSuspensao)
+    };
+  }
+
+  function _recomendarApuracao(simTri, simAnual, simSuspensao, d) {
+    var totalTri = simTri.total;
+    var totalAnual = simAnual.totalEstimativas;
+    var temMes = d.preencherMesAMes === true || d.preencherMesAMes === "true";
+
+    // Verificar sazonalidade
+    var sazonal = false;
+    if (temMes) {
+      var recMeses = [];
+      for (var m = 1; m <= 12; m++) recMeses.push(_n(d["receitaMes" + m]));
+      var maxM = Math.max.apply(null, recMeses);
+      var minM = Math.min.apply(null, recMeses.filter(function (v) { return v > 0; }));
+      if (minM > 0 && (maxM / minM) > 1.3) sazonal = true;
+    }
+
+    // Algum trimestre com prejuízo?
+    var temPrejuizoTri = simTri.trimestres.some(function (t) { return t.lucroAjustado < 0; });
+
+    var recomendacao = "";
+    var forma = "";
+    if (sazonal || temPrejuizoTri) {
+      forma = "anual";
+      recomendacao = "Apuração ANUAL recomendada. ";
+      if (sazonal) recomendacao += "Receita sazonal (variação > 30% entre meses) favorece apuração anual. ";
+      if (temPrejuizoTri) recomendacao += "Prejuízo em trimestres pode ser compensado dentro do ano na apuração anual. ";
+      if (simSuspensao && simSuspensao.mesesSuspensos > 0) {
+        recomendacao += "Com suspensão/redução, economia adicional de " + _m(simSuspensao.economiaTotalSuspensao) + " evitando estimativas desnecessárias.";
+      }
+    } else if (totalTri < totalAnual) {
+      forma = "trimestral";
+      recomendacao = "Apuração TRIMESTRAL é mais vantajosa neste caso (economia de " + _m(totalAnual - totalTri) + " vs. estimativa). Lucro estável favorece simplicidade.";
+    } else {
+      forma = "anual";
+      recomendacao = "Apuração ANUAL por estimativa é ligeiramente mais vantajosa (economia de " + _m(totalTri - totalAnual) + ").";
+    }
+
+    return {
+      formaRecomendada: forma,
+      justificativa: recomendacao,
+      diferenca: _r(Math.abs(totalTri - totalAnual)),
+      sazonal: sazonal,
+      temPrejuizoTrimestral: temPrejuizoTri
+    };
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  CENÁRIOS (pessimista / base / otimista)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  function _gerarCenarios(d, dre, lalur, ehFinanceira, prejuizoFiscal, baseNegCSLL, vedaCompensacao) {
+    var variacao = (_n(d.variacaoMargemCenario) || 5) / 100;
+    var rb = _n(d.receitaBrutaAnual);
+    var cenarios = [];
+    var nomes = ["Pessimista", "Base", "Otimista"];
+    var fatores = [-variacao, 0, variacao];
+    var aliqCSLL = ehFinanceira ? 0.15 : 0.09;
+    var pf = vedaCompensacao ? 0 : (prejuizoFiscal || 0);
+    var bn = vedaCompensacao ? 0 : (baseNegCSLL || 0);
+
+    for (var c = 0; c < 3; c++) {
+      var margemAjustada = (dre.margemLucro / 100) + fatores[c];
+      var lucroC = _r(rb * margemAjustada);
+      var lucroAjC = _r(lucroC + lalur.totalAdicoes - lalur.totalExclusoes);
+
+      // Compensação de prejuízo fiscal (30%) — mesmo critério do cálculo principal
+      var compPF = 0;
+      if (lucroAjC > 0 && pf > 0) {
+        compPF = Math.min(_r(lucroAjC * 0.30), pf);
+      }
+      var lucroRealC = Math.max(lucroAjC - compPF, 0);
+
+      // IRPJ sobre lucro real do cenário
+      var irpjC = _r(lucroRealC * 0.15 + Math.max(lucroRealC - 240000, 0) * 0.10);
+
+      // CSLL com compensação de base negativa (30%)
+      var compBN = 0;
+      if (lucroAjC > 0 && bn > 0) {
+        compBN = Math.min(_r(lucroAjC * 0.30), bn);
+      }
+      var baseCSLLC = Math.max(lucroAjC - compBN, 0);
+      var csllC = _r(baseCSLLC * aliqCSLL);
+
+      var pcC = _r(pisCofinsSimplificado(rb, d));
+      var issC = _r((_n(d.receitaServicos) || rb) * (_n(d.issAliquota) || 5) / 100);
+      var totalC = _r(irpjC + csllC + pcC + issC);
+      var aliqC = rb > 0 ? _r(totalC / rb * 100) : 0;
+
+      cenarios.push({
+        nome: nomes[c],
+        margem: _r(margemAjustada * 100),
+        lucro: lucroC,
+        irpjCSLL: _r(irpjC + csllC),
+        pisCofins: pcC,
+        iss: issC,
+        cargaTotal: totalC,
+        aliquotaEfetiva: aliqC
+      });
+    }
+    return cenarios;
+  }
+
+  function pisCofinsSimplificado(rb, d) {
+    var isentas = _n(d.receitasIsentas) + _n(d.receitaExportacao) + _n(d.receitasMonofasicas);
+    var tributavel = Math.max(rb - isentas, 0);
+    var baseCreditos = _calcBaseCreditos();
+    var debitos = _r(tributavel * 0.0925);
+    var creditos = _r(baseCreditos * 0.0925);
+    return _r(Math.max(debitos - creditos, 0));
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  FLUXO DE CAIXA TRIBUTÁRIO MENSAL
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  function _gerarFluxoCaixaMensal(d, receitaBruta, receitaServicos, issAliquota, irpjAnual, csllAnual, pisCofinsResult) {
+    var apuracao = d.apuracaoLR || "trimestral";
+    var temMes = d.preencherMesAMes === true || d.preencherMesAMes === "true";
+    var meses = [];
+    var pisAnual = pisCofinsResult.pisAPagar || (pisCofinsResult.aPagar ? pisCofinsResult.aPagar.pis : 0);
+    var cofinsAnual = pisCofinsResult.cofinsAPagar || (pisCofinsResult.aPagar ? pisCofinsResult.aPagar.cofins : 0);
+    var totalFluxo = 0;
+
+    for (var m = 1; m <= 12; m++) {
+      var recMes = temMes ? _n(d["receitaMes" + m]) : _r(receitaBruta / 12);
+      var fator = receitaBruta > 0 ? recMes / receitaBruta : 1 / 12;
+      var recServMes = _r(receitaServicos * fator);
+
+      // PIS/COFINS sempre mensais
+      var pisMes = _r(pisAnual / 12);
+      var cofinsMes = _r(cofinsAnual / 12);
+
+      // ISS mensal sobre receita de serviços
+      var issMes = _r(recServMes * issAliquota / 100);
+
+      // IRPJ/CSLL dependem da apuração
+      var irpjMes = 0;
+      var csllMes = 0;
+      if (apuracao === "trimestral") {
+        // Concentrado nos meses 3, 6, 9, 12
+        if (m % 3 === 0) {
+          irpjMes = _r(irpjAnual / 4);
+          csllMes = _r(csllAnual / 4);
+        }
+      } else {
+        // Estimativa mensal
+        irpjMes = _r(irpjAnual / 12);
+        csllMes = _r(csllAnual / 12);
+      }
+
+      var totalMes = _r(irpjMes + csllMes + pisMes + cofinsMes + issMes);
+      totalFluxo += totalMes;
+
+      meses.push({
+        mes: m,
+        irpj: irpjMes,
+        csll: csllMes,
+        pis: pisMes,
+        cofins: cofinsMes,
+        iss: issMes,
+        total: totalMes
+      });
+    }
+
+    return {
+      meses: meses,
+      totalAnual: _r(totalFluxo),
+      apuracao: apuracao,
+      mediaMensal: _r(totalFluxo / 12)
+    };
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  RENDER RESULTADOS — PLACEHOLDER PARTE 3
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  function renderResultados(r) {
+    var d = r.dadosEmpresa;
+    var cfg = r.config || CONFIG;
+    var container = $("wizardContainer");
+    var resContainer = $("resultadosContainer");
+    if (!resContainer) {
+      resContainer = document.createElement("div");
+      resContainer.id = "resultadosContainer";
+      if (container && container.parentNode) {
+        container.parentNode.insertBefore(resContainer, container.nextSibling);
+      } else {
+        document.body.appendChild(resContainer);
+      }
+    }
+    if (container) container.style.display = "none";
+    resContainer.style.display = "";
+
+    var mesesNome = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+    var dataHoje = new Date();
+    var dataFormatada = dataHoje.toLocaleDateString("pt-BR");
+    var anoBase = d.anoBase || "2026";
+
+    // ═══ Helpers locais ═══
+    function _pp(v) { return (v || 0).toFixed(2) + "%"; }
+    function _linha(label, valor, artigo, cls) {
+      return '<tr class="' + (cls || "") + '"><td>' + label +
+        (artigo ? ' <span class="res-artigo">' + artigo + '</span>' : '') +
+        '</td><td class="res-valor">' + _m(valor) + '</td></tr>';
+    }
+    function _linhaPerc(label, valor, cls) {
+      return '<tr class="' + (cls || "") + '"><td>' + label + '</td><td class="res-valor">' + _pp(valor) + '</td></tr>';
+    }
+    function _secao(num, titulo, conteudo) {
+      return '<div class="res-section" id="resSecao' + num + '">' +
+        '<h2 class="res-section-title"><span class="res-section-num">' + num + '</span> ' + titulo + '</h2>' +
+        '<div class="res-section-body">' + conteudo + '</div></div>';
+    }
+
+    var html = '';
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  SEÇÃO 1 — CABEÇALHO PROFISSIONAL
+    // ═══════════════════════════════════════════════════════════════════════
+    var elab = cfg.elaboradoPor || {};
+    html += '<div class="res-header">';
+    if (cfg.logoURL) {
+      html += '<div class="res-logo"><img src="' + cfg.logoURL + '" alt="Logo" style="max-height:60px;"></div>';
+    }
+    html += '<h1 class="res-title">ESTUDO TRIBUTÁRIO — REGIME DO LUCRO REAL</h1>';
+    html += '<div class="res-header-line"></div>';
+    html += '<div class="res-company">';
+    html += '<div class="res-company-row"><strong>Empresa:</strong> ' + (d.razaoSocial || "—") + '</div>';
+    if (d.cnpj) html += '<div class="res-company-row"><strong>CNPJ:</strong> ' + d.cnpj + '</div>';
+    if (d.cnaePrincipal) html += '<div class="res-company-row"><strong>CNAE:</strong> ' + d.cnaePrincipal + '</div>';
+    html += '<div class="res-company-row"><strong>UF/Município:</strong> ' + (d.uf || "—") + ' / ' + (d.municipio || "—") + ' — ISS: ' + _pp(_n(d.issAliquota)) + '</div>';
+    var formaApurLabel = d.apuracaoLR === "trimestral" ? "Trimestral (definitiva)" : d.apuracaoLR === "anual_suspensao" ? "Anual com Suspensão/Redução" : "Anual por Estimativa";
+    html += '<div class="res-company-row"><strong>Forma de Apuração:</strong> ' + formaApurLabel + '</div>';
+    html += '<div class="res-company-row"><strong>Ano-Base:</strong> ' + anoBase + '</div>';
+    html += '</div>';
+    if (elab.nome) {
+      html += '<div class="res-elaborador">';
+      html += '<div><strong>Elaborado por:</strong> ' + elab.nome;
+      if (elab.registro) html += ' — ' + elab.registro;
+      html += '</div>';
+      if (elab.email || elab.telefone) {
+        html += '<div><strong>Contato:</strong> ';
+        if (elab.email) html += elab.email;
+        if (elab.email && elab.telefone) html += ' | ';
+        if (elab.telefone) html += elab.telefone;
+        html += '</div>';
+      }
+      html += '<div><strong>Data:</strong> ' + dataFormatada + '</div>';
+      html += '</div>';
+    }
+    if (cfg.mostrarMarcaImpost) {
+      html += '<div class="res-powered">Powered by ' + cfg.nomeProduto + ' v' + VERSAO + ' — ' + cfg.subtitulo + '</div>';
+    }
+    html += '</div>';
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  SEÇÃO 2 — PAINEL RESUMO (6 Cards)
+    // ═══════════════════════════════════════════════════════════════════════
+    var res = r.resumo;
+    var s2 = '<div class="res-summary">';
+    // Card 1 — Economia total
+    s2 += '<div class="res-summary-card res-card-hero">' +
+      '<div class="res-card-label">ECONOMIA TOTAL IDENTIFICADA</div>' +
+      '<div class="res-card-value res-card-economia">' + _m(res.economiaTotal) + '</div>' +
+      '<div class="res-card-sub">' + res.numOportunidades + ' oportunidade' + (res.numOportunidades !== 1 ? 's' : '') + ' identificada' + (res.numOportunidades !== 1 ? 's' : '') + '</div>' +
+      '</div>';
+    // Card 2 — Carga bruta
+    s2 += '<div class="res-summary-card">' +
+      '<div class="res-card-label">CARGA TRIBUTÁRIA TOTAL</div>' +
+      '<div class="res-card-value">' + _m(res.cargaBruta) + '</div>' +
+      '<div class="res-card-sub">Mensal: ' + _m(res.cargaBrutaMensal) + '</div>' +
+      '</div>';
+    // Card 3 — Alíquota efetiva
+    s2 += '<div class="res-summary-card">' +
+      '<div class="res-card-label">ALÍQUOTA EFETIVA GLOBAL</div>' +
+      '<div class="res-card-value">' + _pp(res.aliquotaEfetiva) + '</div>' +
+      '<div class="res-card-sub">Carga / Receita Bruta</div>' +
+      '</div>';
+    // Card 4 — Carga otimizada
+    s2 += '<div class="res-summary-card">' +
+      '<div class="res-card-label">CARGA OTIMIZADA</div>' +
+      '<div class="res-card-value res-card-economia">' + _m(res.cargaOtimizada) + '</div>' +
+      '<div class="res-card-sub">Alíquota: ' + _pp(res.aliquotaOtimizada) + '</div>' +
+      '</div>';
+    // Card 5 — Retenções
+    s2 += '<div class="res-summary-card">' +
+      '<div class="res-card-label">RETENÇÕES A COMPENSAR</div>' +
+      '<div class="res-card-value">' + _m(res.totalRetencoes) + '</div>' +
+      '<div class="res-card-sub">IRRF + CSRF + ISS retido</div>' +
+      '</div>';
+    // Card 6 — Saldo efetivo
+    s2 += '<div class="res-summary-card">' +
+      '<div class="res-card-label">SALDO EFETIVO A PAGAR</div>' +
+      '<div class="res-card-value ' + (res.saldoEfetivo < 0 ? 'res-card-economia' : '') + '">' + _m(res.saldoEfetivo) + '</div>' +
+      '<div class="res-card-sub">' + (res.saldoEfetivo < 0 ? 'Saldo negativo — PER/DCOMP' : 'Após todas as compensações') + '</div>' +
+      '</div>';
+    s2 += '</div>';
+    html += _secao(2, 'Painel Resumo Executivo', s2);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  SEÇÃO 3 — DRE + LALUR
+    // ═══════════════════════════════════════════════════════════════════════
+    var dre = r.dre;
+    var lalur = r.lalur;
+    var s3 = '<div class="res-dre">';
+    s3 += '<h3>DEMONSTRAÇÃO DO RESULTADO DO EXERCÍCIO (DRE)</h3>';
+    s3 += '<table class="res-table res-table-dre">';
+    s3 += _linha('Receita Bruta', dre.receitaBruta, '', '');
+    // Deduções da receita (PIS/COFINS sobre receita como info)
+    var deducoesReceita = r.pisCofins ? (r.pisCofins.totalAPagar || 0) : 0;
+    s3 += _linha('(-) PIS/COFINS sobre Receita', deducoesReceita, 'Lei 10.637/02 + 10.833/03', 'res-sub');
+    s3 += _linha('= RECEITA LÍQUIDA', _r(dre.receitaBruta - deducoesReceita), '', 'res-subtotal');
+    if (dre.cmv > 0) s3 += _linha('(-) CMV / Custos Operacionais', dre.cmv, '', 'res-sub');
+    if (dre.servicosTerceiros > 0) s3 += _linha('(-) Serviços de Terceiros', dre.servicosTerceiros, '', 'res-sub');
+    s3 += _linha('(-) Custos Totais', dre.custosTotais, '', 'res-sub');
+    s3 += _linha('= LUCRO BRUTO', _r(dre.receitaBruta - dre.custosTotais), '', 'res-subtotal');
+    if (dre.folhaPagamento > 0) s3 += _linha('(-) Despesas com Pessoal', dre.folhaPagamento, '', 'res-sub');
+    s3 += _linha('(-) Despesas Administrativas e Operacionais', _r(dre.despesasTotais - (dre.folhaPagamento || 0)), '', 'res-sub');
+    if (dre.depreciacao > 0) s3 += _linha('(-) Depreciação e Amortização', dre.depreciacao, 'Art. 305-329 RIR/2018', 'res-sub');
+    if (dre.receitaFinanceiras > 0) s3 += _linha('(+) Receitas Financeiras', dre.receitaFinanceiras, '', 'res-sub');
+    s3 += '<tr class="res-total"><td><strong>= LUCRO LÍQUIDO DO EXERCÍCIO</strong></td><td class="res-valor"><strong>' + _m(dre.lucroLiquido) + '</strong></td></tr>';
+    s3 += '<tr class="res-info-row"><td colspan="2">Margem de Lucro: ' + _pp(dre.margemLucro) + '</td></tr>';
+    s3 += '</table>';
+
+    // LALUR
+    s3 += '<h3>LIVRO DE APURAÇÃO DO LUCRO REAL (LALUR — Parte A)</h3>';
+    s3 += '<table class="res-table res-table-lalur">';
+    s3 += _linha('Lucro Líquido do Exercício', lalur.lucroLiquido, '', '');
+    if (lalur.adicoes && lalur.adicoes.length > 0) {
+      s3 += '<tr class="res-group-header"><td colspan="2"><strong>(+) ADIÇÕES:</strong></td></tr>';
+      lalur.adicoes.forEach(function (a) {
+        var tipoTag = a.tipo === 'T' ? ' <span class="res-tag-tipo-t">[Temp.]</span>' : a.tipo === 'C' ? ' <span class="res-tag-tipo-c">[Cond.]</span>' : '';
+        s3 += _linha('    ' + a.desc + tipoTag, a.valor, a.artigo, 'res-sub');
+      });
+      s3 += _linha('= Total de Adições', lalur.totalAdicoes, '', 'res-subtotal');
+    }
+    if (lalur.exclusoes && lalur.exclusoes.length > 0) {
+      s3 += '<tr class="res-group-header"><td colspan="2"><strong>(-) EXCLUSÕES:</strong></td></tr>';
+      lalur.exclusoes.forEach(function (e) {
+        s3 += _linha('    ' + e.desc, e.valor, e.artigo, 'res-sub');
+      });
+      s3 += _linha('= Total de Exclusões', lalur.totalExclusoes, '', 'res-subtotal');
+    }
+    s3 += _linha('= LUCRO ANTES DA COMPENSAÇÃO', lalur.lucroAjustado, '', 'res-subtotal');
+    // Compensação de prejuízos
+    if (r.compensacao && r.compensacao.resumo) {
+      var comp = r.compensacao.resumo;
+      if (comp.compensacaoEfetiva && comp.compensacaoEfetiva.prejuizoOperacional > 0) {
+        s3 += _linha('(-) Compensação Prejuízo Fiscal (30%)', comp.compensacaoEfetiva.prejuizoOperacional, 'Art. 579-586 RIR/2018', 'res-sub res-economia');
+      }
+    }
+    s3 += '<tr class="res-total res-destaque"><td><strong>= LUCRO REAL</strong></td><td class="res-valor"><strong>' + _m(r.lucroRealFinal) + '</strong></td></tr>';
+    s3 += '</table>';
+    s3 += '</div>';
+    html += _secao(3, 'Demonstração do Resultado e Apuração do Lucro Real', s3);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  SEÇÃO 4 — CÁLCULO DETALHADO DE CADA TRIBUTO
+    // ═══════════════════════════════════════════════════════════════════════
+    var s4 = '<div class="res-detail-grid">';
+
+    // 4.1 — IRPJ
+    s4 += '<div class="res-detail-card">';
+    s4 += '<h3>4.1 — IRPJ <span class="res-artigo">Art. 225 do RIR/2018</span></h3>';
+    s4 += '<table class="res-table">';
+    s4 += _linha('Lucro Real (base de cálculo)', r.lucroRealFinal, '', '');
+    if (r.irpj) {
+      s4 += _linha('IRPJ Normal (15%)', r.irpj.irpjNormal || _r(r.lucroRealFinal * 0.15), 'Art. 225', '');
+      s4 += _linha('Adicional (10% sobre excedente R$ 240.000)', r.irpj.adicional || _r(Math.max(r.lucroRealFinal - 240000, 0) * 0.10), 'Art. 228', '');
+      s4 += _linha('= IRPJ Bruto', r.irpjAntesReducao, '', 'res-subtotal');
+      if (r.irpj.deducaoIncentivos > 0 || (r.incentivosFiscais && r.incentivosFiscais.totalDeducaoFinal > 0)) {
+        s4 += _linha('(-) Deduções por Incentivos Fiscais', r.irpj.deducaoIncentivos || r.incentivosFiscais.totalDeducaoFinal, 'Art. 641', 'res-sub res-economia');
+      }
+      if (r.reducaoSUDAM > 0) {
+        s4 += _linha('(-) Redução SUDAM/SUDENE (75%)', r.reducaoSUDAM, 'Art. 627-637', 'res-sub res-economia');
+      }
+      s4 += _linha('= IRPJ após Reduções', r.irpjAposReducao, '', 'res-subtotal');
+      var totalIRRF = _n(d.irrfRetidoPrivado) + _n(d.irrfRetidoPublico);
+      if (totalIRRF > 0) {
+        s4 += _linha('(-) IRRF Retido na Fonte', totalIRRF, '', 'res-sub');
+      }
+      var estimIRPJ = _n(d.estimativasIRPJPagas);
+      if (estimIRPJ > 0) {
+        s4 += _linha('(-) Estimativas de IRPJ Pagas', estimIRPJ, '', 'res-sub');
+      }
+      var saldoIRPJ = _r(r.irpjAposReducao - totalIRRF - estimIRPJ);
+      s4 += '<tr class="res-total"><td><strong>' + (saldoIRPJ >= 0 ? '= IRPJ A PAGAR' : '= SALDO NEGATIVO IRPJ') + '</strong></td><td class="res-valor"><strong>' + _m(saldoIRPJ) + '</strong></td></tr>';
+    }
+    s4 += '</table></div>';
+
+    // 4.2 — CSLL
+    s4 += '<div class="res-detail-card">';
+    s4 += '<h3>4.2 — CSLL <span class="res-artigo">Lei 7.689/1988</span></h3>';
+    s4 += '<table class="res-table">';
+    if (r.csll) {
+      var aliqCSLL = r.csll.aliquota || (d.ehFinanceira ? 0.15 : 0.09);
+      s4 += _linha('Base de cálculo CSLL', r.baseCSLLFinal, '', '');
+      if (r.compensacao && r.compensacao.resumo && r.compensacao.resumo.compensacaoEfetiva && r.compensacao.resumo.compensacaoEfetiva.baseNegativaCSLL > 0) {
+        s4 += _linha('(-) Compensação Base Negativa (30%)', r.compensacao.resumo.compensacaoEfetiva.baseNegativaCSLL, 'Art. 580-586', 'res-sub res-economia');
+      }
+      s4 += _linha('Alíquota CSLL', '', '', '');
+      s4 += '<tr><td>CSLL (' + _pp(aliqCSLL * 100) + ')</td><td class="res-valor">' + _m(r.csll.csllDevida) + '</td></tr>';
+      var csllRetida = _n(d.csllRetido);
+      if (csllRetida > 0) s4 += _linha('(-) CSLL Retida na Fonte', csllRetida, '', 'res-sub');
+      var estimCSLL = _n(d.estimativasCSLLPagas);
+      if (estimCSLL > 0) s4 += _linha('(-) Estimativas CSLL Pagas', estimCSLL, '', 'res-sub');
+      var saldoCSLL = _r(r.csll.csllDevida - csllRetida - estimCSLL);
+      s4 += '<tr class="res-total"><td><strong>' + (saldoCSLL >= 0 ? '= CSLL A PAGAR' : '= SALDO NEGATIVO CSLL') + '</strong></td><td class="res-valor"><strong>' + _m(saldoCSLL) + '</strong></td></tr>';
+    }
+    s4 += '</table></div>';
+
+    // 4.3 — PIS/COFINS
+    s4 += '<div class="res-detail-card res-detail-wide">';
+    s4 += '<h3>4.3 — PIS/COFINS Não-Cumulativo <span class="res-artigo">Lei 10.637/02 + Lei 10.833/03</span></h3>';
+    s4 += '<table class="res-table">';
+    if (r.pisCofins) {
+      var pc = r.pisCofins;
+      s4 += _linha('Receita Bruta', dre.receitaBruta, '', '');
+      if (pc.receitasIsentas > 0) s4 += _linha('(-) Receitas Isentas/Suspensas', pc.receitasIsentas, '', 'res-sub');
+      s4 += _linha('= Receita Tributável', pc.receitaTributavel || _r(dre.receitaBruta - (pc.receitasIsentas || 0)), '', 'res-subtotal');
+      s4 += '<tr class="res-group-header"><td colspan="2"><strong>DÉBITOS:</strong></td></tr>';
+      s4 += _linha('    PIS (1,65%)', pc.debitoPIS || pc.debitos.pis, 'Art. 2º, Lei 10.637/02', 'res-sub');
+      s4 += _linha('    COFINS (7,60%)', pc.debitoCOFINS || pc.debitos.cofins, 'Art. 2º, Lei 10.833/03', 'res-sub');
+      s4 += _linha('= Total Débitos', _r((pc.debitoPIS || pc.debitos.pis || 0) + (pc.debitoCOFINS || pc.debitos.cofins || 0)), '', 'res-subtotal');
+      s4 += '<tr class="res-group-header"><td colspan="2"><strong>CRÉDITOS:</strong></td></tr>';
+      // Listar créditos detalhados se disponíveis
+      if (pc.creditosDetalhe && pc.creditosDetalhe.length > 0) {
+        pc.creditosDetalhe.forEach(function (cr) {
+          if (cr.valor > 0) s4 += _linha('    ' + cr.descricao, cr.valor, cr.artigo || 'Art. 3º', 'res-sub res-economia');
+        });
+      } else {
+        s4 += _linha('    Crédito PIS (1,65%)', pc.creditoPIS || pc.creditos.pis, 'Art. 3º', 'res-sub res-economia');
+        s4 += _linha('    Crédito COFINS (7,60%)', pc.creditoCOFINS || pc.creditos.cofins, 'Art. 3º', 'res-sub res-economia');
+      }
+      s4 += _linha('= Total Créditos', _r((pc.creditoPIS || pc.creditos.pis || 0) + (pc.creditoCOFINS || pc.creditos.cofins || 0)), '', 'res-subtotal res-economia');
+      // Retenções PIS/COFINS
+      var pisRetido = _n(d.pisRetido);
+      var cofinsRetido = _n(d.cofinsRetido);
+      if (pisRetido > 0) s4 += _linha('(-) PIS Retido na Fonte', pisRetido, '', 'res-sub');
+      if (cofinsRetido > 0) s4 += _linha('(-) COFINS Retido na Fonte', cofinsRetido, '', 'res-sub');
+      s4 += '<tr class="res-total"><td><strong>= PIS/COFINS A PAGAR</strong></td><td class="res-valor"><strong>' + _m(pc.totalAPagar) + '</strong></td></tr>';
+      s4 += '<tr class="res-info-row"><td colspan="2">Alíquota Efetiva: ' + (pc.aliquotaEfetiva || _pp(_r(pc.totalAPagar / (dre.receitaBruta || 1) * 100))) + ' (nominal: 9,25%)</td></tr>';
+    }
+    s4 += '</table></div>';
+
+    // 4.4 — ISS
+    s4 += '<div class="res-detail-card">';
+    s4 += '<h3>4.4 — ISS <span class="res-artigo">LC 116/2003</span></h3>';
+    s4 += '<table class="res-table">';
+    if (r.iss) {
+      s4 += _linha('Receita de Serviços', r.iss.receitaServicos, '', '');
+      s4 += '<tr><td>Município: ' + r.iss.municipio + '</td><td class="res-valor">Alíquota: ' + _pp(r.iss.aliquota) + '</td></tr>';
+      s4 += '<tr class="res-total"><td><strong>= ISS Anual</strong></td><td class="res-valor"><strong>' + _m(r.iss.issAnual) + '</strong></td></tr>';
+      s4 += '<tr class="res-info-row"><td><strong>ISS Mensal</strong></td><td class="res-valor">' + _m(r.iss.issMensal) + '</td></tr>';
+      var issRetido = _n(d.issRetido);
+      if (issRetido > 0) s4 += _linha('(-) ISS Retido na Fonte', issRetido, '', 'res-sub');
+    }
+    s4 += '</table></div>';
+
+    s4 += '</div>'; // fecha res-detail-grid
+    html += _secao(4, 'Cálculo Detalhado de Cada Tributo', s4);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  SEÇÃO 5 — COMPOSIÇÃO DA CARGA TRIBUTÁRIA
+    // ═══════════════════════════════════════════════════════════════════════
+    var comp = r.composicao;
+    var s5 = '';
+
+    // Barra visual
+    var totalComp = (comp.irpj.valor || 0) + (comp.csll.valor || 0) + (comp.pisCofins.valor || 0) + (comp.iss.valor || 0);
+    if (totalComp > 0) {
+      var pIRPJ = _r((comp.irpj.valor / totalComp) * 100);
+      var pCSLL = _r((comp.csll.valor / totalComp) * 100);
+      var pPC = _r((comp.pisCofins.valor / totalComp) * 100);
+      var pISS = _r(100 - pIRPJ - pCSLL - pPC);
+
+      s5 += '<div class="res-composicao-visual">';
+      s5 += '<div class="res-comp-bar">';
+      if (pIRPJ > 0) s5 += '<div class="res-comp-seg" style="width:' + pIRPJ + '%;background:#E74C3C;" title="IRPJ: ' + _pp(pIRPJ) + '">IRPJ</div>';
+      if (pCSLL > 0) s5 += '<div class="res-comp-seg" style="width:' + pCSLL + '%;background:#F39C12;" title="CSLL: ' + _pp(pCSLL) + '">CSLL</div>';
+      if (pPC > 0) s5 += '<div class="res-comp-seg" style="width:' + pPC + '%;background:#3498DB;" title="PIS/COFINS: ' + _pp(pPC) + '">PIS/COF</div>';
+      if (pISS > 0) s5 += '<div class="res-comp-seg" style="width:' + pISS + '%;background:#9B59B6;" title="ISS: ' + _pp(pISS) + '">ISS</div>';
+      s5 += '</div></div>';
+    }
+
+    // Gráfico Pizza
+    s5 += '<div class="res-chart-container"><canvas id="chartComposicao" width="350" height="350"></canvas></div>';
+
+    // Tabela de composição
+    s5 += '<table class="res-table">';
+    s5 += '<thead><tr><th>Tributo</th><th>Base</th><th>Alíq. Efetiva</th><th>Anual</th><th>Mensal</th><th>% Carga</th></tr></thead>';
+    s5 += '<tbody>';
+    s5 += '<tr><td style="color:#E74C3C;">IRPJ</td><td>' + _m(r.lucroRealFinal) + '</td><td>' + _pp(r.lucroRealFinal > 0 ? _r(comp.irpj.valor / r.lucroRealFinal * 100) : 0) + '</td><td>' + _m(comp.irpj.valor) + '</td><td>' + _m(_r(comp.irpj.valor / 12)) + '</td><td>' + _pp(comp.irpj.percentual) + '</td></tr>';
+    s5 += '<tr><td style="color:#F39C12;">CSLL</td><td>' + _m(r.baseCSLLFinal) + '</td><td>' + _pp(r.baseCSLLFinal > 0 ? _r(comp.csll.valor / r.baseCSLLFinal * 100) : 0) + '</td><td>' + _m(comp.csll.valor) + '</td><td>' + _m(_r(comp.csll.valor / 12)) + '</td><td>' + _pp(comp.csll.percentual) + '</td></tr>';
+    s5 += '<tr><td style="color:#3498DB;">PIS/COFINS</td><td>' + _m(dre.receitaBruta) + '</td><td>' + (r.pisCofins.aliquotaEfetiva || _pp(_r(comp.pisCofins.valor / (dre.receitaBruta || 1) * 100))) + '</td><td>' + _m(comp.pisCofins.valor) + '</td><td>' + _m(_r(comp.pisCofins.valor / 12)) + '</td><td>' + _pp(comp.pisCofins.percentual) + '</td></tr>';
+    s5 += '<tr><td style="color:#9B59B6;">ISS</td><td>' + _m(r.iss.receitaServicos) + '</td><td>' + _pp(r.iss.aliquota) + '</td><td>' + _m(comp.iss.valor) + '</td><td>' + _m(_r(comp.iss.valor / 12)) + '</td><td>' + _pp(comp.iss.percentual) + '</td></tr>';
+    s5 += '</tbody>';
+    s5 += '<tfoot><tr class="res-total"><td><strong>TOTAL</strong></td><td></td><td><strong>' + _pp(res.aliquotaEfetiva) + '</strong></td><td><strong>' + _m(res.cargaBruta) + '</strong></td><td><strong>' + _m(res.cargaBrutaMensal) + '</strong></td><td><strong>100%</strong></td></tr></tfoot>';
+    s5 += '</table>';
+    html += _secao(5, 'Composição da Carga Tributária', s5);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  SEÇÃO 6 — MAPA DA ECONOMIA (Antes × Depois)
+    // ═══════════════════════════════════════════════════════════════════════
+    var eco = r.economia;
+    var s6 = '<div class="res-mapa-economia">';
+    // Antes vs Depois
+    s6 += '<div class="res-mapa-row">';
+    s6 += '<div class="res-mapa-card res-mapa-antes"><div class="res-mapa-card-label">SEM Otimização</div><div class="res-mapa-card-value">' + _m(res.cargaBruta) + '</div><div class="res-mapa-card-sub">Alíquota: ' + _pp(res.aliquotaEfetiva) + '</div></div>';
+    s6 += '<div class="res-mapa-seta"><div class="res-mapa-seta-valor">- ' + _m(eco.total) + '</div><div class="res-mapa-seta-icon">→</div></div>';
+    s6 += '<div class="res-mapa-card res-mapa-depois"><div class="res-mapa-card-label">COM Otimização</div><div class="res-mapa-card-value">' + _m(res.cargaOtimizada) + '</div><div class="res-mapa-card-sub">Alíquota: ' + _pp(res.aliquotaOtimizada) + '</div></div>';
+    s6 += '</div>';
+
+    // Breakdown das economias
+    s6 += '<div class="res-mapa-breakdown"><h4>Detalhamento das Economias</h4>';
+    s6 += '<table class="res-table">';
+    if (eco.jcp > 0) s6 += _linha('JCP — Juros sobre Capital Próprio', eco.jcp, 'Art. 355-358', 'res-economia');
+    if (eco.prejuizo > 0) s6 += _linha('Compensação de Prejuízo Fiscal', eco.prejuizo, 'Art. 579-586', 'res-economia');
+    if (eco.sudam > 0) s6 += _linha('Redução SUDAM/SUDENE (75%)', eco.sudam, 'Art. 627-637', 'res-economia');
+    if (eco.incentivos > 0) s6 += _linha('Incentivos Fiscais (PAT, FIA, etc.)', eco.incentivos, 'Art. 641', 'res-economia');
+    if (eco.depreciacao > 0) s6 += _linha('Economia Fiscal de Depreciação', eco.depreciacao, 'Art. 305-329', 'res-economia');
+    if (eco.pisCofinsCreditos > 0) s6 += _linha('Créditos PIS/COFINS', eco.pisCofinsCreditos, 'Art. 3º', 'res-economia');
+    if (eco.gratificacao > 0) s6 += _linha('Conversão Gratificação → Pró-labore', eco.gratificacao, 'Art. 358, §1º', 'res-economia');
+    if (eco.cprb > 0) s6 += _linha('CPRB — Desoneração da Folha', eco.cprb, 'Lei 12.546/2011', 'res-economia');
+    if (eco.pddFiscal > 0) s6 += _linha('PDD Fiscal — Perdas no Recebimento', eco.pddFiscal, 'Art. 340-342 RIR/2018', 'res-economia');
+    s6 += '<tr class="res-total res-economia"><td><strong>ECONOMIA TOTAL</strong></td><td class="res-valor"><strong>' + _m(eco.total) + '</strong></td></tr>';
+    s6 += '</table></div>';
+
+    // Projeções acumuladas
+    if (r.projecao && r.projecao.projecaoCarga) {
+      s6 += '<div class="res-mapa-projecoes"><h4>Projeção de Economia Acumulada</h4>';
+      s6 += '<table class="res-table"><thead><tr><th>Período</th><th>Economia/Ano</th><th>Acumulada</th></tr></thead><tbody>';
+      var econAcum1 = 0;
+      var periodos = [1, 3, 5, 10];
+      periodos.forEach(function (p) {
+        var econP = 0;
+        for (var a = 0; a < Math.min(p, r.projecao.projecaoCarga.length); a++) {
+          econP += r.projecao.projecaoCarga[a].economiaAno;
+        }
+        var anoLabel = p === 1 ? "1 ano" : p + " anos";
+        var ultimoAno = r.projecao.projecaoCarga[Math.min(p, r.projecao.projecaoCarga.length) - 1];
+        s6 += '<tr><td>' + anoLabel + '</td><td>' + _m(ultimoAno ? ultimoAno.economiaAno : eco.total) + '</td><td class="res-economia"><strong>' + _m(econP || eco.total * p) + '</strong></td></tr>';
+      });
+      s6 += '</tbody></table></div>';
+    } else {
+      // Projeção simples sem cenários
+      s6 += '<div class="res-mapa-projecoes"><h4>Projeção de Economia Acumulada</h4>';
+      s6 += '<table class="res-table"><thead><tr><th>Período</th><th>Economia Acumulada</th></tr></thead><tbody>';
+      [1, 3, 5, 10].forEach(function (p) {
+        s6 += '<tr><td>' + p + (p === 1 ? ' ano' : ' anos') + '</td><td class="res-economia"><strong>' + _m(_r(eco.total * p)) + '</strong></td></tr>';
+      });
+      s6 += '</tbody></table></div>';
+    }
+
+    // Gráficos
+    s6 += '<div class="res-chart-row">';
+    s6 += '<div class="res-chart-container"><canvas id="chartEconomias" width="400" height="300"></canvas></div>';
+    s6 += '<div class="res-chart-container"><canvas id="chartAntesDepois" width="400" height="300"></canvas></div>';
+    s6 += '</div>';
+    if (r.projecao && r.projecao.projecaoCarga) {
+      s6 += '<div class="res-chart-container"><canvas id="chartProjecao" width="700" height="300"></canvas></div>';
+    }
+
+    s6 += '</div>';
+    html += _secao(6, 'Mapa da Economia — Antes x Depois', s6);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  SEÇÃO 7 — OPORTUNIDADES DE ECONOMIA
+    // ═══════════════════════════════════════════════════════════════════════
+    var ops = r.oportunidades || [];
+    var s7 = '<div class="res-oportunidades">';
+    if (ops.length === 0) {
+      s7 += '<p class="res-info-msg">Nenhuma oportunidade adicional identificada com os dados informados.</p>';
+    } else {
+      ops.sort(function (a, b) { return (b.economiaAnual || 0) - (a.economiaAnual || 0); });
+      ops.forEach(function (op, idx) {
+        var rankNum = idx + 1;
+        var corTipo = op.tipo === 'Dedução' ? '#2ECC71' : op.tipo === 'Redução' ? '#3498DB' : op.tipo === 'Crédito' ? '#9B59B6' : op.tipo === 'Compensação' ? '#F39C12' : op.tipo === 'Potencial' ? '#95A5A6' : '#E74C3C';
+        var corRisco = op.risco === 'Baixo' ? '#2ECC71' : op.risco === 'Médio' ? '#F39C12' : '#E74C3C';
+        var corCompl = op.complexidade === 'Baixa' ? '#2ECC71' : op.complexidade === 'Média' ? '#F39C12' : '#E74C3C';
+
+        s7 += '<div class="res-oport-card">';
+        s7 += '<div class="res-oport-header">';
+        s7 += '<div class="res-oport-rank">#' + rankNum + '</div>';
+        s7 += '<div class="res-oport-titulo">' + op.titulo + '</div>';
+        s7 += '<div class="res-oport-valor">' + _m(op.economiaAnual) + '<span>/ano</span></div>';
+        s7 += '</div>';
+        s7 += '<div class="res-oport-tags">';
+        s7 += '<span class="res-tag" style="background:' + corTipo + ';">' + op.tipo + '</span>';
+        s7 += '<span class="res-tag" style="background:' + corCompl + ';">Compl.: ' + op.complexidade + '</span>';
+        s7 += '<span class="res-tag" style="background:' + corRisco + ';">Risco: ' + op.risco + '</span>';
+        if (op.prazoImplementacao) s7 += '<span class="res-tag" style="background:#3498DB;">Prazo: ' + op.prazoImplementacao + '</span>';
+        s7 += '</div>';
+        s7 += '<div class="res-oport-body">';
+        s7 += '<p>' + op.descricao + '</p>';
+        if (op.baseLegal) s7 += '<div class="res-oport-legal">Base Legal: ' + op.baseLegal + '</div>';
+        if (op.acaoRecomendada) s7 += '<div class="res-oport-acao"><strong>Ação Recomendada:</strong> ' + op.acaoRecomendada + '</div>';
+        s7 += '</div>';
+        s7 += '</div>';
+      });
+    }
+    s7 += '</div>';
+    html += _secao(7, 'Oportunidades de Economia (' + ops.length + ')', s7);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  SEÇÃO 8 — TRIMESTRAL vs ANUAL
+    // ═══════════════════════════════════════════════════════════════════════
+    var ca = r.comparativoApuracao;
+    var s8 = '';
+    if (ca) {
+      // Tabela comparativa TRIMESTRAL
+      if (ca.trimestral && ca.trimestral.trimestres) {
+        s8 += '<h3>Apuração Trimestral</h3>';
+        s8 += '<table class="res-table"><thead><tr><th>Trimestre</th><th>Lucro Ajustado</th><th>Comp. Prejuízo</th><th>Lucro Real</th><th>IRPJ Normal</th><th>IRPJ Adic.</th><th>IRPJ Total</th><th>CSLL</th></tr></thead><tbody>';
+        ca.trimestral.trimestres.forEach(function (t) {
+          s8 += '<tr><td>' + t.trimestre + 'º Tri</td><td>' + _m(t.lucroAjustado) + '</td><td>' + _m(t.compensacaoPrejuizo) + '</td><td>' + _m(t.lucroReal) + '</td><td>' + _m(t.irpjNormal) + '</td><td>' + _m(t.irpjAdicional) + '</td><td>' + _m(t.irpjTotal) + '</td><td>' + _m(t.csll) + '</td></tr>';
+        });
+        s8 += '<tr class="res-total"><td><strong>TOTAL</strong></td><td></td><td></td><td></td><td></td><td></td><td><strong>' + _m(ca.trimestral.totalIRPJ) + '</strong></td><td><strong>' + _m(ca.trimestral.totalCSLL) + '</strong></td></tr>';
+        s8 += '</tbody></table>';
+        s8 += '<p class="res-total-destaque">Total Trimestral (IRPJ+CSLL): <strong>' + _m(ca.trimestral.total) + '</strong></p>';
+      }
+
+      // Tabela ANUAL POR ESTIMATIVA (resumo)
+      if (ca.anual) {
+        s8 += '<h3>Apuração Anual por Estimativa</h3>';
+        s8 += '<table class="res-table">';
+        s8 += _linha('Total Estimativas IRPJ (12 meses)', ca.anual.totalEstimativasIRPJ, '', '');
+        s8 += _linha('Total Estimativas CSLL (12 meses)', ca.anual.totalEstimativasCSLL, '', '');
+        s8 += _linha('= Total Estimativas Pagas', ca.anual.totalEstimativas, '', 'res-subtotal');
+        s8 += _linha('IRPJ Real Anual (ajuste)', ca.anual.irpjRealAnual, '', '');
+        s8 += _linha('CSLL Real Anual (ajuste)', ca.anual.csllRealAnual, '', '');
+        s8 += _linha('Ajuste IRPJ (real - estimativas)', ca.anual.ajusteIRPJ, '', ca.anual.ajusteIRPJ < 0 ? 'res-economia' : '');
+        s8 += _linha('Ajuste CSLL (real - estimativas)', ca.anual.ajusteCSLL, '', ca.anual.ajusteCSLL < 0 ? 'res-economia' : '');
+        if (ca.anual.saldoACompensar > 0) {
+          s8 += _linha('Saldo a Compensar (estimativas excedentes)', ca.anual.saldoACompensar, 'PER/DCOMP', 'res-economia');
+        }
+        s8 += '</table>';
+      }
+
+      // Suspensão/Redução
+      if (ca.suspensao && ca.suspensao.mesesSuspensos > 0) {
+        s8 += '<h3>Suspensão/Redução de Estimativas</h3>';
+        s8 += '<p>Meses com possibilidade de suspensão: <strong>' + ca.suspensao.mesesSuspensos + '</strong></p>';
+        s8 += '<p>Economia estimada com suspensão: <strong class="res-economia">' + _m(ca.suspensao.economiaTotalSuspensao) + '</strong></p>';
+      }
+
+      // Recomendação
+      if (ca.recomendacao) {
+        var recBg = ca.recomendacao.formaRecomendada === 'trimestral' ? '#1A3C6E' : '#2ECC71';
+        s8 += '<div class="res-recomendacao" style="border-left:4px solid ' + recBg + ';">';
+        s8 += '<h4>Recomendação</h4>';
+        s8 += '<p>' + ca.recomendacao.justificativa + '</p>';
+        if (ca.recomendacao.diferenca > 0) {
+          s8 += '<p><strong>Diferença: ' + _m(ca.recomendacao.diferenca) + '</strong></p>';
+        }
+        s8 += '</div>';
+      }
+    }
+    html += _secao(8, 'Comparativo: Trimestral vs Anual', s8);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  SEÇÃO 9 — CENÁRIOS DE SENSIBILIDADE
+    // ═══════════════════════════════════════════════════════════════════════
+    var s9 = '';
+    if (r.cenarios && r.cenarios.length > 0) {
+      s9 += '<table class="res-table"><thead><tr><th>Cenário</th><th>Margem</th><th>Lucro</th><th>IRPJ+CSLL</th><th>PIS/COFINS</th><th>ISS</th><th>Carga Total</th><th>Alíq. Efetiva</th></tr></thead><tbody>';
+      r.cenarios.forEach(function (c) {
+        var cls = c.nome === 'Base' ? 'res-cenario-base' : c.nome === 'Pessimista' ? 'res-cenario-pessimista' : 'res-cenario-otimista';
+        s9 += '<tr class="' + cls + '"><td><strong>' + c.nome + '</strong></td><td>' + _pp(c.margem) + '</td><td>' + _m(c.lucro) + '</td><td>' + _m(c.irpjCSLL) + '</td><td>' + _m(c.pisCofins) + '</td><td>' + _m(c.iss) + '</td><td><strong>' + _m(c.cargaTotal) + '</strong></td><td>' + _pp(c.aliquotaEfetiva) + '</td></tr>';
+      });
+      s9 += '</tbody></table>';
+      s9 += '<div class="res-chart-container"><canvas id="chartCenarios" width="600" height="300"></canvas></div>';
+    } else {
+      s9 += '<p class="res-info-msg">Cenários de sensibilidade não foram habilitados. Ative na Etapa 6 para visualizar.</p>';
+    }
+
+    // Projeção plurianual
+    if (r.projecao && r.projecao.projecaoCarga) {
+      s9 += '<h3>Projeção Plurianual</h3>';
+      s9 += '<table class="res-table"><thead><tr><th>Ano</th><th>Receita Projetada</th><th>Carga Tributária</th><th>Economia/Ano</th><th>Economia Acumulada</th></tr></thead><tbody>';
+      r.projecao.projecaoCarga.forEach(function (p) {
+        s9 += '<tr><td>Ano ' + p.ano + '</td><td>' + _m(p.receita) + '</td><td>' + _m(p.carga) + '</td><td>' + _m(p.economiaAno) + '</td><td class="res-economia"><strong>' + _m(p.economiaAcumulada) + '</strong></td></tr>';
+      });
+      s9 += '</tbody></table>';
+    }
+    html += _secao(9, 'Cenários de Sensibilidade', s9);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  SEÇÃO 10 — FLUXO DE CAIXA TRIBUTÁRIO MENSAL
+    // ═══════════════════════════════════════════════════════════════════════
+    var fc = r.fluxoCaixa;
+    var s10 = '';
+    if (fc && fc.meses) {
+      s10 += '<p>Forma de Apuração: <strong>' + (fc.apuracao === "trimestral" ? "Trimestral" : "Anual por Estimativa") + '</strong> | Média Mensal: <strong>' + _m(fc.mediaMensal) + '</strong></p>';
+      s10 += '<div class="res-table-wrap"><table class="res-table res-fluxo-mensal"><thead><tr><th>Mês</th><th>IRPJ</th><th>CSLL</th><th>PIS</th><th>COFINS</th><th>ISS</th><th>Total</th></tr></thead><tbody>';
+      var totIRPJ = 0, totCSLL = 0, totPIS = 0, totCOF = 0, totISS = 0, totTot = 0;
+      fc.meses.forEach(function (m) {
+        totIRPJ += m.irpj; totCSLL += m.csll; totPIS += m.pis; totCOF += m.cofins; totISS += m.iss; totTot += m.total;
+        s10 += '<tr><td>' + mesesNome[m.mes - 1] + '</td><td>' + _m(m.irpj) + '</td><td>' + _m(m.csll) + '</td><td>' + _m(m.pis) + '</td><td>' + _m(m.cofins) + '</td><td>' + _m(m.iss) + '</td><td><strong>' + _m(m.total) + '</strong></td></tr>';
+      });
+      s10 += '<tr class="res-total"><td><strong>TOTAL</strong></td><td><strong>' + _m(_r(totIRPJ)) + '</strong></td><td><strong>' + _m(_r(totCSLL)) + '</strong></td><td><strong>' + _m(_r(totPIS)) + '</strong></td><td><strong>' + _m(_r(totCOF)) + '</strong></td><td><strong>' + _m(_r(totISS)) + '</strong></td><td><strong>' + _m(_r(totTot)) + '</strong></td></tr>';
+      s10 += '</tbody></table></div>';
+      s10 += '<div class="res-chart-container"><canvas id="chartFluxoMensal" width="700" height="350"></canvas></div>';
+    }
+    html += _secao(10, 'Fluxo de Caixa Tributário Mensal', s10);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  SEÇÃO 11 — ALERTAS E COMPLIANCE
+    // ═══════════════════════════════════════════════════════════════════════
+    var alertas = r.alertas || [];
+    var s11 = '<div class="res-alertas">';
+
+    // Obrigatoriedade
+    if (r.obrigatoriedade && r.obrigatoriedade.obrigado) {
+      s11 += '<div class="res-alerta res-alerta-critico"><span class="res-alerta-icon">&#x1F534;</span><strong>OBRIGATORIEDADE:</strong> ' + (r.obrigatoriedade.motivo || 'Empresa é obrigada ao regime do Lucro Real.') + '</div>';
+    }
+
+    // Alertas da validação cruzada
+    alertas.forEach(function (a) {
+      var cls = a.tipo === 'critico' ? 'res-alerta-critico' : a.tipo === 'aviso' ? 'res-alerta-aviso' : a.tipo === 'economia' ? 'res-alerta-economia' : 'res-alerta-info';
+      var icon = a.tipo === 'critico' ? '&#x1F534;' : a.tipo === 'aviso' ? '&#x1F7E1;' : a.tipo === 'economia' ? '&#x1F7E2;' : '&#x1F535;';
+      s11 += '<div class="res-alerta ' + cls + '"><span class="res-alerta-icon">' + icon + '</span>' + a.msg + '</div>';
+    });
+
+    // Saldo negativo
+    if (r.saldoNegativo && r.saldoNegativo.saldoNegativo && r.saldoNegativo.saldoNegativo > 0) {
+      s11 += '<div class="res-alerta res-alerta-info"><span class="res-alerta-icon">&#x1F535;</span><strong>SALDO NEGATIVO IRPJ:</strong> ' + _m(r.saldoNegativo.saldoNegativo) + '. Solicitar restituição ou compensação via PER/DCOMP (IN RFB 2.055/2021).</div>';
+    }
+
+    // Vedações de compensação
+    if (r.vedacoes && r.vedacoes.compensacaoPermitida === false) {
+      s11 += '<div class="res-alerta res-alerta-critico"><span class="res-alerta-icon">&#x1F534;</span><strong>VEDAÇÃO DE COMPENSAÇÃO:</strong> ' + (r.vedacoes.motivo || 'Compensação de prejuízo fiscal vedada por mudança de controle + ramo de atividade (Art. 584 RIR/2018).') + '</div>';
+    }
+
+    // JCP não aproveitado
+    if (r.jcpDetalhado && r.jcpDetalhado.economiaLiquida > 0 && r.economia.jcp > 0) {
+      s11 += '<div class="res-alerta res-alerta-economia"><span class="res-alerta-icon">&#x1F7E2;</span><strong>JCP DISPONÍVEL:</strong> Economia líquida de ' + _m(r.jcpDetalhado.economiaLiquida) + '/ano com distribuição de Juros sobre Capital Próprio.</div>';
+    }
+
+    // SUDAM/SUDENE potencial
+    var isSUDAM = (LR.helpers && LR.helpers.ehSUDAM) ? LR.helpers.ehSUDAM(d.uf) : false;
+    var isSUDENE = (LR.helpers && LR.helpers.ehSUDENE) ? LR.helpers.ehSUDENE(d.uf) : false;
+    if ((isSUDAM || isSUDENE) && !(d.temProjetoAprovado === true || d.temProjetoAprovado === "true")) {
+      var nomeSup = isSUDAM ? "SUDAM" : "SUDENE";
+      s11 += '<div class="res-alerta res-alerta-economia"><span class="res-alerta-icon">&#x1F7E2;</span><strong>POTENCIAL ' + nomeSup + ':</strong> Empresa em área ' + nomeSup + ' sem projeto aprovado. Redução de até 75% do IRPJ é possível.</div>';
+    }
+
+    // Reforma Tributária
+    s11 += '<div class="res-alerta res-alerta-info"><span class="res-alerta-icon">&#x1F535;</span><strong>REFORMA TRIBUTÁRIA (LC 214/2025):</strong> A partir de 2026 inicia-se a transição para CBS/IBS em substituição ao PIS/COFINS e ISS. O regime do Lucro Real permanece para IRPJ e CSLL. Acompanhe as regulamentações para ajustar o planejamento tributário.</div>';
+
+    s11 += '</div>';
+    html += _secao(11, 'Alertas e Compliance', s11);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  SEÇÃO 12 — OBRIGAÇÕES ACESSÓRIAS E DARFs
+    // ═══════════════════════════════════════════════════════════════════════
+    var s12 = '';
+
+    // Obrigações acessórias
+    var obrigacoes = r.obrigacoes || [];
+    if (obrigacoes.length > 0) {
+      s12 += '<h3>Obrigações Acessórias</h3>';
+      s12 += '<table class="res-table"><thead><tr><th>Obrigação</th><th>Periodicidade</th><th>Prazo</th><th>Descrição</th></tr></thead><tbody>';
+      obrigacoes.forEach(function (ob) {
+        if (ob) {
+          s12 += '<tr><td><strong>' + (ob.nome || ob.id || '—') + '</strong></td><td>' + (ob.periodicidade || '—') + '</td><td>' + (ob.prazo || '—') + '</td><td>' + (ob.descricao || '—') + '</td></tr>';
+        }
+      });
+      s12 += '</tbody></table>';
+    } else {
+      // Obrigações padrão do Lucro Real
+      s12 += '<h3>Obrigações Acessórias do Lucro Real</h3>';
+      s12 += '<table class="res-table"><thead><tr><th>Obrigação</th><th>Periodicidade</th><th>Prazo</th></tr></thead><tbody>';
+      s12 += '<tr><td><strong>ECF</strong> — Escrituração Contábil Fiscal</td><td>Anual</td><td>Último dia útil de julho</td></tr>';
+      s12 += '<tr><td><strong>ECD</strong> — Escrituração Contábil Digital</td><td>Anual</td><td>Último dia útil de maio</td></tr>';
+      s12 += '<tr><td><strong>EFD-Contribuições</strong></td><td>Mensal</td><td>10º dia útil do 2º mês subsequente</td></tr>';
+      s12 += '<tr><td><strong>DCTF</strong> — Declaração de Débitos e Créditos</td><td>Mensal</td><td>15º dia útil do 2º mês subsequente</td></tr>';
+      s12 += '<tr><td><strong>EFD-ICMS/IPI</strong></td><td>Mensal</td><td>Varia por UF</td></tr>';
+      s12 += '<tr><td><strong>LALUR/LACS</strong> — Livro de Apuração</td><td>' + (d.apuracaoLR === "trimestral" ? "Trimestral" : "Anual") + '</td><td>Integrado à ECF</td></tr>';
+      s12 += '</tbody></table>';
+    }
+
+    // DARFs
+    var darfs = r.darfs || [];
+    if (darfs.length > 0) {
+      s12 += '<h3>Códigos DARF — Forma: ' + (d.apuracaoLR === "trimestral" ? "Trimestral" : "Anual") + '</h3>';
+      s12 += '<table class="res-table res-darf-table"><thead><tr><th>Tributo</th><th>Código DARF</th><th>Periodicidade</th><th>Prazo</th></tr></thead><tbody>';
+      darfs.forEach(function (df) {
+        if (df) {
+          s12 += '<tr><td><strong>' + (df.tributo || df.nome || '—') + '</strong></td><td>' + (df.codigo || '—') + '</td><td>' + (df.periodicidade || '—') + '</td><td>' + (df.prazo || df.vencimento || '—') + '</td></tr>';
+        }
+      });
+      s12 += '</tbody></table>';
+    } else {
+      // DARFs padrão
+      s12 += '<h3>Códigos DARF</h3>';
+      s12 += '<table class="res-table res-darf-table"><thead><tr><th>Tributo</th><th>Código DARF</th><th>Periodicidade</th></tr></thead><tbody>';
+      if (d.apuracaoLR === "trimestral") {
+        s12 += '<tr><td>IRPJ — Trimestral</td><td>0220</td><td>Trimestral</td></tr>';
+        s12 += '<tr><td>CSLL — Trimestral</td><td>2372</td><td>Trimestral</td></tr>';
+      } else {
+        s12 += '<tr><td>IRPJ — Estimativa Mensal</td><td>2362</td><td>Mensal</td></tr>';
+        s12 += '<tr><td>CSLL — Estimativa Mensal</td><td>2484</td><td>Mensal</td></tr>';
+        s12 += '<tr><td>IRPJ — Ajuste Anual</td><td>2430</td><td>Anual</td></tr>';
+        s12 += '<tr><td>CSLL — Ajuste Anual</td><td>6773</td><td>Anual</td></tr>';
+      }
+      s12 += '<tr><td>PIS — Não Cumulativo</td><td>6912</td><td>Mensal</td></tr>';
+      s12 += '<tr><td>COFINS — Não Cumulativo</td><td>5856</td><td>Mensal</td></tr>';
+      if (r.jcpDetalhado && r.jcpDetalhado.jcpDedutivel > 0) {
+        s12 += '<tr><td>IRRF sobre JCP</td><td>5706</td><td>Quando distribuir</td></tr>';
+      }
+      s12 += '</tbody></table>';
+    }
+    html += _secao(12, 'Obrigações Acessórias e DARFs', s12);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  SEÇÃO 13 — CRONOGRAMA DE IMPLEMENTAÇÃO (condicional)
+    // ═══════════════════════════════════════════════════════════════════════
+    var situacao = d.situacaoAtual || '';
+    if (situacao === 'vai_migrar' || situacao === 'avaliando') {
+      var s13 = '<div class="res-timeline">';
+      var etapas = [
+        { fase: "1", titulo: "Diagnóstico Tributário", prazo: "Semana 1-2", desc: "Análise completa da situação fiscal atual, identificação de riscos e oportunidades." },
+        { fase: "2", titulo: "Levantamento de Saldos", prazo: "Semana 2-3", desc: "Apurar saldos de prejuízo fiscal, base negativa, retenções acumuladas e créditos de PIS/COFINS." },
+        { fase: "3", titulo: "Ajustes Contábeis (IFRS/CPC)", prazo: "Semana 3-5", desc: "Adequar contabilidade aos padrões IFRS. Conciliações e ajustes de classificação." },
+        { fase: "4", titulo: "Implementação LALUR/LACS", prazo: "Semana 5-7", desc: "Estruturar Parte A e Parte B do LALUR. Configurar sistema de adições e exclusões." },
+        { fase: "5", titulo: "Setup ECD/ECF/EFD", prazo: "Semana 7-9", desc: "Configurar escriturações digitais. Mapear plano de contas referencial." },
+        { fase: "6", titulo: "Créditos PIS/COFINS", prazo: "Semana 8-10", desc: "Mapear todos os insumos elegíveis a créditos. Implementar controles de apropriação." },
+        { fase: "7", titulo: "JCP e Incentivos", prazo: "Semana 10-11", desc: "Estruturar distribuição de JCP. Cadastrar nos programas de incentivos aplicáveis (PAT, FIA, etc.)." },
+        { fase: "8", titulo: "Go-Live e Monitoramento", prazo: "Semana 12+", desc: "Primeira apuração no Lucro Real. Monitoramento contínuo dos indicadores fiscais." }
+      ];
+      etapas.forEach(function (et) {
+        s13 += '<div class="res-timeline-item">';
+        s13 += '<div class="res-timeline-marker">' + et.fase + '</div>';
+        s13 += '<div class="res-timeline-content">';
+        s13 += '<div class="res-timeline-titulo"><strong>' + et.titulo + '</strong> <span class="res-timeline-prazo">' + et.prazo + '</span></div>';
+        s13 += '<div class="res-timeline-desc">' + et.desc + '</div>';
+        s13 += '</div></div>';
+      });
+      s13 += '</div>';
+      html += _secao(13, 'Cronograma de Implementação', s13);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  SEÇÃO 14 — RODAPÉ E AÇÕES
+    // ═══════════════════════════════════════════════════════════════════════
+    var s14 = '<div class="res-footer">';
+    if (elab.nome) {
+      s14 += '<div class="res-footer-elaborador"><strong>Elaborado por:</strong> ' + elab.nome;
+      if (elab.registro) s14 += ' — ' + elab.registro;
+      s14 += '</div>';
+    }
+    s14 += '<div class="res-footer-data"><strong>Data de geração:</strong> ' + dataFormatada + ' às ' + dataHoje.toLocaleTimeString("pt-BR") + '</div>';
+    s14 += '<div class="res-footer-base">Base legal: RIR/2018 (Decreto 9.580/2018), Lei 7.689/1988, Lei 10.637/2002, Lei 10.833/2003, LC 116/2003</div>';
+    s14 += '<div class="res-footer-disclaimer">' + cfg.disclaimer + '</div>';
+    if (cfg.mostrarMarcaImpost) {
+      s14 += '<div class="res-footer-marca">' + cfg.nomeProduto + ' v' + VERSAO + ' — ' + cfg.subtitulo + '</div>';
+    }
+    s14 += '<div class="res-actions">';
+    s14 += '<button class="res-btn" onclick="window.print()">Imprimir</button>';
+    s14 += '<button class="res-btn" onclick="LucroRealEstudos.exportarJSON()">Exportar JSON</button>';
+    s14 += '<button class="res-btn" onclick="LucroRealEstudos.voltarWizard()">Editar Dados</button>';
+    s14 += '<button class="res-btn" onclick="LucroRealEstudos.novoEstudo()">Novo Estudo</button>';
+    s14 += '</div>';
+    s14 += '</div>';
+    html += _secao(14, '', s14);
+
+    // Gráfico alíquota efetiva (gauge)
+    html += '<div class="res-chart-container res-chart-aliquota" style="max-width:250px;margin:0 auto 2rem;"><canvas id="chartAliquota" width="250" height="250"></canvas></div>';
+
+    // ═══ Inserir HTML no container ═══
+    resContainer.innerHTML = html;
+
+    // ═══ Renderizar gráficos após DOM atualizar ═══
+    requestAnimationFrame(function () {
+      renderCharts(r);
+    });
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  RENDER GRÁFICOS (Chart.js) — 7 gráficos
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  function renderCharts(r) {
+    if (typeof Chart === "undefined") {
+      console.warn("[IMPOST.] Chart.js não carregado — gráficos não renderizados.");
+      return;
+    }
+
+    var CORES = {
+      irpj: '#E74C3C',
+      csll: '#F39C12',
+      pisCofins: '#3498DB',
+      iss: '#9B59B6',
+      economia: '#2ECC71',
+      bruto: '#95A5A6',
+      otimizado: '#27AE60',
+      pessimista: '#E74C3C',
+      base: '#3498DB',
+      otimista: '#2ECC71'
+    };
+
+    var chartDefaults = {
+      responsive: true,
+      maintainAspectRatio: true,
+      plugins: {
+        legend: { position: 'bottom', labels: { color: '#ccc', font: { family: "'DM Sans', sans-serif", size: 12 } } },
+        tooltip: {
+          callbacks: {
+            label: function (ctx) {
+              return ctx.dataset.label + ': ' + _m(ctx.parsed.y || ctx.parsed || 0);
+            }
+          }
+        }
+      },
+      scales: {
+        x: { ticks: { color: '#aaa' }, grid: { color: 'rgba(255,255,255,0.06)' } },
+        y: { ticks: { color: '#aaa', callback: function (v) { return _m(v); } }, grid: { color: 'rgba(255,255,255,0.06)' } }
+      }
+    };
+
+    // ── Gráfico 1: Doughnut — Composição ──
+    var elComp = $("chartComposicao");
+    if (elComp && r.composicao) {
+      new Chart(elComp, {
+        type: 'doughnut',
+        data: {
+          labels: ['IRPJ', 'CSLL', 'PIS/COFINS', 'ISS'],
+          datasets: [{
+            data: [r.composicao.irpj.valor, r.composicao.csll.valor, r.composicao.pisCofins.valor, r.composicao.iss.valor],
+            backgroundColor: [CORES.irpj, CORES.csll, CORES.pisCofins, CORES.iss],
+            borderColor: '#161e31',
+            borderWidth: 2
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: true,
+          plugins: {
+            legend: { position: 'bottom', labels: { color: '#ccc' } },
+            tooltip: {
+              callbacks: { label: function (ctx) { return ctx.label + ': ' + _m(ctx.parsed); } }
+            }
+          }
+        }
+      });
+    }
+
+    // ── Gráfico 2: Bar horizontal — Ranking de economias ──
+    var elEcon = $("chartEconomias");
+    if (elEcon && r.economia) {
+      var econLabels = [];
+      var econValues = [];
+      var econColors = [];
+      var eco = r.economia;
+      var items = [
+        { label: 'JCP', val: eco.jcp },
+        { label: 'Prejuízo Fiscal', val: eco.prejuizo },
+        { label: 'SUDAM/SUDENE', val: eco.sudam },
+        { label: 'Incentivos Fiscais', val: eco.incentivos },
+        { label: 'Depreciação', val: eco.depreciacao },
+        { label: 'Créditos PIS/COFINS', val: eco.pisCofinsCreditos },
+        { label: 'Gratificação→Pró-labore', val: eco.gratificacao },
+        { label: 'CPRB Desoneração', val: eco.cprb },
+        { label: 'PDD Fiscal', val: eco.pddFiscal }
+      ];
+      items.sort(function (a, b) { return (b.val || 0) - (a.val || 0); });
+      items.forEach(function (it) {
+        if (it.val > 0) {
+          econLabels.push(it.label);
+          econValues.push(it.val);
+          econColors.push(CORES.economia);
+        }
+      });
+      if (econLabels.length > 0) {
+        new Chart(elEcon, {
+          type: 'bar',
+          data: {
+            labels: econLabels,
+            datasets: [{ label: 'Economia Anual', data: econValues, backgroundColor: econColors, borderRadius: 4 }]
+          },
+          options: Object.assign({}, chartDefaults, {
+            indexAxis: 'y',
+            plugins: Object.assign({}, chartDefaults.plugins, {
+              tooltip: { callbacks: { label: function (ctx) { return _m(ctx.parsed.x); } } }
+            }),
+            scales: {
+              x: { ticks: { color: '#aaa', callback: function (v) { return _m(v); } }, grid: { color: 'rgba(255,255,255,0.06)' } },
+              y: { ticks: { color: '#ccc' }, grid: { display: false } }
+            }
+          })
+        });
+      }
+    }
+
+    // ── Gráfico 3: Bar agrupado — Antes vs Depois ──
+    var elAD = $("chartAntesDepois");
+    if (elAD && r.resumo) {
+      new Chart(elAD, {
+        type: 'bar',
+        data: {
+          labels: ['Carga Tributária'],
+          datasets: [
+            { label: 'Sem Otimização', data: [r.resumo.cargaBruta], backgroundColor: CORES.bruto, borderRadius: 4 },
+            { label: 'Com Otimização', data: [r.resumo.cargaOtimizada], backgroundColor: CORES.otimizado, borderRadius: 4 }
+          ]
+        },
+        options: chartDefaults
+      });
+    }
+
+    // ── Gráfico 4: Line — Projeção acumulada ──
+    var elProj = $("chartProjecao");
+    if (elProj && r.projecao && r.projecao.projecaoCarga) {
+      var projLabels = r.projecao.projecaoCarga.map(function (p) { return 'Ano ' + p.ano; });
+      var projValues = r.projecao.projecaoCarga.map(function (p) { return p.economiaAcumulada; });
+      new Chart(elProj, {
+        type: 'line',
+        data: {
+          labels: projLabels,
+          datasets: [{
+            label: 'Economia Acumulada',
+            data: projValues,
+            borderColor: CORES.economia,
+            backgroundColor: 'rgba(46,204,113,0.1)',
+            fill: true,
+            tension: 0.3,
+            pointRadius: 5,
+            pointBackgroundColor: CORES.economia
+          }]
+        },
+        options: chartDefaults
+      });
+    }
+
+    // ── Gráfico 5: Bar empilhado — Fluxo mensal ──
+    var elFluxo = $("chartFluxoMensal");
+    if (elFluxo && r.fluxoCaixa && r.fluxoCaixa.meses) {
+      var mLabels = r.fluxoCaixa.meses.map(function (m) { return ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"][m.mes - 1]; });
+      new Chart(elFluxo, {
+        type: 'bar',
+        data: {
+          labels: mLabels,
+          datasets: [
+            { label: 'IRPJ', data: r.fluxoCaixa.meses.map(function (m) { return m.irpj; }), backgroundColor: CORES.irpj },
+            { label: 'CSLL', data: r.fluxoCaixa.meses.map(function (m) { return m.csll; }), backgroundColor: CORES.csll },
+            { label: 'PIS', data: r.fluxoCaixa.meses.map(function (m) { return m.pis; }), backgroundColor: '#2980B9' },
+            { label: 'COFINS', data: r.fluxoCaixa.meses.map(function (m) { return m.cofins; }), backgroundColor: CORES.pisCofins },
+            { label: 'ISS', data: r.fluxoCaixa.meses.map(function (m) { return m.iss; }), backgroundColor: CORES.iss }
+          ]
+        },
+        options: Object.assign({}, chartDefaults, {
+          scales: {
+            x: { stacked: true, ticks: { color: '#aaa' }, grid: { color: 'rgba(255,255,255,0.06)' } },
+            y: { stacked: true, ticks: { color: '#aaa', callback: function (v) { return _m(v); } }, grid: { color: 'rgba(255,255,255,0.06)' } }
+          }
+        })
+      });
+    }
+
+    // ── Gráfico 6: Bar agrupado — Cenários ──
+    var elCen = $("chartCenarios");
+    if (elCen && r.cenarios && r.cenarios.length > 0) {
+      new Chart(elCen, {
+        type: 'bar',
+        data: {
+          labels: r.cenarios.map(function (c) { return c.nome; }),
+          datasets: [
+            { label: 'IRPJ+CSLL', data: r.cenarios.map(function (c) { return c.irpjCSLL; }), backgroundColor: CORES.irpj, borderRadius: 4 },
+            { label: 'PIS/COFINS', data: r.cenarios.map(function (c) { return c.pisCofins; }), backgroundColor: CORES.pisCofins, borderRadius: 4 },
+            { label: 'ISS', data: r.cenarios.map(function (c) { return c.iss; }), backgroundColor: CORES.iss, borderRadius: 4 }
+          ]
+        },
+        options: chartDefaults
+      });
+    }
+
+    // ── Gráfico 7: Doughnut com texto central — Alíquota efetiva (gauge) ──
+    var elAliq = $("chartAliquota");
+    if (elAliq && r.resumo) {
+      var aliqVal = r.resumo.aliquotaEfetiva || 0;
+      var restante = Math.max(100 - aliqVal, 0);
+      new Chart(elAliq, {
+        type: 'doughnut',
+        data: {
+          labels: ['Carga Tributária', 'Receita Livre'],
+          datasets: [{
+            data: [aliqVal, restante],
+            backgroundColor: [CORES.irpj, 'rgba(255,255,255,0.08)'],
+            borderColor: '#161e31',
+            borderWidth: 2
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: true,
+          cutout: '70%',
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: { label: function (ctx) { return ctx.label + ': ' + ctx.parsed.toFixed(2) + '%'; } }
+            }
+          }
+        },
+        plugins: [{
+          id: 'centerText',
+          afterDraw: function (chart) {
+            var ctx2d = chart.ctx;
+            var w = chart.width;
+            var h = chart.height;
+            ctx2d.save();
+            ctx2d.textAlign = 'center';
+            ctx2d.textBaseline = 'middle';
+            ctx2d.fillStyle = '#ccc';
+            ctx2d.font = 'bold 22px "DM Sans", sans-serif';
+            ctx2d.fillText(aliqVal.toFixed(2) + '%', w / 2, h / 2 - 8);
+            ctx2d.font = '12px "DM Sans", sans-serif';
+            ctx2d.fillStyle = '#999';
+            ctx2d.fillText('Alíquota Efetiva', w / 2, h / 2 + 16);
+            ctx2d.restore();
+          }
+        }]
+      });
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  PREENCHIMENTO DE EXEMPLO (Demo genérico)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  function preencherExemplo() {
+    dadosEmpresa = {
+      razaoSocial: "Empresa Modelo Consultoria Ltda",
+      cnpj: "12.345.678/0001-90",
+      cnaePrincipal: "7020-4/00",
+      uf: "SP",
+      municipio: "São Paulo",
+      issAliquota: 5,
+      issConhecido: true,
+      tipoAtividade: "SERVICOS_GERAL",
+      apuracaoLR: "trimestral",
+      anoBase: "2026",
+      numSocios: "2",
+      numFuncionarios: "25",
+      prestaServPublico: false,
+      ehFinanceira: false,
+      receitaBrutaAnual: 3000000,
+      receitaServicos: 3000000,
+      percentReceitaPublico: 15,
+      folhaPagamentoAnual: 1200000,
+      cmv: 100000,
+      servicosTerceiros: 150000,
+      aluguelAnual: 72000,
+      energiaAnual: 36000,
+      telecomAnual: 18000,
+      honorariosContabeis: 36000,
+      marketingPublicidade: 24000,
+      outrasDespesasOp: 48000,
+      temMultas: true,
+      multasPunitivas: 5000,
+      temBrindes: true,
+      brindes: 3000,
+      temGratificacaoAdm: true,
+      gratificacoesAdm: 24000,
+      patrimonioLiquido: 600000,
+      capitalSocial: 300000,
+      lucrosAcumulados: 300000,
+      detalharPL: true,
+      tjlp: 6,
+      prejuizoFiscal: 200000,
+      baseNegativaCSLL: 150000,
+      irrfRetidoPublico: 21600,
+      pisRetido: 2925,
+      cofinsRetido: 13500,
+      csllRetido: 4500,
+      comprasMercadoriasAnual: 80000,
+      energiaCredito: 36000,
+      alugueisPJCredito: 72000,
+      depreciacaoBensCredito: 55000,
+      freteVendasAnual: 24000,
+      valorVeiculos: 180000,
+      valorComputadores: 60000,
+      valorMoveis: 30000,
+      temPDD: true,
+      perdasCreditos6Meses: 50000,
+      perdasCreditosJudicial: 30000,
+      turnosOperacao: "1",
+      gerarCenarios: true,
+      variacaoMargemCenario: 5,
+      gerarProjecao: true,
+      taxaCrescimentoAnual: 10,
+      horizonteProjecao: "5",
+    };
+    currentStep = 0;
+    saveToLS();
+    renderWizard();
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  NOVO ESTUDO
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  function novoEstudo() {
+    if (confirm("Tem certeza? Os dados atuais serão perdidos.")) {
+      dadosEmpresa = {};
+      currentStep = 0;
+      resultadosCache = null;
+      localStorage.removeItem(LS_KEY_DADOS);
+      localStorage.removeItem(LS_KEY_STEP);
+      localStorage.removeItem(LS_KEY_RESULTADOS);
+      renderWizard();
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  EXPORTAR JSON / IMPRIMIR
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  function exportarJSON() {
+    var exportData = {
+      versao: VERSAO,
+      produto: CONFIG.nomeProduto,
+      dataExportacao: new Date().toISOString(),
+      dadosEmpresa: dadosEmpresa,
+      resultados: resultadosCache,
+    };
+    var blob = new Blob([JSON.stringify(exportData, null, 2)], {
+      type: "application/json",
+    });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url;
+    a.download =
+      "estudo-lucro-real-" +
+      (dadosEmpresa.razaoSocial || "empresa").replace(/\s+/g, "-") +
+      "-" +
+      new Date().toISOString().split("T")[0] +
+      ".json";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function imprimir() {
+    window.print();
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  INIT — Verificação de dependências
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  function init() {
+    // 1. Verificar mapeamento (obrigatório)
+    LR = window.LR || window.LucroRealMap;
+    if (!LR) {
+      mostrarErro(
+        "lucro-real-mapeamento.js não carregado. Verifique se o script foi incluído antes deste arquivo."
+      );
+      return;
+    }
+
+    // 2. Verificar estados.js (obrigatório para municípios)
+    ESTADOS = window.ESTADOS || window.Estados || window.EstadosBR;
+    if (!ESTADOS) {
+      mostrarErro(
+        "estados.js não carregado. Verifique se o script foi incluído antes deste arquivo."
+      );
+      return;
+    }
+
+    // 3. Verificar MunicipiosIBGE (obrigatório para select de municípios)
+    if (!window.MunicipiosIBGE) {
+      mostrarErro(
+        "municipios.js não carregado. Verifique se o script foi incluído antes deste arquivo."
+      );
+      return;
+    }
+
+    // 4. Ler white-label config
+    var cfg = window.IMPOST_CONFIG || {};
+    CONFIG = Object.assign({}, CONFIG_DEFAULTS, cfg);
+    if (cfg.elaboradoPor) {
+      CONFIG.elaboradoPor = Object.assign(
+        {},
+        CONFIG_DEFAULTS.elaboradoPor,
+        cfg.elaboradoPor
+      );
+    }
+
+    // 5. Injetar CSS de siglas (tooltips)
+    _injectSiglaCSS();
+
+    // 6. Restaurar dados salvos
+    loadFromLS();
+
+    // 7. Renderizar wizard
+    renderWizard();
+
+    console.log(
+      "[" + CONFIG.nomeProduto + " LucroRealEstudos] v" + VERSAO + " inicializado. " +
+      "LR: ✓ | ESTADOS: ✓ | MunicipiosIBGE: ✓"
+    );
+  }
+
+
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // ═══════════════════════════════════════════════════════════════════════════
+  // ██████████████████████████████████████████████████████████████████████████
+  //  MÓDULO DE EXPORTAÇÃO PDF / EXCEL                                       █
+  //  (integrado — anteriormente em lucro-real-estudos-export.js)             █
+  //  Gera relatórios profissionais: PDF Simplificado, PDF Completo, Excel    █
+  // ██████████████████████████████████████████████████████████████████████████
+  // ═══════════════════════════════════════════════════════════════════════════
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  // ── Helpers de data para exportação ──
+  function _dataFormatada(iso) {
+    if (!iso) return new Date().toLocaleDateString('pt-BR');
+    var dt = new Date(iso);
+    return dt.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
+  }
+  function _dataHora(iso) {
+    if (!iso) return '';
+    var dt = new Date(iso);
+    return dt.toLocaleDateString('pt-BR') + ' ' + dt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  }
+  function _dataCurta() {
+    return new Date().toISOString().split('T')[0];
+  }
+
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  CORES & ESTILOS
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  var COR = {
+    primary: '#2D8C4E',
+    primaryDark: '#1E6B38',
+    accent: '#2ECC71',
+    accentDark: '#27AE60',
+    danger: '#E74C3C',
+    warning: '#F39C12',
+    info: '#3498DB',
+    purple: '#9B59B6',
+    text: '#1a1a2e',
+    textSec: '#5a6170',
+    textMuted: '#8b95a5',
+    stripe: '#f7f9fb',
+    ecoBg: '#eafaf1',
+    dangerBg: '#FADBD8',
+    warningBg: '#FEF5E7',
+    infoBg: '#EBF5FB',
+    white: '#FFFFFF',
+    headerBg: '#2D8C4E',
+    totalBg: '#2D8C4E',
+    subtotalBg: '#E2E6EA'
+  };
+
+  var FONT = "font-family:'DM Sans','Segoe UI',Helvetica,Arial,sans-serif;";
+  var FONT_MONO = "font-family:'JetBrains Mono','Fira Code','Courier New',monospace;";
+  var BASE_CSS = FONT + "color:" + COR.text + ";font-size:11px;line-height:1.6;";
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  LOADING OVERLAY
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  function showLoading(msg) {
+    hideLoading();
+    var overlay = document.createElement('div');
+    overlay.id = '__impost_loading';
+    overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;z-index:99999;background:rgba(10,15,30,0.85);display:flex;align-items:center;justify-content:center;flex-direction:column;';
+    overlay.innerHTML =
+      '<div style="width:48px;height:48px;border:4px solid rgba(255,255,255,0.15);border-top:4px solid #2ECC71;border-radius:50%;animation:impostSpin 0.8s linear infinite;margin-bottom:16px;"></div>' +
+      '<div style="color:#fff;font-size:15px;' + FONT + '">' + (msg || 'Gerando...') + '</div>' +
+      '<style>@keyframes impostSpin{to{transform:rotate(360deg)}}</style>';
+    document.body.appendChild(overlay);
+  }
+
+  function hideLoading() {
+    var el = document.getElementById('__impost_loading');
+    if (el) el.remove();
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  HTML BUILDERS — Blocos reutilizáveis para PDF
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /** Cabeçalho do PDF com logo IMPOST., empresa, data */
+  function pdfHeader(r, titulo) {
+    var d = r.dadosEmpresa || {};
+    var cfg = r.config || {};
+    var h = '';
+    h += '<div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid ' + COR.primary + ';padding-bottom:14px;margin-bottom:18px;">';
+    // Logo lado esquerdo
+    h += '<div>';
+    if (cfg.mostrarMarcaImpost !== false) {
+      h += '<div style="font-size:26px;font-weight:800;color:' + COR.primary + ';letter-spacing:1px;' + FONT + '">' + (cfg.nomeProduto || 'IMPOST.') + '</div>';
+      h += '<div style="font-size:9px;color:' + COR.textMuted + ';margin-top:2px;' + FONT + '">' + (cfg.subtitulo || '') + '</div>';
+    }
+    h += '</div>';
+    // Info lado direito
+    h += '<div style="text-align:right;font-size:10px;color:' + COR.textSec + ';">';
+    h += '<div style="font-weight:700;font-size:12px;color:' + COR.text + ';">' + (d.razaoSocial || 'Empresa') + '</div>';
+    if (d.cnpj) h += '<div>CNPJ: ' + d.cnpj + '</div>';
+    h += '<div>' + (d.municipio || '') + '/' + (d.uf || '') + ' — ' + (d.anoBase || new Date().getFullYear()) + '</div>';
+    h += '</div>';
+    h += '</div>';
+    // Título do relatório
+    h += '<div style="text-align:center;margin-bottom:18px;">';
+    h += '<div style="font-size:16px;font-weight:700;color:' + COR.primary + ';text-transform:uppercase;letter-spacing:2px;' + FONT + '">' + titulo + '</div>';
+    h += '<div style="font-size:9px;color:' + COR.textMuted + ';margin-top:4px;">Gerado em ' + _dataFormatada(r.dataGeracao) + ' — v' + (r.versao || '2.0.0') + '</div>';
+    h += '</div>';
+    return h;
+  }
+
+  /** Rodapé padrão */
+  function pdfFooter(r) {
+    var cfg = r.config || {};
+    var ep = cfg.elaboradoPor || {};
+    var h = '<div style="margin-top:30px;border-top:2px solid #e0e4e8;padding-top:14px;font-size:9px;color:' + COR.textMuted + ';">';
+    // Disclaimer
+    h += '<div style="background:#f8f9fa;border-left:3px solid ' + COR.info + ';padding:10px 14px;margin-bottom:12px;font-size:9px;color:' + COR.textSec + ';line-height:1.5;">';
+    h += (cfg.disclaimer || 'Este estudo é uma estimativa automatizada para fins de planejamento tributário. Consulte um profissional habilitado para validação e implementação.');
+    h += '</div>';
+    // Elaborado por
+    if (ep.nome) {
+      h += '<div style="margin-top:30px;text-align:center;">';
+      h += '<div style="border-top:1px solid #ccc;width:250px;margin:0 auto 6px;"></div>';
+      h += '<div style="font-weight:600;color:' + COR.text + ';font-size:11px;">' + ep.nome + '</div>';
+      if (ep.registro) h += '<div>' + ep.registro + '</div>';
+      if (ep.email) h += '<div>' + ep.email + '</div>';
+      if (ep.telefone) h += '<div>' + ep.telefone + '</div>';
+      h += '</div>';
+    }
+    // Powered by
+    if (cfg.mostrarMarcaImpost !== false) {
+      h += '<div style="text-align:center;margin-top:14px;font-size:8px;color:' + COR.textMuted + ';">Powered by ' + (cfg.nomeProduto || 'IMPOST.') + ' v' + (r.versao || '2.0.0') + '</div>';
+    }
+    h += '</div>';
+    return h;
+  }
+
+  /** Título de seção com ícone */
+  function secaoTitulo(icone, texto, sub) {
+    var h = '<div style="page-break-inside:avoid;margin:22px 0 12px;">';
+    h += '<div style="font-size:15px;font-weight:700;color:' + COR.primary + ';border-bottom:2px solid ' + COR.primary + ';padding-bottom:6px;' + FONT + '">';
+    if (icone) h += icone + ' ';
+    h += texto + '</div>';
+    if (sub) h += '<div style="font-size:9px;color:' + COR.textMuted + ';margin-top:3px;">' + sub + '</div>';
+    h += '</div>';
+    return h;
+  }
+
+  /** Card de economia com valor verde */
+  function cardEconomia(titulo, valor, sub) {
+    return '<div style="background:' + COR.ecoBg + ';border-left:4px solid ' + COR.accentDark + ';padding:10px 14px;margin:6px 0;page-break-inside:avoid;">' +
+      '<div style="font-size:9px;color:' + COR.textSec + ';text-transform:uppercase;letter-spacing:0.5px;">' + titulo + '</div>' +
+      '<div style="font-size:18px;font-weight:700;color:' + COR.accentDark + ';' + FONT_MONO + '">' + _m(valor) + '</div>' +
+      (sub ? '<div style="font-size:9px;color:' + COR.textMuted + ';margin-top:2px;">' + sub + '</div>' : '') +
+      '</div>';
+  }
+
+  /** Mini card indicador */
+  function miniCard(titulo, valor, cor, sub) {
+    cor = cor || COR.text;
+    return '<div style="background:#fff;border:1px solid #e8ecf0;border-radius:6px;padding:10px 12px;text-align:center;page-break-inside:avoid;">' +
+      '<div style="font-size:8px;color:' + COR.textMuted + ';text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">' + titulo + '</div>' +
+      '<div style="font-size:16px;font-weight:700;color:' + cor + ';' + FONT_MONO + '">' + valor + '</div>' +
+      (sub ? '<div style="font-size:8px;color:' + COR.textMuted + ';margin-top:3px;">' + sub + '</div>' : '') +
+      '</div>';
+  }
+
+  /** Grid de N colunas */
+  function grid(cols, items) {
+    var w = Math.floor(100 / cols) - 2;
+    var h = '<div style="display:flex;flex-wrap:wrap;gap:8px;margin:10px 0;">';
+    items.forEach(function (item) {
+      h += '<div style="flex:0 0 ' + w + '%;max-width:' + w + '%;">' + item + '</div>';
+    });
+    h += '</div>';
+    return h;
+  }
+
+  /** Tabela genérica com zebra-striping */
+  function tabelaHTML(headers, rows, opts) {
+    opts = opts || {};
+    var h = '<table style="width:100%;border-collapse:collapse;margin:8px 0;page-break-inside:avoid;font-size:10px;' + FONT + '">';
+    // Header
+    h += '<thead><tr>';
+    headers.forEach(function (hdr, i) {
+      var align = (i > 0 && !opts.noAlignRight) ? 'text-align:right;' : 'text-align:left;';
+      h += '<th style="background:' + COR.headerBg + ';color:#fff;padding:7px 10px;font-weight:600;font-size:9px;text-transform:uppercase;letter-spacing:0.5px;' + align + '">' + hdr + '</th>';
+    });
+    h += '</tr></thead>';
+    // Body
+    h += '<tbody>';
+    rows.forEach(function (row, ri) {
+      var isTotal = row._total || false;
+      var isSubtotal = row._subtotal || false;
+      var isEco = row._eco || false;
+      var bg = isTotal ? COR.totalBg : isSubtotal ? COR.subtotalBg : (ri % 2 === 1 ? COR.stripe : '#fff');
+      var txtColor = isTotal ? '#fff' : COR.text;
+      var fw = (isTotal || isSubtotal) ? 'font-weight:700;' : '';
+      h += '<tr style="background:' + bg + ';color:' + txtColor + ';' + fw + '">';
+      (row.cells || row).forEach(function (cell, ci) {
+        var align = (ci > 0 && !opts.noAlignRight) ? 'text-align:right;' : 'text-align:left;';
+        var ecoStyle = (isEco && ci > 0) ? 'color:' + COR.accentDark + ';font-weight:700;' + FONT_MONO : '';
+        var indent = (row._indent && ci === 0) ? 'padding-left:' + (row._indent * 14) + 'px;' : '';
+        h += '<td style="padding:6px 10px;border-bottom:1px solid #eee;' + align + ecoStyle + indent + '">' + cell + '</td>';
+      });
+      h += '</tr>';
+    });
+    h += '</tbody></table>';
+    return h;
+  }
+
+  /** Box de alerta */
+  function alertaBox(tipo, msg) {
+    var cores = {
+      critico: { bg: COR.dangerBg, borda: COR.danger, ico: '🔴' },
+      aviso: { bg: COR.warningBg, borda: COR.warning, ico: '🟡' },
+      economia: { bg: COR.ecoBg, borda: COR.accentDark, ico: '🟢' },
+      info: { bg: COR.infoBg, borda: COR.info, ico: '🔵' }
+    };
+    var c = cores[tipo] || cores.info;
+    return '<div style="background:' + c.bg + ';border-left:4px solid ' + c.borda + ';padding:8px 12px;margin:5px 0;font-size:10px;page-break-inside:avoid;">' +
+      c.ico + ' ' + msg + '</div>';
+  }
+
+  /** Barra visual de percentual */
+  function barraVisual(valor, max, cor, label) {
+    var pct = max > 0 ? Math.min((valor / max) * 100, 100) : 0;
+    return '<div style="display:flex;align-items:center;margin:3px 0;">' +
+      '<div style="flex:0 0 120px;font-size:9px;color:' + COR.textSec + ';">' + (label || '') + '</div>' +
+      '<div style="flex:1;background:#eee;border-radius:4px;height:14px;overflow:hidden;">' +
+      '<div style="width:' + pct.toFixed(1) + '%;background:' + (cor || COR.primary) + ';height:100%;border-radius:4px;"></div>' +
+      '</div>' +
+      '<div style="flex:0 0 90px;text-align:right;font-size:10px;font-weight:600;' + FONT_MONO + 'color:' + (cor || COR.text) + ';">' + _m(valor) + '</div>' +
+      '</div>';
+  }
+
+  /** Page break */
+  function pageBreak() {
+    return '<div style="page-break-before:always;margin:0;padding:0;height:0;"></div>';
+  }
+
+  /** Badge colorido */
+  function badge(texto, cor) {
+    return '<span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:8px;font-weight:600;background:' + cor + '20;color:' + cor + ';margin:0 3px;">' + texto + '</span>';
+  }
+
+  function badgeComplexidade(c) {
+    var cores = { 'Baixa': COR.accentDark, 'Média': COR.warning, 'Alta': COR.danger };
+    return badge(c || 'N/A', cores[c] || COR.info);
+  }
+  function badgeRisco(r) {
+    var cores = { 'Baixo': COR.accentDark, 'Médio': COR.warning, 'Alto': COR.danger };
+    return badge(r || 'N/A', cores[r] || COR.info);
+  }
+
+  /** Nomes das fontes de economia */
+  var ECONOMIA_NOMES = {
+    jcp: { nome: 'Juros sobre Capital Próprio (JCP)', base: 'Art. 355-358 RIR/2018' },
+    prejuizo: { nome: 'Compensação de Prejuízo Fiscal', base: 'Art. 579-586 RIR/2018' },
+    sudam: { nome: 'Redução SUDAM/SUDENE (75%)', base: 'Art. 612-613 RIR/2018' },
+    incentivos: { nome: 'Incentivos Fiscais (PAT, Rouanet, etc.)', base: 'Legislação específica' },
+    depreciacao: { nome: 'Economia Fiscal com Depreciação', base: 'Art. 317-323 RIR/2018' },
+    pisCofinsCreditos: { nome: 'Créditos PIS/COFINS Não-Cumulativo', base: 'Art. 3º Lei 10.637/02 e 10.833/03' },
+    gratificacao: { nome: 'Conversão Gratificação → Pró-labore', base: 'Art. 311 RIR/2018' },
+    cprb: { nome: 'Desoneração da Folha (CPRB)', base: 'Lei 12.546/2011' },
+    pddFiscal: { nome: 'PDD — Provisão para Devedores Duvidosos', base: 'Art. 340-342 RIR/2018' }
+  };
+
+  /** Nomes dos meses */
+  var MESES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  GERADOR DO HTML2PDF — wrapper
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  function gerarPDF(htmlContent, filename, onDone) {
+    if (typeof html2pdf === 'undefined') {
+      alert('html2pdf.js não foi carregado. Verifique as dependências.');
+      if (onDone) onDone();
+      return;
+    }
+    var wrapper = '<div style="' + BASE_CSS + 'max-width:700px;margin:0 auto;padding:10px 15px;">' + htmlContent + '</div>';
+    var tempDiv = document.createElement('div');
+    tempDiv.innerHTML = wrapper;
+    document.body.appendChild(tempDiv);
+
+    html2pdf().set({
+      margin: [10, 10, 15, 10],
+      filename: filename,
+      image: { type: 'jpeg', quality: 0.95 },
+      html2canvas: { scale: 2, useCORS: true, logging: false, letterRendering: true },
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+      pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+    }).from(tempDiv).save().then(function () {
+      document.body.removeChild(tempDiv);
+      if (onDone) onDone();
+    }).catch(function (err) {
+      document.body.removeChild(tempDiv);
+      console.error('Erro PDF:', err);
+      alert('Erro ao gerar PDF. Veja o console.');
+      if (onDone) onDone();
+    });
+  }
+
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // ███████████████████████████████████████████████████████████████████████████████
+  //  PDF SIMPLIFICADO — Para o empresário (3-5 páginas)
+  // ███████████████████████████████████████████████████████████████████████████████
+  // ═══════════════════════════════════════════════════════════════════════════════
+
+  function pdfSimplificado() {
+    var r = window.LucroRealEstudos ? window.LucroRealEstudos.getResultados() : null;
+    if (!r) { alert('Gere o estudo antes de exportar.'); return; }
+
+    showLoading('Gerando Relatório Simplificado...');
+
+    var d = r.dadosEmpresa || {};
+    var res = r.resumo || {};
+    var eco = r.economia || {};
+    var ops = (r.oportunidades || []).slice(0, 5);
+    var fc = r.fluxoCaixa || {};
+    var ca = r.comparativoApuracao || {};
+    var proj = r.projecao || {};
+
+    var h = '';
+
+    // ══════════════════════════════════════════════════════════════
+    //  PÁGINA 1: CAPA + RESUMO EXECUTIVO
+    // ══════════════════════════════════════════════════════════════
+
+    h += pdfHeader(r, 'RELATÓRIO EXECUTIVO — ESTUDO DE LUCRO REAL');
+
+    // 6 Cards de resumo (grid 3x2)
+    h += grid(3, [
+      miniCard('ECONOMIA IDENTIFICADA', _m(res.economiaTotal), COR.accentDark, 'Potencial de economia anual'),
+      miniCard('CARGA TRIBUTÁRIA', _m(res.cargaBruta), COR.danger, _m(res.cargaBrutaMensal) + '/mês'),
+      miniCard('ALÍQUOTA EFETIVA', _pp(res.aliquotaEfetiva), COR.text),
+      miniCard('CARGA OTIMIZADA', _m(res.cargaOtimizada), COR.accentDark, _pp(res.aliquotaOtimizada) + ' efetiva'),
+      miniCard('RETENÇÕES A COMPENSAR', _m(res.totalRetencoes), COR.info),
+      miniCard('SALDO A PAGAR', _m(res.saldoEfetivo), COR.text, 'Após retenções')
+    ]);
+
+    // Box economia destaque
+    if (res.economiaTotal > 0) {
+      h += '<div style="background:' + COR.ecoBg + ';border:2px solid ' + COR.accentDark + ';border-radius:8px;padding:16px 20px;margin:16px 0;text-align:center;page-break-inside:avoid;">';
+      h += '<div style="font-size:10px;color:' + COR.textSec + ';text-transform:uppercase;letter-spacing:1px;">ECONOMIA TOTAL IDENTIFICADA</div>';
+      h += '<div style="font-size:32px;font-weight:800;color:' + COR.accentDark + ';' + FONT_MONO + 'margin:6px 0;">' + _m(res.economiaTotal) + ' /ano</div>';
+      h += '<div style="font-size:10px;color:' + COR.textSec + ';">' + _m(res.economiaTotal / 12) + ' por mês &bull; Redução de ' + _pp(res.aliquotaEfetiva - res.aliquotaOtimizada) + ' na alíquota efetiva</div>';
+      h += '</div>';
+    }
+
+    // Box explicativo
+    h += '<div style="background:#f8f9fa;border-radius:6px;padding:12px 16px;margin:12px 0;font-size:10px;color:' + COR.textSec + ';line-height:1.7;page-break-inside:avoid;">';
+    h += '<div style="font-weight:700;color:' + COR.text + ';margin-bottom:4px;">💡 O que isso significa para sua empresa?</div>';
+    if (res.economiaTotal > 0) {
+      h += 'Identificamos <strong style="color:' + COR.accentDark + ';">' + (res.numOportunidades || ops.length) + ' oportunidades de economia</strong> que podem reduzir sua carga tributária de ';
+      h += '<strong>' + _m(res.cargaBruta) + '</strong> para <strong style="color:' + COR.accentDark + ';">' + _m(res.cargaOtimizada) + '</strong> por ano. ';
+      h += 'A economia de <strong style="color:' + COR.accentDark + ';">' + _m(res.economiaTotal) + '</strong> representa uma redução de ';
+      h += '<strong>' + (res.cargaBruta > 0 ? _pp(res.economiaTotal / res.cargaBruta * 100) : '0%') + '</strong> na carga tributária total.';
+    } else {
+      h += 'A empresa já opera com carga tributária otimizada no regime de Lucro Real. Recomendamos revisão periódica para identificar novas oportunidades.';
+    }
+    h += '</div>';
+
+
+    // ══════════════════════════════════════════════════════════════
+    //  PÁGINA 2: MAPA DE ECONOMIA
+    // ══════════════════════════════════════════════════════════════
+
+    h += pageBreak();
+    h += secaoTitulo('💰', 'DE ONDE VEM A ECONOMIA', 'Fontes identificadas de economia tributária');
+
+    // Tabela de fontes de economia (apenas > 0)
+    var ecoRows = [];
+    var ecoKeys = ['jcp', 'prejuizo', 'sudam', 'incentivos', 'depreciacao', 'pisCofinsCreditos', 'gratificacao', 'cprb', 'pddFiscal'];
+    ecoKeys.forEach(function (k) {
+      if (eco[k] > 0) {
+        var info = ECONOMIA_NOMES[k] || {};
+        ecoRows.push({ cells: [info.nome || k, _m(eco[k]), info.base || '—'], _eco: true });
+      }
+    });
+    if (ecoRows.length > 0) {
+      ecoRows.push({ cells: ['ECONOMIA TOTAL', _m(eco.total || res.economiaTotal), ''], _total: true });
+      h += tabelaHTML(['Fonte de Economia', 'Valor Anual', 'Base Legal'], ecoRows);
+    } else {
+      h += '<div style="font-size:10px;color:' + COR.textMuted + ';padding:10px;">Nenhuma fonte de economia adicional identificada neste estudo.</div>';
+    }
+
+    // Barra ANTES x DEPOIS
+    h += '<div style="margin:18px 0;page-break-inside:avoid;">';
+    h += '<div style="font-size:11px;font-weight:700;color:' + COR.text + ';margin-bottom:8px;">COMPARATIVO: ANTES × DEPOIS</div>';
+    h += barraVisual(res.cargaBruta, res.cargaBruta, COR.danger, 'Carga Bruta');
+    if (res.economiaTotal > 0) {
+      h += barraVisual(res.economiaTotal, res.cargaBruta, COR.accentDark, '(-) Economia');
+    }
+    h += barraVisual(res.cargaOtimizada, res.cargaBruta, COR.primary, 'Carga Otimizada');
+    h += '</div>';
+
+    // Projeção de economia acumulada
+    if (res.economiaTotal > 0) {
+      h += '<div style="margin:14px 0;page-break-inside:avoid;">';
+      h += '<div style="font-size:11px;font-weight:700;color:' + COR.text + ';margin-bottom:8px;">PROJEÇÃO DE ECONOMIA ACUMULADA</div>';
+      var projAnos = [1, 3, 5, 10];
+      var projRows = [];
+      projAnos.forEach(function (a) {
+        // Se tiver projeção com crescimento, usar
+        if (proj.projecaoCarga && proj.projecaoCarga.length >= a) {
+          projRows.push({ cells: [a + (a === 1 ? ' ano' : ' anos'), _m(proj.projecaoCarga[a - 1].economiaAcumulada)], _eco: true });
+        } else {
+          projRows.push({ cells: [a + (a === 1 ? ' ano' : ' anos'), _m(res.economiaTotal * a)], _eco: true });
+        }
+      });
+      h += tabelaHTML(['Horizonte', 'Economia Acumulada'], projRows);
+      h += '</div>';
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    //  PÁGINA 3: TOP OPORTUNIDADES + AÇÕES
+    // ══════════════════════════════════════════════════════════════
+
+    if (ops.length > 0) {
+      h += pageBreak();
+      h += secaoTitulo('🎯', 'TOP ' + ops.length + ' OPORTUNIDADES DE ECONOMIA');
+
+      ops.forEach(function (op, i) {
+        h += '<div style="background:#fff;border:1px solid #e8ecf0;border-radius:6px;padding:12px 16px;margin:8px 0;page-break-inside:avoid;' + (i === 0 ? 'border-left:4px solid ' + COR.accentDark + ';' : '') + '">';
+        h += '<div style="display:flex;justify-content:space-between;align-items:flex-start;">';
+        h += '<div>';
+        h += '<span style="display:inline-block;background:' + COR.primary + ';color:#fff;border-radius:50%;width:22px;height:22px;text-align:center;line-height:22px;font-size:10px;font-weight:700;margin-right:8px;">#' + (i + 1) + '</span>';
+        h += '<strong style="font-size:12px;color:' + COR.text + ';">' + (op.titulo || '') + '</strong>';
+        h += '</div>';
+        h += '<div style="font-size:14px;font-weight:700;color:' + COR.accentDark + ';' + FONT_MONO + '">' + _m(op.economiaAnual || 0) + '/ano</div>';
+        h += '</div>';
+        // Tags
+        h += '<div style="margin:6px 0;">';
+        h += badge(op.tipo || 'N/A', COR.primary);
+        h += badgeComplexidade(op.complexidade);
+        h += badgeRisco(op.risco);
+        h += badge(op.prazoImplementacao || '', COR.info);
+        h += '</div>';
+        // Descrição + Ação
+        if (op.descricao) h += '<div style="font-size:9px;color:' + COR.textSec + ';margin:4px 0;">' + op.descricao + '</div>';
+        if (op.acaoRecomendada) {
+          h += '<div style="font-size:9px;color:' + COR.primary + ';font-weight:600;margin-top:4px;">→ ' + op.acaoRecomendada + '</div>';
+        }
+        h += '</div>';
+      });
+
+      // Box recomendação de apuração
+      if (ca.recomendacao) {
+        h += '<div style="background:' + COR.infoBg + ';border-left:4px solid ' + COR.info + ';padding:12px 16px;margin:14px 0;page-break-inside:avoid;">';
+        h += '<div style="font-weight:700;color:' + COR.text + ';font-size:11px;">📋 Recomendação de Forma de Apuração</div>';
+        h += '<div style="font-size:10px;color:' + COR.textSec + ';margin-top:4px;">';
+        h += 'Forma recomendada: <strong style="color:' + COR.primary + ';">' + (ca.recomendacao.formaRecomendada === 'anual' ? 'ANUAL por Estimativa' : 'TRIMESTRAL') + '</strong>';
+        if (ca.recomendacao.justificativa) h += '<br>' + ca.recomendacao.justificativa;
+        if (ca.recomendacao.diferenca) h += '<br>Diferença estimada: <strong style="color:' + COR.accentDark + ';">' + _m(Math.abs(ca.recomendacao.diferenca)) + '</strong>';
+        h += '</div></div>';
+      }
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    //  PÁGINA 4: FLUXO MENSAL + PRÓXIMOS PASSOS
+    // ══════════════════════════════════════════════════════════════
+
+    h += pageBreak();
+    h += secaoTitulo('📅', 'FLUXO DE CAIXA TRIBUTÁRIO MENSAL', 'Desembolso estimado mês a mês');
+
+    if (fc.meses && fc.meses.length > 0) {
+      var fcHeaders = ['Mês', 'IRPJ', 'CSLL', 'PIS', 'COFINS', 'ISS', 'TOTAL'];
+      var fcRows = [];
+      fc.meses.forEach(function (m, i) {
+        fcRows.push({ cells: [MESES[i] || m.mes, _m(m.irpj), _m(m.csll), _m(m.pis), _m(m.cofins), _m(m.iss), _m(m.total)] });
+      });
+      fcRows.push({ cells: ['TOTAL ANUAL', _m(fc.meses.reduce(function (s, m) { return s + (m.irpj || 0); }, 0)), _m(fc.meses.reduce(function (s, m) { return s + (m.csll || 0); }, 0)), _m(fc.meses.reduce(function (s, m) { return s + (m.pis || 0); }, 0)), _m(fc.meses.reduce(function (s, m) { return s + (m.cofins || 0); }, 0)), _m(fc.meses.reduce(function (s, m) { return s + (m.iss || 0); }, 0)), _m(fc.totalAnual || 0)], _total: true });
+      if (fc.mediaMensal) {
+        fcRows.push({ cells: ['MÉDIA MENSAL', '', '', '', '', '', _m(fc.mediaMensal)], _subtotal: true });
+      }
+      h += tabelaHTML(fcHeaders, fcRows);
+    } else {
+      h += '<div style="font-size:10px;color:' + COR.textMuted + ';padding:8px;">Fluxo mensal não disponível.</div>';
+    }
+
+    // Próximos Passos
+    h += '<div style="background:#f8f9fa;border-radius:8px;padding:14px 18px;margin:18px 0;page-break-inside:avoid;">';
+    h += '<div style="font-size:13px;font-weight:700;color:' + COR.primary + ';margin-bottom:8px;">📌 Próximos Passos</div>';
+    h += '<div style="font-size:10px;color:' + COR.textSec + ';line-height:1.8;">';
+    var passos = [];
+    if (eco.jcp > 0) passos.push('Deliberar distribuição de JCP em ata de sócios/assembleia');
+    if (eco.prejuizo > 0) passos.push('Verificar controle de prejuízos na Parte B do LALUR');
+    if (eco.sudam > 0) passos.push('Confirmar laudo de projeto SUDAM/SUDENE vigente');
+    if (eco.pisCofinsCreditos > 0) passos.push('Revisar escrituração de créditos PIS/COFINS');
+    if (eco.depreciacao > 0) passos.push('Avaliar depreciação acelerada e controle patrimonial');
+    if (ops.length > 0) passos.push('Implementar as oportunidades acima em ordem de prioridade');
+    passos.push('Agendar revisão tributária com profissional habilitado');
+    passos.push('Manter escrituração contábil regular para aproveitamento de todas as deduções');
+    passos.forEach(function (p, i) {
+      h += '<div style="margin:3px 0;"><strong style="color:' + COR.primary + ';">' + (i + 1) + '.</strong> ' + p + '</div>';
+    });
+    h += '</div></div>';
+
+    // Footer
+    h += pdfFooter(r);
+
+    // Gerar
+    var filename = 'relatorio-simplificado-' + (d.razaoSocial || 'empresa').replace(/[^a-zA-Z0-9]/g, '-').substring(0, 40) + '-' + _dataCurta() + '.pdf';
+    gerarPDF(h, filename, function () { hideLoading(); });
+  }
+
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // ███████████████████████████████████████████████████████████████████████████████
+  //  PDF COMPLETO — Para o contador (10-18 páginas, 14 seções)
+  // ███████████████████████████████████████████████████████████████████████████████
+  // ═══════════════════════════════════════════════════════════════════════════════
+
+  function pdfCompleto() {
+    var r = window.LucroRealEstudos ? window.LucroRealEstudos.getResultados() : null;
+    if (!r) { alert('Gere o estudo antes de exportar.'); return; }
+
+    showLoading('Gerando Relatório Completo — 14 seções...');
+
+    var d = r.dadosEmpresa || {};
+    var res = r.resumo || {};
+    var eco = r.economia || {};
+    var dre = r.dre || {};
+    var lalur = r.lalur || {};
+    var irpj = r.irpj || {};
+    var csll = r.csll || {};
+    var pc = r.pisCofins || {};
+    var iss = r.iss || {};
+    var comp = r.composicao || {};
+    var ops = r.oportunidades || [];
+    var ca = r.comparativoApuracao || {};
+    var cen = r.cenarios || [];
+    var proj = r.projecao || {};
+    var fc = r.fluxoCaixa || {};
+    var alertas = r.alertas || [];
+    var obr = r.obrigacoes || [];
+    var darfs = r.darfs || [];
+    var cfg = r.config || {};
+
+    var h = '';
+
+    // ═════════════════════════════════════════════════════
+    //  SEÇÃO 1 — CAPA PROFISSIONAL
+    // ═════════════════════════════════════════════════════
+
+    h += '<div style="text-align:center;padding:40px 20px 30px;page-break-after:always;">';
+    // Logo
+    h += '<div style="font-size:36px;font-weight:800;color:' + COR.primary + ';letter-spacing:2px;' + FONT + '">' + (cfg.nomeProduto || 'IMPOST.') + '</div>';
+    h += '<div style="font-size:11px;color:' + COR.textMuted + ';margin-top:4px;">' + (cfg.subtitulo || '') + '</div>';
+    h += '<div style="width:80px;height:3px;background:' + COR.primary + ';margin:20px auto;"></div>';
+    // Título
+    h += '<div style="font-size:20px;font-weight:700;color:' + COR.text + ';margin:24px 0 8px;">ESTUDO DE LUCRO REAL</div>';
+    h += '<div style="font-size:13px;color:' + COR.textSec + ';">Relatório Completo de Análise Tributária</div>';
+    // Dados da empresa
+    h += '<div style="margin:30px auto;max-width:400px;text-align:left;background:#f8f9fa;border-radius:8px;padding:18px 24px;">';
+    h += '<div style="font-size:14px;font-weight:700;color:' + COR.text + ';margin-bottom:8px;">' + (d.razaoSocial || 'Empresa') + '</div>';
+    var dadosCapa = [];
+    if (d.cnpj) dadosCapa.push(['CNPJ', d.cnpj]);
+    if (d.cnaePrincipal) dadosCapa.push(['CNAE', d.cnaePrincipal]);
+    if (d.uf) dadosCapa.push(['UF/Município', (d.municipio || '') + '/' + d.uf]);
+    if (d.tipoAtividade) dadosCapa.push(['Atividade', d.tipoAtividade]);
+    dadosCapa.push(['Apuração', (d.apuracaoLR === 'anual' ? 'Anual por Estimativa' : 'Trimestral')]);
+    dadosCapa.push(['Ano-base', d.anoBase || new Date().getFullYear()]);
+    dadosCapa.forEach(function (item) {
+      h += '<div style="display:flex;justify-content:space-between;font-size:10px;padding:3px 0;border-bottom:1px solid #eee;">';
+      h += '<span style="color:' + COR.textMuted + ';">' + item[0] + '</span>';
+      h += '<span style="color:' + COR.text + ';font-weight:600;">' + item[1] + '</span>';
+      h += '</div>';
+    });
+    h += '</div>';
+    // Elaborado por
+    var ep = cfg.elaboradoPor || {};
+    if (ep.nome) {
+      h += '<div style="margin-top:20px;font-size:10px;color:' + COR.textSec + ';">Elaborado por: <strong>' + ep.nome + '</strong>';
+      if (ep.registro) h += ' — ' + ep.registro;
+      h += '</div>';
+    }
+    h += '<div style="font-size:9px;color:' + COR.textMuted + ';margin-top:12px;">' + _dataFormatada(r.dataGeracao) + ' — v' + (r.versao || '2.0.0') + '</div>';
+    h += '</div>';
+
+
+    // ═════════════════════════════════════════════════════
+    //  SEÇÃO 2 — RESUMO EXECUTIVO
+    // ═════════════════════════════════════════════════════
+
+    h += secaoTitulo('📊', 'SEÇÃO 2 — RESUMO EXECUTIVO');
+
+    h += grid(3, [
+      miniCard('ECONOMIA TOTAL', _m(res.economiaTotal), COR.accentDark),
+      miniCard('CARGA BRUTA', _m(res.cargaBruta), COR.danger, _m(res.cargaBrutaMensal) + '/mês'),
+      miniCard('ALÍQUOTA EFETIVA', _pp(res.aliquotaEfetiva), COR.text),
+      miniCard('CARGA OTIMIZADA', _m(res.cargaOtimizada), COR.accentDark, _pp(res.aliquotaOtimizada)),
+      miniCard('RETENÇÕES', _m(res.totalRetencoes), COR.info),
+      miniCard('SALDO A PAGAR', _m(res.saldoEfetivo), COR.text)
+    ]);
+
+    if (res.economiaTotal > 0) {
+      h += cardEconomia('ECONOMIA TOTAL IDENTIFICADA', res.economiaTotal, _m(res.economiaTotal / 12) + ' por mês — ' + (res.numOportunidades || 0) + ' oportunidades');
+    }
+
+
+    // ═════════════════════════════════════════════════════
+    //  SEÇÃO 3 — DRE + LALUR
+    // ═════════════════════════════════════════════════════
+
+    h += pageBreak();
+    h += secaoTitulo('📋', 'SEÇÃO 3 — DEMONSTRAÇÃO DO RESULTADO (DRE) E LALUR');
+
+    // DRE
+    h += '<div style="font-weight:700;font-size:11px;color:' + COR.text + ';margin:10px 0 6px;">Demonstração do Resultado do Exercício (DRE)</div>';
+    var dreRows = [
+      { cells: ['Receita Bruta', _m(dre.receitaBruta)] },
+      { cells: ['(-) Custos Totais', _m(-(dre.custosTotais || 0))], _indent: 1 },
+    ];
+    if (dre.cmv) dreRows.push({ cells: ['    CMV / CPV', _m(-dre.cmv)], _indent: 2 });
+    if (dre.folhaPagamento) dreRows.push({ cells: ['    Folha de Pagamento', _m(-dre.folhaPagamento)], _indent: 2 });
+    if (dre.servicosTerceiros) dreRows.push({ cells: ['    Serviços de Terceiros', _m(-dre.servicosTerceiros)], _indent: 2 });
+    dreRows.push({ cells: ['(-) Despesas Totais', _m(-(dre.despesasTotais || 0))], _indent: 1 });
+    if (dre.depreciacao) dreRows.push({ cells: ['    Depreciação', _m(-dre.depreciacao)], _indent: 2 });
+    if (dre.receitaFinanceiras) dreRows.push({ cells: ['(+) Receitas Financeiras', _m(dre.receitaFinanceiras)], _indent: 1 });
+    dreRows.push({ cells: ['= LUCRO LÍQUIDO CONTÁBIL', _m(dre.lucroLiquido)], _subtotal: true });
+    if (dre.margemLucro !== undefined) dreRows.push({ cells: ['Margem de Lucro', _pp(dre.margemLucro)] });
+    h += tabelaHTML(['Item', 'Valor'], dreRows);
+
+    // LALUR
+    h += '<div style="font-weight:700;font-size:11px;color:' + COR.text + ';margin:14px 0 6px;">LALUR — Livro de Apuração do Lucro Real (Parte A)</div>';
+    var lalurRows = [
+      { cells: ['Lucro Líquido Contábil', _m(lalur.lucroLiquido), ''] }
+    ];
+    // Adições
+    if (lalur.adicoes && lalur.adicoes.length > 0) {
+      lalurRows.push({ cells: ['ADIÇÕES', '', ''], _subtotal: true });
+      lalur.adicoes.forEach(function (a) {
+        lalurRows.push({ cells: ['(+) ' + (a.desc || a.descricao || ''), _m(a.valor), a.artigo || ''], _indent: 1 });
+      });
+      lalurRows.push({ cells: ['Total Adições', _m(lalur.totalAdicoes), ''], _subtotal: true });
+    }
+    // Exclusões
+    if (lalur.exclusoes && lalur.exclusoes.length > 0) {
+      lalurRows.push({ cells: ['EXCLUSÕES', '', ''], _subtotal: true });
+      lalur.exclusoes.forEach(function (e) {
+        lalurRows.push({ cells: ['(-) ' + (e.desc || e.descricao || ''), _m(e.valor), e.artigo || ''], _indent: 1, _eco: e.valor > 0 });
+      });
+      lalurRows.push({ cells: ['Total Exclusões', _m(lalur.totalExclusoes), ''], _subtotal: true });
+    }
+    lalurRows.push({ cells: ['= LUCRO AJUSTADO', _m(lalur.lucroAjustado), ''], _subtotal: true });
+    // Compensação
+    if (r.compensacao && r.compensacao.resumo) {
+      var compRes = r.compensacao.resumo;
+      if (compRes.economia && compRes.economia.total > 0) {
+        lalurRows.push({ cells: ['(-) Compensação Prejuízo Fiscal (30%)', _m(compRes.economia.total > 0 ? (lalur.lucroAjustado - r.lucroRealFinal) : 0), 'Art. 579-586 RIR/2018'], _eco: true });
+      }
+    }
+    lalurRows.push({ cells: ['= LUCRO REAL FINAL', _m(r.lucroRealFinal), ''], _total: true });
+    if (r.baseCSLLFinal !== undefined && r.baseCSLLFinal !== r.lucroRealFinal) {
+      lalurRows.push({ cells: ['Base da CSLL Final', _m(r.baseCSLLFinal), ''] });
+    }
+    h += tabelaHTML(['Descrição', 'Valor', 'Base Legal'], lalurRows);
+
+
+    // ═════════════════════════════════════════════════════
+    //  SEÇÃO 4 — CÁLCULO DETALHADO DE TRIBUTOS
+    // ═════════════════════════════════════════════════════
+
+    h += pageBreak();
+    h += secaoTitulo('🧮', 'SEÇÃO 4 — CÁLCULO DETALHADO DE TRIBUTOS');
+
+    // IRPJ
+    h += '<div style="font-weight:700;font-size:11px;color:' + COR.text + ';margin:10px 0 6px;">4.1 — IRPJ (Imposto de Renda Pessoa Jurídica)</div>';
+    var irpjRows = [
+      { cells: ['Lucro Real Final (Base)', _m(r.lucroRealFinal)] },
+      { cells: ['IRPJ Normal (15%)', _m(irpj.irpjNormal || 0)] },
+      { cells: ['IRPJ Adicional (10% s/ excedente R$ 240k)', _m(irpj.adicional || 0)] },
+      { cells: ['= IRPJ Bruto', _m(irpj.totalBruto || (irpj.irpjNormal || 0) + (irpj.adicional || 0))], _subtotal: true }
+    ];
+    if (r.incentivosFiscais && r.incentivosFiscais.economiaTotal > 0) {
+      irpjRows.push({ cells: ['(-) Incentivos Fiscais', _m(-r.incentivosFiscais.economiaTotal)], _eco: true });
+    }
+    if (r.reducaoSUDAM > 0) {
+      irpjRows.push({ cells: ['(-) Redução SUDAM/SUDENE (75%)', _m(-r.reducaoSUDAM)], _eco: true });
+    }
+    irpjRows.push({ cells: ['= IRPJ FINAL', _m(r.irpjAposReducao)], _total: true });
+    h += tabelaHTML(['Item', 'Valor'], irpjRows);
+
+    // CSLL
+    h += '<div style="font-weight:700;font-size:11px;color:' + COR.text + ';margin:14px 0 6px;">4.2 — CSLL (Contribuição Social sobre o Lucro Líquido)</div>';
+    h += tabelaHTML(['Item', 'Valor'], [
+      { cells: ['Base da CSLL', _m(r.baseCSLLFinal || r.lucroRealFinal)] },
+      { cells: ['Alíquota', _pp((csll.aliquota || 0.09) * 100)] },
+      { cells: ['= CSLL DEVIDA', _m(csll.csllDevida)], _total: true }
+    ]);
+
+    // PIS/COFINS
+    h += '<div style="font-weight:700;font-size:11px;color:' + COR.text + ';margin:14px 0 6px;">4.3 — PIS/COFINS (Não-Cumulativo)</div>';
+    var pcRows = [
+      { cells: ['Receita Tributável', _m(pc.receitaTributavel)] },
+      { cells: ['Débito PIS (1,65%)', _m(pc.debitoPIS)] },
+      { cells: ['Débito COFINS (7,6%)', _m(pc.debitoCOFINS)] },
+      { cells: ['Total Débitos', _m((pc.debitoPIS || 0) + (pc.debitoCOFINS || 0))], _subtotal: true },
+      { cells: ['(-) Crédito PIS', _m(-(pc.creditoPIS || 0))], _eco: pc.creditoPIS > 0 },
+      { cells: ['(-) Crédito COFINS', _m(-(pc.creditoCOFINS || 0))], _eco: pc.creditoCOFINS > 0 },
+      { cells: ['= PIS/COFINS A PAGAR', _m(pc.totalAPagar)], _total: true }
+    ];
+    if (pc.economiaCreditos > 0) {
+      pcRows.push({ cells: ['Economia com Créditos Não-Cumulativos', _m(pc.economiaCreditos)], _eco: true });
+    }
+    h += tabelaHTML(['Item', 'Valor'], pcRows);
+
+    // ISS
+    if (iss && (iss.issAnual > 0 || iss.receitaServicos > 0)) {
+      h += '<div style="font-weight:700;font-size:11px;color:' + COR.text + ';margin:14px 0 6px;">4.4 — ISS (Imposto sobre Serviços)</div>';
+      h += tabelaHTML(['Item', 'Valor'], [
+        { cells: ['Receita de Serviços', _m(iss.receitaServicos)] },
+        { cells: ['Alíquota ISS (' + (iss.municipio || '') + ')', _pp((iss.aliquota || 0) * 100)] },
+        { cells: ['= ISS Anual', _m(iss.issAnual)], _total: true },
+        { cells: ['ISS Mensal', _m(iss.issMensal)] }
+      ]);
+    }
+
+
+    // ═════════════════════════════════════════════════════
+    //  SEÇÃO 5 — COMPOSIÇÃO DA CARGA
+    // ═════════════════════════════════════════════════════
+
+    h += pageBreak();
+    h += secaoTitulo('📊', 'SEÇÃO 5 — COMPOSIÇÃO DA CARGA TRIBUTÁRIA');
+
+    h += tabelaHTML(['Tributo', 'Valor Anual', '% da Carga'], [
+      { cells: ['IRPJ', _m(comp.irpj ? comp.irpj.valor : 0), _pp(comp.irpj ? comp.irpj.percentual : 0)] },
+      { cells: ['CSLL', _m(comp.csll ? comp.csll.valor : 0), _pp(comp.csll ? comp.csll.percentual : 0)] },
+      { cells: ['PIS/COFINS', _m(comp.pisCofins ? comp.pisCofins.valor : 0), _pp(comp.pisCofins ? comp.pisCofins.percentual : 0)] },
+      { cells: ['ISS', _m(comp.iss ? comp.iss.valor : 0), _pp(comp.iss ? comp.iss.percentual : 0)] },
+      { cells: ['TOTAL', _m(res.cargaBruta), '100,00%'], _total: true }
+    ]);
+
+    // Barras visuais
+    h += '<div style="margin:12px 0;">';
+    var maxComp = res.cargaBruta || 1;
+    h += barraVisual(comp.irpj ? comp.irpj.valor : 0, maxComp, '#E74C3C', 'IRPJ');
+    h += barraVisual(comp.csll ? comp.csll.valor : 0, maxComp, '#F39C12', 'CSLL');
+    h += barraVisual(comp.pisCofins ? comp.pisCofins.valor : 0, maxComp, '#3498DB', 'PIS/COFINS');
+    h += barraVisual(comp.iss ? comp.iss.valor : 0, maxComp, '#9B59B6', 'ISS');
+    h += '</div>';
+
+
+    // ═════════════════════════════════════════════════════
+    //  SEÇÃO 6 — MAPA DA ECONOMIA
+    // ═════════════════════════════════════════════════════
+
+    h += secaoTitulo('💰', 'SEÇÃO 6 — MAPA DA ECONOMIA (ANTES × DEPOIS)');
+
+    // Diagrama antes/depois
+    h += '<div style="display:flex;align-items:center;justify-content:space-around;margin:12px 0;page-break-inside:avoid;">';
+    h += '<div style="text-align:center;padding:14px 20px;background:#fff;border:2px solid ' + COR.danger + ';border-radius:8px;">';
+    h += '<div style="font-size:9px;color:' + COR.textMuted + ';text-transform:uppercase;">Carga Bruta</div>';
+    h += '<div style="font-size:20px;font-weight:700;color:' + COR.danger + ';' + FONT_MONO + '">' + _m(res.cargaBruta) + '</div></div>';
+    h += '<div style="font-size:24px;color:' + COR.accentDark + ';">→</div>';
+    h += '<div style="text-align:center;padding:14px 20px;background:' + COR.ecoBg + ';border:2px solid ' + COR.accentDark + ';border-radius:8px;">';
+    h += '<div style="font-size:9px;color:' + COR.textMuted + ';text-transform:uppercase;">Economia</div>';
+    h += '<div style="font-size:20px;font-weight:700;color:' + COR.accentDark + ';' + FONT_MONO + '">' + _m(res.economiaTotal) + '</div></div>';
+    h += '<div style="font-size:24px;color:' + COR.primary + ';">→</div>';
+    h += '<div style="text-align:center;padding:14px 20px;background:#fff;border:2px solid ' + COR.primary + ';border-radius:8px;">';
+    h += '<div style="font-size:9px;color:' + COR.textMuted + ';text-transform:uppercase;">Carga Otimizada</div>';
+    h += '<div style="font-size:20px;font-weight:700;color:' + COR.primary + ';' + FONT_MONO + '">' + _m(res.cargaOtimizada) + '</div></div>';
+    h += '</div>';
+
+    // Tabela detalhada de economia
+    var ecoRows2 = [];
+    var ecoKeys2 = ['jcp', 'prejuizo', 'sudam', 'incentivos', 'depreciacao', 'pisCofinsCreditos', 'gratificacao', 'cprb', 'pddFiscal'];
+    ecoKeys2.forEach(function (k) {
+      if (eco[k] > 0) {
+        var info = ECONOMIA_NOMES[k] || {};
+        ecoRows2.push({ cells: [info.nome || k, _m(eco[k]), info.base || '—'], _eco: true });
+      }
+    });
+    if (ecoRows2.length > 0) {
+      ecoRows2.push({ cells: ['ECONOMIA TOTAL', _m(eco.total || res.economiaTotal), ''], _total: true });
+      h += tabelaHTML(['Fonte de Economia', 'Valor Anual', 'Base Legal'], ecoRows2);
+    }
+
+    // Projeção acumulada
+    if (res.economiaTotal > 0) {
+      h += '<div style="font-weight:700;font-size:11px;color:' + COR.text + ';margin:12px 0 6px;">Projeção de Economia Acumulada</div>';
+      var projAnos2 = [1, 3, 5, 10];
+      var projR2 = [];
+      projAnos2.forEach(function (a) {
+        if (proj.projecaoCarga && proj.projecaoCarga.length >= a) {
+          projR2.push({ cells: [a + (a === 1 ? ' ano' : ' anos'), _m(proj.projecaoCarga[a - 1].economiaAcumulada)], _eco: true });
+        } else {
+          projR2.push({ cells: [a + (a === 1 ? ' ano' : ' anos'), _m(res.economiaTotal * a)], _eco: true });
+        }
+      });
+      h += tabelaHTML(['Horizonte', 'Economia Acumulada'], projR2);
+    }
+
+
+    // ═════════════════════════════════════════════════════
+    //  SEÇÃO 7 — OPORTUNIDADES
+    // ═════════════════════════════════════════════════════
+
+    if (ops.length > 0) {
+      h += pageBreak();
+      h += secaoTitulo('🎯', 'SEÇÃO 7 — OPORTUNIDADES DE ECONOMIA (' + ops.length + ')');
+
+      ops.forEach(function (op, i) {
+        h += '<div style="background:#fff;border:1px solid #e0e4e8;border-left:4px solid ' + COR.primary + ';padding:12px 16px;margin:8px 0;page-break-inside:avoid;">';
+        // Header
+        h += '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;">';
+        h += '<div><span style="background:' + COR.primary + ';color:#fff;padding:2px 8px;border-radius:10px;font-size:9px;font-weight:700;margin-right:6px;">#' + (op.ranking || i + 1) + '</span>';
+        h += '<strong style="font-size:11px;">' + (op.titulo || '') + '</strong></div>';
+        h += '<div style="font-size:14px;font-weight:700;color:' + COR.accentDark + ';' + FONT_MONO + '">' + _m(op.economiaAnual || 0) + '/ano</div>';
+        h += '</div>';
+        // Tags
+        h += '<div style="margin:4px 0;">';
+        h += badge(op.tipo || '', COR.primary);
+        h += badgeComplexidade(op.complexidade);
+        h += badgeRisco(op.risco);
+        h += badge(op.prazoImplementacao || '', COR.info);
+        h += '</div>';
+        // Detalhes
+        if (op.descricao) h += '<div style="font-size:9px;color:' + COR.textSec + ';margin:4px 0;line-height:1.5;">' + op.descricao + '</div>';
+        if (op.baseLegal) h += '<div style="font-size:9px;color:' + COR.textMuted + ';"><em>Base legal: ' + op.baseLegal + '</em></div>';
+        if (op.acaoRecomendada) h += '<div style="font-size:9px;color:' + COR.primary + ';font-weight:600;margin-top:4px;">→ Ação: ' + op.acaoRecomendada + '</div>';
+        h += '</div>';
+      });
+    }
+
+
+    // ═════════════════════════════════════════════════════
+    //  SEÇÃO 8 — COMPARATIVO TRIMESTRAL vs ANUAL
+    // ═════════════════════════════════════════════════════
+
+    h += pageBreak();
+    h += secaoTitulo('📈', 'SEÇÃO 8 — COMPARATIVO: TRIMESTRAL vs ANUAL POR ESTIMATIVA');
+
+    // Trimestral
+    if (ca.trimestral && ca.trimestral.trimestres) {
+      h += '<div style="font-weight:700;font-size:11px;color:' + COR.text + ';margin:10px 0 6px;">8.1 — Apuração Trimestral</div>';
+      var trimHeaders = ['Trim.', 'Lucro Ajust.', 'Comp. Prej.', 'Lucro Real', 'IRPJ Normal', 'IRPJ Adic.', 'IRPJ Total', 'CSLL'];
+      var trimRows = [];
+      ca.trimestral.trimestres.forEach(function (t) {
+        trimRows.push({ cells: [t.trimestre + 'º', _m(t.lucroAjustado), _m(t.compensacaoPrejuizo), _m(t.lucroReal), _m(t.irpjNormal), _m(t.irpjAdicional), _m(t.irpjTotal), _m(t.csll)] });
+      });
+      trimRows.push({ cells: ['TOTAL', '', '', '', '', '', _m(ca.trimestral.totalIRPJ), _m(ca.trimestral.totalCSLL)], _total: true });
+      h += tabelaHTML(trimHeaders, trimRows);
+    }
+
+    // Anual
+    if (ca.anual && ca.anual.meses) {
+      h += '<div style="font-weight:700;font-size:11px;color:' + COR.text + ';margin:14px 0 6px;">8.2 — Apuração Anual por Estimativa</div>';
+      var anualHeaders = ['Mês', 'Receita Bruta', 'Est. IRPJ', 'Est. CSLL', 'Total Mês'];
+      var anualRows = [];
+      ca.anual.meses.forEach(function (m, i) {
+        anualRows.push({ cells: [MESES[i] || m.mes, _m(m.receitaBruta), _m(m.irpjEstimativa), _m(m.csllEstimativa), _m(m.totalMes)] });
+      });
+      anualRows.push({ cells: ['TOTAL ESTIMATIVAS', '', _m(ca.anual.totalEstimativasIRPJ), _m(ca.anual.totalEstimativasCSLL), _m(ca.anual.totalEstimativas)], _total: true });
+      // Ajuste anual
+      if (ca.anual.ajusteTotal !== undefined) {
+        anualRows.push({ cells: ['IRPJ Real Anual', '', _m(ca.anual.irpjRealAnual), _m(ca.anual.csllRealAnual), ''], _subtotal: true });
+        anualRows.push({ cells: ['Ajuste (Real - Estimativas)', '', _m(ca.anual.ajusteIRPJ), _m(ca.anual.ajusteCSLL), _m(ca.anual.ajusteTotal)], _subtotal: true });
+      }
+      h += tabelaHTML(anualHeaders, anualRows);
+    }
+
+    // Suspensão/Redução
+    if (ca.suspensao && ca.suspensao.meses && ca.suspensao.meses.length > 0) {
+      h += '<div style="font-weight:700;font-size:11px;color:' + COR.text + ';margin:14px 0 6px;">8.3 — Oportunidades de Suspensão/Redução</div>';
+      var suspHeaders = ['Mês', 'Situação', 'Est. IRPJ', 'IRPJ Pago', 'Est. CSLL', 'CSLL Paga', 'Economia'];
+      var suspRows = [];
+      ca.suspensao.meses.forEach(function (m, i) {
+        var isEco = (m.economia || 0) > 0;
+        suspRows.push({ cells: [MESES[i] || m.mes, m.situacao || '', _m(m.estimativaIRPJ), _m(m.irpjPago), _m(m.estimativaCSLL), _m(m.csllPaga), _m(m.economia)], _eco: isEco });
+      });
+      if (ca.suspensao.economiaTotalSuspensao > 0) {
+        suspRows.push({ cells: ['TOTAL', ca.suspensao.mesesSuspensos + ' meses suspensos', '', '', '', '', _m(ca.suspensao.economiaTotalSuspensao)], _total: true });
+      }
+      h += tabelaHTML(suspHeaders, suspRows);
+    }
+
+    // Recomendação
+    if (ca.recomendacao) {
+      h += '<div style="background:' + COR.infoBg + ';border-left:4px solid ' + COR.info + ';padding:12px 16px;margin:12px 0;page-break-inside:avoid;">';
+      h += '<div style="font-weight:700;color:' + COR.text + ';font-size:11px;">📋 Recomendação</div>';
+      h += '<div style="font-size:10px;color:' + COR.textSec + ';margin-top:4px;">';
+      h += 'Forma recomendada: <strong style="color:' + COR.primary + ';">' + (ca.recomendacao.formaRecomendada === 'anual' ? 'ANUAL por Estimativa' : 'TRIMESTRAL') + '</strong>';
+      if (ca.recomendacao.justificativa) h += '<br>' + ca.recomendacao.justificativa;
+      if (ca.recomendacao.diferenca) h += '<br>Diferença: <strong style="color:' + COR.accentDark + ';">' + _m(Math.abs(ca.recomendacao.diferenca)) + '</strong>';
+      h += '</div></div>';
+    }
+
+
+    // ═════════════════════════════════════════════════════
+    //  SEÇÃO 9 — CENÁRIOS
+    // ═════════════════════════════════════════════════════
+
+    if (cen && cen.length > 0) {
+      h += pageBreak();
+      h += secaoTitulo('📉', 'SEÇÃO 9 — CENÁRIOS (Pessimista / Base / Otimista)');
+
+      var cenHeaders = ['Indicador'];
+      cen.forEach(function (c) { cenHeaders.push(c.nome || ''); });
+      var indicadores = ['margem', 'lucro', 'irpjCSLL', 'pisCofins', 'iss', 'cargaTotal', 'aliquotaEfetiva'];
+      var labels = { margem: 'Margem (%)', lucro: 'Lucro', irpjCSLL: 'IRPJ + CSLL', pisCofins: 'PIS/COFINS', iss: 'ISS', cargaTotal: 'Carga Total', aliquotaEfetiva: 'Alíquota Efetiva (%)' };
+      var cenRows = [];
+      indicadores.forEach(function (ind) {
+        var row = [labels[ind] || ind];
+        cen.forEach(function (c) {
+          var v = c[ind];
+          if (ind === 'margem' || ind === 'aliquotaEfetiva') row.push(_pp(v));
+          else row.push(_m(v));
+        });
+        cenRows.push({ cells: row });
+      });
+      h += tabelaHTML(cenHeaders, cenRows);
+    }
+
+    // Projeção plurianual
+    if (proj.projecaoCarga && proj.projecaoCarga.length > 0) {
+      h += '<div style="font-weight:700;font-size:11px;color:' + COR.text + ';margin:14px 0 6px;">Projeção Plurianual</div>';
+      var projHeaders = ['Ano', 'Receita', 'Carga', 'Economia Ano', 'Economia Acumulada'];
+      var projRows = [];
+      proj.projecaoCarga.forEach(function (p) {
+        projRows.push({ cells: ['Ano ' + p.ano, _m(p.receita), _m(p.carga), _m(p.economiaAno), _m(p.economiaAcumulada)], _eco: true });
+      });
+      h += tabelaHTML(projHeaders, projRows);
+    }
+
+
+    // ═════════════════════════════════════════════════════
+    //  SEÇÃO 10 — FLUXO DE CAIXA
+    // ═════════════════════════════════════════════════════
+
+    h += pageBreak();
+    h += secaoTitulo('📅', 'SEÇÃO 10 — FLUXO DE CAIXA TRIBUTÁRIO MENSAL');
+
+    if (fc.meses && fc.meses.length > 0) {
+      var fcHeaders2 = ['Mês', 'IRPJ', 'CSLL', 'PIS', 'COFINS', 'ISS', 'TOTAL'];
+      var fcRows2 = [];
+      fc.meses.forEach(function (m, i) {
+        fcRows2.push({ cells: [MESES[i] || m.mes, _m(m.irpj), _m(m.csll), _m(m.pis), _m(m.cofins), _m(m.iss), _m(m.total)] });
+      });
+      fcRows2.push({ cells: ['TOTAL ANUAL', _m(fc.meses.reduce(function (s, m) { return s + (m.irpj || 0); }, 0)), _m(fc.meses.reduce(function (s, m) { return s + (m.csll || 0); }, 0)), _m(fc.meses.reduce(function (s, m) { return s + (m.pis || 0); }, 0)), _m(fc.meses.reduce(function (s, m) { return s + (m.cofins || 0); }, 0)), _m(fc.meses.reduce(function (s, m) { return s + (m.iss || 0); }, 0)), _m(fc.totalAnual || 0)], _total: true });
+      if (fc.mediaMensal) {
+        fcRows2.push({ cells: ['Média Mensal', '', '', '', '', '', _m(fc.mediaMensal)], _subtotal: true });
+      }
+      h += tabelaHTML(fcHeaders2, fcRows2);
+      h += '<div style="font-size:9px;color:' + COR.textMuted + ';margin-top:6px;">Forma de apuração: ' + (fc.apuracao || d.apuracaoLR || 'N/A') + '</div>';
+    }
+
+
+    // ═════════════════════════════════════════════════════
+    //  SEÇÃO 11 — ALERTAS E COMPLIANCE
+    // ═════════════════════════════════════════════════════
+
+    h += pageBreak();
+    h += secaoTitulo('⚠️', 'SEÇÃO 11 — ALERTAS E COMPLIANCE');
+
+    // Obrigatoriedade
+    if (r.obrigatoriedade) {
+      if (r.obrigatoriedade.obrigado) {
+        h += alertaBox('critico', '<strong>OBRIGATÓRIO:</strong> Esta empresa é obrigatória ao Lucro Real. Motivo: ' + (r.obrigatoriedade.motivo || 'Legislação vigente.'));
+      } else {
+        h += alertaBox('info', 'A empresa pode optar pelo Lucro Real (não obrigatória). ' + (r.obrigatoriedade.motivo || ''));
+      }
+    }
+
+    // Alerta da Reforma Tributária
+    h += alertaBox('aviso', '<strong>Reforma Tributária (LC 214/2025):</strong> A CBS e o IBS substituirão PIS/COFINS e ISS/ICMS a partir de 2026 (transição até 2033). Os cálculos de PIS/COFINS e ISS neste estudo seguem a legislação atual vigente. Recomenda-se acompanhar a regulamentação.');
+
+    // Vedações
+    if (r.vedacoes && r.vedacoes.length > 0) {
+      r.vedacoes.forEach(function (v) {
+        h += alertaBox('aviso', '<strong>Vedação:</strong> ' + (v.msg || v.descricao || v));
+      });
+    }
+
+    // Alertas do motor
+    if (alertas.length > 0) {
+      alertas.forEach(function (a) {
+        h += alertaBox(a.tipo || 'info', a.msg || '');
+      });
+    } else {
+      h += alertaBox('info', 'Nenhum alerta adicional identificado na análise.');
+    }
+
+
+    // ═════════════════════════════════════════════════════
+    //  SEÇÃO 12 — OBRIGAÇÕES ACESSÓRIAS E DARFs
+    // ═════════════════════════════════════════════════════
+
+    h += secaoTitulo('📝', 'SEÇÃO 12 — OBRIGAÇÕES ACESSÓRIAS E DARFs');
+
+    if (obr.length > 0) {
+      h += '<div style="font-weight:700;font-size:10px;margin:8px 0 4px;">Obrigações Acessórias do Lucro Real</div>';
+      var obrRows = [];
+      obr.forEach(function (o) {
+        obrRows.push({ cells: [o.nome || '', o.periodicidade || '', o.prazo || '', o.descricao || ''] });
+      });
+      h += tabelaHTML(['Obrigação', 'Periodicidade', 'Prazo', 'Descrição'], obrRows, { noAlignRight: true });
+    }
+
+    if (darfs.length > 0) {
+      h += '<div style="font-weight:700;font-size:10px;margin:12px 0 4px;">Códigos DARF</div>';
+      var darfRows = [];
+      darfs.forEach(function (df) {
+        if (df) darfRows.push({ cells: [df.tributo || '', df.codigo || '', df.periodicidade || '', df.prazo || ''] });
+      });
+      if (darfRows.length > 0) {
+        h += tabelaHTML(['Tributo', 'Código DARF', 'Periodicidade', 'Prazo'], darfRows, { noAlignRight: true });
+      }
+    }
+
+
+    // ═════════════════════════════════════════════════════
+    //  SEÇÃO 13 — DETALHAMENTOS COMPLEMENTARES
+    // ═════════════════════════════════════════════════════
+
+    h += pageBreak();
+    h += secaoTitulo('📎', 'SEÇÃO 13 — DETALHAMENTOS COMPLEMENTARES');
+
+    // JCP
+    if (r.jcpDetalhado && r.jcpDetalhado.jcpDedutivel > 0) {
+      h += '<div style="font-weight:700;font-size:10px;margin:10px 0 4px;">13.1 — Juros sobre Capital Próprio (JCP)</div>';
+      h += tabelaHTML(['Item', 'Valor'], [
+        { cells: ['JCP Dedutível (PL × TJLP)', _m(r.jcpDetalhado.jcpDedutivel)] },
+        { cells: ['IRRF sobre JCP (15%)', _m(r.jcpDetalhado.irpjJCP || r.jcpDetalhado.irrfJCP)] },
+        { cells: ['Economia Líquida (34% - 15%)', _m(r.jcpDetalhado.economiaLiquida)], _eco: true },
+        { cells: ['Limite (Lucro Líquido)', _m(r.jcpDetalhado.limiteLucro)] }
+      ]);
+    }
+
+    // Compensação de prejuízo
+    if (r.compensacao && r.compensacao.resumo && r.compensacao.resumo.economia && r.compensacao.resumo.economia.total > 0) {
+      h += '<div style="font-weight:700;font-size:10px;margin:14px 0 4px;">13.2 — Compensação de Prejuízo Fiscal</div>';
+      var compEco = r.compensacao.resumo.economia;
+      var compSaldos = r.compensacao.resumo.saldosPosCompensacao || {};
+      h += tabelaHTML(['Item', 'Valor'], [
+        { cells: ['Economia com IRPJ', _m(compEco.irpj || compEco.total)], _eco: true },
+        { cells: ['Economia com CSLL', _m(compEco.csll || 0)], _eco: true },
+        { cells: ['Economia Total', _m(compEco.total)], _eco: true },
+        { cells: ['Saldo Remanescente Prejuízo Fiscal', _m(compSaldos.prejuizoOperacional || compSaldos.prejuizoFiscal || 0)] },
+        { cells: ['Saldo Remanescente Base Negativa CSLL', _m(compSaldos.baseNegativaCSLL || 0)] }
+      ]);
+    }
+
+    // Depreciação
+    if (r.depreciacaoDetalhada && r.depreciacaoDetalhada.bens && r.depreciacaoDetalhada.bens.length > 0) {
+      h += '<div style="font-weight:700;font-size:10px;margin:14px 0 4px;">13.3 — Depreciação Detalhada</div>';
+      var depHeaders = ['Tipo de Bem', 'Valor Original', 'Taxa', 'Deprec. Normal', 'Deprec. Acelerada'];
+      var depRows = [];
+      r.depreciacaoDetalhada.bens.forEach(function (b) {
+        depRows.push({ cells: [b.tipo || '', _m(b.valorOriginal), _pp(b.taxa * 100), _m(b.depreciaNormal), _m(b.depreciaAcelerada)] });
+      });
+      depRows.push({ cells: ['TOTAL', '', '', _m(r.depreciacaoDetalhada.depreciaNormal), _m(r.depreciacaoDetalhada.depreciaAcelerada)], _subtotal: true });
+      depRows.push({ cells: ['Economia Fiscal com Depreciação', '', '', '', _m(r.depreciacaoDetalhada.economiaFiscal)], _eco: true });
+      h += tabelaHTML(depHeaders, depRows);
+      if (r.depreciacaoDetalhada.turnos > 1) {
+        h += '<div style="font-size:9px;color:' + COR.textMuted + ';">Turnos de operação: ' + r.depreciacaoDetalhada.turnos + ' (multiplicador: ' + r.depreciacaoDetalhada.multiplicador + 'x)</div>';
+      }
+    }
+
+    // SUDAM/SUDENE
+    if (r.sudamDetalhado && r.sudamDetalhado.resumo) {
+      var sudR = r.sudamDetalhado.resumo;
+      if ((sudR.economiaReducao75 || 0) + (sudR.economiaReinvestimento30 || 0) > 0) {
+        h += '<div style="font-weight:700;font-size:10px;margin:14px 0 4px;">13.4 — SUDAM/SUDENE</div>';
+        h += tabelaHTML(['Item', 'Valor'], [
+          { cells: ['Economia Redução 75%', _m(sudR.economiaReducao75)], _eco: true },
+          { cells: ['Economia Reinvestimento 30%', _m(sudR.economiaReinvestimento30)], _eco: true }
+        ]);
+      }
+    }
+
+    // CPRB
+    if (r.cprb && r.cprb.optou && r.cprb.economia > 0) {
+      h += '<div style="font-weight:700;font-size:10px;margin:14px 0 4px;">13.5 — CPRB (Desoneração da Folha)</div>';
+      h += tabelaHTML(['Item', 'Valor'], [
+        { cells: ['Alíquota CPRB', _pp(r.cprb.aliquota * 100)] },
+        { cells: ['Base CPRB', _m(r.cprb.baseCPRB)] },
+        { cells: ['Custo CPRB', _m(r.cprb.custoCPRB)] },
+        { cells: ['CPP Normal (sem desoneração)', _m(r.cprb.cppNormal)] },
+        { cells: ['Economia', _m(r.cprb.economia)], _eco: true },
+        { cells: ['Compensa?', r.cprb.compensa ? 'SIM' : 'NÃO'] }
+      ]);
+    }
+
+    // Incentivos Fiscais
+    if (r.incentivosFiscais && r.incentivosFiscais.incentivos && r.incentivosFiscais.incentivos.length > 0) {
+      h += '<div style="font-weight:700;font-size:10px;margin:14px 0 4px;">13.6 — Incentivos Fiscais</div>';
+      var incRows = [];
+      r.incentivosFiscais.incentivos.forEach(function (inc) {
+        incRows.push({ cells: [inc.nome || inc.tipo || '', _m(inc.valor || inc.economia || 0), inc.baseLegal || ''] });
+      });
+      incRows.push({ cells: ['TOTAL INCENTIVOS', _m(r.incentivosFiscais.economiaTotal), ''], _total: true });
+      h += tabelaHTML(['Incentivo', 'Economia', 'Base Legal'], incRows);
+    }
+
+    // Retenções compensadas
+    if (r.retencoesCompensadas && r.retencoesCompensadas.tributosARecolher) {
+      h += '<div style="font-weight:700;font-size:10px;margin:14px 0 4px;">13.7 — Retenções Compensadas</div>';
+      var retObj = r.retencoesCompensadas.tributosARecolher;
+      var retRows = [];
+      Object.keys(retObj).forEach(function (k) {
+        if (k !== 'total') retRows.push({ cells: [k.toUpperCase(), _m(retObj[k])] });
+      });
+      retRows.push({ cells: ['TOTAL A RECOLHER APÓS RETENÇÕES', _m(retObj.total)], _total: true });
+      h += tabelaHTML(['Tributo', 'Valor a Recolher'], retRows);
+    }
+
+
+    // ═════════════════════════════════════════════════════
+    //  SEÇÃO 14 — DISCLAIMER + RODAPÉ
+    // ═════════════════════════════════════════════════════
+
+    h += pageBreak();
+    h += secaoTitulo('📜', 'SEÇÃO 14 — NOTAS FINAIS E DISCLAIMER');
+    h += pdfFooter(r);
+
+
+    // GERAR PDF
+    var filename = 'relatorio-completo-' + (d.razaoSocial || 'empresa').replace(/[^a-zA-Z0-9]/g, '-').substring(0, 40) + '-' + _dataCurta() + '.pdf';
+    gerarPDF(h, filename, function () { hideLoading(); });
+  }
+
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // ███████████████████████████████████████████████████████████████████████████████
+  //  EXPORTAR EXCEL — 6 abas com SheetJS
+  // ███████████████████████████████████████████████████████████████████████████████
+  // ═══════════════════════════════════════════════════════════════════════════════
+
+  function exportarExcel() {
+    var r = window.LucroRealEstudos ? window.LucroRealEstudos.getResultados() : null;
+    if (!r) { alert('Gere o estudo antes de exportar.'); return; }
+    if (typeof XLSX === 'undefined') { alert('SheetJS (XLSX) não foi carregado.'); return; }
+
+    showLoading('Gerando planilha Excel...');
+
+    var d = r.dadosEmpresa || {};
+    var res = r.resumo || {};
+    var eco = r.economia || {};
+    var dre = r.dre || {};
+    var lalur = r.lalur || {};
+    var irpj = r.irpj || {};
+    var csll = r.csll || {};
+    var pc = r.pisCofins || {};
+    var iss = r.iss || {};
+    var comp = r.composicao || {};
+    var ops = r.oportunidades || [];
+    var fc = r.fluxoCaixa || {};
+    var cen = r.cenarios || [];
+    var proj = r.projecao || {};
+
+    var wb = XLSX.utils.book_new();
+
+    // Helper: criar worksheet com largura de colunas
+    function addSheet(name, aoa, colWidths) {
+      var ws = XLSX.utils.aoa_to_sheet(aoa);
+      if (colWidths) ws['!cols'] = colWidths.map(function (w) { return { wch: w }; });
+      XLSX.utils.book_append_sheet(wb, ws, name);
+    }
+
+    // Formatador numérico para Excel
+    function mv(v) { return _r(v || 0); }
+    function pv(v) { return _r((v || 0) * 100); }
+
+    // ═════════════════════════════════════════════════════
+    //  ABA 1 — RESUMO
+    // ═════════════════════════════════════════════════════
+
+    var aba1 = [];
+    aba1.push(['ESTUDO DE LUCRO REAL — RESUMO EXECUTIVO']);
+    aba1.push([]);
+    aba1.push(['DADOS DA EMPRESA']);
+    aba1.push(['Razão Social', d.razaoSocial || '']);
+    aba1.push(['CNPJ', d.cnpj || '']);
+    aba1.push(['CNAE', d.cnaePrincipal || '']);
+    aba1.push(['UF/Município', (d.municipio || '') + '/' + (d.uf || '')]);
+    aba1.push(['Atividade', d.tipoAtividade || '']);
+    aba1.push(['Apuração', d.apuracaoLR === 'anual' ? 'Anual por Estimativa' : 'Trimestral']);
+    aba1.push(['Ano-base', d.anoBase || '']);
+    aba1.push(['Receita Bruta Anual', mv(d.receitaBrutaAnual)]);
+    aba1.push([]);
+    aba1.push(['INDICADORES PRINCIPAIS']);
+    aba1.push(['Economia Total Identificada', mv(res.economiaTotal)]);
+    aba1.push(['Carga Tributária Bruta', mv(res.cargaBruta)]);
+    aba1.push(['Carga Tributária Mensal', mv(res.cargaBrutaMensal)]);
+    aba1.push(['Alíquota Efetiva (%)', pv(res.aliquotaEfetiva / 100)]);
+    aba1.push(['Carga Otimizada', mv(res.cargaOtimizada)]);
+    aba1.push(['Alíquota Otimizada (%)', pv(res.aliquotaOtimizada / 100)]);
+    aba1.push(['Retenções a Compensar', mv(res.totalRetencoes)]);
+    aba1.push(['Saldo Efetivo a Pagar', mv(res.saldoEfetivo)]);
+    aba1.push([]);
+    aba1.push(['FONTES DE ECONOMIA', 'Valor Anual', 'Base Legal']);
+    var ecoKeys3 = ['jcp', 'prejuizo', 'sudam', 'incentivos', 'depreciacao', 'pisCofinsCreditos', 'gratificacao', 'cprb', 'pddFiscal'];
+    ecoKeys3.forEach(function (k) {
+      if (eco[k] > 0) {
+        var info = ECONOMIA_NOMES[k] || {};
+        aba1.push([info.nome || k, mv(eco[k]), info.base || '']);
+      }
+    });
+    aba1.push(['ECONOMIA TOTAL', mv(eco.total || res.economiaTotal), '']);
+    addSheet('Resumo', aba1, [40, 18, 30]);
+
+
+    // ═════════════════════════════════════════════════════
+    //  ABA 2 — DRE-LALUR
+    // ═════════════════════════════════════════════════════
+
+    var aba2 = [];
+    aba2.push(['DRE — DEMONSTRAÇÃO DO RESULTADO DO EXERCÍCIO']);
+    aba2.push(['Item', 'Valor']);
+    aba2.push(['Receita Bruta', mv(dre.receitaBruta)]);
+    aba2.push(['(-) Custos Totais', mv(-(dre.custosTotais || 0))]);
+    if (dre.cmv) aba2.push(['    CMV / CPV', mv(-dre.cmv)]);
+    if (dre.folhaPagamento) aba2.push(['    Folha de Pagamento', mv(-dre.folhaPagamento)]);
+    if (dre.servicosTerceiros) aba2.push(['    Serviços de Terceiros', mv(-dre.servicosTerceiros)]);
+    aba2.push(['(-) Despesas Totais', mv(-(dre.despesasTotais || 0))]);
+    if (dre.depreciacao) aba2.push(['    Depreciação', mv(-dre.depreciacao)]);
+    if (dre.receitaFinanceiras) aba2.push(['(+) Receitas Financeiras', mv(dre.receitaFinanceiras)]);
+    aba2.push(['= LUCRO LÍQUIDO CONTÁBIL', mv(dre.lucroLiquido)]);
+    if (dre.margemLucro !== undefined) aba2.push(['Margem de Lucro (%)', pv(dre.margemLucro / 100)]);
+    aba2.push([]);
+    aba2.push(['LALUR — LIVRO DE APURAÇÃO DO LUCRO REAL']);
+    aba2.push(['Descrição', 'Valor', 'Base Legal']);
+    aba2.push(['Lucro Líquido Contábil', mv(lalur.lucroLiquido), '']);
+    if (lalur.adicoes && lalur.adicoes.length > 0) {
+      aba2.push(['--- ADIÇÕES ---', '', '']);
+      lalur.adicoes.forEach(function (a) {
+        aba2.push(['(+) ' + (a.desc || a.descricao || ''), mv(a.valor), a.artigo || '']);
+      });
+      aba2.push(['Total Adições', mv(lalur.totalAdicoes), '']);
+    }
+    if (lalur.exclusoes && lalur.exclusoes.length > 0) {
+      aba2.push(['--- EXCLUSÕES ---', '', '']);
+      lalur.exclusoes.forEach(function (e) {
+        aba2.push(['(-) ' + (e.desc || e.descricao || ''), mv(e.valor), e.artigo || '']);
+      });
+      aba2.push(['Total Exclusões', mv(lalur.totalExclusoes), '']);
+    }
+    aba2.push(['= LUCRO AJUSTADO', mv(lalur.lucroAjustado), '']);
+    aba2.push(['= LUCRO REAL FINAL', mv(r.lucroRealFinal), '']);
+    if (r.baseCSLLFinal !== undefined) aba2.push(['Base CSLL Final', mv(r.baseCSLLFinal), '']);
+    addSheet('DRE-LALUR', aba2, [40, 18, 30]);
+
+
+    // ═════════════════════════════════════════════════════
+    //  ABA 3 — TRIBUTOS
+    // ═════════════════════════════════════════════════════
+
+    var aba3 = [];
+    aba3.push(['CÁLCULO DETALHADO DE TRIBUTOS']);
+    aba3.push([]);
+    aba3.push(['IRPJ']);
+    aba3.push(['Lucro Real Final (Base)', mv(r.lucroRealFinal)]);
+    aba3.push(['IRPJ Normal (15%)', mv(irpj.irpjNormal)]);
+    aba3.push(['IRPJ Adicional (10%)', mv(irpj.adicional)]);
+    aba3.push(['IRPJ Bruto', mv(irpj.totalBruto || (irpj.irpjNormal || 0) + (irpj.adicional || 0))]);
+    if (r.reducaoSUDAM > 0) aba3.push(['(-) Redução SUDAM/SUDENE', mv(-r.reducaoSUDAM)]);
+    if (r.incentivosFiscais && r.incentivosFiscais.economiaTotal > 0) aba3.push(['(-) Incentivos Fiscais', mv(-r.incentivosFiscais.economiaTotal)]);
+    aba3.push(['IRPJ FINAL', mv(r.irpjAposReducao)]);
+    aba3.push([]);
+    aba3.push(['CSLL']);
+    aba3.push(['Base CSLL', mv(r.baseCSLLFinal || r.lucroRealFinal)]);
+    aba3.push(['Alíquota (%)', pv(csll.aliquota)]);
+    aba3.push(['CSLL Devida', mv(csll.csllDevida)]);
+    aba3.push([]);
+    aba3.push(['PIS/COFINS (Não-Cumulativo)']);
+    aba3.push(['Receita Tributável', mv(pc.receitaTributavel)]);
+    aba3.push(['Débito PIS (1,65%)', mv(pc.debitoPIS)]);
+    aba3.push(['Débito COFINS (7,6%)', mv(pc.debitoCOFINS)]);
+    aba3.push(['(-) Crédito PIS', mv(-(pc.creditoPIS || 0))]);
+    aba3.push(['(-) Crédito COFINS', mv(-(pc.creditoCOFINS || 0))]);
+    aba3.push(['PIS/COFINS a Pagar', mv(pc.totalAPagar)]);
+    if (pc.economiaCreditos > 0) aba3.push(['Economia com Créditos', mv(pc.economiaCreditos)]);
+    aba3.push([]);
+    aba3.push(['ISS']);
+    if (iss) {
+      aba3.push(['Receita de Serviços', mv(iss.receitaServicos)]);
+      aba3.push(['Alíquota ISS (%)', pv(iss.aliquota)]);
+      aba3.push(['ISS Anual', mv(iss.issAnual)]);
+      aba3.push(['ISS Mensal', mv(iss.issMensal)]);
+    }
+    aba3.push([]);
+    aba3.push(['COMPOSIÇÃO DA CARGA']);
+    aba3.push(['Tributo', 'Valor Anual', '% da Carga']);
+    aba3.push(['IRPJ', mv(comp.irpj ? comp.irpj.valor : 0), pv((comp.irpj ? comp.irpj.percentual : 0) / 100)]);
+    aba3.push(['CSLL', mv(comp.csll ? comp.csll.valor : 0), pv((comp.csll ? comp.csll.percentual : 0) / 100)]);
+    aba3.push(['PIS/COFINS', mv(comp.pisCofins ? comp.pisCofins.valor : 0), pv((comp.pisCofins ? comp.pisCofins.percentual : 0) / 100)]);
+    aba3.push(['ISS', mv(comp.iss ? comp.iss.valor : 0), pv((comp.iss ? comp.iss.percentual : 0) / 100)]);
+    aba3.push(['TOTAL', mv(res.cargaBruta), '100.00']);
+    addSheet('Tributos', aba3, [35, 18, 14]);
+
+
+    // ═════════════════════════════════════════════════════
+    //  ABA 4 — OPORTUNIDADES
+    // ═════════════════════════════════════════════════════
+
+    var aba4 = [];
+    aba4.push(['OPORTUNIDADES DE ECONOMIA TRIBUTÁRIA']);
+    aba4.push(['#', 'Título', 'Tipo', 'Economia Anual', 'Complexidade', 'Risco', 'Prazo', 'Base Legal', 'Descrição', 'Ação Recomendada']);
+    ops.forEach(function (op, i) {
+      aba4.push([
+        op.ranking || i + 1,
+        op.titulo || '',
+        op.tipo || '',
+        mv(op.economiaAnual),
+        op.complexidade || '',
+        op.risco || '',
+        op.prazoImplementacao || '',
+        op.baseLegal || '',
+        op.descricao || '',
+        op.acaoRecomendada || ''
+      ]);
+    });
+    addSheet('Oportunidades', aba4, [5, 30, 12, 16, 12, 10, 12, 25, 50, 50]);
+
+
+    // ═════════════════════════════════════════════════════
+    //  ABA 5 — FLUXO MENSAL
+    // ═════════════════════════════════════════════════════
+
+    var aba5 = [];
+    aba5.push(['FLUXO DE CAIXA TRIBUTÁRIO MENSAL']);
+    aba5.push(['Mês', 'IRPJ', 'CSLL', 'PIS', 'COFINS', 'ISS', 'TOTAL']);
+    if (fc.meses) {
+      fc.meses.forEach(function (m, i) {
+        aba5.push([MESES[i] || m.mes, mv(m.irpj), mv(m.csll), mv(m.pis), mv(m.cofins), mv(m.iss), mv(m.total)]);
+      });
+      aba5.push([
+        'TOTAL ANUAL',
+        mv(fc.meses.reduce(function (s, m) { return s + (m.irpj || 0); }, 0)),
+        mv(fc.meses.reduce(function (s, m) { return s + (m.csll || 0); }, 0)),
+        mv(fc.meses.reduce(function (s, m) { return s + (m.pis || 0); }, 0)),
+        mv(fc.meses.reduce(function (s, m) { return s + (m.cofins || 0); }, 0)),
+        mv(fc.meses.reduce(function (s, m) { return s + (m.iss || 0); }, 0)),
+        mv(fc.totalAnual || 0)
+      ]);
+      if (fc.mediaMensal) {
+        aba5.push(['Média Mensal', '', '', '', '', '', mv(fc.mediaMensal)]);
+      }
+    }
+    addSheet('Fluxo Mensal', aba5, [14, 14, 14, 14, 14, 14, 16]);
+
+
+    // ═════════════════════════════════════════════════════
+    //  ABA 6 — CENÁRIOS + PROJEÇÃO
+    // ═════════════════════════════════════════════════════
+
+    var aba6 = [];
+    if (cen && cen.length > 0) {
+      aba6.push(['CENÁRIOS — ANÁLISE DE SENSIBILIDADE']);
+      var cenH = ['Indicador'];
+      cen.forEach(function (c) { cenH.push(c.nome || ''); });
+      aba6.push(cenH);
+      var indicadores2 = [
+        { k: 'margem', l: 'Margem (%)' },
+        { k: 'lucro', l: 'Lucro' },
+        { k: 'irpjCSLL', l: 'IRPJ + CSLL' },
+        { k: 'pisCofins', l: 'PIS/COFINS' },
+        { k: 'iss', l: 'ISS' },
+        { k: 'cargaTotal', l: 'Carga Total' },
+        { k: 'aliquotaEfetiva', l: 'Alíquota Efetiva (%)' }
+      ];
+      indicadores2.forEach(function (ind) {
+        var row = [ind.l];
+        cen.forEach(function (c) {
+          if (ind.k === 'margem' || ind.k === 'aliquotaEfetiva') row.push(pv(c[ind.k] / 100));
+          else row.push(mv(c[ind.k]));
+        });
+        aba6.push(row);
+      });
+      aba6.push([]);
+    }
+
+    if (proj.projecaoCarga && proj.projecaoCarga.length > 0) {
+      aba6.push(['PROJEÇÃO PLURIANUAL']);
+      aba6.push(['Ano', 'Receita', 'Carga', 'Economia Ano', 'Economia Acumulada']);
+      proj.projecaoCarga.forEach(function (p) {
+        aba6.push(['Ano ' + p.ano, mv(p.receita), mv(p.carga), mv(p.economiaAno), mv(p.economiaAcumulada)]);
+      });
+    }
+
+    if (aba6.length === 0) {
+      aba6.push(['Cenários e projeção não gerados']);
+      aba6.push(['Ative as opções "Gerar Cenários" e "Gerar Projeção" na Etapa 7 do wizard.']);
+    }
+    addSheet('Cenários-Projeção', aba6, [20, 18, 18, 18, 20]);
+
+
+    // ═════════════════════════════════════════════════════
+    //  SALVAR ARQUIVO
+    // ═════════════════════════════════════════════════════
+
+    try {
+      var filename = 'estudo-lucro-real-' + (d.razaoSocial || 'empresa').replace(/[^a-zA-Z0-9]/g, '-').substring(0, 40) + '-' + _dataCurta() + '.xlsx';
+      XLSX.writeFile(wb, filename);
+    } catch (err) {
+      console.error('Erro Excel:', err);
+      alert('Erro ao gerar Excel. Veja o console.');
+    }
+
+    hideLoading();
+  }
+
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  EXPORT PÚBLICO
+  // ═══════════════════════════════════════════════════════════════════════════
+
+
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  EXPORT PÚBLICO (Wizard + Motor + Exportação PDF/Excel)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  window.LucroRealEstudos = {
+    VERSAO: VERSAO,
+    init: init,
+    nextStep: nextStep,
+    prevStep: prevStep,
+    goToStep: goToStep,
+    analisar: analisar,
+    voltarWizard: voltarWizard,
+    saveField: saveField,
+    saveMoney: saveMoney,
+    onMunicipioChanged: onMunicipioChanged,
+    preencherExemplo: preencherExemplo,
+    novoEstudo: novoEstudo,
+    getDados: function () { return dadosEmpresa; },
+    getResultados: function () { return resultadosCache; },
+    exportarJSON: exportarJSON,
+    imprimir: imprimir,
+    // ── Exportação PDF / Excel (integrado) ──
+    pdfSimplificado: pdfSimplificado,
+    pdfCompleto: pdfCompleto,
+    exportarExcel: exportarExcel
+  };
+
+  // Aliases globais para compatibilidade com onclick nos botões do relatório
+  window.IMPOSTExport = {
+    pdfSimplificado: pdfSimplificado,
+    pdfCompleto: pdfCompleto,
+    exportarExcel: exportarExcel
+  };
+  window.pdfSimplificado = pdfSimplificado;
+  window.pdfCompleto = pdfCompleto;
+  window.exportarExcel = exportarExcel;
+
+  document.addEventListener("DOMContentLoaded", init);
+})();

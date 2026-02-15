@@ -1,0 +1,2032 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Estudo Lucro Presumido v2.1 | IMPOST.</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0f172a;--bg2:#1e293b;--bg-card:#1e293b;--bg-card-h:#334155;--surface:#334155;
+  --border:#475569;--border-l:rgba(100,116,139,.2);
+  --text:#f1f5f9;--text2:#94a3b8;--text3:#64748b;
+  --accent:#f59e0b;--accent-h:#d97706;--accent-l:rgba(245,158,11,.12);
+  --success:#10b981;--success-l:rgba(16,185,129,.12);--success-b:rgba(16,185,129,.25);
+  --warn:#f59e0b;--warn-l:rgba(245,158,11,.12);--warn-b:rgba(245,158,11,.25);
+  --danger:#ef4444;--danger-l:rgba(239,68,68,.12);--danger-b:rgba(239,68,68,.25);
+  --info:#3b82f6;--info-l:rgba(59,130,246,.12);--info-b:rgba(59,130,246,.25);
+  --simples:#8b5cf6;--presumido:#f59e0b;--real:#3b82f6;--sudam:#10b981;
+  --r:8px;--rl:12px;--font:'DM Sans',sans-serif;--mono:'Space Mono',monospace;
+  --t:.2s ease;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{font-family:var(--font);background:var(--bg);color:var(--text);line-height:1.6;min-height:100vh;-webkit-font-smoothing:antialiased}
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:var(--surface);border-radius:3px}
+
+/* LOADING */
+#loadingOverlay{position:fixed;inset:0;z-index:9999;background:var(--bg);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px;transition:opacity .4s}
+#loadingOverlay.hide{opacity:0;pointer-events:none}
+.ld-spinner{width:44px;height:44px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.ld-text{color:var(--text3);font-size:14px}
+.ld-brand{font-size:28px;font-weight:800;letter-spacing:-.5px;margin-bottom:8px}
+.ld-brand span{color:var(--accent)}
+
+/* TOPBAR */
+.topbar{background:var(--bg2);border-bottom:1px solid var(--border-l);padding:0 28px;display:flex;align-items:center;justify-content:space-between;height:56px;position:sticky;top:0;z-index:100}
+.tb-left{display:flex;align-items:center;gap:14px}
+.tb-brand{font-size:20px;font-weight:800;letter-spacing:-.5px}
+.tb-brand span{color:var(--accent)}
+.tb-sep{width:1px;height:22px;background:var(--border)}
+.tb-page{font-size:13px;color:var(--text3)}
+.tb-right{display:flex;gap:8px}
+.tb-btn{padding:7px 18px;border-radius:var(--r);font-size:12px;font-weight:600;font-family:var(--font);cursor:pointer;transition:var(--t);border:1px solid var(--border);background:transparent;color:var(--text2)}
+.tb-btn:hover{border-color:var(--accent);color:var(--accent)}
+.tb-btn-p{background:var(--accent);color:#000;border-color:var(--accent);font-weight:700}
+.tb-btn-p:hover{background:var(--accent-h)}
+
+/* LAYOUT */
+.layout{display:flex;min-height:calc(100vh - 56px)}
+
+/* SIDEBAR */
+.sidebar{width:260px;background:var(--bg2);border-right:1px solid var(--border-l);padding:20px 16px;position:sticky;top:56px;height:calc(100vh - 56px);overflow-y:auto;flex-shrink:0}
+.sb-title{font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:12px;font-weight:600}
+.sb-card{background:var(--surface);border-radius:var(--r);padding:14px;margin-bottom:10px}
+.sb-label{font-size:11px;color:var(--text3);margin-bottom:2px}
+.sb-value{font-size:16px;font-weight:700;font-family:var(--mono);color:var(--text)}
+.sb-value.accent{color:var(--accent)}
+.sb-value.success{color:var(--success)}
+.sb-regime{display:inline-block;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:700;margin-top:4px}
+.sb-divider{height:1px;background:var(--border-l);margin:12px 0}
+
+/* MAIN */
+.main-area{flex:1;padding:24px 32px 80px;max-width:960px;margin:0 auto;width:100%}
+
+/* STEPPER */
+.stepper{display:flex;align-items:center;margin-bottom:28px;overflow-x:auto;padding-bottom:4px}
+.st-item{display:flex;flex-direction:column;align-items:center;min-width:72px;flex-shrink:0;cursor:pointer}
+.st-num{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;background:var(--surface);border:2px solid var(--border);color:var(--text3);transition:var(--t)}
+.st-item.active .st-num{background:var(--accent);border-color:var(--accent);color:#000;box-shadow:0 2px 12px rgba(245,158,11,.35)}
+.st-item.done .st-num{background:var(--success);border-color:var(--success);color:#fff}
+.st-label{font-size:10px;color:var(--text3);margin-top:5px;text-align:center;white-space:nowrap;font-weight:500}
+.st-item.active .st-label{color:var(--accent);font-weight:600}
+.st-item.done .st-label{color:var(--success)}
+.st-line{flex:1;height:2px;background:var(--border);min-width:16px;margin:0 2px;margin-bottom:18px}
+.st-line.done{background:var(--success)}
+
+/* WIZARD PANEL */
+.wz-panel{display:none;animation:fadeUp .3s ease-out}
+.wz-panel.active{display:block}
+@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.wz-card{background:var(--bg-card);border:1px solid var(--border-l);border-radius:var(--rl);padding:28px 32px;margin-bottom:20px}
+.wz-header{display:flex;align-items:center;gap:14px;margin-bottom:24px;padding-bottom:16px;border-bottom:1px solid var(--border-l)}
+.wz-icon{font-size:28px}
+.wz-title{font-size:18px;font-weight:700}
+.wz-sub{font-size:13px;color:var(--text3);margin-top:2px}
+
+/* FORMS */
+.fm-grid{display:grid;gap:16px}.fm-2{grid-template-columns:1fr 1fr}.fm-3{grid-template-columns:1fr 1fr 1fr}
+@media(max-width:700px){.fm-2,.fm-3{grid-template-columns:1fr}}
+.fm-group{display:flex;flex-direction:column;gap:4px}
+.fm-group label{font-size:12px;font-weight:600;color:var(--text2);display:flex;align-items:center;gap:6px}
+.fm-tip{font-size:11px;color:var(--text3);line-height:1.4}
+.fm-input{padding:9px 13px;background:var(--surface);border:1px solid var(--border-l);border-radius:var(--r);color:var(--text);font-size:14px;font-family:var(--font);transition:var(--t);outline:none;width:100%}
+.fm-input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-l)}
+.fm-input::placeholder{color:var(--text3)}
+select.fm-input{cursor:pointer;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2394a3b8' d='M6 8L1 3h10z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding-right:32px}
+.fm-prefix{display:flex;align-items:center;background:var(--surface);border:1px solid var(--border-l);border-radius:var(--r);overflow:hidden;transition:var(--t)}
+.fm-prefix:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-l)}
+.fm-prefix span{padding:0 11px;font-size:12px;font-weight:600;color:var(--text3);background:var(--bg2);min-height:38px;display:flex;align-items:center;border-right:1px solid var(--border-l)}
+.fm-prefix .fm-input{border:none;background:transparent;box-shadow:none!important}
+.fm-error{font-size:11px;color:var(--danger)}
+
+/* TOGGLE */
+.toggle-wrap{display:flex;background:var(--surface);border-radius:var(--r);padding:3px;gap:2px;margin-bottom:16px}
+.toggle-btn{flex:1;padding:8px 16px;border:none;border-radius:6px;font-size:13px;font-weight:600;font-family:var(--font);cursor:pointer;transition:var(--t);background:transparent;color:var(--text3)}
+.toggle-btn.active{background:var(--accent);color:#000}
+
+/* CHECKBOX CARD */
+.chk-card{display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--surface);border:1px solid var(--border-l);border-radius:var(--r);cursor:pointer;transition:var(--t);font-size:13px;color:var(--text2)}
+.chk-card:hover{border-color:var(--accent)}
+.chk-card input{display:none}
+.chk-mark{width:18px;height:18px;flex-shrink:0;border:2px solid var(--border);border-radius:4px;display:flex;align-items:center;justify-content:center;transition:var(--t);font-size:10px}
+.chk-card input:checked+.chk-mark{background:var(--danger);border-color:var(--danger);color:#fff}
+.chk-card input:checked+.chk-mark::after{content:'\2713'}
+
+/* INFO BOX */
+.info-box{padding:12px 16px;border-radius:var(--r);font-size:12px;line-height:1.6;margin-top:8px}
+.info-box.success{background:var(--success-l);border:1px solid var(--success-b);color:var(--success)}
+.info-box.danger{background:var(--danger-l);border:1px solid var(--danger-b);color:var(--danger)}
+.info-box.warn{background:var(--warn-l);border:1px solid var(--warn-b);color:var(--warn)}
+.info-box.info{background:var(--info-l);border:1px solid var(--info-b);color:var(--info)}
+
+/* BADGE */
+.badge{display:inline-block;padding:2px 10px;border-radius:12px;font-size:11px;font-weight:600}
+.badge-success{background:var(--success-l);color:var(--success)}
+.badge-danger{background:var(--danger-l);color:var(--danger)}
+.badge-warn{background:var(--warn-l);color:var(--warn)}
+.badge-info{background:var(--info-l);color:var(--info)}
+
+/* SEARCH RESULTS */
+.search-results{max-height:220px;overflow-y:auto;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);margin-top:4px;display:none}
+.search-results.open{display:block}
+.sr-item{padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border-l);transition:var(--t);font-size:13px}
+.sr-item:hover{background:var(--accent-l)}
+.sr-item .sr-code{font-family:var(--mono);color:var(--accent);font-size:12px;font-weight:700}
+.sr-item .sr-desc{color:var(--text2);margin-left:8px}
+.sr-item .sr-cat{font-size:11px;color:var(--text3);display:block;margin-top:2px}
+
+/* DYNAMIC TABLE */
+.dyn-table{width:100%;border-collapse:collapse;font-size:13px}
+.dyn-table th{text-align:left;padding:10px 12px;background:var(--bg);color:var(--text3);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border)}
+.dyn-table td{padding:9px 12px;border-bottom:1px solid var(--border-l)}
+.dyn-table tr:hover td{background:var(--bg-card-h)}
+.dyn-table .mono{font-family:var(--mono);font-size:12px}
+.dyn-table .right{text-align:right}
+.dyn-table .btn-rm{background:none;border:none;color:var(--danger);cursor:pointer;font-size:16px;padding:2px 6px}
+.btn-add-row{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;background:var(--accent-l);border:1px dashed var(--accent);border-radius:var(--r);color:var(--accent);font-size:12px;font-weight:600;cursor:pointer;transition:var(--t);margin-top:8px;font-family:var(--font)}
+.btn-add-row:hover{background:var(--accent);color:#000}
+
+/* RESULT TABS */
+.res-tabs{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:20px;padding:4px;background:var(--bg);border-radius:var(--r)}
+.res-tab{padding:7px 14px;border:none;border-radius:6px;font-size:11px;font-weight:600;font-family:var(--font);cursor:pointer;transition:var(--t);background:transparent;color:var(--text3);white-space:nowrap}
+.res-tab.active{background:var(--accent);color:#000}
+.res-tab:hover:not(.active){background:var(--surface)}
+.tab-panel{display:none}.tab-panel.active{display:block}
+
+/* KPI CARDS */
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:20px}
+.kpi{background:var(--surface);border-radius:var(--r);padding:16px;text-align:center}
+.kpi-label{font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
+.kpi-value{font-size:22px;font-weight:800;font-family:var(--mono)}
+.kpi-sub{font-size:11px;color:var(--text3);margin-top:2px}
+
+/* REGIME COMPARISON CARDS */
+.regime-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin-bottom:20px}
+.regime-card{border-radius:var(--rl);padding:20px;border:2px solid var(--border-l);position:relative;transition:var(--t)}
+.regime-card.best{border-color:var(--success);box-shadow:0 0 20px rgba(16,185,129,.15)}
+.regime-card .rc-badge{position:absolute;top:-10px;right:12px;padding:2px 12px;border-radius:12px;font-size:11px;font-weight:700}
+.rc-name{font-size:14px;font-weight:700;margin-bottom:12px}
+.rc-total{font-size:24px;font-weight:800;font-family:var(--mono);margin-bottom:4px}
+.rc-pct{font-size:12px;color:var(--text3);margin-bottom:12px}
+.rc-detail{font-size:12px;color:var(--text2);line-height:1.8}
+.rc-detail span{font-family:var(--mono);float:right}
+.rc-economy{margin-top:12px;padding:8px;background:var(--success-l);border-radius:6px;text-align:center;font-size:12px;font-weight:700;color:var(--success)}
+
+/* RISK CARDS */
+.risk-grid{display:flex;flex-direction:column;gap:10px}
+.risk-card{padding:16px;border-radius:var(--r);border-left:4px solid}
+.risk-card.critica{background:var(--danger-l);border-color:var(--danger)}
+.risk-card.alta{background:var(--warn-l);border-color:var(--warn)}
+.risk-card.media{background:var(--info-l);border-color:var(--info)}
+.risk-title{font-size:14px;font-weight:700;margin-bottom:4px}
+.risk-desc{font-size:12px;color:var(--text2);margin-bottom:6px}
+.risk-prev{font-size:11px;color:var(--text3);font-style:italic}
+
+/* ADVANTAGE/DISADVANTAGE CARDS */
+.adv-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:700px){.adv-grid{grid-template-columns:1fr}}
+.adv-card{padding:16px;border-radius:var(--r);border:1px solid}
+.adv-card.pro{background:var(--success-l);border-color:var(--success-b)}
+.adv-card.con{background:var(--danger-l);border-color:var(--danger-b)}
+.adv-title{font-size:13px;font-weight:700;margin-bottom:4px}
+.adv-desc{font-size:12px;color:var(--text2)}
+.adv-impact{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-top:6px}
+
+/* OBLIGATION TIMELINE */
+.obl-list{display:flex;flex-direction:column;gap:10px}
+.obl-item{display:flex;gap:14px;padding:14px;background:var(--surface);border-radius:var(--r);align-items:flex-start}
+.obl-period{min-width:80px;font-size:11px;font-weight:700;color:var(--accent);text-transform:uppercase}
+.obl-name{font-size:13px;font-weight:600;color:var(--text)}
+.obl-detail{font-size:11px;color:var(--text3);margin-top:2px}
+
+/* CHART */
+.chart-wrap{background:var(--surface);border-radius:var(--r);padding:16px;margin-bottom:16px;position:relative}
+.chart-wrap canvas{max-height:320px}
+.chart-title{font-size:13px;font-weight:700;color:var(--text2);margin-bottom:10px}
+
+/* TRANSITION */
+.trans-card{background:var(--surface);border-radius:var(--r);padding:20px;margin-bottom:14px}
+.trans-title{font-size:15px;font-weight:700;margin-bottom:10px;color:var(--accent)}
+.trans-steps{list-style:decimal;padding-left:20px;font-size:13px;color:var(--text2);line-height:2}
+.trans-alert{display:flex;align-items:flex-start;gap:8px;padding:8px 12px;background:var(--warn-l);border-radius:6px;font-size:12px;color:var(--warn);margin-top:8px}
+
+/* TIPS */
+.tip-card{padding:14px 18px;background:var(--surface);border-radius:var(--r);margin-bottom:10px;border-left:3px solid var(--accent)}
+.tip-title{font-size:13px;font-weight:700;color:var(--accent);margin-bottom:4px}
+.tip-desc{font-size:12px;color:var(--text2);line-height:1.6}
+
+/* SOCIOS TABLE */
+.soc-row{display:grid;grid-template-columns:1fr 100px 40px;gap:8px;margin-bottom:6px;align-items:center}
+
+/* EXPORT SECTION */
+.export-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px}
+.export-card{background:var(--surface);border-radius:var(--rl);padding:24px;text-align:center;cursor:pointer;transition:var(--t);border:1px solid var(--border-l)}
+.export-card:hover{border-color:var(--accent);transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,0,0,.3)}
+.export-icon{font-size:32px;margin-bottom:8px}
+.export-label{font-size:14px;font-weight:700}
+.export-desc{font-size:11px;color:var(--text3);margin-top:4px}
+
+/* NAV FOOTER */
+.wz-nav{display:flex;justify-content:space-between;margin-top:24px;padding-top:20px;border-top:1px solid var(--border-l)}
+.wz-btn{padding:10px 26px;border:none;border-radius:var(--r);font-size:13px;font-weight:600;font-family:var(--font);cursor:pointer;transition:var(--t)}
+.wz-btn:disabled{opacity:.4;cursor:not-allowed}
+.wz-btn-back{background:var(--surface);color:var(--text2);border:1px solid var(--border)}
+.wz-btn-back:hover:not(:disabled){color:var(--text);border-color:var(--text3)}
+.wz-btn-next{background:var(--accent);color:#000;font-weight:700}
+.wz-btn-next:hover:not(:disabled){background:var(--accent-h);box-shadow:0 2px 12px rgba(245,158,11,.3)}
+.wz-btn-calc{background:var(--success);color:#fff;font-size:14px;padding:12px 32px}
+.wz-btn-calc:hover{background:#059669;box-shadow:0 4px 20px rgba(16,185,129,.3)}
+
+/* TOOLTIP */
+.tt{position:relative;cursor:help;display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;background:var(--border-l);border-radius:50%;font-size:10px;font-weight:700;color:var(--text3)}
+.tt:hover::after{content:attr(data-tip);position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px 12px;font-size:11px;font-weight:400;color:var(--text2);white-space:normal;width:260px;max-width:80vw;z-index:50;box-shadow:0 4px 12px rgba(0,0,0,.4);line-height:1.5;pointer-events:none}
+
+/* FOOTER LEGAL */
+.legal-footer{background:var(--bg2);border-top:1px solid var(--border-l);padding:24px 28px;text-align:center;font-size:11px;color:var(--text3);line-height:1.8}
+.legal-footer a{color:var(--accent);text-decoration:none}
+.legal-footer strong{color:var(--text2)}
+
+/* PRINT */
+@media print{
+  body{background:#fff;color:#000}
+  .topbar,.sidebar,.stepper,.wz-nav,.tb-right,.toggle-wrap,.btn-add-row,.btn-rm,.export-grid,.res-tabs,.legal-footer{display:none!important}
+  #step1,#step2,#step3,#step4{display:none!important}
+  .layout{display:block}.main-area{max-width:100%;padding:0}
+  #step5,#step6{display:block!important}
+  #step5 .wz-card{box-shadow:none;border:none;padding:0}
+  .tab-panel{display:block!important;break-inside:avoid;margin-bottom:20px;page-break-inside:avoid}
+  .wz-card,.kpi,.regime-card,.risk-card,.adv-card,.chart-wrap,.tip-card{background:#fff;border:1px solid #ddd;color:#000;break-inside:avoid}
+  .kpi-value,.rc-total{color:#000}
+  .fm-input,.fm-prefix{background:#f5f5f5;border:1px solid #ccc;color:#000}
+  .tab-panel .chart-wrap canvas{max-height:240px}
+}
+
+/* RESPONSIVE */
+@media(max-width:900px){
+  .sidebar{display:none}
+  .main-area{padding:16px}
+  .wz-card{padding:20px 16px}
+  .regime-grid{grid-template-columns:1fr}
+  .kpi-grid{grid-template-columns:repeat(2,1fr)}
+}
+@media(max-width:500px){
+  .topbar{padding:0 12px}
+  .kpi-grid{grid-template-columns:1fr}
+  .stepper{gap:0}
+}
+
+/* SECTION TITLE */
+.sec-title{font-size:15px;font-weight:700;color:var(--accent);margin:20px 0 12px;padding-top:16px;border-top:1px solid var(--border-l)}
+.sec-title:first-child{border-top:none;padding-top:0;margin-top:0}
+
+/* DESPESAS GRID */
+.desp-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media(max-width:600px){.desp-grid{grid-template-columns:1fr}}
+
+/* CHARTS RESPONSIVE */
+.chart-grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px}
+@media(max-width:700px){.chart-grid-2{grid-template-columns:1fr}}
+
+/* VALIDATION */
+.fm-input.invalid{border-color:var(--danger)!important;box-shadow:0 0 0 3px var(--danger-l)!important}
+</style>
+</head>
+<body>
+
+<!-- LOADING -->
+<div id="loadingOverlay">
+  <div class="ld-brand">IMPOST<span>.</span></div>
+  <div class="ld-spinner"></div>
+  <div class="ld-text">Carregando motores de calculo...</div>
+</div>
+
+<!-- TOPBAR -->
+<header class="topbar">
+  <div class="tb-left">
+    <div class="tb-brand">IMPOST<span>.</span></div>
+    <div class="tb-sep"></div>
+    <div class="tb-page">Estudo Lucro Presumido</div>
+  </div>
+  <div class="tb-right">
+    <button class="tb-btn" onclick="carregarEstudo()">Carregar Estudo</button>
+    <button class="tb-btn tb-btn-p" onclick="salvarEstudo()">Salvar</button>
+  </div>
+</header>
+
+<!-- LAYOUT -->
+<div class="layout">
+
+<!-- SIDEBAR -->
+<aside class="sidebar" id="sidebar">
+  <div class="sb-title">Resumo do Estudo</div>
+  <div class="sb-card">
+    <div class="sb-label">Empresa</div>
+    <div class="sb-value" id="sbEmpresa" style="font-size:13px;font-family:var(--font)">--</div>
+  </div>
+  <div class="sb-card">
+    <div class="sb-label">CNAE Principal</div>
+    <div class="sb-value" id="sbCnae" style="font-size:12px">--</div>
+  </div>
+  <div class="sb-card">
+    <div class="sb-label">Receita Bruta Anual</div>
+    <div class="sb-value accent" id="sbReceita">R$ 0,00</div>
+  </div>
+  <div class="sb-divider"></div>
+  <div class="sb-card">
+    <div class="sb-label">Tributos do Regime LP</div>
+    <div class="sb-value" id="sbCarga">--</div>
+    <div class="sb-label" id="sbCargaPct" style="margin-top:4px">--</div>
+  </div>
+  <div class="sb-divider"></div>
+  <div class="sb-card">
+    <div class="sb-label">Elegibilidade</div>
+    <div id="sbElegibilidade"><span class="badge badge-info">Pendente</span></div>
+  </div>
+</aside>
+
+<!-- MAIN -->
+<div class="main-area">
+
+<!-- STEPPER -->
+<div class="stepper" id="stepper">
+  <div class="st-item active" data-step="1" onclick="goToStep(1)"><div class="st-num">1</div><div class="st-label">Empresa</div></div>
+  <div class="st-line"></div>
+  <div class="st-item" data-step="2" onclick="goToStep(2)"><div class="st-num">2</div><div class="st-label">Elegibilidade</div></div>
+  <div class="st-line"></div>
+  <div class="st-item" data-step="3" onclick="goToStep(3)"><div class="st-num">3</div><div class="st-label">Financeiro</div></div>
+  <div class="st-line"></div>
+  <div class="st-item" data-step="4" onclick="goToStep(4)"><div class="st-num">4</div><div class="st-label">Complementar</div></div>
+  <div class="st-line"></div>
+  <div class="st-item" data-step="5" onclick="goToStep(5)"><div class="st-num">5</div><div class="st-label">Resultados</div></div>
+  <div class="st-line"></div>
+  <div class="st-item" data-step="6" onclick="goToStep(6)"><div class="st-num">6</div><div class="st-label">Exportar</div></div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<!-- STEP 1: IDENTIFICACAO DA EMPRESA -->
+<!-- ═══════════════════════════════════════════════════ -->
+<section class="wz-panel active" id="step1">
+<div class="wz-card">
+  <div class="wz-header">
+    <div class="wz-icon">&#127970;</div>
+    <div><div class="wz-title">Identificacao da Empresa</div><div class="wz-sub">Dados cadastrais e localizacao</div></div>
+  </div>
+
+  <div class="fm-grid fm-2">
+    <div class="fm-group">
+      <label>Razao Social <span style="color:var(--danger)">*</span></label>
+      <input class="fm-input" id="razaoSocial" placeholder="Nome da empresa" required>
+    </div>
+    <div class="fm-group">
+      <label>CNPJ <span style="color:var(--danger)">*</span></label>
+      <input class="fm-input" id="cnpj" placeholder="XX.XXX.XXX/XXXX-XX" maxlength="18" required>
+    </div>
+  </div>
+
+  <div class="sec-title">CNAE Principal <span style="color:var(--danger)">*</span></div>
+  <div class="fm-group">
+    <label>Buscar CNAE <span class="tt" data-tip="Digite o codigo CNAE ou uma descricao da atividade. Ex: 7119, consultoria, restaurante">?</span></label>
+    <input class="fm-input" id="cnaeBusca" placeholder="Digite o codigo ou descricao da atividade..." autocomplete="off">
+    <div class="search-results" id="cnaeResults"></div>
+    <div id="cnaeInfo" style="display:none"></div>
+  </div>
+  <input type="hidden" id="cnaePrincipal" value="">
+  <input type="hidden" id="atividadeId" value="">
+
+  <div class="sec-title">CNAEs Secundarios</div>
+  <div id="cnaesSecContainer">
+    <div class="fm-tip" style="margin-bottom:8px">Adicione CNAEs secundarios se a empresa possui atividades mistas com percentuais de presuncao diferentes.</div>
+  </div>
+  <button class="btn-add-row" onclick="addCnaeSecundario()">+ Adicionar CNAE Secundario</button>
+
+  <div class="sec-title">Localizacao</div>
+  <div class="fm-grid fm-2">
+    <div class="fm-group">
+      <label>Estado (UF) <span class="tt" data-tip="Selecione o estado para carregar dados tributarios (ICMS, incentivos fiscais, sublimite Simples)">?</span></label>
+      <select class="fm-input" id="estado"><option value="">Selecione o estado...</option></select>
+      <div id="estadoInfo"></div>
+    </div>
+    <div class="fm-group">
+      <label>Municipio</label>
+      <select class="fm-input" id="municipio" disabled><option value="">Selecione o estado primeiro...</option></select>
+      <div id="municipioInfo"></div>
+    </div>
+  </div>
+  <div class="fm-grid fm-2" style="margin-top:12px">
+    <div class="fm-group">
+      <label>Aliquota ISS (%) <span class="tt" data-tip="Minimo 2%, maximo 5% (LC 116/2003). Ajustavel manualmente.">?</span></label>
+      <div class="fm-prefix"><span>%</span><input class="fm-input" id="aliquotaISS" type="number" min="2" max="5" step="0.1" value="5"></div>
+    </div>
+  </div>
+
+  <div class="sec-title">Dados Complementares</div>
+  <div class="fm-grid fm-2">
+    <div class="fm-group">
+      <label>Data de Constituicao</label>
+      <input class="fm-input" id="dataConstituicao" type="date">
+    </div>
+    <div class="fm-group">
+      <label>Porte da Empresa <span class="tt" data-tip="ME: Receita ate R$ 360.000/ano. EPP: ate R$ 4.800.000/ano. Demais: acima.">?</span></label>
+      <select class="fm-input" id="porte">
+        <option value="ME">ME - Microempresa</option>
+        <option value="EPP">EPP - Empresa de Pequeno Porte</option>
+        <option value="DEMAIS" selected>Demais</option>
+      </select>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<!-- STEP 2: ELEGIBILIDADE -->
+<!-- ═══════════════════════════════════════════════════ -->
+<section class="wz-panel" id="step2">
+<div class="wz-card">
+  <div class="wz-header">
+    <div class="wz-icon">&#9989;</div>
+    <div><div class="wz-title">Verificacao de Elegibilidade</div><div class="wz-sub">Verificacao automatica dos requisitos para Lucro Presumido</div></div>
+  </div>
+
+  <div class="fm-grid fm-2">
+    <div class="fm-group">
+      <label>Receita bruta do ano anterior <span class="tt" data-tip="Receita bruta total no ano-calendario anterior. Limite: R$ 78.000.000,00 (Lei 9.718/1998, Art. 13)">?</span></label>
+      <div class="fm-prefix"><span>R$</span><input class="fm-input money" id="receitaAnterior" placeholder="0,00"></div>
+    </div>
+    <div class="fm-group">
+      <label>Meses de atividade no ano anterior</label>
+      <select class="fm-input" id="mesesAtividade">
+        <option value="12" selected>12 meses (ano completo)</option>
+        <option value="11">11 meses</option><option value="10">10 meses</option>
+        <option value="9">9 meses</option><option value="8">8 meses</option>
+        <option value="7">7 meses</option><option value="6">6 meses</option>
+        <option value="5">5 meses</option><option value="4">4 meses</option>
+        <option value="3">3 meses</option><option value="2">2 meses</option>
+        <option value="1">1 mes (empresa nova)</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="sec-title">Impedimentos Legais (RIR/2018, Art. 257)</div>
+  <div class="fm-tip" style="margin-bottom:10px">Marque SIM apenas se a situacao se aplica a empresa. Qualquer marcacao pode impedir o Lucro Presumido.</div>
+  <div class="fm-grid" style="gap:8px">
+    <label class="chk-card"><input type="checkbox" id="impInstFinanceira"><span class="chk-mark"></span> E instituicao financeira? (bancos, corretoras)</label>
+    <label class="chk-card"><input type="checkbox" id="impFactoring"><span class="chk-mark"></span> E empresa de factoring?</label>
+    <label class="chk-card"><input type="checkbox" id="impExterior"><span class="chk-mark"></span> Tem rendimentos/lucros do exterior?</label>
+    <label class="chk-card"><input type="checkbox" id="impIsencao"><span class="chk-mark"></span> Tem isencao/reducao de IR sobre lucro da exploracao?</label>
+    <label class="chk-card"><input type="checkbox" id="impSCP"><span class="chk-mark"></span> E Sociedade em Conta de Participacao (SCP)?</label>
+  </div>
+
+  <div id="elegibilidadeResult" style="margin-top:20px"></div>
+</div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<!-- STEP 3: DADOS FINANCEIROS -->
+<!-- ═══════════════════════════════════════════════════ -->
+<section class="wz-panel" id="step3">
+<div class="wz-card">
+  <div class="wz-header">
+    <div class="wz-icon">&#128200;</div>
+    <div><div class="wz-title">Dados Financeiros Detalhados</div><div class="wz-sub">Receitas, deducoes e retencoes para calculo preciso</div></div>
+  </div>
+
+  <div class="toggle-wrap">
+    <button class="toggle-btn active" onclick="setModoFinanceiro('simplificado')">Modo Simplificado</button>
+    <button class="toggle-btn" onclick="setModoFinanceiro('detalhado')">Modo Detalhado (Trimestral)</button>
+  </div>
+
+  <!-- MODO SIMPLIFICADO -->
+  <div id="modoSimplificado">
+    <div class="sec-title">Receita Bruta Anual por Atividade <span style="color:var(--danger)">*</span></div>
+    <div class="fm-tip" style="margin-bottom:10px">Informe a receita anual estimada para cada atividade. O percentual de presuncao sera aplicado automaticamente.</div>
+    <table class="dyn-table" id="tblReceitasSimp">
+      <thead><tr><th>Atividade</th><th>% IRPJ</th><th>% CSLL</th><th style="width:180px">Receita Anual (R$)</th><th></th></tr></thead>
+      <tbody id="tbodyReceitasSimp"></tbody>
+    </table>
+    <button class="btn-add-row" onclick="addLinhaReceita()">+ Adicionar Atividade</button>
+
+    <div class="sec-title">Deducoes da Receita Bruta</div>
+    <div class="fm-grid fm-3">
+      <div class="fm-group"><label>Devolucoes de vendas</label><div class="fm-prefix"><span>R$</span><input class="fm-input money" id="devolucoes" placeholder="0,00"></div></div>
+      <div class="fm-group"><label>Vendas canceladas</label><div class="fm-prefix"><span>R$</span><input class="fm-input money" id="cancelamentos" placeholder="0,00"></div></div>
+      <div class="fm-group"><label>Descontos incondicionais</label><div class="fm-prefix"><span>R$</span><input class="fm-input money" id="descontos" placeholder="0,00"></div></div>
+    </div>
+
+    <div class="sec-title">Adicoes Obrigatorias a Base (Art. 595 RIR/2018) <span class="tt" data-tip="Estas receitas sao adicionadas INTEGRALMENTE a base de calculo (100%), nao passam pela presuncao.">?</span></div>
+    <div class="fm-grid fm-2">
+      <div class="fm-group"><label>Ganhos de capital</label><div class="fm-prefix"><span>R$</span><input class="fm-input money" id="ganhosCapital" placeholder="0,00"></div></div>
+      <div class="fm-group"><label>Rendimentos financeiros</label><div class="fm-prefix"><span>R$</span><input class="fm-input money" id="rendFinanceiros" placeholder="0,00"></div></div>
+      <div class="fm-group"><label>JCP recebido</label><div class="fm-prefix"><span>R$</span><input class="fm-input money" id="jcpRecebido" placeholder="0,00"></div></div>
+      <div class="fm-group"><label>Multas contratuais recebidas</label><div class="fm-prefix"><span>R$</span><input class="fm-input money" id="multasContratuais" placeholder="0,00"></div></div>
+      <div class="fm-group"><label>Receitas financeiras diversas</label><div class="fm-prefix"><span>R$</span><input class="fm-input money" id="recFinDiversas" placeholder="0,00"></div></div>
+      <div class="fm-group"><label>Valores recuperados</label><div class="fm-prefix"><span>R$</span><input class="fm-input money" id="valoresRecuperados" placeholder="0,00"></div></div>
+      <div class="fm-group"><label>Demais receitas</label><div class="fm-prefix"><span>R$</span><input class="fm-input money" id="demaisReceitas" placeholder="0,00"></div></div>
+    </div>
+
+    <div class="sec-title">Retencoes na Fonte</div>
+    <div class="fm-grid fm-2">
+      <div class="fm-group"><label>IRRF retido (anual)</label><div class="fm-prefix"><span>R$</span><input class="fm-input money" id="irrfRetido" placeholder="0,00"></div></div>
+      <div class="fm-group"><label>CSLL retida (anual)</label><div class="fm-prefix"><span>R$</span><input class="fm-input money" id="csllRetida" placeholder="0,00"></div></div>
+      <div class="fm-group"><label>PIS retido (anual)</label><div class="fm-prefix"><span>R$</span><input class="fm-input money" id="pisRetido" placeholder="0,00"></div></div>
+      <div class="fm-group"><label>COFINS retida (anual)</label><div class="fm-prefix"><span>R$</span><input class="fm-input money" id="cofinsRetida" placeholder="0,00"></div></div>
+    </div>
+  </div>
+
+  <!-- MODO DETALHADO (trimestral) -->
+  <div id="modoDetalhado" style="display:none">
+    <div class="fm-tip" style="margin-bottom:16px">Preencha os dados para cada trimestre separadamente. Os campos seguem a mesma estrutura do modo simplificado.</div>
+    <div class="toggle-wrap" id="trimToggle">
+      <button class="toggle-btn active" onclick="setTrimestre(1)">1o Trim</button>
+      <button class="toggle-btn" onclick="setTrimestre(2)">2o Trim</button>
+      <button class="toggle-btn" onclick="setTrimestre(3)">3o Trim</button>
+      <button class="toggle-btn" onclick="setTrimestre(4)">4o Trim</button>
+    </div>
+    <div id="trimContent"></div>
+  </div>
+</div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<!-- STEP 4: DADOS COMPLEMENTARES -->
+<!-- ═══════════════════════════════════════════════════ -->
+<section class="wz-panel" id="step4">
+<div class="wz-card">
+  <div class="wz-header">
+    <div class="wz-icon">&#128202;</div>
+    <div><div class="wz-title">Dados Complementares para Comparacao</div><div class="wz-sub">Informacoes adicionais para comparativo entre regimes tributarios</div></div>
+  </div>
+
+  <div class="sec-title">Folha de Pagamento e Encargos</div>
+  <div class="fm-grid fm-3">
+    <div class="fm-group"><label>Folha de pagamento anual <span class="tt" data-tip="Total bruto anual (salarios + pro-labore). Usado para calcular INSS patronal e Fator R do Simples. Deixe 0 se nao houver.">?</span></label><div class="fm-prefix"><span>R$</span><input class="fm-input money" id="folhaPagamento" placeholder="0,00" value=""></div></div>
+    <div class="fm-group"><label>Aliquota RAT (%)</label><div class="fm-prefix"><span>%</span><input class="fm-input" id="aliquotaRAT" type="number" min="1" max="3" step="0.1" value="3"></div></div>
+    <div class="fm-group"><label>Contribuicao a terceiros (%)</label><div class="fm-prefix"><span>%</span><input class="fm-input" id="aliquotaTerceiros" type="number" min="0" max="5.8" step="0.1" value="0.5"></div></div>
+  </div>
+
+  <div class="sec-title">Despesas Operacionais Anuais</div>
+  <div class="fm-tip" style="margin-bottom:10px">Detalhamento para estimativa de lucro real. Total sera calculado automaticamente.</div>
+  <div class="desp-grid">
+    <div class="fm-group"><label>Aluguel</label><div class="fm-prefix"><span>R$</span><input class="fm-input money desp" id="despAluguel" placeholder="0,00"></div></div>
+    <div class="fm-group"><label>Energia / Agua / Telefone</label><div class="fm-prefix"><span>R$</span><input class="fm-input money desp" id="despUtilidades" placeholder="0,00"></div></div>
+    <div class="fm-group"><label>Combustivel e manutencao</label><div class="fm-prefix"><span>R$</span><input class="fm-input money desp" id="despCombustivel" placeholder="0,00"></div></div>
+    <div class="fm-group"><label>Material de consumo</label><div class="fm-prefix"><span>R$</span><input class="fm-input money desp" id="despMaterial" placeholder="0,00"></div></div>
+    <div class="fm-group"><label>Servicos de terceiros</label><div class="fm-prefix"><span>R$</span><input class="fm-input money desp" id="despServicos" placeholder="0,00"></div></div>
+    <div class="fm-group"><label>Pro-labore</label><div class="fm-prefix"><span>R$</span><input class="fm-input money desp" id="despProlabore" placeholder="0,00"></div></div>
+    <div class="fm-group"><label>Salarios e encargos</label><div class="fm-prefix"><span>R$</span><input class="fm-input money desp" id="despSalarios" placeholder="0,00"></div></div>
+    <div class="fm-group"><label>Depreciacao</label><div class="fm-prefix"><span>R$</span><input class="fm-input money desp" id="despDepreciacao" placeholder="0,00"></div></div>
+    <div class="fm-group"><label>Outras despesas</label><div class="fm-prefix"><span>R$</span><input class="fm-input money desp" id="despOutras" placeholder="0,00"></div></div>
+  </div>
+  <div class="fm-group" style="margin-top:10px">
+    <label>Total Despesas Operacionais</label>
+    <div class="fm-prefix"><span>R$</span><input class="fm-input" id="totalDespesas" readonly style="font-weight:700;color:var(--accent)"></div>
+  </div>
+
+  <div class="sec-title">Dados para Comparacao de Regimes</div>
+  <div class="fm-grid fm-2">
+    <div class="fm-group"><label>Creditos PIS/COFINS estimados (Lucro Real) <span class="tt" data-tip="Estimativa de creditos sobre insumos no regime nao-cumulativo. Reduz o PIS/COFINS no Lucro Real.">?</span></label><div class="fm-prefix"><span>R$</span><input class="fm-input money" id="creditosPISCOFINS" placeholder="0,00"></div></div>
+    <div class="fm-group"><label>Aliquota efetiva Simples Nacional (%) <span class="tt" data-tip="Se a empresa for elegivel ao Simples, informe a aliquota efetiva estimada para comparacao.">?</span></label><div class="fm-prefix"><span>%</span><input class="fm-input" id="aliquotaSimples" type="number" min="4" max="33" step="0.1" value="15"></div></div>
+    <div class="fm-group"><label>Lucro contabil efetivo (R$) <span class="tt" data-tip="Lucro apurado pela contabilidade. Se informado e houver escrituracao completa, permite distribuir lucros acima da base presumida.">?</span></label><div class="fm-prefix"><span>R$</span><input class="fm-input money" id="lucroContabil" placeholder="0,00 (opcional)"></div></div>
+    <div class="fm-group"><label>Prejuizos fiscais acumulados (R$)</label><div class="fm-prefix"><span>R$</span><input class="fm-input money" id="prejuizosFiscais" placeholder="0,00"></div></div>
+  </div>
+
+  <div class="sec-title">Caracteristicas da Empresa</div>
+  <div class="fm-grid" style="gap:8px">
+    <label class="chk-card" style="border-color:var(--success-b)"><input type="checkbox" id="temEscrituracao"><span class="chk-mark" style="border-color:var(--success)"></span> Possui escrituracao contabil completa (ECD)</label>
+    <label class="chk-card" style="border-color:var(--success-b)"><input type="checkbox" id="temEquipamentos"><span class="chk-mark" style="border-color:var(--success)"></span> Tem investimentos em equipamentos (depreciacao acelerada)</label>
+    <label class="chk-card" style="border-color:var(--success-b)"><input type="checkbox" id="temPD"><span class="chk-mark" style="border-color:var(--success)"></span> Faz pesquisa e desenvolvimento (Lei do Bem)</label>
+    <label class="chk-card" style="border-color:var(--success-b)"><input type="checkbox" id="receitaSazonal"><span class="chk-mark" style="border-color:var(--success)"></span> Receitas sao sazonais</label>
+  </div>
+
+  <div class="sec-title">Composicao Societaria</div>
+  <div id="sociosContainer"></div>
+  <button class="btn-add-row" onclick="addSocio()">+ Adicionar Socio</button>
+</div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<!-- STEP 5: RESULTADOS -->
+<!-- ═══════════════════════════════════════════════════ -->
+<section class="wz-panel" id="step5">
+<div class="wz-card" style="padding:20px">
+  <div class="wz-header" style="margin-bottom:16px;padding-bottom:12px">
+    <div class="wz-icon">&#128640;</div>
+    <div><div class="wz-title">Resultados e Analise Completa</div><div class="wz-sub">Calculos detalhados do Lucro Presumido e recomendacoes</div></div>
+  </div>
+
+  <div class="res-tabs" id="resTabs">
+    <button class="res-tab active" data-tab="sim" onclick="showTab('sim')">Simulacao</button>
+    <button class="res-tab" data-tab="trim" onclick="showTab('trim')">Trimestral</button>
+    <button class="res-tab" data-tab="piscofins" onclick="showTab('piscofins')">PIS/COFINS</button>
+    <button class="res-tab" data-tab="anual" onclick="showTab('anual')">Anual</button>
+    <button class="res-tab" data-tab="vantagens" onclick="showTab('vantagens')">Vantagens</button>
+    <button class="res-tab" data-tab="distribuicao" onclick="showTab('distribuicao')">Distribuicao</button>
+    <button class="res-tab" data-tab="riscos" onclick="showTab('riscos')">Riscos</button>
+    <button class="res-tab" data-tab="obrigacoes" onclick="showTab('obrigacoes')">Obrigacoes</button>
+    <button class="res-tab" data-tab="transicao" onclick="showTab('transicao')">Transicao</button>
+    <button class="res-tab" data-tab="dicas" onclick="showTab('dicas')">Dicas</button>
+  </div>
+
+  <div class="tab-panel active" id="tabSim"></div>
+  <div class="tab-panel" id="tabTrim"></div>
+  <div class="tab-panel" id="tabPiscofins"></div>
+  <div class="tab-panel" id="tabAnual"></div>
+  <div class="tab-panel" id="tabVantagens"></div>
+  <div class="tab-panel" id="tabDistribuicao"></div>
+  <div class="tab-panel" id="tabRiscos"></div>
+  <div class="tab-panel" id="tabObrigacoes"></div>
+  <div class="tab-panel" id="tabTransicao"></div>
+  <div class="tab-panel" id="tabDicas"></div>
+</div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<!-- STEP 6: EXPORTACAO -->
+<!-- ═══════════════════════════════════════════════════ -->
+<section class="wz-panel" id="step6">
+<div class="wz-card">
+  <div class="wz-header">
+    <div class="wz-icon">&#128230;</div>
+    <div><div class="wz-title">Exportacao e Relatorio</div><div class="wz-sub">Salve, exporte ou imprima seu estudo tributario</div></div>
+  </div>
+  <div class="export-grid">
+    <div class="export-card" id="btnExportPDF" onclick="exportPDF()">
+      <div class="export-icon">&#128196;</div>
+      <div class="export-label">Exportar PDF</div>
+      <div class="export-desc">Relatorio profissional completo</div>
+    </div>
+    <div class="export-card" onclick="exportExcel()">
+      <div class="export-icon">&#128202;</div>
+      <div class="export-label">Exportar CSV</div>
+      <div class="export-desc">Planilha CSV compativel com Excel</div>
+    </div>
+    <div class="export-card" onclick="window.print()">
+      <div class="export-icon">&#128424;</div>
+      <div class="export-label">Imprimir</div>
+      <div class="export-desc">Layout otimizado para impressao</div>
+    </div>
+    <div class="export-card" onclick="salvarEstudo()">
+      <div class="export-icon">&#128190;</div>
+      <div class="export-label">Salvar Estudo</div>
+      <div class="export-desc">Salvar no navegador (localStorage)</div>
+    </div>
+    <div class="export-card" onclick="novoEstudo()">
+      <div class="export-icon">&#128260;</div>
+      <div class="export-label">Novo Estudo</div>
+      <div class="export-desc">Limpar tudo e recomecar</div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- NAV FOOTER -->
+<div class="wz-nav" id="wzNav">
+  <button class="wz-btn wz-btn-back" id="btnPrev" onclick="prevStep()" disabled>&larr; Anterior</button>
+  <button class="wz-btn wz-btn-next" id="btnNext" onclick="nextStep()">Proximo &rarr;</button>
+</div>
+
+</div><!-- /main-area -->
+</div><!-- /layout -->
+
+<!-- BUG #9 FIX: FOOTER LEGAL -->
+<footer class="legal-footer">
+  <strong>IMPOST.</strong> — Simulador de Otimizacao Tributaria<br>
+  Este simulador tem carater informativo e educacional. <strong>Nao substitui consultoria contabil ou juridica profissional.</strong><br>
+  Os calculos sao estimativas baseadas nos dados informados e na legislacao vigente. Consulte seu contador antes de tomar decisoes tributarias.<br>
+  <span style="opacity:.7">Base legal: RIR/2018 (Decreto 9.580/2018) | Lei 9.249/1995 | Lei 9.430/1996 | Lei 9.718/1998 | IN RFB 1.700/2017</span>
+</footer>
+
+<!-- SCRIPT IMPORTS -->
+<script src="../scripts/impostos_federais.js"></script>
+<script src="../scripts/cnae-mapeamento.js"></script>
+<script src="../scripts/acre.js"></script>
+<script src="../scripts/alagoas.js"></script>
+<script src="../scripts/amapa.js"></script>
+<script src="../scripts/amazonas.js"></script>
+<script src="../scripts/bahia.js"></script>
+<script src="../scripts/ceara.js"></script>
+<script src="../scripts/distrito_federal.js"></script>
+<script src="../scripts/espirito_santo.js"></script>
+<script src="../scripts/goias.js"></script>
+<script src="../scripts/maranhao.js"></script>
+<script src="../scripts/mato_grosso.js"></script>
+<script src="../scripts/mato_grosso_do_sul.js"></script>
+<script src="../scripts/minas_gerais.js"></script>
+<script src="../scripts/para.js"></script>
+<script src="../scripts/paraiba.js"></script>
+<script src="../scripts/parana.js"></script>
+<script src="../scripts/pernambuco.js"></script>
+<script src="../scripts/piaui.js"></script>
+<script src="../scripts/rio_de_janeiro.js"></script>
+<script src="../scripts/rio_grande_do_norte.js"></script>
+<script src="../scripts/rio_grande_do_sul.js"></script>
+<script src="../scripts/rondonia.js"></script>
+<script src="../scripts/roraima.js"></script>
+<script src="../scripts/santa_catarina.js"></script>
+<script src="../scripts/sao_paulo.js"></script>
+<script src="../scripts/sergipe.js"></script>
+<script src="../scripts/tocantins.js"></script>
+<script src="../scripts/estados.js"></script>
+<script src="../scripts/municipios.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.4/jspdf.plugin.autotable.min.js"></script>
+<script src="../scripts/lucro_presumido.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+
+<!-- CNAE DB (ES6 module) -->
+<script type="module">
+import { BANCO_CNAE } from '../scripts/cnae.js';
+window.BANCO_CNAE = BANCO_CNAE;
+window.dispatchEvent(new Event('cnae-loaded'));
+</script>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<!-- MAIN APP SCRIPT — v2.2 (9 bugs fixed) -->
+<!-- ═══════════════════════════════════════════════════ -->
+<script>
+// ═══════════════════════════════════════════════════════════════════════════
+// ESTUDO LUCRO PRESUMIDO — APPLICATION SCRIPT v2.2
+// Fixes: NaN%, carga 486%, dev message, elegibilidade, stepper,
+//        CNAE search, money mask, validation, footer legal
+// ═══════════════════════════════════════════════════════════════════════════
+
+const App = {
+  currentStep: 1,
+  totalSteps: 6,
+  modoFinanceiro: 'simplificado',
+  trimestreAtivo: 1,
+  formData: {},
+  results: {},
+  charts: {},
+  cnaeLoaded: false,
+  autoSaveTimer: null,
+  socioCount: 0,
+  receitaRowCount: 0,
+  cnaeSecCount: 0
+};
+
+const UFS = ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'];
+
+// ─────────────────────────────────────────────────────────────────────────
+// 2. UTILITY FUNCTIONS
+// ─────────────────────────────────────────────────────────────────────────
+function formatMoney(value) {
+  if (value == null || isNaN(value)) return 'R$ 0,00';
+  return 'R$ ' + Number(value).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function parseMoney(str) {
+  if (typeof str === 'number') return str;
+  if (!str) return 0;
+  return parseFloat(String(str).replace(/[R$\s.]/g, '').replace(',', '.')) || 0;
+}
+
+function maskCNPJ(input) {
+  let v = input.value.replace(/\D/g, '').slice(0, 14);
+  if (v.length > 12) v = v.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{0,2})/, '$1.$2.$3/$4-$5');
+  else if (v.length > 8) v = v.replace(/^(\d{2})(\d{3})(\d{3})(\d{0,4})/, '$1.$2.$3/$4');
+  else if (v.length > 5) v = v.replace(/^(\d{2})(\d{3})(\d{0,3})/, '$1.$2.$3');
+  else if (v.length > 2) v = v.replace(/^(\d{2})(\d{0,3})/, '$1.$2');
+  input.value = v;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// BUG #7 FIX: maskMoney — trata input como REAIS (nao centavos)
+// Antes: "1200000" → R$ 12.000,00 (errado — dividia por 100)
+// Agora: "1200000" → R$ 1.200.000,00 (correto — trata como inteiro)
+// Para centavos, usuario digita virgula: "1200000,50"
+// ═══════════════════════════════════════════════════════════════════════════
+function maskMoney(input) {
+  let v = input.value;
+  // Remove tudo exceto digitos e virgula
+  v = v.replace(/[^\d,]/g, '');
+  if (!v) { input.value = ''; return; }
+
+  // Split na virgula decimal
+  const parts = v.split(',');
+  let inteiro = parts[0].replace(/^0+(?=\d)/, ''); // remove leading zeros
+  if (!inteiro) inteiro = '0';
+  const decimal = parts.length > 1 ? parts[1].slice(0, 2) : '';
+
+  // Formata parte inteira com pontos de milhar
+  inteiro = inteiro.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+
+  // Reconstroi
+  if (parts.length > 1) {
+    input.value = inteiro + ',' + decimal;
+  } else {
+    input.value = inteiro;
+  }
+}
+
+function debounce(fn, ms) {
+  let t;
+  return function(...args) { clearTimeout(t); t = setTimeout(() => fn.apply(this, args), ms); };
+}
+
+function $(id) { return document.getElementById(id); }
+function $$(sel) { return document.querySelectorAll(sel); }
+
+// Helper seguro para ler percentuais (protege contra NaN)
+function safePercent(val, mult) {
+  const n = Number(val);
+  if (val == null || isNaN(n)) return '?';
+  return (n * (mult || 100)).toFixed(0);
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// 3. WIZARD NAVIGATION
+// ═══════════════════════════════════════════════════════════════════════════
+// BUG #5 FIX: Stepper usa data-step em vez de index para robustez
+// BUG #8 FIX: Validacao ao avancar steps
+// ═══════════════════════════════════════════════════════════════════════════
+function goToStep(n) {
+  if (n < 1 || n > App.totalSteps) return;
+  // Update stepper visual — usa data-step para robustez (BUG #5)
+  $$('.st-item').forEach(el => {
+    const step = parseInt(el.dataset.step);
+    el.classList.remove('active', 'done');
+    if (step < n) el.classList.add('done');
+    if (step === n) el.classList.add('active');
+  });
+  $$('.st-line').forEach((el, i) => {
+    el.classList.toggle('done', i < n - 1);
+  });
+  // Show panel
+  $$('.wz-panel').forEach(p => p.classList.remove('active'));
+  const panel = $('step' + n);
+  if (panel) panel.classList.add('active');
+  App.currentStep = n;
+  // Nav buttons
+  $('btnPrev').disabled = n === 1;
+  const btnNext = $('btnNext');
+  if (n === 4) {
+    btnNext.textContent = 'Calcular Resultados';
+    btnNext.className = 'wz-btn wz-btn-calc';
+  } else {
+    btnNext.textContent = 'Proximo \u2192';
+    btnNext.className = 'wz-btn wz-btn-next';
+  }
+  btnNext.disabled = n === App.totalSteps;
+  // Run eligibility when entering step 2 (BUG #4)
+  if (n === 2) checkElegibilidade();
+  // Run calculations when entering step 5
+  if (n === 5) runAllCalculations();
+  updateSidebar();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// BUG #8 FIX: Validacao antes de avancar
+function validateStep(step) {
+  const errors = [];
+  if (step === 1) {
+    if (!$('razaoSocial').value.trim()) errors.push('Razao Social e obrigatoria.');
+    if (!$('cnpj').value.trim() || $('cnpj').value.replace(/\D/g,'').length < 14) errors.push('CNPJ valido e obrigatorio.');
+    if (!$('cnaePrincipal').value) errors.push('Selecione um CNAE principal.');
+  }
+  if (step === 3 || step === 4) {
+    let receita = 0;
+    $$('#tbodyReceitasSimp tr').forEach(tr => {
+      const inp = tr.querySelector('.money');
+      if (inp) receita += parseMoney(inp.value);
+    });
+    if (step === 4 && receita <= 0) errors.push('Informe ao menos uma receita na etapa Financeiro.');
+  }
+  if (errors.length) {
+    alert('Corrija antes de avancar:\n\n• ' + errors.join('\n• '));
+    // Highlight invalid fields
+    if (errors.some(e => e.includes('Razao'))) $('razaoSocial').classList.add('invalid');
+    if (errors.some(e => e.includes('CNPJ'))) $('cnpj').classList.add('invalid');
+    if (errors.some(e => e.includes('CNAE'))) $('cnaeBusca').classList.add('invalid');
+    return false;
+  }
+  // Remove invalid highlights
+  $$('.invalid').forEach(el => el.classList.remove('invalid'));
+  return true;
+}
+
+function nextStep() {
+  // Validate current step before advancing (BUG #8)
+  if (App.currentStep === 1 && !validateStep(1)) return;
+
+  if (App.currentStep === 4) {
+    gatherFormData();
+    if (!App.formData.receitaBrutaAnual || App.formData.receitaBrutaAnual <= 0) {
+      alert('Informe pelo menos uma receita na etapa 3 (Dados Financeiros) antes de calcular os resultados.');
+      goToStep(3);
+      return;
+    }
+    goToStep(5);
+    return;
+  }
+  goToStep(App.currentStep + 1);
+}
+
+function prevStep() {
+  goToStep(App.currentStep - 1);
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// 4. CNAE SEARCH
+// ═══════════════════════════════════════════════════════════════════════════
+// BUG #6 FIX: Prioriza match por codigo (prefixo exato), depois descricao
+// ═══════════════════════════════════════════════════════════════════════════
+function initCnaeSearch() {
+  const input = $('cnaeBusca');
+  const results = $('cnaeResults');
+  if (!input || !results) return;
+  const search = debounce(function() {
+    const q = input.value.trim().toLowerCase();
+    if (q.length < 2 || !window.BANCO_CNAE) { results.classList.remove('open'); return; }
+    const qNorm = q.replace(/[.\-\/\s]/g, '');
+    const isNumeric = /^\d+$/.test(qNorm);
+
+    let matches = window.BANCO_CNAE.filter(c => {
+      const cod = (c.codigo || '').toLowerCase();
+      const codNorm = cod.replace(/[.\-\/\s]/g, '');
+      const desc = (c.descricao || '').toLowerCase();
+      if (isNumeric) {
+        // BUG #6 FIX: busca numerica → so match por CODIGO (prefixo)
+        return codNorm.startsWith(qNorm);
+      }
+      // Busca textual → descricao ou codigo
+      return desc.includes(q) || cod.includes(q);
+    });
+
+    // BUG #6 FIX: Ordena por relevancia — prefixo exato primeiro
+    matches.sort((a, b) => {
+      const aN = (a.codigo || '').replace(/[.\-\/\s]/g, '');
+      const bN = (b.codigo || '').replace(/[.\-\/\s]/g, '');
+      const aExact = aN.startsWith(qNorm) ? 0 : 1;
+      const bExact = bN.startsWith(qNorm) ? 0 : 1;
+      if (aExact !== bExact) return aExact - bExact;
+      return aN.localeCompare(bN);
+    });
+
+    matches = matches.slice(0, 30);
+    if (!matches.length) { results.innerHTML = '<div class="sr-item" style="color:var(--text3)">Nenhum resultado encontrado</div>'; results.classList.add('open'); return; }
+    results.innerHTML = matches.map(c => `<div class="sr-item" data-codigo="${c.codigo}" data-desc="${c.descricao}" data-cat="${c.categoria || ''}"><span class="sr-code">${c.codigo}</span><span class="sr-desc">${c.descricao}</span><span class="sr-cat">${c.categoria || ''}</span></div>`).join('');
+    results.classList.add('open');
+    results.querySelectorAll('.sr-item').forEach(el => {
+      el.addEventListener('click', () => selectCnae(el.dataset.codigo, el.dataset.desc, el.dataset.cat));
+    });
+  }, 300);
+  input.addEventListener('input', search);
+  document.addEventListener('click', e => { if (!input.contains(e.target) && !results.contains(e.target)) results.classList.remove('open'); });
+}
+
+function selectCnae(codigo, descricao, categoria) {
+  $('cnaeBusca').value = codigo + ' - ' + descricao;
+  $('cnaeBusca').classList.remove('invalid');
+  $('cnaePrincipal').value = codigo;
+  $('cnaeResults').classList.remove('open');
+  try {
+    const ativ = LucroPresumido.identificarAtividadePorCNAE(codigo);
+    if (ativ) {
+      $('atividadeId').value = ativ.atividadeId;
+      $('cnaeInfo').style.display = 'block';
+      $('cnaeInfo').innerHTML = `<div class="info-box success"><strong>${ativ.descricao}</strong><br>Presuncao IRPJ: <strong>${(ativ.percentualIRPJ * 100).toFixed(1)}%</strong> | Presuncao CSLL: <strong>${(ativ.percentualCSLL * 100).toFixed(1)}%</strong><br><span style="opacity:.7">${ativ.baseLegal || ''}</span> | Categoria: ${categoria || 'N/A'}</div>`;
+    } else {
+      $('atividadeId').value = 'servicos_gerais';
+      $('cnaeInfo').style.display = 'block';
+      $('cnaeInfo').innerHTML = `<div class="info-box warn">CNAE nao mapeado automaticamente. Usando <strong>Servicos Gerais (32%)</strong> como padrao. Ajuste manualmente na etapa financeira se necessario.</div>`;
+    }
+  } catch(e) {
+    $('atividadeId').value = 'servicos_gerais';
+  }
+  triggerAutoSave();
+  updateSidebar();
+}
+
+function addCnaeSecundario() {
+  App.cnaeSecCount++;
+  const id = App.cnaeSecCount;
+  const container = $('cnaesSecContainer');
+  const row = document.createElement('div');
+  row.id = 'cnaeSec' + id;
+  row.style.cssText = 'display:flex;gap:8px;align-items:center;margin-bottom:8px;';
+  row.innerHTML = `<input class="fm-input" placeholder="Buscar CNAE secundario..." style="flex:1" id="cnaeSecBusca${id}" autocomplete="off"><button class="btn-rm" onclick="document.getElementById('cnaeSec${id}').remove()" style="background:none;border:none;color:var(--danger);font-size:18px;cursor:pointer">&times;</button><div class="search-results" id="cnaeSecResults${id}" style="position:absolute;z-index:50;width:400px;margin-top:40px"></div>`;
+  container.appendChild(row);
+  const inp = $('cnaeSecBusca' + id);
+  const res = $('cnaeSecResults' + id);
+  const searchSec = debounce(function() {
+    const q = inp.value.trim().toLowerCase();
+    if (q.length < 2 || !window.BANCO_CNAE) { res.classList.remove('open'); return; }
+    const qNorm = q.replace(/[.\-\/\s]/g, '');
+    const isNum = /^\d+$/.test(qNorm);
+    let matches = window.BANCO_CNAE.filter(c => {
+      const codN = (c.codigo || '').replace(/[.\-\/\s]/g, '');
+      if (isNum) return codN.startsWith(qNorm);
+      return (c.codigo || '').toLowerCase().includes(q) || (c.descricao || '').toLowerCase().includes(q);
+    }).slice(0, 15);
+    if (!matches.length) { res.innerHTML = '<div class="sr-item">Nenhum resultado</div>'; res.classList.add('open'); return; }
+    res.innerHTML = matches.map(c => `<div class="sr-item" data-codigo="${c.codigo}" data-desc="${c.descricao}"><span class="sr-code">${c.codigo}</span><span class="sr-desc">${c.descricao}</span></div>`).join('');
+    res.classList.add('open');
+    res.querySelectorAll('.sr-item').forEach(el => el.addEventListener('click', () => { inp.value = el.dataset.codigo + ' - ' + el.dataset.desc; res.classList.remove('open'); }));
+  }, 300);
+  inp.addEventListener('input', searchSec);
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// 5. STATE / MUNICIPALITY
+// ─────────────────────────────────────────────────────────────────────────
+function populateEstados() {
+  const sel = $('estado');
+  UFS.forEach(uf => {
+    const opt = document.createElement('option');
+    opt.value = uf;
+    const estado = getEstadoData(uf);
+    opt.textContent = estado ? `${uf} - ${estado.nome}` : uf;
+    sel.appendChild(opt);
+  });
+}
+
+function getEstadoData(uf) {
+  if (typeof ESTADOS !== 'undefined' && ESTADOS[uf]) return ESTADOS[uf];
+  if (typeof Estados !== 'undefined' && Estados[uf]) return Estados[uf];
+  if (typeof EstadosBR !== 'undefined' && EstadosBR[uf]) return EstadosBR[uf];
+  return null;
+}
+
+async function onEstadoChange() {
+  const uf = $('estado').value;
+  const munSel = $('municipio');
+  const estadoInfo = $('estadoInfo');
+  if (!uf) {
+    munSel.innerHTML = '<option value="">Selecione o estado primeiro...</option>';
+    munSel.disabled = true;
+    estadoInfo.innerHTML = '';
+    return;
+  }
+  const estado = getEstadoData(uf);
+  if (estado) {
+    let info = `<div class="info-box info">ICMS padrao: <strong>${(estado.icms.padrao * 100).toFixed(1)}%</strong>`;
+    if (estado.beneficios) {
+      if (estado.beneficios.tem_sudam) info += ' | <strong style="color:var(--success)">Area SUDAM</strong>';
+      if (estado.beneficios.tem_sudene) info += ' | <strong style="color:var(--success)">Area SUDENE</strong>';
+      if (estado.beneficios.zona_franca) info += ' | <strong style="color:var(--success)">Zona Franca</strong>';
+    }
+    info += '</div>';
+    estadoInfo.innerHTML = info;
+  }
+  munSel.innerHTML = '<option value="">Carregando municipios...</option>';
+  munSel.disabled = true;
+  try {
+    const municipios = await MunicipiosIBGE.buscarMunicipios(uf, typeof ESTADOS !== 'undefined' ? ESTADOS : null);
+    MunicipiosIBGE.renderizarSelect(munSel, municipios);
+  } catch(e) {
+    try {
+      const fallback = MunicipiosIBGE.fallbackEstadosJS(uf, typeof ESTADOS !== 'undefined' ? ESTADOS : null);
+      if (fallback.length) { MunicipiosIBGE.renderizarSelect(munSel, fallback); }
+      else { munSel.innerHTML = '<option value="">Nenhum municipio encontrado</option>'; munSel.disabled = false; }
+    } catch(e2) { munSel.innerHTML = '<option value="">Erro ao carregar municipios</option>'; munSel.disabled = false; }
+  }
+  triggerAutoSave();
+  updateSidebar();
+}
+
+function onMunicipioChange() {
+  const munSel = $('municipio');
+  const opt = munSel.options[munSel.selectedIndex];
+  if (!opt || !opt.value) return;
+  const iss = opt.dataset.iss;
+  const issConhecido = opt.dataset.issConhecido === '1';
+  if (iss) $('aliquotaISS').value = parseFloat(iss).toFixed(1);
+  $('municipioInfo').innerHTML = '<div class="info-box ' + (issConhecido ? 'success' : 'warn') + '">' + MunicipiosIBGE.gerarDicaISS(issConhecido, opt.value) + '</div>';
+  triggerAutoSave();
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// 6. ELIGIBILITY
+// ═══════════════════════════════════════════════════════════════════════════
+// BUG #4 FIX: checkElegibilidade tambem e chamado em runAllCalculations
+// ═══════════════════════════════════════════════════════════════════════════
+function checkElegibilidade() {
+  try {
+    const result = LucroPresumido.verificarElegibilidade({
+      receitaBrutaAnualAnterior: parseMoney($('receitaAnterior').value),
+      mesesAtividadeAnoAnterior: parseInt($('mesesAtividade').value) || 12,
+      isInstituicaoFinanceira: $('impInstFinanceira').checked,
+      isFactoring: $('impFactoring').checked,
+      temRendimentosExterior: $('impExterior').checked,
+      temIsencaoReducaoIR: $('impIsencao').checked,
+      isSCP: $('impSCP').checked
+    });
+    const div = $('elegibilidadeResult');
+    if (result.elegivel) {
+      let html = '<div class="info-box success"><strong>ELEGIVEL ao Lucro Presumido</strong>';
+      html += `<br>Limite aplicavel: ${formatMoney(result.limiteAplicavel)}`;
+      if (result.alertas.length) {
+        html += '<br><br>';
+        result.alertas.forEach(a => { html += `<div style="margin-top:4px"><span class="badge badge-warn">${a.tipo}</span> ${a.mensagem}</div>`; });
+      }
+      html += '</div>';
+      div.innerHTML = html;
+      $('sbElegibilidade').innerHTML = result.alertas.length
+        ? '<span class="badge badge-warn">Elegivel (alertas)</span>'
+        : '<span class="badge badge-success">Elegivel</span>';
+    } else {
+      let html = '<div class="info-box danger"><strong>NAO ELEGIVEL ao Lucro Presumido</strong><br><br>';
+      result.impedimentos.forEach(imp => {
+        html += `<div style="margin-top:6px"><strong>${imp.descricao}</strong><br><span style="opacity:.7">${imp.baseLegal}</span></div>`;
+      });
+      html += '</div>';
+      div.innerHTML = html;
+      $('sbElegibilidade').innerHTML = '<span class="badge badge-danger">Inelegivel</span>';
+    }
+  } catch(e) {
+    $('elegibilidadeResult').innerHTML = `<div class="info-box danger">Erro: ${e.message}</div>`;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// 7. FINANCIAL DATA
+// ═══════════════════════════════════════════════════════════════════════════
+// BUG #1 FIX: buildActivitySelect com protecao contra NaN
+// ═══════════════════════════════════════════════════════════════════════════
+function setModoFinanceiro(modo) {
+  App.modoFinanceiro = modo;
+  $$('#step3 .toggle-wrap')[0].querySelectorAll('.toggle-btn').forEach((btn, i) => {
+    btn.classList.toggle('active', (i === 0 && modo === 'simplificado') || (i === 1 && modo === 'detalhado'));
+  });
+  $('modoSimplificado').style.display = modo === 'simplificado' ? 'block' : 'none';
+  $('modoDetalhado').style.display = modo === 'detalhado' ? 'block' : 'none';
+  if (modo === 'detalhado' && !$('trimContent').children.length) buildTrimestralForms();
+}
+
+function buildActivitySelect(selectedId) {
+  const atividades = LucroPresumido.getAtividadesDisponiveis();
+  return atividades.map(a => {
+    // BUG #1 FIX: protecao contra NaN nos percentuais
+    const irpj = safePercent(a.percentualIRPJ);
+    const csll = safePercent(a.percentualCSLL);
+    return `<option value="${a.id}" data-irpj="${a.percentualIRPJ || 0}" data-csll="${a.percentualCSLL || 0}" ${a.id === selectedId ? 'selected' : ''}>${a.descricao} (IRPJ ${irpj}% / CSLL ${csll}%)</option>`;
+  }).join('');
+}
+
+function addLinhaReceita(tableBodyId, defaultAtivId) {
+  const tbody = $(tableBodyId || 'tbodyReceitasSimp');
+  if (!tbody) return;
+  App.receitaRowCount++;
+  const id = App.receitaRowCount;
+  const atividadeId = defaultAtivId || $('atividadeId').value || 'servicos_gerais';
+  const atividades = LucroPresumido.getAtividadesDisponiveis();
+  const ativ = atividades.find(a => a.id === atividadeId);
+  // BUG #1 FIX: protecao contra NaN
+  const irpjPct = ativ ? safePercent(ativ.percentualIRPJ) + '%' : '32%';
+  const csllPct = ativ ? safePercent(ativ.percentualCSLL) + '%' : '32%';
+  const tr = document.createElement('tr');
+  tr.id = 'recRow' + id;
+  tr.innerHTML = `<td><select class="fm-input rec-ativ" id="recAtiv${id}" onchange="updateReceitaRow(${id})" style="font-size:12px">${buildActivitySelect(atividadeId)}</select></td><td class="mono" id="recIRPJ${id}">${irpjPct}</td><td class="mono" id="recCSLL${id}">${csllPct}</td><td><input class="fm-input money" id="recValor${id}" placeholder="0,00" oninput="maskMoney(this);triggerAutoSave()"></td><td><button class="btn-rm" onclick="document.getElementById('recRow${id}').remove()">&times;</button></td>`;
+  tbody.appendChild(tr);
+}
+
+function updateReceitaRow(id) {
+  const sel = $('recAtiv' + id);
+  if (!sel) return;
+  const atividades = LucroPresumido.getAtividadesDisponiveis();
+  const ativ = atividades.find(a => a.id === sel.value);
+  if (ativ) {
+    $('recIRPJ' + id).textContent = safePercent(ativ.percentualIRPJ) + '%';
+    $('recCSLL' + id).textContent = safePercent(ativ.percentualCSLL) + '%';
+  }
+}
+
+function buildTrimestralForms() {
+  const container = $('trimContent');
+  let html = '';
+  for (let q = 1; q <= 4; q++) {
+    html += `<div class="trim-panel" id="trimPanel${q}" style="${q === 1 ? '' : 'display:none'}">
+      <div class="sec-title">${q}o Trimestre — Receitas</div>
+      <table class="dyn-table"><thead><tr><th>Atividade</th><th>% IRPJ</th><th>% CSLL</th><th style="width:180px">Receita (R$)</th><th></th></tr></thead>
+      <tbody id="tbodyRecTrim${q}"></tbody></table>
+      <button class="btn-add-row" onclick="addLinhaReceita('tbodyRecTrim${q}')">+ Adicionar Atividade</button>
+      <div class="fm-grid fm-2" style="margin-top:12px">
+        <div class="fm-group"><label>Devolucoes</label><div class="fm-prefix"><span>R$</span><input class="fm-input money" id="trimDev${q}" placeholder="0,00"></div></div>
+        <div class="fm-group"><label>Cancelamentos</label><div class="fm-prefix"><span>R$</span><input class="fm-input money" id="trimCanc${q}" placeholder="0,00"></div></div>
+        <div class="fm-group"><label>Descontos incondicionais</label><div class="fm-prefix"><span>R$</span><input class="fm-input money" id="trimDesc${q}" placeholder="0,00"></div></div>
+        <div class="fm-group"><label>Ganhos de capital</label><div class="fm-prefix"><span>R$</span><input class="fm-input money" id="trimGanhos${q}" placeholder="0,00"></div></div>
+        <div class="fm-group"><label>Rendimentos financeiros</label><div class="fm-prefix"><span>R$</span><input class="fm-input money" id="trimRendFin${q}" placeholder="0,00"></div></div>
+        <div class="fm-group"><label>IRRF retido</label><div class="fm-prefix"><span>R$</span><input class="fm-input money" id="trimIRRF${q}" placeholder="0,00"></div></div>
+        <div class="fm-group"><label>CSLL retida</label><div class="fm-prefix"><span>R$</span><input class="fm-input money" id="trimCSLL${q}" placeholder="0,00"></div></div>
+      </div>
+    </div>`;
+  }
+  container.innerHTML = html;
+  for (let q = 1; q <= 4; q++) addLinhaReceita('tbodyRecTrim' + q);
+}
+
+function setTrimestre(n) {
+  App.trimestreAtivo = n;
+  $('trimToggle').querySelectorAll('.toggle-btn').forEach((btn, i) => btn.classList.toggle('active', i === n - 1));
+  for (let q = 1; q <= 4; q++) {
+    const panel = $('trimPanel' + q);
+    if (panel) panel.style.display = q === n ? 'block' : 'none';
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// 8. COMPLEMENTARY DATA
+// ─────────────────────────────────────────────────────────────────────────
+function calcTotalDespesas() {
+  let total = 0;
+  $$('.desp').forEach(inp => { total += parseMoney(inp.value); });
+  $('totalDespesas').value = Number(total).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function addSocio() {
+  App.socioCount++;
+  const id = App.socioCount;
+  const container = $('sociosContainer');
+  const row = document.createElement('div');
+  row.className = 'soc-row';
+  row.id = 'socRow' + id;
+  row.innerHTML = `<input class="fm-input" id="socNome${id}" placeholder="Nome do socio"><input class="fm-input" id="socPct${id}" type="number" min="0" max="100" step="0.1" placeholder="%" style="text-align:center"><button class="btn-rm" onclick="document.getElementById('socRow${id}').remove()">&times;</button>`;
+  container.appendChild(row);
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// 9. GATHER FORM DATA
+// ─────────────────────────────────────────────────────────────────────────
+function gatherFormData() {
+  const d = {};
+  d.razaoSocial = $('razaoSocial').value;
+  d.cnpj = $('cnpj').value;
+  d.cnaePrincipal = $('cnaePrincipal').value;
+  d.atividadeId = $('atividadeId').value || 'servicos_gerais';
+  d.estado = $('estado').value;
+  d.municipio = $('municipio').value;
+  d.aliquotaISS = parseFloat($('aliquotaISS').value) || 5;
+  d.porte = $('porte').value;
+  d.receitaAnterior = parseMoney($('receitaAnterior').value);
+  d.folhaPagamento = parseMoney($('folhaPagamento').value);
+  d.aliquotaRAT = parseFloat($('aliquotaRAT').value) || 3;
+  d.aliquotaTerceiros = parseFloat($('aliquotaTerceiros').value) || 0.5;
+  d.creditosPISCOFINS = parseMoney($('creditosPISCOFINS').value);
+  d.aliquotaSimples = parseFloat($('aliquotaSimples').value) || 15;
+  d.lucroContabil = parseMoney($('lucroContabil').value);
+  d.prejuizosFiscais = parseMoney($('prejuizosFiscais').value);
+  d.temEscrituracao = $('temEscrituracao').checked;
+  d.temEquipamentos = $('temEquipamentos').checked;
+  d.temPD = $('temPD').checked;
+  d.receitaSazonal = $('receitaSazonal').checked;
+  d.devolucoes = parseMoney($('devolucoes').value);
+  d.cancelamentos = parseMoney($('cancelamentos').value);
+  d.descontos = parseMoney($('descontos').value);
+  d.ganhosCapital = parseMoney($('ganhosCapital').value);
+  d.rendFinanceiros = parseMoney($('rendFinanceiros').value);
+  d.jcpRecebido = parseMoney($('jcpRecebido').value);
+  d.multasContratuais = parseMoney($('multasContratuais').value);
+  d.recFinDiversas = parseMoney($('recFinDiversas').value);
+  d.valoresRecuperados = parseMoney($('valoresRecuperados').value);
+  d.demaisReceitas = parseMoney($('demaisReceitas').value);
+  d.irrfRetido = parseMoney($('irrfRetido').value);
+  d.csllRetida = parseMoney($('csllRetida').value);
+  d.pisRetido = parseMoney($('pisRetido').value);
+  d.cofinsRetida = parseMoney($('cofinsRetida').value);
+  calcTotalDespesas();
+  d.totalDespesas = parseMoney($('totalDespesas').value);
+  // Receitas
+  d.receitas = [];
+  $$('#tbodyReceitasSimp tr').forEach(tr => {
+    const sel = tr.querySelector('.rec-ativ');
+    const inp = tr.querySelector('.money');
+    if (sel && inp) d.receitas.push({ atividadeId: sel.value, valor: parseMoney(inp.value) });
+  });
+  d.receitaBrutaAnual = d.receitas.reduce((s, r) => s + r.valor, 0);
+  // Socios
+  d.socios = [];
+  $$('.soc-row').forEach(row => {
+    const nome = row.querySelector('input[type="text"], input:not([type])');
+    const pct = row.querySelector('input[type="number"]');
+    if (nome && pct && nome.value) {
+      d.socios.push({ nome: nome.value, percentual: (parseFloat(pct.value) || 0) / 100 });
+    }
+  });
+  // Estado/SUDAM
+  const estadoData = getEstadoData(d.estado);
+  d.areaAtuacaoSUDAM = estadoData && estadoData.beneficios && estadoData.beneficios.tem_sudam ? true : false;
+  const temImpedimentoSimples = $('impInstFinanceira').checked || $('impFactoring').checked || $('impExterior').checked;
+  d.elegivelSimples = d.receitaBrutaAnual <= 4800000 && d.porte !== 'DEMAIS' && !temImpedimentoSimples;
+  App.formData = d;
+  return d;
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// 10. RESULTS
+// ═══════════════════════════════════════════════════════════════════════════
+// BUG #4 FIX: Chama checkElegibilidade ao calcular resultados
+// ═══════════════════════════════════════════════════════════════════════════
+function runAllCalculations() {
+  const d = gatherFormData();
+  // BUG #4 FIX: Atualiza elegibilidade na sidebar
+  checkElegibilidade();
+
+  if (d.socios.length > 0) {
+    const totalPct = d.socios.reduce((s, sc) => s + sc.percentual, 0);
+    if (Math.abs(totalPct - 1) > 0.01) {
+      const pctFmt = (totalPct * 100).toFixed(1);
+      if (!confirm(`A composicao societaria soma ${pctFmt}% (deveria ser 100%). Deseja continuar mesmo assim?`)) return;
+    }
+  }
+  try {
+    renderSimulacao(d);
+    renderTrimestral(d);
+    renderPISCOFINS(d);
+    renderAnual(d);
+    renderVantagens(d);
+    renderDistribuicao(d);
+    renderRiscos();
+    renderObrigacoes();
+    renderTransicao(d);
+    renderDicas(d);
+    updateSidebar();
+  } catch(e) {
+    console.error('Erro nos calculos:', e);
+    $('tabSim').innerHTML = `<div class="info-box danger">Erro ao calcular: ${e.message}. Verifique os dados informados.</div>`;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// TAB: SIMULACAO
+// ═══════════════════════════════════════════════════════════════════════════
+// BUG #3 FIX: Mensagem de observacao amigavel (sem referencia a funcao JS)
+// ═══════════════════════════════════════════════════════════════════════════
+function renderSimulacao(d) {
+  const receitaTrim = d.receitaBrutaAnual / 4;
+  if (receitaTrim <= 0) { $('tabSim').innerHTML = '<div class="info-box warn">Informe ao menos uma receita na etapa financeira.</div>'; return; }
+  try {
+    const sim = LucroPresumido.simulacaoRapida(receitaTrim, d.atividadeId);
+    App.results.simulacao = sim;
+    // BUG #3 FIX: texto amigavel em vez de referencia a funcao JS
+    const obsTexto = 'Estimativa simplificada para visao rapida. Consulte as abas Trimestral e Anual para o calculo completo com deducoes, retencoes e adicionais.';
+    $('tabSim').innerHTML = `
+      <div class="kpi-grid">
+        <div class="kpi"><div class="kpi-label">Receita Trimestral</div><div class="kpi-value" style="color:var(--accent)">${formatMoney(sim.receitaBrutaTrimestral)}</div></div>
+        <div class="kpi"><div class="kpi-label">Base IRPJ</div><div class="kpi-value">${formatMoney(sim.baseIRPJ)}</div><div class="kpi-sub">${sim.percentualPresuncaoIRPJ}</div></div>
+        <div class="kpi"><div class="kpi-label">IRPJ</div><div class="kpi-value" style="color:var(--danger)">${formatMoney(sim.irpj.total)}</div><div class="kpi-sub">Normal ${formatMoney(sim.irpj.normal)} + Adic. ${formatMoney(sim.irpj.adicional)}</div></div>
+        <div class="kpi"><div class="kpi-label">CSLL</div><div class="kpi-value" style="color:var(--danger)">${formatMoney(sim.csll)}</div></div>
+        <div class="kpi"><div class="kpi-label">PIS + COFINS</div><div class="kpi-value" style="color:var(--warn)">${formatMoney(sim.pisTrimestral + sim.cofinsTrimestral)}</div><div class="kpi-sub">PIS ${formatMoney(sim.pisTrimestral)} | COFINS ${formatMoney(sim.cofinsTrimestral)}</div></div>
+        <div class="kpi"><div class="kpi-label">Total Tributos Federais</div><div class="kpi-value" style="color:var(--danger)">${formatMoney(sim.totalTributosFederais)}</div></div>
+        <div class="kpi"><div class="kpi-label">Aliquota Efetiva</div><div class="kpi-value" style="color:var(--info)">${sim.aliquotaEfetiva}</div></div>
+      </div>
+      <div class="info-box info" style="margin-top:12px"><strong>Atividade:</strong> ${sim.atividade}<br>${obsTexto}</div>`;
+  } catch(e) {
+    $('tabSim').innerHTML = `<div class="info-box danger">Erro: ${e.message}</div>`;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// TAB: TRIMESTRAL
+// ─────────────────────────────────────────────────────────────────────────
+function renderTrimestral(d) {
+  if (d.receitaBrutaAnual <= 0) { $('tabTrim').innerHTML = '<div class="info-box warn">Informe receitas na etapa financeira.</div>'; return; }
+  try {
+    const trimResults = [];
+    for (let q = 0; q < 4; q++) {
+      const receitasTrim = d.receitas.map(r => ({ atividadeId: r.atividadeId, valor: r.valor / 4 }));
+      const result = LucroPresumido.calcularLucroPresumidoTrimestral({
+        receitas: receitasTrim,
+        devolucoes: d.devolucoes / 4, cancelamentos: d.cancelamentos / 4,
+        descontosIncondicionais: d.descontos / 4, ganhosCapital: d.ganhosCapital / 4,
+        rendimentosFinanceiros: d.rendFinanceiros / 4, jcpRecebidos: d.jcpRecebido / 4,
+        multasContratuais: d.multasContratuais / 4, receitasFinanceirasDiversas: d.recFinDiversas / 4,
+        valoresRecuperados: d.valoresRecuperados / 4, demaisReceitas: d.demaisReceitas / 4,
+        irrfRetidoFonte: d.irrfRetido / 4, csllRetidaFonte: d.csllRetida / 4
+      });
+      trimResults.push(result);
+    }
+    App.results.trimestral = trimResults;
+    let html = '<table class="dyn-table"><thead><tr><th>Item</th><th class="right">1o Trim</th><th class="right">2o Trim</th><th class="right">3o Trim</th><th class="right">4o Trim</th><th class="right">Total</th></tr></thead><tbody>';
+    const fields = [
+      ['Receita Bruta', 'receitaBrutaTotal'],['(-) Deducoes', 'deducoesDaReceita'],
+      ['Receita Ajustada', 'receitaBrutaAjustada'],['Base Presumida IRPJ', 'basePresumidaIRPJ'],
+      ['Base Presumida CSLL', 'basePresumidaCSLL'],['(+) Adicoes', 'adicoesObrigatorias'],
+      ['Base Calculo IRPJ', 'baseCalculoIRPJ'],['Base Calculo CSLL', 'baseCalculoCSLL'],
+      ['IRPJ Normal (15%)', 'irpjNormal'],['IRPJ Adicional (10%)', 'irpjAdicional'],
+      ['(-) IRRF Retido', 'irrfRetidoFonte'],['IRPJ Devido', 'irpjDevido'],
+      ['CSLL (9%)', 'csllBruta'],['(-) CSLL Retida', 'csllRetidaFonte'],
+      ['CSLL Devida', 'csllDevida'],['Total IRPJ + CSLL', 'totalIRPJCSLL'],
+    ];
+    fields.forEach(([label, key]) => {
+      let total = 0;
+      html += `<tr><td>${label}</td>`;
+      trimResults.forEach(r => { const v = r.resumo[key] || 0; total += v; html += `<td class="right mono">${formatMoney(v)}</td>`; });
+      html += `<td class="right mono" style="font-weight:700">${formatMoney(total)}</td></tr>`;
+    });
+    html += '</tbody></table>';
+    html += `<div class="info-box info" style="margin-top:12px"><strong>DARF IRPJ:</strong> Codigo ${trimResults[0].resumo.codigoDARF_IRPJ} | <strong>DARF CSLL:</strong> Codigo ${trimResults[0].resumo.codigoDARF_CSLL}<br>Aliquota efetiva sobre receita: ${trimResults[0].resumo.aliquotaEfetivaReceita}</div>`;
+    $('tabTrim').innerHTML = html;
+  } catch(e) { $('tabTrim').innerHTML = `<div class="info-box danger">Erro: ${e.message}</div>`; }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// TAB: PIS/COFINS
+// ─────────────────────────────────────────────────────────────────────────
+function renderPISCOFINS(d) {
+  if (d.receitaBrutaAnual <= 0) { $('tabPiscofins').innerHTML = '<div class="info-box warn">Informe receitas.</div>'; return; }
+  try {
+    const receitaMensal = d.receitaBrutaAnual / 12;
+    const mesesResults = [];
+    const mesesNomes = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+    for (let m = 0; m < 12; m++) {
+      mesesResults.push(LucroPresumido.calcularPISCOFINSMensal({
+        receitaBrutaMensal: receitaMensal, vendasCanceladas: d.cancelamentos / 12,
+        descontosIncondicionais: d.descontos / 12, pisRetidoFonte: d.pisRetido / 12,
+        cofinsRetidaFonte: d.cofinsRetida / 12
+      }));
+    }
+    App.results.piscofins = mesesResults;
+    let html = '<table class="dyn-table"><thead><tr><th>Mes</th><th class="right">Receita</th><th class="right">Base</th><th class="right">PIS 0,65%</th><th class="right">COFINS 3,00%</th><th class="right">Total 3,65%</th></tr></thead><tbody>';
+    let totRec=0,totBase=0,totPIS=0,totCOF=0,totT=0;
+    mesesResults.forEach((r, i) => {
+      const total = r.pis.devido + r.cofins.devida;
+      totRec+=r.receitaBrutaMensal;totBase+=r.baseCalculo;totPIS+=r.pis.devido;totCOF+=r.cofins.devida;totT+=total;
+      html += `<tr><td>${mesesNomes[i]}</td><td class="right mono">${formatMoney(r.receitaBrutaMensal)}</td><td class="right mono">${formatMoney(r.baseCalculo)}</td><td class="right mono">${formatMoney(r.pis.devido)}</td><td class="right mono">${formatMoney(r.cofins.devida)}</td><td class="right mono" style="font-weight:700">${formatMoney(total)}</td></tr>`;
+    });
+    html += `<tr style="background:var(--bg);font-weight:700"><td>TOTAL</td><td class="right mono">${formatMoney(totRec)}</td><td class="right mono">${formatMoney(totBase)}</td><td class="right mono">${formatMoney(totPIS)}</td><td class="right mono">${formatMoney(totCOF)}</td><td class="right mono">${formatMoney(totT)}</td></tr></tbody></table>`;
+    html += `<div class="info-box info" style="margin-top:12px"><strong>Regime:</strong> Cumulativo | <strong>DARF PIS:</strong> ${mesesResults[0].pis.codigoDARF} | <strong>DARF COFINS:</strong> ${mesesResults[0].cofins.codigoDARF}<br>Vencimento: Dia 25 do mes seguinte ao fato gerador.</div>`;
+    $('tabPiscofins').innerHTML = html;
+  } catch(e) { $('tabPiscofins').innerHTML = `<div class="info-box danger">Erro: ${e.message}</div>`; }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// TAB: ANUAL
+// ═══════════════════════════════════════════════════════════════════════════
+// BUG #2 FIX: Separa "Tributos do Regime" de "INSS Patronal" no display
+// Mostra percentual apenas sobre tributos do regime (sem INSS)
+// ═══════════════════════════════════════════════════════════════════════════
+function renderAnual(d) {
+  if (d.receitaBrutaAnual <= 0) { $('tabAnual').innerHTML = '<div class="info-box warn">Informe receitas.</div>'; return; }
+  try {
+    const trimestres = [];
+    for (let q = 0; q < 4; q++) {
+      trimestres.push({
+        receitas: d.receitas.map(r => ({ atividadeId: r.atividadeId, valor: r.valor / 4 })),
+        devolucoes: d.devolucoes/4, cancelamentos: d.cancelamentos/4,
+        descontosIncondicionais: d.descontos/4, ganhosCapital: d.ganhosCapital/4,
+        rendimentosFinanceiros: d.rendFinanceiros/4, jcpRecebidos: d.jcpRecebido/4,
+        multasContratuais: d.multasContratuais/4, receitasFinanceirasDiversas: d.recFinDiversas/4,
+        valoresRecuperados: d.valoresRecuperados/4, demaisReceitas: d.demaisReceitas/4,
+        irrfRetidoFonte: d.irrfRetido/4, csllRetidaFonte: d.csllRetida/4
+      });
+    }
+    const meses = [];
+    for (let m = 0; m < 12; m++) {
+      meses.push({
+        receitaBrutaMensal: d.receitaBrutaAnual/12, vendasCanceladas: d.cancelamentos/12,
+        descontosIncondicionais: d.descontos/12, pisRetidoFonte: d.pisRetido/12,
+        cofinsRetidaFonte: d.cofinsRetida/12
+      });
+    }
+    const socios = d.socios.length ? d.socios : [{ nome: 'Socio Unico', percentual: 1 }];
+    const anual = LucroPresumido.calcularAnualConsolidado({
+      trimestres, meses,
+      aliquotaISS: d.aliquotaISS / 100,
+      folhaPagamentoAnual: d.folhaPagamento,
+      aliquotaRAT: d.aliquotaRAT / 100,
+      aliquotaTerceiros: d.aliquotaTerceiros / 100,
+      lucroContabilEfetivo: d.lucroContabil || null,
+      socios
+    });
+    App.results.anual = anual;
+
+    // ═══ BUG #2 FIX: Calcular % apenas sobre tributos do regime (sem INSS) ═══
+    const tribRegime = anual.consolidacao.tributosFederais + anual.tributos.iss.anual;
+    const rb = anual.receitaBrutaAnual || 1;
+    const pctRegime = ((tribRegime / rb) * 100).toFixed(2) + '%';
+    const cargaTotal = anual.consolidacao.cargaTributariaTotal;
+    const pctTotal = anual.consolidacao.percentualCargaTributaria;
+
+    let html = `<div class="kpi-grid">
+      <div class="kpi"><div class="kpi-label">Receita Bruta Anual</div><div class="kpi-value" style="color:var(--accent)">${formatMoney(rb)}</div></div>
+      <div class="kpi"><div class="kpi-label">Tributos do Regime LP</div><div class="kpi-value" style="color:var(--danger)">${formatMoney(tribRegime)}</div><div class="kpi-sub">${pctRegime} da receita</div></div>
+      <div class="kpi"><div class="kpi-label">Carga Total (c/ INSS)</div><div class="kpi-value" style="color:var(--warn)">${formatMoney(cargaTotal)}</div><div class="kpi-sub">INSS patronal e encargo trabalhista</div></div>
+      <div class="kpi"><div class="kpi-label">Lucro Distribuivel Isento</div><div class="kpi-value" style="color:var(--success)">${formatMoney(anual.distribuicaoLucros.lucroDistribuivelFinal)}</div></div>
+    </div>`;
+    // Tax composition
+    html += `<div class="kpi-grid" style="margin-top:8px">
+      <div class="kpi"><div class="kpi-label">IRPJ</div><div class="kpi-value mono">${formatMoney(anual.tributos.irpj.anual)}</div></div>
+      <div class="kpi"><div class="kpi-label">CSLL</div><div class="kpi-value mono">${formatMoney(anual.tributos.csll.anual)}</div></div>
+      <div class="kpi"><div class="kpi-label">PIS</div><div class="kpi-value mono">${formatMoney(anual.tributos.pis.anual)}</div></div>
+      <div class="kpi"><div class="kpi-label">COFINS</div><div class="kpi-value mono">${formatMoney(anual.tributos.cofins.anual)}</div></div>
+      <div class="kpi"><div class="kpi-label">ISS</div><div class="kpi-value mono">${formatMoney(anual.tributos.iss.anual)}</div></div>
+      <div class="kpi"><div class="kpi-label">INSS Patronal</div><div class="kpi-value mono">${formatMoney(anual.tributos.inssPatronal.anual)}</div><div class="kpi-sub">Encargo trabalhista</div></div>
+    </div>`;
+    html += '<div class="chart-grid-2"><div class="chart-wrap"><div class="chart-title">Carga Tributaria por Trimestre</div><canvas id="chartTrimAnual"></canvas></div>';
+    html += '<div class="chart-wrap"><div class="chart-title">Composicao dos Tributos</div><canvas id="chartComposicao"></canvas></div></div>';
+    $('tabAnual').innerHTML = html;
+    renderQuarterlyChart(anual);
+    renderCompositionChart(anual);
+  } catch(e) { $('tabAnual').innerHTML = `<div class="info-box danger">Erro: ${e.message}</div>`; }
+}
+
+function renderQuarterlyChart(anual) {
+  destroyChart('trimAnual');
+  const ctx = $('chartTrimAnual');
+  if (!ctx || typeof Chart === 'undefined') return;
+  const trimData = anual.detalhamentoTrimestral || [];
+  App.charts.trimAnual = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: ['1o Trim', '2o Trim', '3o Trim', '4o Trim'],
+      datasets: [
+        { label: 'IRPJ', data: trimData.map(t => t.irpjDevido || 0), backgroundColor: 'rgba(239,68,68,.7)' },
+        { label: 'CSLL', data: trimData.map(t => t.csllDevida || 0), backgroundColor: 'rgba(245,158,11,.7)' }
+      ]
+    },
+    options: chartOptions()
+  });
+}
+
+function renderCompositionChart(anual) {
+  destroyChart('composicao');
+  const ctx = $('chartComposicao');
+  if (!ctx || typeof Chart === 'undefined') return;
+  App.charts.composicao = new Chart(ctx, {
+    type: 'pie',
+    data: {
+      labels: ['IRPJ', 'CSLL', 'PIS', 'COFINS', 'ISS', 'INSS Patronal'],
+      datasets: [{ data: [anual.tributos.irpj.anual, anual.tributos.csll.anual, anual.tributos.pis.anual, anual.tributos.cofins.anual, anual.tributos.iss.anual, anual.tributos.inssPatronal.anual], backgroundColor: ['#ef4444','#f59e0b','#3b82f6','#8b5cf6','#10b981','#ec4899'] }]
+    },
+    options: { responsive:true, plugins:{ legend:{position:'bottom',labels:{color:'#94a3b8',font:{size:11}}}, tooltip:{callbacks:{label:ctx=>`${ctx.label}: ${formatMoney(ctx.raw)}`}} } }
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// TAB: VANTAGENS
+// ─────────────────────────────────────────────────────────────────────────
+function renderVantagens(d) {
+  try {
+    const analise = LucroPresumido.analisarVantagensDesvantagens({
+      receitaBrutaAnual: d.receitaBrutaAnual,
+      despesasOperacionaisAnuais: d.totalDespesas + d.folhaPagamento,
+      atividadeId: d.atividadeId, areaAtuacaoSUDAM: d.areaAtuacaoSUDAM,
+      temInvestimentosEquipamentos: d.temEquipamentos,
+      temPesquisaDesenvolvimento: d.temPD, temReceitasSazonais: d.receitaSazonal
+    });
+    App.results.vantagens = analise;
+    let html = `<div class="info-box ${analise.analise.startsWith('FAVORAVEL') ? 'success' : 'warn'}" style="margin-bottom:16px"><strong>${analise.analise}</strong><br>Atividade: ${analise.atividade} | Presuncao: ${analise.percentualPresuncao} | Margem Real: ${analise.margemLucroReal}</div>`;
+    html += '<div class="adv-grid"><div>';
+    html += '<h3 style="color:var(--success);margin-bottom:10px;font-size:14px">Vantagens (' + analise.vantagens.length + ')</h3>';
+    analise.vantagens.forEach(v => { html += `<div class="adv-card pro" style="margin-bottom:8px"><div class="adv-title">${v.titulo}</div><div class="adv-desc">${v.descricao}</div><div class="adv-impact" style="color:var(--success)">Impacto: ${v.impacto}</div></div>`; });
+    html += '</div><div>';
+    html += '<h3 style="color:var(--danger);margin-bottom:10px;font-size:14px">Desvantagens (' + analise.desvantagens.length + ')</h3>';
+    analise.desvantagens.forEach(v => { html += `<div class="adv-card con" style="margin-bottom:8px"><div class="adv-title">${v.titulo}</div><div class="adv-desc">${v.descricao}</div><div class="adv-impact" style="color:var(--danger)">Impacto: ${v.impacto}${v.valorImpacto ? ' | ' + formatMoney(v.valorImpacto) : ''}</div></div>`; });
+    html += '</div></div>';
+    html += `<div style="margin-top:16px;display:flex;gap:12px"><div class="kpi" style="flex:1"><div class="kpi-label">Vantagens</div><div class="kpi-value" style="color:var(--success)">${analise.pontuacao.vantagensAplicaveis}</div></div><div class="kpi" style="flex:1"><div class="kpi-label">Desvantagens</div><div class="kpi-value" style="color:var(--danger)">${analise.pontuacao.desvantagensAplicaveis}</div></div><div class="kpi" style="flex:1"><div class="kpi-label">Criticas</div><div class="kpi-value" style="color:var(--danger)">${analise.pontuacao.desvantagensCriticas}</div></div></div>`;
+    $('tabVantagens').innerHTML = html;
+  } catch(e) { $('tabVantagens').innerHTML = `<div class="info-box danger">Erro: ${e.message}</div>`; }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// TAB: DISTRIBUICAO
+// ─────────────────────────────────────────────────────────────────────────
+function renderDistribuicao(d) {
+  const anual = App.results.anual;
+  if (!anual) { $('tabDistribuicao').innerHTML = '<div class="info-box warn">Calcule os resultados anuais primeiro.</div>'; return; }
+  const dist = anual.distribuicaoLucros;
+  let html = `<div class="kpi-grid"><div class="kpi"><div class="kpi-label">Lucro Distribuivel Isento</div><div class="kpi-value" style="color:var(--success)">${formatMoney(dist.lucroDistribuivelFinal)}</div><div class="kpi-sub">Base: ${dist.tipoBase}</div></div>`;
+  if (dist.lucroDistribuivelPresumido != null) html += `<div class="kpi"><div class="kpi-label">Base Presumida</div><div class="kpi-value mono">${formatMoney(dist.lucroDistribuivelPresumido)}</div></div>`;
+  if (dist.lucroDistribuivelContabil != null) html += `<div class="kpi"><div class="kpi-label">Base Contabil</div><div class="kpi-value mono">${formatMoney(dist.lucroDistribuivelContabil)}</div></div>`;
+  html += '</div>';
+  if (dist.porSocio && dist.porSocio.length) {
+    html += '<table class="dyn-table" style="margin-top:16px"><thead><tr><th>Socio</th><th class="right">%</th><th class="right">Valor Isento</th><th>Base Legal</th></tr></thead><tbody>';
+    dist.porSocio.forEach(s => { html += `<tr><td>${s.nome}</td><td class="right mono">${s.percentualFormatado}</td><td class="right mono" style="color:var(--success);font-weight:700">${formatMoney(s.valorIsento)}</td><td style="font-size:11px;color:var(--text3)">${s.observacao}</td></tr>`; });
+    html += '</tbody></table>';
+  }
+  html += `<div class="info-box info" style="margin-top:16px"><strong>Base legal:</strong> ${dist.baseLegal}</div>`;
+  $('tabDistribuicao').innerHTML = html;
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// TAB: RISCOS
+// ─────────────────────────────────────────────────────────────────────────
+function renderRiscos() {
+  const riscos = LucroPresumido.RISCOS_FISCAIS;
+  if (!riscos || !riscos.length) { $('tabRiscos').innerHTML = '<div class="info-box info">Nenhum risco fiscal cadastrado.</div>'; return; }
+  let html = '<div class="risk-grid">';
+  riscos.forEach(r => {
+    const sevClass = r.gravidade === 'critica' ? 'critica' : r.gravidade === 'alta' ? 'alta' : 'media';
+    html += `<div class="risk-card ${sevClass}"><div style="display:flex;justify-content:space-between;align-items:center"><div class="risk-title">${r.titulo}</div><span class="badge badge-${r.gravidade === 'critica' ? 'danger' : r.gravidade === 'alta' ? 'warn' : 'info'}">${r.gravidade.toUpperCase()}</span></div><div class="risk-desc">${r.descricao}</div><div style="font-size:12px;color:var(--${r.gravidade === 'critica' ? 'danger' : 'warn'});margin:4px 0"><strong>Consequencia:</strong> ${r.consequencia}</div><div class="risk-prev"><strong>Prevencao:</strong> ${r.prevencao}</div></div>`;
+  });
+  $('tabRiscos').innerHTML = html + '</div>';
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// TAB: OBRIGACOES
+// ─────────────────────────────────────────────────────────────────────────
+function renderObrigacoes() {
+  const obr = LucroPresumido.OBRIGACOES_ACESSORIAS;
+  if (!obr) return;
+  let html = '<div class="obl-list">';
+  Object.entries(obr).forEach(([key, o]) => { html += `<div class="obl-item"><div class="obl-period">${o.periodicidade||'N/A'}</div><div><div class="obl-name">${o.nome}</div><div class="obl-detail">${o.descricao||''}<br>Prazo: ${o.prazo||'N/A'}</div></div></div>`; });
+  html += '</div><div class="sec-title" style="margin-top:20px">Calendario de DARFs</div>';
+  html += '<table class="dyn-table"><thead><tr><th>Tributo</th><th>Codigo DARF</th><th>Periodicidade</th><th>Vencimento</th></tr></thead><tbody>';
+  html += `<tr><td>IRPJ Presumido</td><td class="mono">${LucroPresumido.CODIGOS_DARF.IRPJ_PRESUMIDO}</td><td>Trimestral</td><td>Ultimo dia util do mes seguinte ao trimestre</td></tr>`;
+  html += `<tr><td>CSLL Presumido</td><td class="mono">${LucroPresumido.CODIGOS_DARF.CSLL_PRESUMIDO}</td><td>Trimestral</td><td>Ultimo dia util do mes seguinte ao trimestre</td></tr>`;
+  html += `<tr><td>PIS Cumulativo</td><td class="mono">${LucroPresumido.CODIGOS_DARF.PIS_CUMULATIVO}</td><td>Mensal</td><td>Dia 25 do mes seguinte</td></tr>`;
+  html += `<tr><td>COFINS Cumulativo</td><td class="mono">${LucroPresumido.CODIGOS_DARF.COFINS_CUMULATIVO}</td><td>Mensal</td><td>Dia 25 do mes seguinte</td></tr>`;
+  html += '</tbody></table>';
+  $('tabObrigacoes').innerHTML = html;
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// TAB: TRANSICAO
+// ─────────────────────────────────────────────────────────────────────────
+function renderTransicao(d) {
+  const transicoes = LucroPresumido.TRANSICOES;
+  if (!transicoes) return;
+  let html = '';
+  ['SIMPLES_PARA_PRESUMIDO', 'REAL_PARA_PRESUMIDO', 'PRESUMIDO_PARA_REAL'].forEach(key => {
+    const t = transicoes[key];
+    if (!t) return;
+    html += `<div class="trans-card"><div class="trans-title">${t.descricao}</div><ol class="trans-steps">`;
+    (t.procedimentos||[]).forEach(p => { html += `<li>${p}</li>`; });
+    html += '</ol>';
+    if (t.alertas) t.alertas.forEach(a => { html += `<div class="trans-alert"><span style="flex-shrink:0">&#9888;</span><span>${a}</span></div>`; });
+    if (t.baseLegal) html += `<div style="margin-top:8px;font-size:11px;color:var(--text3)">Base legal: ${t.baseLegal}</div>`;
+    html += '</div>';
+  });
+  $('tabTransicao').innerHTML = html || '<div class="info-box info">Nenhuma transicao relevante.</div>';
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// TAB: DICAS
+// ═══════════════════════════════════════════════════════════════════════════
+// BUG #1 FIX (parcial): Protecao contra NaN nos percentuais de presuncao
+// ═══════════════════════════════════════════════════════════════════════════
+function renderDicas(d) {
+  const tips = [];
+  const atividades = LucroPresumido.getAtividadesDisponiveis();
+  const ativ = atividades.find(a => a.id === d.atividadeId);
+  const pctPresuncao = (ativ && !isNaN(ativ.percentualIRPJ)) ? ativ.percentualIRPJ : 0.32;
+  const despTotal = d.totalDespesas + d.folhaPagamento;
+  const lucroReal = d.receitaBrutaAnual - despTotal;
+  const margemReal = d.receitaBrutaAnual > 0 ? lucroReal / d.receitaBrutaAnual : 0;
+
+  if (margemReal > pctPresuncao) {
+    tips.push({ title: 'Margem Real Acima da Presuncao', desc: `Sua margem de lucro real (${(margemReal*100).toFixed(1)}%) e superior ao percentual de presuncao (${(pctPresuncao*100).toFixed(1)}%). O Lucro Presumido tende a ser VANTAJOSO neste caso.` });
+  } else if (d.receitaBrutaAnual > 0) {
+    tips.push({ title: 'Atencao: Margem Abaixo da Presuncao', desc: `Sua margem real (${(margemReal*100).toFixed(1)}%) e INFERIOR a presuncao (${(pctPresuncao*100).toFixed(1)}%). Considere Lucro Real se as despesas forem comprovanveis.` });
+  }
+  if (d.areaAtuacaoSUDAM) tips.push({ title: 'Voce Esta em Area SUDAM', desc: 'Empresas em area SUDAM podem obter reducao de 75% no IRPJ optando pelo Lucro Real. Faca a comparacao detalhada.' });
+  tips.push({ title: 'Regime de Caixa', desc: 'No Lucro Presumido voce pode optar pelo regime de caixa. O imposto e calculado sobre os recebimentos efetivos (nao sobre o faturamento). Ideal para empresas com inadimplencia.' });
+  if (d.receitas.length > 1) tips.push({ title: 'Atividades Mistas', desc: 'Sua empresa tem multiplas atividades. Certifique-se de que cada receita esta classificada com o percentual correto.' });
+  const pisCofCum = d.receitaBrutaAnual * 0.0365;
+  const pisCofNC = d.receitaBrutaAnual * 0.0925 - d.creditosPISCOFINS;
+  if (pisCofNC < pisCofCum && d.creditosPISCOFINS > 0) {
+    tips.push({ title: 'PIS/COFINS: Nao-Cumulativo Pode Ser Melhor', desc: `Com creditos de ${formatMoney(d.creditosPISCOFINS)}, o nao-cumulativo geraria ${formatMoney(pisCofNC)} vs ${formatMoney(pisCofCum)} no cumulativo. Diferenca de ${formatMoney(pisCofCum - pisCofNC)}/ano.` });
+  } else {
+    tips.push({ title: 'PIS/COFINS Cumulativo Simplificado', desc: `Regime cumulativo (3,65%) gera ${formatMoney(pisCofCum)}/ano. Sem controle de creditos.` });
+  }
+  const baseAnual = d.receitaBrutaAnual * pctPresuncao;
+  if (baseAnual > 240000) { tips.push({ title: 'Adicional de IRPJ Significativo', desc: `Base presumida anual (${formatMoney(baseAnual)}) excede R$ 240.000. Adicional de 10%: ${formatMoney((baseAnual-240000)*0.10)}/ano.` }); }
+  tips.push({ title: 'Reforma Tributaria 2026-2033', desc: 'A CBS comeca a vigorar em 2026 com aliquota teste de 0,9%. Acompanhe as mudancas para ajustar o planejamento.' });
+  if (!d.temEscrituracao) tips.push({ title: 'Escrituracao Contabil Completa', desc: 'Manter ECD permite distribuir lucros isentos acima da base presumida. Amplia a distribuicao de lucros.' });
+
+  let html = '';
+  tips.forEach(t => { html += `<div class="tip-card"><div class="tip-title">${t.title}</div><div class="tip-desc">${t.desc}</div></div>`; });
+  $('tabDicas').innerHTML = html;
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// TAB NAVIGATION
+// ─────────────────────────────────────────────────────────────────────────
+function showTab(tabId) {
+  $$('.res-tab').forEach(btn => btn.classList.toggle('active', btn.dataset.tab === tabId));
+  $$('.tab-panel').forEach(p => p.classList.toggle('active', p.id === 'tab' + tabId.charAt(0).toUpperCase() + tabId.slice(1)));
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// CHART HELPERS
+// ─────────────────────────────────────────────────────────────────────────
+function chartOptions() {
+  return {
+    responsive: true,
+    plugins: { legend:{labels:{color:'#94a3b8',font:{size:11}}}, tooltip:{callbacks:{label:ctx=>formatMoney(ctx.raw)}} },
+    scales: { x:{ticks:{color:'#64748b'},grid:{color:'rgba(100,116,139,.15)'}}, y:{ticks:{color:'#64748b',callback:v=>formatMoney(v)},grid:{color:'rgba(100,116,139,.15)'}} }
+  };
+}
+function destroyChart(name) { if (App.charts[name]) { App.charts[name].destroy(); delete App.charts[name]; } }
+
+// ─────────────────────────────────────────────────────────────────────────
+// SIDEBAR
+// ═══════════════════════════════════════════════════════════════════════════
+// BUG #2 FIX: Sidebar mostra tributos do regime (sem INSS inflacionando %)
+// ═══════════════════════════════════════════════════════════════════════════
+function updateSidebar() {
+  const d = App.formData || {};
+  $('sbEmpresa').textContent = d.razaoSocial || '--';
+  const cnaeVal = $('cnaePrincipal').value;
+  const cnaeBusca = $('cnaeBusca').value || '';
+  $('sbCnae').textContent = (cnaeVal && cnaeBusca) ? cnaeBusca.substring(0, 40) : '--';
+
+  let receita = d.receitaBrutaAnual || 0;
+  if (!receita) {
+    $$('#tbodyReceitasSimp tr').forEach(tr => {
+      const inp = tr.querySelector('.money');
+      if (inp) receita += parseMoney(inp.value);
+    });
+  }
+  $('sbReceita').textContent = formatMoney(receita);
+
+  const anual = App.results.anual;
+  if (anual) {
+    // BUG #2 FIX: mostra tributos do regime (federais + ISS) sem INSS
+    const tribRegime = anual.consolidacao.tributosFederais + anual.tributos.iss.anual;
+    const rb = anual.receitaBrutaAnual || 1;
+    const pctRegime = ((tribRegime / rb) * 100).toFixed(2);
+    $('sbCarga').textContent = formatMoney(tribRegime);
+    $('sbCargaPct').textContent = pctRegime + '% da receita';
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// AUTO-SAVE
+// ─────────────────────────────────────────────────────────────────────────
+function triggerAutoSave() {
+  clearTimeout(App.autoSaveTimer);
+  App.autoSaveTimer = setTimeout(() => {
+    try { gatherFormData(); localStorage.setItem('lp_autosave', JSON.stringify({ ts: Date.now(), data: App.formData })); } catch(e) {}
+  }, 2000);
+}
+
+function loadAutoSave() {
+  try {
+    const raw = localStorage.getItem('lp_autosave');
+    if (!raw) return false;
+    const saved = JSON.parse(raw);
+    if (!saved.data) return false;
+    const d = saved.data;
+    if (d.razaoSocial) $('razaoSocial').value = d.razaoSocial;
+    if (d.cnpj) $('cnpj').value = d.cnpj;
+    if (d.estado) { $('estado').value = d.estado; onEstadoChange(); }
+    if (d.aliquotaISS) $('aliquotaISS').value = d.aliquotaISS;
+    if (d.porte) $('porte').value = d.porte;
+    const moneyFields = ['receitaAnterior','devolucoes','cancelamentos','descontos',
+      'ganhosCapital','rendFinanceiros','jcpRecebido','multasContratuais','recFinDiversas',
+      'valoresRecuperados','demaisReceitas','irrfRetido','csllRetida','pisRetido','cofinsRetida',
+      'creditosPISCOFINS','lucroContabil','prejuizosFiscais'];
+    // BUG #2 FIX: NAO restaura folhaPagamento do autosave (evita default absurdo)
+    moneyFields.forEach(field => {
+      if (d[field] && $(field)) $(field).value = Number(d[field]).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+    });
+    // Folha: so restaura se parece razoavel (< 10x receita)
+    if (d.folhaPagamento && d.receitaBrutaAnual && d.folhaPagamento < d.receitaBrutaAnual * 2) {
+      $('folhaPagamento').value = Number(d.folhaPagamento).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+    }
+    const despFields = ['despAluguel','despUtilidades','despCombustivel','despMaterial','despServicos','despProlabore','despSalarios','despDepreciacao','despOutras'];
+    despFields.forEach(field => { if (d[field] && $(field)) $(field).value = Number(d[field]).toLocaleString('pt-BR', { minimumFractionDigits: 2 }); });
+    if (d.aliquotaRAT) $('aliquotaRAT').value = d.aliquotaRAT;
+    if (d.aliquotaTerceiros) $('aliquotaTerceiros').value = d.aliquotaTerceiros;
+    if (d.aliquotaSimples) $('aliquotaSimples').value = d.aliquotaSimples;
+    if (d.temEscrituracao) $('temEscrituracao').checked = d.temEscrituracao;
+    if (d.temEquipamentos) $('temEquipamentos').checked = d.temEquipamentos;
+    if (d.temPD) $('temPD').checked = d.temPD;
+    if (d.receitaSazonal) $('receitaSazonal').checked = d.receitaSazonal;
+    calcTotalDespesas();
+    return true;
+  } catch(e) { return false; }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// EXPORT FUNCTIONS
+// ─────────────────────────────────────────────────────────────────────────
+function salvarEstudo() {
+  try {
+    gatherFormData();
+    const study = { ts: Date.now(), version: '2.2', formData: App.formData, results: {} };
+    if (App.results.simulacao) study.results.simulacao = App.results.simulacao;
+    if (App.results.anual) study.results.anual = App.results.anual;
+    localStorage.setItem('lp_estudo_salvo', JSON.stringify(study));
+    alert('Estudo salvo com sucesso! (' + new Date().toLocaleString('pt-BR') + ')');
+  } catch(e) { alert('Erro ao salvar: ' + e.message); }
+}
+
+function carregarEstudo() {
+  try {
+    const raw = localStorage.getItem('lp_estudo_salvo');
+    if (!raw) { alert('Nenhum estudo salvo encontrado.'); return; }
+    const study = JSON.parse(raw);
+    if (!study.formData) { alert('Dados invalidos.'); return; }
+    const d = study.formData;
+    if (d.razaoSocial) $('razaoSocial').value = d.razaoSocial;
+    if (d.cnpj) $('cnpj').value = d.cnpj;
+    if (d.estado) { $('estado').value = d.estado; onEstadoChange(); }
+    if (d.aliquotaISS) $('aliquotaISS').value = d.aliquotaISS;
+    if (d.porte) $('porte').value = d.porte;
+    const moneyFields = ['receitaAnterior','folhaPagamento','devolucoes','cancelamentos','descontos','ganhosCapital','rendFinanceiros','jcpRecebido','multasContratuais','recFinDiversas','valoresRecuperados','demaisReceitas','irrfRetido','csllRetida','pisRetido','cofinsRetida','creditosPISCOFINS','lucroContabil','prejuizosFiscais'];
+    moneyFields.forEach(field => { if (d[field] && $(field)) $(field).value = Number(d[field]).toLocaleString('pt-BR', { minimumFractionDigits: 2 }); });
+    const despFields = ['despAluguel','despUtilidades','despCombustivel','despMaterial','despServicos','despProlabore','despSalarios','despDepreciacao','despOutras'];
+    despFields.forEach(field => { if (d[field] && $(field)) $(field).value = Number(d[field]).toLocaleString('pt-BR', { minimumFractionDigits: 2 }); });
+    if (d.aliquotaRAT) $('aliquotaRAT').value = d.aliquotaRAT;
+    if (d.aliquotaTerceiros) $('aliquotaTerceiros').value = d.aliquotaTerceiros;
+    if (d.aliquotaSimples) $('aliquotaSimples').value = d.aliquotaSimples;
+    if (d.temEscrituracao) $('temEscrituracao').checked = d.temEscrituracao;
+    if (d.temEquipamentos) $('temEquipamentos').checked = d.temEquipamentos;
+    if (d.temPD) $('temPD').checked = d.temPD;
+    if (d.receitaSazonal) $('receitaSazonal').checked = d.receitaSazonal;
+    calcTotalDespesas();
+    alert('Estudo carregado! Salvo em: ' + new Date(study.ts).toLocaleString('pt-BR'));
+  } catch(e) { alert('Erro ao carregar: ' + e.message); }
+}
+
+function exportPDF() {
+  try {
+    gatherFormData();
+    const d = App.formData;
+    if (!d.receitaBrutaAnual || d.receitaBrutaAnual <= 0) {
+      alert('Calcule os resultados primeiro (etapa 5) antes de exportar o PDF.');
+      return;
+    }
+    if (typeof LucroPresumido !== 'undefined' && typeof LucroPresumido.gerarRelatorioPDF === 'function') {
+      const trimestres = [];
+      for (let q = 0; q < 4; q++) {
+        trimestres.push({
+          receitas: d.receitas.map(r => ({ atividadeId: r.atividadeId, valor: r.valor / 4 })),
+          devolucoes: (d.devolucoes || 0) / 4,
+          cancelamentos: (d.cancelamentos || 0) / 4,
+          descontosIncondicionais: (d.descontos || 0) / 4,
+          ganhosCapital: (d.ganhosCapital || 0) / 4,
+          rendimentosFinanceiros: (d.rendFinanceiros || 0) / 4,
+          jcpRecebidos: (d.jcpRecebido || 0) / 4,
+          multasContratuais: (d.multasContratuais || 0) / 4,
+          receitasFinanceirasDiversas: (d.recFinDiversas || 0) / 4,
+          valoresRecuperados: (d.valoresRecuperados || 0) / 4,
+          demaisReceitas: (d.demaisReceitas || 0) / 4,
+          irrfRetidoFonte: (d.irrfRetido || 0) / 4,
+          csllRetidaFonte: (d.csllRetida || 0) / 4
+        });
+      }
+      const meses = [];
+      for (let m = 0; m < 12; m++) {
+        meses.push({
+          receitaBrutaMensal: d.receitaBrutaAnual / 12,
+          vendasCanceladas: (d.cancelamentos || 0) / 12,
+          descontosIncondicionais: (d.descontos || 0) / 12,
+          pisRetidoFonte: (d.pisRetido || 0) / 12,
+          cofinsRetidaFonte: (d.cofinsRetida || 0) / 12
+        });
+      }
+      const socios = d.socios && d.socios.length ? d.socios : [{ nome: 'Socio Unico', percentual: 1 }];
+      const pdfData = {
+        empresa: {
+          razaoSocial: d.razaoSocial || 'Empresa',
+          cnpj: d.cnpj || '',
+          cnaePrincipal: d.cnaePrincipal || '',
+          estado: d.estado || '',
+          municipio: d.municipio || ''
+        },
+        trimestres,
+        meses,
+        aliquotaISS: (d.aliquotaISS || 5) / 100,
+        folhaPagamentoAnual: d.folhaPagamento || 0,
+        aliquotaRAT: (d.aliquotaRAT || 3) / 100,
+        aliquotaTerceiros: (d.aliquotaTerceiros || 0.5) / 100,
+        lucroContabilEfetivo: d.lucroContabil || null,
+        socios,
+        comparativo: {
+          receitaBrutaAnual: d.receitaBrutaAnual,
+          folhaPagamentoAnual: d.folhaPagamento || 0,
+          despesasOperacionaisAnuais: (d.totalDespesas || 0) + (d.folhaPagamento || 0),
+          atividadeId: d.atividadeId,
+          aliquotaISS: (d.aliquotaISS || 5) / 100,
+          aliquotaRAT: (d.aliquotaRAT || 3) / 100,
+          aliquotaTerceiros: (d.aliquotaTerceiros || 0.5) / 100,
+          creditosPISCOFINS: d.creditosPISCOFINS || 0,
+          aliquotaSimplesEstimada: (d.aliquotaSimples || 15) / 100,
+          areaAtuacaoSUDAM: d.areaAtuacaoSUDAM || false,
+          elegivelSimples: d.elegivelSimples || false,
+          lucroContabilEfetivo: d.lucroContabil || null,
+          prejuizosFiscaisAcumulados: d.prejuizosFiscais || 0
+        }
+      };
+      LucroPresumido.gerarRelatorioPDF(pdfData);
+    } else {
+      window.print();
+    }
+  } catch(e) {
+    console.error('Erro PDF:', e);
+    if (confirm('Erro ao gerar PDF profissional: ' + e.message + '\n\nDeseja usar a impressao do navegador como alternativa?')) {
+      window.print();
+    }
+  }
+}
+
+function exportExcel() {
+  try {
+    gatherFormData();
+    const d = App.formData;
+    const anual = App.results.anual;
+    let csv = 'sep=;\n';
+    csv += 'ESTUDO LUCRO PRESUMIDO;;\n';
+    csv += `Data;${new Date().toLocaleString('pt-BR')}\n`;
+    csv += `Empresa;${d.razaoSocial||''}\nCNPJ;${d.cnpj||''}\nCNAE;${d.cnaePrincipal||''}\n`;
+    csv += `Receita Bruta Anual;${d.receitaBrutaAnual||0}\nFolha Pagamento;${d.folhaPagamento||0}\n\n`;
+    if (anual) {
+      csv += 'TRIBUTOS ANUAIS;;\n';
+      csv += `IRPJ;${anual.tributos.irpj.anual}\nCSLL;${anual.tributos.csll.anual}\n`;
+      csv += `PIS;${anual.tributos.pis.anual}\nCOFINS;${anual.tributos.cofins.anual}\n`;
+      csv += `ISS;${anual.tributos.iss.anual}\nINSS Patronal;${anual.tributos.inssPatronal.anual}\n`;
+      csv += `Carga Total;${anual.consolidacao.cargaTributariaTotal}\nLucro Distribuivel;${anual.distribuicaoLucros.lucroDistribuivelFinal}\n`;
+    }
+    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `estudo_lp_${(d.razaoSocial||'empresa').replace(/\s+/g,'_')}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch(e) { alert('Erro: ' + e.message); }
+}
+
+function novoEstudo() {
+  if (!confirm('Limpar todos os dados e iniciar novo estudo?')) return;
+  try { localStorage.removeItem('lp_autosave'); localStorage.removeItem('lp_estudo_salvo'); } catch(e) {}
+  location.reload();
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// INIT
+// ─────────────────────────────────────────────────────────────────────────
+function initApp() {
+  populateEstados();
+  $('estado').addEventListener('change', onEstadoChange);
+  $('municipio').addEventListener('change', onMunicipioChange);
+  $('cnpj').addEventListener('input', function() { maskCNPJ(this); });
+  // Money masks + sidebar update
+  document.addEventListener('input', function(e) {
+    if (e.target.classList.contains('money')) { maskMoney(e.target); updateSidebar(); }
+  });
+  // BUG #7 FIX: blur handler para completar decimais
+  document.addEventListener('blur', function(e) {
+    if (e.target.classList.contains('money')) {
+      let v = e.target.value;
+      if (v && !v.includes(',')) e.target.value = v + ',00';
+      else if (v && v.endsWith(',')) e.target.value = v + '00';
+      else if (v && /,\d$/.test(v)) e.target.value = v + '0';
+    }
+  }, true);
+  // Despesas auto-total
+  document.addEventListener('input', function(e) { if (e.target.classList.contains('desp')) { maskMoney(e.target); calcTotalDespesas(); } });
+  document.addEventListener('input', debounce(triggerAutoSave, 2000));
+  // Eligibility checks
+  ['receitaAnterior','mesesAtividade','impInstFinanceira','impFactoring','impExterior','impIsencao','impSCP'].forEach(id => {
+    const el = $(id);
+    if (el) { el.addEventListener('change', checkElegibilidade); el.addEventListener('input', checkElegibilidade); }
+  });
+  // Remove invalid class on focus
+  document.addEventListener('focus', function(e) { if (e.target.classList.contains('invalid')) e.target.classList.remove('invalid'); }, true);
+
+  addLinhaReceita();
+  addSocio();
+  initCnaeSearch();
+  loadAutoSave();
+  setTimeout(() => { const o = $('loadingOverlay'); if (o) o.classList.add('hide'); }, 600);
+}
+
+// Wrapper com loading feedback para exportPDF
+const _originalExportPDF = exportPDF;
+window.exportPDF = function() {
+  const btn = document.getElementById('btnExportPDF');
+  if (btn) {
+    const orig = btn.innerHTML;
+    btn.innerHTML = '<div class="export-icon">&#9203;</div><div class="export-label">Gerando PDF...</div><div class="export-desc">Aguarde alguns segundos</div>';
+    btn.style.opacity = '0.6';
+    btn.style.pointerEvents = 'none';
+    setTimeout(() => {
+      try { _originalExportPDF(); }
+      catch(e) { alert('Erro ao gerar PDF: ' + e.message); console.error(e); }
+      finally {
+        setTimeout(() => {
+          btn.innerHTML = orig;
+          btn.style.opacity = '1';
+          btn.style.pointerEvents = 'auto';
+        }, 500);
+      }
+    }, 100);
+  } else {
+    _originalExportPDF();
+  }
+};
+
+// Wait for DOM and CNAE
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', () => {
+    if (window.BANCO_CNAE) { App.cnaeLoaded = true; initApp(); }
+    else window.addEventListener('cnae-loaded', () => { App.cnaeLoaded = true; initApp(); });
+  });
+} else {
+  if (window.BANCO_CNAE) { App.cnaeLoaded = true; initApp(); }
+  else window.addEventListener('cnae-loaded', () => { App.cnaeLoaded = true; initApp(); });
+}
+setTimeout(() => { if (!App.cnaeLoaded) { App.cnaeLoaded = true; initApp(); } }, 3000);
+</script>
+
+</body>
+</html>
