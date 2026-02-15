@@ -5,9 +5,40 @@
  *
  * AGROGEO BRASIL - Geotecnologia e Consultoria Ambiental
  * Autor: Luis Fernando | Proprietário AGROGEO BRASIL
- * Versão: 2.1.0
+ * Versão: 3.3.0
  * Data: Fevereiro/2026
  * Localização: Novo Progresso, Pará (Amazônia Legal - SUDAM)
+ *
+ * Changelog v3.3.0 (versão final):
+ *   - ETAPA 4: calcularBreakEven() — Break-even LP vs Lucro Real (alerta inteligente)
+ *   - ETAPA 4: gerarCalendarioTributario() — Calendário tributário 12 meses × tributos
+ *   - ETAPA 4: Retenções CSRF: CODIGOS_DARF_RETENCAO, ALIQUOTAS_CSRF, saldo PER/DCOMP
+ *   - ETAPA 4: calcularPISCOFINSMensal() atualizado com CSRF e indicação PER/DCOMP
+ *   - ETAPA 4: Fix ECF prazo: "31 de maio" → "Último dia útil de julho" (IN RFB 1.422/2013, Art. 3º)
+ *   - ETAPA 4: Fix EFD-Contribuições prazo: "15º dia útil" → "10º dia útil" (IN RFB 1.252/2012, Art. 7º)
+ *   - ETAPA 4: Adicionada EFD-Reinf: mensal, dia 15 do mês seguinte (IN RFB 2.043/2021)
+ *   - ETAPA 4: DIRF com alerta "substituída por EFD-Reinf + eSocial a partir de 2025"
+ *   - ETAPA 4: UI: aba Break-Even LP vs LR (alerta inteligente com gráfico)
+ *   - ETAPA 4: UI: aba Calendário Tributário (tabela 12 meses × tributos)
+ *
+ * Changelog v3.0.0:
+ *   - ETAPA 1: Constantes atualizadas para 2026 (SM, INSS, IRPF, LC 224/2025, JCP)
+ *   - ETAPA 1: 14 categorias de atividade (6 novas + reestruturação)
+ *   - ETAPA 1: Campos irpjMajorado/csllMajorada (LC 224/2025 +10%) em todas as categorias
+ *   - ETAPA 1: Removida aba "Comparativo" (ferramenta exclusiva LP)
+ *   - ETAPA 1: Tabela IRPF 2026 com redutor Lei 15.270/2025
+ *   - ETAPA 2: calcularBasePresumidaLC224() — acréscimo 10% com faixa R$5M e vigência
+ *   - ETAPA 2: Integração LC 224 no fluxo trimestral e consolidado anual
+ *   - ETAPA 2: getAliquotaIRRFJCP() — 15% até 31/03, 17.5% a partir de 01/04/2026
+ *   - ETAPA 2: calcularIRPFProLabore2026() — tabela progressiva + redutor Lei 15.270
+ *   - ETAPA 2: calcularINSSSocio() e calcularINSSPatronal()
+ *   - ETAPA 2: Fix distribuição lucros isentos (IN RFB 1.700/2017, Art. 238)
+ *   - ETAPA 2: Fix adicional IRPJ trimestral (RIR/2018, Art. 624)
+ *   - ETAPA 3: simularProLaboreOtimo() — Simulador de pró-labore ótimo por sócio
+ *   - ETAPA 3: simularJCP() — Simulador de JCP com comparativo 3 vias
+ *   - ETAPA 3: simularRegimeCaixa() — Caixa vs Competência (PIS/COFINS + IRPJ/CSLL)
+ *   - ETAPA 3: calcularBeneficioECD() — Escrituração completa e distribuição ampliada
+ *   - ETAPA 3: UI com abas Pró-Labore Ótimo, JCP/ECD, Caixa vs Competência
  *
  * Changelog v2.1.0:
  *   - Fix: _formatarMoeda protegida contra undefined/NaN
@@ -25,6 +56,10 @@
  *   - Lei 10.637/2002 (PIS) e Lei 10.833/2003 (COFINS)
  *   - Lei 12.973/2014
  *   - IN RFB 1.700/2017
+ *   - LC 224/2025 — Acréscimo 10% presunção; JCP 17,5%
+ *   - LC 167/2019 — ESC 38,4%
+ *   - Lei 15.270/2025 — Reforma IRPF (isenção até R$ 5.000)
+ *   - Portaria MPS/MF 13/2026 — Valores INSS/SM 2026
  *
  * ══════════════════════════════════════════════════════════════════════════════
  */
@@ -118,6 +153,267 @@ const PERCENTUAL_INCENTIVO_SUDAM = 0.75;
  */
 const LIMITE_COMPENSACAO_PREJUIZO_LUCRO_REAL = 0.30;
 
+// ── Constantes 2026 (Portaria MPS/MF 13/2026) ──
+
+const SALARIO_MINIMO_2026 = 1621.00;
+const TETO_INSS_2026 = 8475.55;
+const INSS_PATRONAL_ALIQUOTA = 0.20;           // 20% sem teto
+const INSS_CONTRIBUINTE_INDIVIDUAL = 0.11;      // 11% limitado ao teto
+
+// ── IRPF 2026 — Tabela progressiva mensal ──
+
+const TABELA_IRPF_2026 = [
+  { limite: 2428.80,   aliquota: 0,     deducao: 0 },
+  { limite: 2826.65,   aliquota: 0.075, deducao: 182.16 },
+  { limite: 3751.05,   aliquota: 0.15,  deducao: 394.16 },
+  { limite: 4664.68,   aliquota: 0.225, deducao: 675.49 },
+  { limite: Infinity,  aliquota: 0.275, deducao: 908.73 }
+];
+
+// ── IRPF 2026 — Redutor adicional (Lei 15.270/2025) ──
+
+const REDUTOR_IRPF_2026 = {
+  limiteIsencaoTotal: 5000.00,       // Até R$ 5.000: IR zerado
+  limiteReducaoParcial: 7350.00,     // Até R$ 7.350: redução parcial
+  valorReducao: 978.62,              // Constante da fórmula
+  coeficienteReducao: 0.133145       // Multiplicador da fórmula
+};
+
+const DEDUCAO_DEPENDENTE_IRPF = 189.59;
+const DESCONTO_SIMPLIFICADO_IRPF = 607.20;
+
+// ── JCP — LC 224/2025, Art. 8º ──
+
+const ALIQUOTA_IRRF_JCP_ANTIGA = 0.15;          // Até 31/03/2026
+const ALIQUOTA_IRRF_JCP_NOVA = 0.175;           // A partir de 01/04/2026
+const DATA_VIGENCIA_JCP_NOVA = new Date(2026, 3, 1); // 01/04/2026
+
+// ── LC 224/2025 — Acréscimo 10% nos percentuais de presunção ──
+
+const LC224_DATA_VIGENCIA = new Date(2026, 3, 1);    // 01/04/2026
+const LC224_LIMITE_ISENCAO_ANUAL = 5_000_000.00;
+const LC224_ACRESCIMO = 0.10;                         // 10% sobre o percentual
+
+// ── ISS (LC 116/2003) ──
+
+const ISS_MINIMO = 0.02;
+const ISS_MAXIMO = 0.05;
+
+// ── Limite LP (Lei 9.430/96, Art. 13) ──
+
+const LIMITE_RECEITA_LP = 78_000_000.00;
+
+// ── Retenções CSRF (Lei 10.833/2003, Arts. 30-35) ──
+
+const LIMITE_DISPENSA_CSRF = 5000.00;
+const ALIQUOTA_CSRF_TOTAL = 0.0465;
+
+const CODIGOS_DARF_RETENCAO = {
+  IRRF_SERVICOS: '1708',
+  CSRF_UNIFICADA: '5952'
+};
+
+const ALIQUOTAS_CSRF = {
+  PIS: 0.0065,
+  COFINS: 0.03,
+  CSLL: 0.01,
+  TOTAL: 0.0465
+};
+
+// ── ESC (LC 167/2019) ──
+
+const LIMITE_RECEITA_ESC = 4_800_000.00;
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SEÇÃO 1A: LC 224/2025 — FUNÇÕES DE CÁLCULO COM ACRÉSCIMO DE 10%
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Calcula a base presumida considerando a LC 224/2025.
+ *
+ * REGRAS:
+ * 1. VIGÊNCIA: Só se aplica a partir de 01/04/2026 (2º trimestre).
+ *    1º Trimestre 2026 = percentuais ANTIGOS.
+ * 2. FAIXA DE ISENÇÃO: Receita anual ≤ R$ 5.000.000 → NENHUMA alteração.
+ *    Apenas a PARCELA EXCEDENTE recebe acréscimo.
+ * 3. PROPORCIONALIZAÇÃO: Limite trimestral = R$ 5M ÷ 4 = R$ 1.250.000.
+ *    Ajuste acumulado permitido.
+ * 4. ACRÉSCIMO: É 10% SOBRE o percentual (não pontos).
+ *    Ex: 32% × 1.10 = 35.2%, NÃO 42%.
+ * 5. ATIVIDADES MISTAS: Se empresa tem comércio + serviço, acréscimo proporcional
+ *    a cada atividade.
+ *
+ * Base Legal: LC 224/2025, Art. 4º, §4º, VII; §5º; Art. 14, I, "a".
+ *
+ * @param {Object} params
+ * @param {number} params.receitaBrutaTrimestral - Receita bruta do trimestre atual
+ * @param {number} params.receitaBrutaAcumuladaAnoAte - Receita acumulada no ano ATÉ o fim deste trimestre
+ * @param {number} params.percentualPresuncaoOriginal - Ex: 0.32 para serviços
+ * @param {number} params.trimestreAtual - 1, 2, 3 ou 4
+ * @param {number} params.anoCalendario - Ex: 2026
+ * @returns {Object} Resultado com base presumida bifurcada e impacto da LC 224
+ */
+function calcularBasePresumidaLC224(params) {
+  const {
+    receitaBrutaTrimestral,
+    receitaBrutaAcumuladaAnoAte,
+    percentualPresuncaoOriginal,
+    trimestreAtual,
+    anoCalendario
+  } = params;
+
+  // REGRA 1: Verificar vigência
+  // LC 224/2025, Art. 14, I, "a": primeiro dia do 4º mês após 26/12/2025 = 01/04/2026
+  // IRPJ e CSLL: anterioridade nonagesimal (CF, art. 150, III, "c")
+  const inicioTrimestre = new Date(anoCalendario, (trimestreAtual - 1) * 3, 1);
+
+  if (inicioTrimestre < LC224_DATA_VIGENCIA) {
+    return {
+      basePresumida: receitaBrutaTrimestral * percentualPresuncaoOriginal,
+      percentualOriginal: percentualPresuncaoOriginal,
+      percentualMajorado: percentualPresuncaoOriginal * (1 + LC224_ACRESCIMO),
+      dentroDoLimite: receitaBrutaTrimestral,
+      excedenteDoTrimestre: 0,
+      impactoLC224: 0,
+      lc224Aplicavel: false
+    };
+  }
+
+  // REGRA 2 e 3: Calcular parcela excedente com proporcionalização e ajuste acumulado
+  const limiteProporcionalAcumulado = (LC224_LIMITE_ISENCAO_ANUAL / 4) * trimestreAtual;
+  const limiteProporcionalAnterior = (LC224_LIMITE_ISENCAO_ANUAL / 4) * (trimestreAtual - 1);
+  const receitaAcumuladaAnterior = receitaBrutaAcumuladaAnoAte - receitaBrutaTrimestral;
+
+  // Excedente acumulado ATÉ o trimestre anterior (já processado)
+  const excedenteAnterior = Math.max(0, receitaAcumuladaAnterior - limiteProporcionalAnterior);
+
+  // Excedente acumulado ATÉ este trimestre (total)
+  const excedenteAteAqui = Math.max(0, receitaBrutaAcumuladaAnoAte - limiteProporcionalAcumulado);
+
+  // Excedente que pertence EXCLUSIVAMENTE a este trimestre
+  // (desconta o que já foi processado em trimestres anteriores)
+  const excedenteDoTrimestre = Math.max(0, Math.min(excedenteAteAqui - excedenteAnterior, receitaBrutaTrimestral));
+  const dentroDoLimite = receitaBrutaTrimestral - excedenteDoTrimestre;
+
+  // REGRA 4: Percentual majorado
+  const percentualMajorado = percentualPresuncaoOriginal * (1 + LC224_ACRESCIMO);
+
+  // Base presumida bifurcada
+  const baseDentroDoLimite = dentroDoLimite * percentualPresuncaoOriginal;
+  const baseExcedente = excedenteDoTrimestre * percentualMajorado;
+  const basePresumidaTotal = baseDentroDoLimite + baseExcedente;
+
+  // Impacto financeiro da LC 224 (quanto a mais na base)
+  const impactoNaBase = excedenteDoTrimestre * (percentualMajorado - percentualPresuncaoOriginal);
+
+  return {
+    basePresumida: basePresumidaTotal,
+    percentualOriginal: percentualPresuncaoOriginal,
+    percentualMajorado: percentualMajorado,
+    dentroDoLimite: dentroDoLimite,
+    excedenteDoTrimestre: excedenteDoTrimestre,
+    impactoLC224: impactoNaBase,
+    lc224Aplicavel: excedenteDoTrimestre > 0
+  };
+}
+
+/**
+ * Retorna a alíquota de IRRF sobre JCP conforme vigência da LC 224/2025, Art. 8º.
+ * - Antes de 01/04/2026: 15%
+ * - A partir de 01/04/2026: 17,5%
+ *
+ * Base Legal: LC 224/2025, Art. 8º (altera Lei 9.249/95, Art. 9º, §2º).
+ *
+ * @param {Date} dataReferencia - Data de pagamento ou crédito do JCP
+ * @returns {number} Alíquota decimal (0.15 ou 0.175)
+ */
+function getAliquotaIRRFJCP(dataReferencia) {
+  return dataReferencia >= DATA_VIGENCIA_JCP_NOVA
+    ? ALIQUOTA_IRRF_JCP_NOVA
+    : ALIQUOTA_IRRF_JCP_ANTIGA;
+}
+
+/**
+ * Calcula IRPF sobre pró-labore do sócio em 2026.
+ * Inclui tabela progressiva de 5 faixas + REDUTOR ADICIONAL (Lei 15.270/2025).
+ *
+ * O redutor usa o RENDIMENTO BRUTO (proLabore), NÃO a base de cálculo.
+ *
+ * Base Legal: Lei 15.270/2025; Tabela progressiva mensal IRPF 2026.
+ *
+ * @param {number} proLabore - Valor bruto do pró-labore mensal
+ * @param {number} inssDescontado - INSS retido do sócio
+ * @param {number} numeroDependentes - Número de dependentes para dedução
+ * @returns {Object} { baseCalculo, irCalculado, redutorAdicional, irFinal, aliquotaEfetiva }
+ */
+function calcularIRPFProLabore2026(proLabore, inssDescontado, numeroDependentes) {
+  // Passo 1: Base de cálculo
+  const deducaoDependentes = numeroDependentes * DEDUCAO_DEPENDENTE_IRPF;
+
+  // Usar a MAIOR dedução entre (INSS + dependentes) ou desconto simplificado
+  const deducoesCompletas = inssDescontado + deducaoDependentes;
+  const deducaoEfetiva = Math.max(deducoesCompletas, DESCONTO_SIMPLIFICADO_IRPF);
+
+  const baseCalculo = Math.max(0, proLabore - deducaoEfetiva);
+
+  // Passo 2: Tabela progressiva
+  let irCalculado = 0;
+  for (const faixa of TABELA_IRPF_2026) {
+    if (baseCalculo <= faixa.limite) {
+      irCalculado = baseCalculo * faixa.aliquota - faixa.deducao;
+      break;
+    }
+  }
+  irCalculado = Math.max(0, irCalculado);
+
+  // Passo 3: Redutor adicional (Lei 15.270/2025)
+  // ATENÇÃO: O redutor usa o RENDIMENTO BRUTO (proLabore), não a base de cálculo
+  let redutorAdicional = 0;
+  if (proLabore <= REDUTOR_IRPF_2026.limiteIsencaoTotal) {
+    redutorAdicional = irCalculado; // Zera o IR
+  } else if (proLabore <= REDUTOR_IRPF_2026.limiteReducaoParcial) {
+    redutorAdicional = Math.max(0,
+      REDUTOR_IRPF_2026.valorReducao - (REDUTOR_IRPF_2026.coeficienteReducao * proLabore)
+    );
+    redutorAdicional = Math.min(redutorAdicional, irCalculado);
+  }
+  // Acima de R$ 7.350: sem redutor
+
+  const irFinal = Math.max(0, irCalculado - redutorAdicional);
+
+  return {
+    baseCalculo: _arredondar(baseCalculo),
+    irCalculado: _arredondar(irCalculado),
+    redutorAdicional: _arredondar(redutorAdicional),
+    irFinal: _arredondar(irFinal),
+    aliquotaEfetiva: proLabore > 0 ? _arredondar(irFinal / proLabore, 4) : 0
+  };
+}
+
+/**
+ * Calcula INSS do sócio (contribuinte individual): 11% sobre pró-labore, limitado ao teto.
+ * Base Legal: IN RFB 971/2009, Art. 57; Decreto 3.048/99, Art. 201.
+ *
+ * @param {number} proLabore - Valor bruto do pró-labore mensal
+ * @returns {number} Valor do INSS retido
+ */
+function calcularINSSSocio(proLabore) {
+  const base = Math.min(proLabore, TETO_INSS_2026);
+  return _arredondar(base * INSS_CONTRIBUINTE_INDIVIDUAL);
+}
+
+/**
+ * Calcula INSS Patronal: 20% sobre total do pró-labore (SEM TETO).
+ * Base Legal: Lei 8.212/91, Art. 22, III.
+ *
+ * @param {number} proLabore - Valor bruto do pró-labore mensal
+ * @returns {number} Valor do INSS patronal
+ */
+function calcularINSSPatronal(proLabore) {
+  return _arredondar(proLabore * INSS_PATRONAL_ALIQUOTA);
+}
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SEÇÃO 2: TABELAS DE PERCENTUAIS DE PRESUNÇÃO
@@ -128,34 +424,89 @@ const LIMITE_COMPENSACAO_PREJUIZO_LUCRO_REAL = 0.30;
  * Base Legal: Lei 9.249/1995, Art. 15 e seus parágrafos.
  *
  * Cada entrada contém:
- *   - id:            Identificador único da atividade
- *   - descricao:     Descrição da atividade
- *   - percentual:    Percentual de presunção do IRPJ (decimal)
- *   - baseLegal:     Referência legal
- *   - cnaes:         Lista de CNAEs típicos (não exaustiva)
- *   - observacoes:   Notas adicionais
+ *   - id:              Identificador único da atividade
+ *   - descricao:       Descrição da atividade
+ *   - percentual:      Percentual de presunção do IRPJ (decimal)
+ *   - irpjMajorado:    Percentual com acréscimo de 10% da LC 224/2025
+ *   - baseLegal:       Referência legal
+ *   - cnaes:           Lista de CNAEs típicos (não exaustiva)
+ *   - observacoes:     Notas adicionais
+ *   - temRequisitos:   (opcional) Se há requisitos cumulativos para o percentual reduzido
+ *   - requisitos:      (opcional) Lista de requisitos
+ *   - alertaSeFalhar:  (opcional) Alerta se requisitos não atendidos
  */
 const PERCENTUAIS_PRESUNCAO_IRPJ = [
   {
     id: 'combustivel',
     descricao: 'Revenda a varejo de combustível derivado de petróleo, álcool etílico carburante e gás natural',
     percentual: 0.016,
+    irpjMajorado: 0.0176,
     baseLegal: 'Lei 9.249/95, Art. 15, §1º, I',
     cnaes: ['47.31-8'],
     observacoes: 'Exclusivamente revenda a varejo. Não se aplica a distribuição ou transporte.'
   },
   {
-    id: 'comercio_industria',
-    descricao: 'Venda de mercadorias, produtos e transporte de cargas',
+    id: 'comercio_geral',
+    descricao: 'Venda de mercadorias e produtos (comércio em geral)',
     percentual: 0.08,
+    irpjMajorado: 0.088,
     baseLegal: 'Lei 9.249/95, Art. 15, caput',
-    cnaes: ['47.*', '46.*', '10.*', '49.30-2'],
-    observacoes: 'Regra geral para comércio e indústria. Inclui transporte de carga.'
+    cnaes: ['47.*', '46.*'],
+    observacoes: 'Regra geral para comércio. Indústria e transporte de cargas são categorias separadas.'
+  },
+  {
+    id: 'industria',
+    descricao: 'Indústria (transformação, beneficiamento)',
+    percentual: 0.08,
+    irpjMajorado: 0.088,
+    baseLegal: 'Lei 9.249/95, Art. 15, caput — regra geral de 8%',
+    cnaes: ['10.*', '11.*', '12.*', '13.*', '14.*', '15.*', '16.*', '17.*', '18.*', '19.*', '20.*', '21.*', '22.*', '23.*', '24.*', '25.*', '26.*', '27.*', '28.*', '29.*', '30.*', '31.*', '32.*', '33.*'],
+    observacoes: 'Transformação de matéria-prima. CNAEs 10.xx a 33.xx.'
+  },
+  {
+    id: 'imobiliaria_venda',
+    descricao: 'Atividade Imobiliária — Venda/Loteamento/Incorporação',
+    percentual: 0.08,
+    irpjMajorado: 0.088,
+    baseLegal: 'Lei 9.249/95, Art. 15, caput — regra geral de 8%',
+    cnaes: ['41.10-7', '68.10-2/01'],
+    observacoes: 'Venda de imóveis próprios, loteamento, incorporação imobiliária. CNAEs 41.10, 68.10-2/01.'
+  },
+  {
+    id: 'construcao_com_material',
+    descricao: 'Construção — Empreitada com TODOS os materiais',
+    percentual: 0.08,
+    irpjMajorado: 0.088,
+    baseLegal: 'IN RFB 1.700/2017, Art. 33, §4º',
+    cnaes: ['41.20-4', '42.*'],
+    observacoes: 'SOMENTE quando o contrato prevê fornecimento de TODOS os materiais indispensáveis. Se parcial → usar 32% (construcao_sem_material).'
+  },
+  {
+    id: 'transporte_cargas',
+    descricao: 'Transporte de Cargas',
+    percentual: 0.08,
+    irpjMajorado: 0.088,
+    baseLegal: 'Lei 9.249/95, Art. 15, caput — regra geral de 8%',
+    cnaes: ['49.30-2'],
+    observacoes: 'Transporte de carga (qualquer modal). NÃO confundir com transporte de passageiros (16%). CNAE 49.30-2.'
+  },
+  {
+    id: 'hospitalar_reduzido',
+    descricao: 'Serviços Hospitalares e Auxílio Diagnóstico (8%)',
+    percentual: 0.08,
+    irpjMajorado: 0.088,
+    baseLegal: 'Lei 9.249/95, Art. 15, §1º, III, "a"; Lei 11.727/2008, Art. 29',
+    cnaes: ['86.*'],
+    observacoes: 'REQUISITOS CUMULATIVOS: (1) Sociedade empresária (LTDA ou S/A — NÃO pode ser sociedade simples); (2) Atender normas ANVISA. Se NÃO atender AMBOS os requisitos → cai para 32% (serviços gerais). CNAE 86.xx.',
+    temRequisitos: true,
+    requisitos: ['Sociedade empresária registrada na Junta Comercial', 'Cumprimento de normas ANVISA'],
+    alertaSeFalhar: 'Sem atender os requisitos cumulativos, a presunção sobe de 8% para 32% (IRPJ) e de 12% para 32% (CSLL).'
   },
   {
     id: 'transporte_passageiros',
-    descricao: 'Prestação de serviços de transporte (exceto carga)',
+    descricao: 'Prestação de serviços de transporte de passageiros',
     percentual: 0.16,
+    irpjMajorado: 0.176,
     baseLegal: 'Lei 9.249/95, Art. 15, §1º, II, a',
     cnaes: ['49.21-3', '49.22-1', '49.29-9', '50.11-4', '50.12-2', '51.11-1'],
     observacoes: 'Transporte de passageiros (rodoviário, aquaviário, aéreo). NÃO inclui transporte de carga (8%).'
@@ -164,6 +515,7 @@ const PERCENTUAIS_PRESUNCAO_IRPJ = [
     id: 'servicos_gerais',
     descricao: 'Prestação de serviços em geral',
     percentual: 0.32,
+    irpjMajorado: 0.352,
     baseLegal: 'Lei 9.249/95, Art. 15, §1º, III, a',
     cnaes: ['71.19-7', '71.12-0', '62.01-5', '69.20-6', '70.20-4', '73.11-4'],
     observacoes: 'Inclui consultoria, engenharia, TI, contabilidade, advocacia e demais serviços profissionais.'
@@ -172,41 +524,55 @@ const PERCENTUAIS_PRESUNCAO_IRPJ = [
     id: 'intermediacao',
     descricao: 'Intermediação de negócios',
     percentual: 0.32,
+    irpjMajorado: 0.352,
     baseLegal: 'Lei 9.249/95, Art. 15, §1º, III, b',
     cnaes: ['66.12-6', '68.22-6'],
     observacoes: 'Corretores, agentes, representantes comerciais.'
   },
   {
     id: 'locacao_cessao',
-    descricao: 'Administração, locação ou cessão de bens imóveis, móveis e direitos de qualquer natureza',
+    descricao: 'Locação de bens MÓVEIS e cessão de direitos de qualquer natureza',
     percentual: 0.32,
+    irpjMajorado: 0.352,
     baseLegal: 'Lei 9.249/95, Art. 15, §1º, III, c',
-    cnaes: ['68.10-2', '77.11-0', '77.19-5'],
-    observacoes: 'Inclui locação de imóveis próprios, móveis, e cessão de direitos.'
+    cnaes: ['77.11-0', '77.19-5'],
+    observacoes: 'Locação de bens MÓVEIS e cessão de direitos. Para locação de IMÓVEIS próprios, usar imobiliaria_locacao.'
+  },
+  {
+    id: 'imobiliaria_locacao',
+    descricao: 'Locação/Administração de Imóveis Próprios',
+    percentual: 0.32,
+    irpjMajorado: 0.352,
+    baseLegal: 'Lei 9.249/95, Art. 15, §1º, III, "c"',
+    cnaes: ['68.10-2/02', '68.22-6'],
+    observacoes: 'Locação de imóveis próprios e administração de imóveis de terceiros. Diferente de locação de bens MÓVEIS. CNAEs 68.10-2/02, 68.22-6.'
   },
   {
     id: 'factoring',
     descricao: 'Factoring (compra de direitos creditórios)',
     percentual: 0.32,
+    irpjMajorado: 0.352,
     baseLegal: 'Lei 9.249/95, Art. 15, §1º, III, d',
     cnaes: ['64.99-9'],
     observacoes: 'Prestação cumulativa e contínua de serviços de assessoria creditícia, mercadológica, gestão de crédito, seleção de riscos, administração de contas.'
   },
   {
-    id: 'construcao_concessao',
-    descricao: 'Construção, recuperação, reforma por empreitada com emprego exclusivo de materiais (concessão)',
+    id: 'construcao_sem_material',
+    descricao: 'Construção — Empreitada SEM fornecimento de materiais',
     percentual: 0.32,
+    irpjMajorado: 0.352,
     baseLegal: 'Lei 9.249/95, Art. 15, §1º, III, e',
     cnaes: ['41.20-4', '42.11-1'],
-    observacoes: 'Construção por empreitada quando há emprego de materiais. Empreitada sem materiais: 32%.'
+    observacoes: 'Empreitada sem fornecimento de todos os materiais indispensáveis. Se fornece TODOS os materiais → usar construcao_com_material (8%).'
   },
   {
     id: 'esc',
     descricao: 'Empresa Simples de Crédito (ESC) — Operações de empréstimo, financiamento e desconto de títulos',
     percentual: 0.384,
-    baseLegal: 'Lei Complementar 167/2019',
+    irpjMajorado: 0.4224,
+    baseLegal: 'Lei Complementar 167/2019, Art. 12 (altera Lei 9.249/95, Art. 15, §1º, IV)',
     cnaes: ['64.99-9'],
-    observacoes: 'Percentual exclusivo para ESC. Introduzido pela LC 167/2019.'
+    observacoes: 'Percentual exclusivo para ESC. Introduzido pela LC 167/2019. Limite receita: R$ 4.800.000/ano (EPP).'
   }
 ];
 
@@ -218,60 +584,113 @@ const PERCENTUAIS_PRESUNCAO_IRPJ = [
  * Ex.: Comércio/Indústria → IRPJ 8%, CSLL 12%.
  *      Transporte          → IRPJ 16%, CSLL 12%.
  *      Serviços em geral   → IRPJ 32%, CSLL 32%.
+ *
+ * Cada entrada contém csllMajorada com o acréscimo de 10% da LC 224/2025.
  */
 const PERCENTUAIS_PRESUNCAO_CSLL = [
   {
     id: 'combustivel',
     descricao: 'Revenda a varejo de combustível',
     percentual: 0.12,
-    baseLegal: 'Lei 9.249/95, Art. 20, I'
+    csllMajorada: 0.132,
+    baseLegal: 'Lei 9.249/95, Art. 20, III'
   },
   {
-    id: 'comercio_industria',
-    descricao: 'Comércio, indústria, serviços hospitalares, transporte',
+    id: 'comercio_geral',
+    descricao: 'Venda de mercadorias e produtos (comércio em geral)',
     percentual: 0.12,
-    baseLegal: 'Lei 9.249/95, Art. 20, I'
+    csllMajorada: 0.132,
+    baseLegal: 'Lei 9.249/95, Art. 20, III'
+  },
+  {
+    id: 'industria',
+    descricao: 'Indústria (transformação, beneficiamento)',
+    percentual: 0.12,
+    csllMajorada: 0.132,
+    baseLegal: 'Lei 9.249/95, Art. 20, III'
+  },
+  {
+    id: 'imobiliaria_venda',
+    descricao: 'Atividade Imobiliária — Venda/Loteamento/Incorporação',
+    percentual: 0.12,
+    csllMajorada: 0.132,
+    baseLegal: 'Lei 9.249/95, Art. 20, III'
+  },
+  {
+    id: 'construcao_com_material',
+    descricao: 'Construção — Empreitada com TODOS os materiais',
+    percentual: 0.12,
+    csllMajorada: 0.132,
+    baseLegal: 'Lei 9.249/95, Art. 20, III'
+  },
+  {
+    id: 'transporte_cargas',
+    descricao: 'Transporte de Cargas',
+    percentual: 0.12,
+    csllMajorada: 0.132,
+    baseLegal: 'Lei 9.249/95, Art. 20, III'
+  },
+  {
+    id: 'hospitalar_reduzido',
+    descricao: 'Serviços Hospitalares e Auxílio Diagnóstico (8%)',
+    percentual: 0.12,
+    csllMajorada: 0.132,
+    baseLegal: 'Lei 9.249/95, Art. 20, III'
   },
   {
     id: 'transporte_passageiros',
-    descricao: 'Prestação de serviços de transporte (exceto carga)',
+    descricao: 'Prestação de serviços de transporte de passageiros',
     percentual: 0.12,
-    baseLegal: 'Lei 9.249/95, Art. 20, I'
+    csllMajorada: 0.132,
+    baseLegal: 'Lei 9.249/95, Art. 20, III'
   },
   {
     id: 'servicos_gerais',
     descricao: 'Prestação de serviços em geral',
     percentual: 0.32,
-    baseLegal: 'Lei 9.249/95, Art. 20, II, a'
+    csllMajorada: 0.352,
+    baseLegal: 'Lei 9.249/95, Art. 20, I'
   },
   {
     id: 'intermediacao',
     descricao: 'Intermediação de negócios',
     percentual: 0.32,
-    baseLegal: 'Lei 9.249/95, Art. 20, II, b'
+    csllMajorada: 0.352,
+    baseLegal: 'Lei 9.249/95, Art. 20, I'
   },
   {
     id: 'locacao_cessao',
-    descricao: 'Administração, locação ou cessão de bens',
+    descricao: 'Locação de bens MÓVEIS e cessão de direitos',
     percentual: 0.32,
-    baseLegal: 'Lei 9.249/95, Art. 20, II, c'
+    csllMajorada: 0.352,
+    baseLegal: 'Lei 9.249/95, Art. 20, I'
+  },
+  {
+    id: 'imobiliaria_locacao',
+    descricao: 'Locação/Administração de Imóveis Próprios',
+    percentual: 0.32,
+    csllMajorada: 0.352,
+    baseLegal: 'Lei 9.249/95, Art. 20, I'
   },
   {
     id: 'factoring',
     descricao: 'Factoring',
     percentual: 0.32,
-    baseLegal: 'Lei 9.249/95, Art. 20, II, d'
+    csllMajorada: 0.352,
+    baseLegal: 'Lei 9.249/95, Art. 20, I'
   },
   {
-    id: 'construcao_concessao',
-    descricao: 'Construção por empreitada (concessão)',
-    percentual: 0.12,
+    id: 'construcao_sem_material',
+    descricao: 'Construção — Empreitada SEM fornecimento de materiais',
+    percentual: 0.32,
+    csllMajorada: 0.352,
     baseLegal: 'Lei 9.249/95, Art. 20, I'
   },
   {
     id: 'esc',
     descricao: 'Empresa Simples de Crédito (ESC)',
     percentual: 0.384,
+    csllMajorada: 0.4224,
     baseLegal: 'Lei Complementar 167/2019, Art. 12 (altera Art. 20, II da Lei 9.249/95)'
   }
 ];
@@ -311,9 +730,9 @@ const OBRIGACOES_ACESSORIAS = {
     nome: 'Escrituração Contábil Fiscal',
     descricao: 'Substituiu a DIPJ. Contém informações contábeis e fiscais para apuração do IRPJ e CSLL. Deve ser transmitida via SPED.',
     periodicidade: 'Anual',
-    prazo: '31 de maio do ano seguinte',
+    prazo: 'Último dia útil de julho do ano seguinte',
     obrigatoria: true,
-    baseLegal: 'IN RFB 1.422/2013'
+    baseLegal: 'IN RFB 1.422/2013, Art. 3º'
   },
   ECD: {
     nome: 'Escrituração Contábil Digital',
@@ -328,9 +747,9 @@ const OBRIGACOES_ACESSORIAS = {
     nome: 'Escrituração Fiscal Digital de Contribuições (PIS/COFINS)',
     descricao: 'Escrituração digital da apuração do PIS/Pasep e COFINS. Apresenta receitas, custos, despesas e créditos (se aplicável).',
     periodicidade: 'Mensal',
-    prazo: '15º dia útil do 2º mês subsequente',
+    prazo: '10º dia útil do 2º mês seguinte ao da escrituração',
     obrigatoria: true,
-    baseLegal: 'IN RFB 1.252/2012'
+    baseLegal: 'IN RFB 1.252/2012, Art. 7º'
   },
   DIRF: {
     nome: 'Declaração do Imposto de Renda Retido na Fonte',
@@ -339,7 +758,17 @@ const OBRIGACOES_ACESSORIAS = {
     prazo: '29 de fevereiro do ano seguinte',
     obrigatoria: true,
     baseLegal: 'IN RFB 1.990/2020',
-    observacao: 'Obrigatória se houve retenções de IR na fonte.'
+    observacao: 'Obrigatória se houve retenções de IR na fonte.',
+    alerta: 'DIRF foi substituída por EFD-Reinf + eSocial a partir de 2025 (IN RFB 2.096/2022). Verificar com contador a transição.'
+  },
+  EFD_REINF: {
+    nome: 'Escrituração Fiscal Digital de Retenções e Informações (EFD-Reinf)',
+    descricao: 'Escrituração mensal das retenções de IRRF, CSRF (PIS/COFINS/CSLL), INSS e demais informações fiscais não relacionadas ao trabalho. Substitui parcialmente a DIRF.',
+    periodicidade: 'Mensal',
+    prazo: 'Dia 15 do mês seguinte',
+    obrigatoria: true,
+    baseLegal: 'IN RFB 2.043/2021',
+    observacao: 'Obrigatória para todas as PJ. Integra o SPED. Informações de retenções de serviços tomados/prestados.'
   },
   ESOCIAL: {
     nome: 'e-Social',
@@ -457,15 +886,40 @@ function getTrimestres(ano) {
 }
 
 /**
- * Calcula o último dia útil de um mês (aproximação — ignora feriados).
+ * Feriados nacionais fixos (MM-DD).
+ * NOTA: Feriados variáveis (Carnaval, Corpus Christi, Sexta-feira Santa) e estaduais não estão incluídos. Considerar integração futura.
+ * @private
+ */
+const FERIADOS_NACIONAIS_FIXOS = [
+  '01-01', // Confraternização Universal
+  '04-21', // Tiradentes
+  '05-01', // Dia do Trabalho
+  '09-07', // Independência
+  '10-12', // Nossa Senhora Aparecida
+  '11-02', // Finados
+  '11-15', // Proclamação da República
+  '12-25'  // Natal
+];
+
+/**
+ * Verifica se uma data cai em feriado nacional fixo.
+ * @private
+ */
+function _isFeriadoFixo(data) {
+  const mmdd = String(data.getMonth() + 1).padStart(2, '0') + '-' + String(data.getDate()).padStart(2, '0');
+  return FERIADOS_NACIONAIS_FIXOS.includes(mmdd);
+}
+
+/**
+ * Calcula o último dia útil de um mês (considera fins de semana e feriados nacionais fixos).
  * @private
  */
 function _getUltimoDiaUtil(ano, mes) {
-  const ultimoDia = new Date(ano, mes + 1, 0);
-  const diaSemana = ultimoDia.getDay();
-  if (diaSemana === 0) ultimoDia.setDate(ultimoDia.getDate() - 2);      // Domingo → Sexta
-  else if (diaSemana === 6) ultimoDia.setDate(ultimoDia.getDate() - 1); // Sábado → Sexta
-  return ultimoDia;
+  let data = new Date(ano, mes + 1, 0);
+  while (data.getDay() === 0 || data.getDay() === 6 || _isFeriadoFixo(data)) {
+    data.setDate(data.getDate() - 1);
+  }
+  return data;
 }
 
 /**
@@ -542,6 +996,16 @@ function verificarElegibilidade(dados) {
     });
   }
 
+  // Validação cruzada: atividade factoring ou ESC
+  if (dados.atividadeId === 'factoring' || dados.atividadeId === 'esc') {
+    resultado.alertas.push({
+      tipo: 'atencao',
+      mensagem: dados.atividadeId === 'factoring'
+        ? 'Atividade de factoring pode configurar impedimento ao LP (RIR/2018, Art. 257, II). Confirme com o contador se sua atividade se enquadra nesta vedação.'
+        : 'ESC: limite de receita R$ 4.800.000/ano (EPP). Atuação restrita ao município da sede + limítrofes (LC 167/2019).'
+    });
+  }
+
   return resultado;
 }
 
@@ -568,6 +1032,9 @@ function verificarElegibilidade(dados) {
  * @param {number} [params.demaisReceitas=0] - Outras receitas não abrangidas pela presunção
  * @param {number} [params.irrfRetidoFonte=0] - IRRF retido na fonte sobre receitas do trimestre
  * @param {number} [params.csllRetidaFonte=0] - CSLL retida na fonte sobre receitas do trimestre
+ * @param {number} [params.trimestreAtual=0] - Trimestre (1-4), necessário para LC 224/2025
+ * @param {number} [params.anoCalendario=2026] - Ano-calendário, necessário para LC 224/2025
+ * @param {number} [params.receitaBrutaAcumuladaAnoAte=0] - Receita acumulada no ano até o fim deste trimestre (inclui este trimestre)
  * @returns {Object} Detalhamento completo do cálculo
  */
 function calcularLucroPresumidoTrimestral(params) {
@@ -584,7 +1051,10 @@ function calcularLucroPresumidoTrimestral(params) {
     valoresRecuperados = 0,
     demaisReceitas = 0,
     irrfRetidoFonte = 0,
-    csllRetidaFonte = 0
+    csllRetidaFonte = 0,
+    trimestreAtual = 0,
+    anoCalendario = new Date().getFullYear(),
+    receitaBrutaAcumuladaAnoAte = 0
   } = params;
 
   // ── Passo 1: Receita Bruta Trimestral ──
@@ -592,11 +1062,19 @@ function calcularLucroPresumidoTrimestral(params) {
   const deducoesDaReceita = devolucoes + cancelamentos + descontosIncondicionais;
   const receitaBrutaAjustada = receitaBrutaTotal - deducoesDaReceita;
 
-  // ── Passo 2: Base Presumida por Atividade ──
+  // ── Passo 2: Base Presumida por Atividade (com LC 224/2025) ──
   const detalhamentoIRPJ = [];
   const detalhamentoCSLL = [];
   let basePresumidaIRPJ = 0;
   let basePresumidaCSLL = 0;
+  let impactoLC224TotalIRPJ = 0;
+  let impactoLC224TotalCSLL = 0;
+  let lc224AplicadaNoTrimestre = false;
+
+  // Receita acumulada para LC 224 (usa receitaBrutaAjustada como base)
+  const receitaAcumuladaLC224 = receitaBrutaAcumuladaAnoAte > 0
+    ? receitaBrutaAcumuladaAnoAte
+    : receitaBrutaAjustada; // fallback: apenas este trimestre
 
   for (const receita of receitas) {
     const atividadeIRPJ = PERCENTUAIS_PRESUNCAO_IRPJ.find(a => a.id === receita.atividadeId);
@@ -610,11 +1088,56 @@ function calcularLucroPresumidoTrimestral(params) {
     const proporcao = receitaBrutaTotal > 0 ? receita.valor / receitaBrutaTotal : 0;
     const receitaLiquidaAtividade = receita.valor - (deducoesDaReceita * proporcao);
 
-    const baseIRPJAtividade = receitaLiquidaAtividade * atividadeIRPJ.percentual;
-    const baseCSLLAtividade = receitaLiquidaAtividade * atividadeCSLL.percentual;
+    // LC 224/2025: Aplicar proporcionalização por atividade (§5º, II)
+    // Cada atividade recebe o excedente proporcional à sua receita
+    const proporcaoAtividadeNaReceita = receitaBrutaAjustada > 0
+      ? receitaLiquidaAtividade / receitaBrutaAjustada
+      : 0;
+
+    // Calcular base IRPJ com LC 224
+    let baseIRPJAtividade;
+    let lc224IRPJ = null;
+    if (trimestreAtual > 0) {
+      lc224IRPJ = calcularBasePresumidaLC224({
+        receitaBrutaTrimestral: receitaLiquidaAtividade,
+        receitaBrutaAcumuladaAnoAte: receitaAcumuladaLC224 * proporcaoAtividadeNaReceita,
+        percentualPresuncaoOriginal: atividadeIRPJ.percentual,
+        trimestreAtual,
+        anoCalendario
+      });
+      baseIRPJAtividade = lc224IRPJ.basePresumida;
+      impactoLC224TotalIRPJ += lc224IRPJ.impactoLC224;
+      if (lc224IRPJ.lc224Aplicavel) lc224AplicadaNoTrimestre = true;
+    } else {
+      baseIRPJAtividade = receitaLiquidaAtividade * atividadeIRPJ.percentual;
+    }
+
+    // Calcular base CSLL com LC 224
+    let baseCSLLAtividade;
+    let lc224CSLL = null;
+    if (trimestreAtual > 0) {
+      lc224CSLL = calcularBasePresumidaLC224({
+        receitaBrutaTrimestral: receitaLiquidaAtividade,
+        receitaBrutaAcumuladaAnoAte: receitaAcumuladaLC224 * proporcaoAtividadeNaReceita,
+        percentualPresuncaoOriginal: atividadeCSLL.percentual,
+        trimestreAtual,
+        anoCalendario
+      });
+      baseCSLLAtividade = lc224CSLL.basePresumida;
+      impactoLC224TotalCSLL += lc224CSLL.impactoLC224;
+    } else {
+      baseCSLLAtividade = receitaLiquidaAtividade * atividadeCSLL.percentual;
+    }
 
     basePresumidaIRPJ += baseIRPJAtividade;
     basePresumidaCSLL += baseCSLLAtividade;
+
+    const percentualEfetivoIRPJ = (lc224IRPJ && lc224IRPJ.lc224Aplicavel)
+      ? (baseIRPJAtividade / receitaLiquidaAtividade)
+      : atividadeIRPJ.percentual;
+    const percentualEfetivoCSLL = (lc224CSLL && lc224CSLL.lc224Aplicavel)
+      ? (baseCSLLAtividade / receitaLiquidaAtividade)
+      : atividadeCSLL.percentual;
 
     detalhamentoIRPJ.push({
       atividade: atividadeIRPJ.descricao,
@@ -624,7 +1147,15 @@ function calcularLucroPresumidoTrimestral(params) {
       percentualPresuncao: atividadeIRPJ.percentual,
       percentualPresuncaoFormatado: `${(atividadeIRPJ.percentual * 100).toFixed(1)}%`,
       basePresumida: _arredondar(baseIRPJAtividade),
-      baseLegal: atividadeIRPJ.baseLegal
+      baseLegal: atividadeIRPJ.baseLegal,
+      lc224: lc224IRPJ ? {
+        aplicavel: lc224IRPJ.lc224Aplicavel,
+        percentualMajorado: lc224IRPJ.percentualMajorado,
+        percentualEfetivo: _arredondar(percentualEfetivoIRPJ, 4),
+        dentroDoLimite: _arredondar(lc224IRPJ.dentroDoLimite),
+        excedenteDoTrimestre: _arredondar(lc224IRPJ.excedenteDoTrimestre),
+        impactoNaBase: _arredondar(lc224IRPJ.impactoLC224)
+      } : null
     });
 
     detalhamentoCSLL.push({
@@ -635,7 +1166,15 @@ function calcularLucroPresumidoTrimestral(params) {
       percentualPresuncao: atividadeCSLL.percentual,
       percentualPresuncaoFormatado: `${(atividadeCSLL.percentual * 100).toFixed(1)}%`,
       basePresumida: _arredondar(baseCSLLAtividade),
-      baseLegal: atividadeCSLL.baseLegal
+      baseLegal: atividadeCSLL.baseLegal,
+      lc224: lc224CSLL ? {
+        aplicavel: lc224CSLL.lc224Aplicavel,
+        percentualMajorado: lc224CSLL.percentualMajorado,
+        percentualEfetivo: _arredondar(percentualEfetivoCSLL, 4),
+        dentroDoLimite: _arredondar(lc224CSLL.dentroDoLimite),
+        excedenteDoTrimestre: _arredondar(lc224CSLL.excedenteDoTrimestre),
+        impactoNaBase: _arredondar(lc224CSLL.impactoLC224)
+      } : null
     });
   }
 
@@ -727,13 +1266,25 @@ function calcularLucroPresumidoTrimestral(params) {
       observacao: 'Quotas mínimas de R$ 1.000,00. 2ª e 3ª quotas acrescidas de juros SELIC.'
     },
 
+    // LC 224/2025 — Impacto do acréscimo de 10%
+    lc224: {
+      aplicada: lc224AplicadaNoTrimestre,
+      impactoBaseIRPJ: _arredondar(impactoLC224TotalIRPJ),
+      impactoBaseCSLL: _arredondar(impactoLC224TotalCSLL),
+      impactoIRPJ: _arredondar(impactoLC224TotalIRPJ * ALIQUOTA_IRPJ),
+      impactoCSLL: _arredondar(impactoLC224TotalCSLL * ALIQUOTA_CSLL),
+      baseLegal: 'LC 224/2025, Art. 4º, §4º, VII; §5º'
+    },
+
     // Cálculos intermediários (para auditoria)
     _auditoria: {
       limiteAdicional: LIMITE_ADICIONAL_TRIMESTRAL,
       baseAdicional,
       aliquotaIRPJ: ALIQUOTA_IRPJ,
       aliquotaAdicional: ALIQUOTA_ADICIONAL_IRPJ,
-      aliquotaCSLL: ALIQUOTA_CSLL
+      aliquotaCSLL: ALIQUOTA_CSLL,
+      trimestreAtual,
+      anoCalendario
     }
   };
 }
@@ -755,9 +1306,11 @@ function calcularLucroPresumidoTrimestral(params) {
  * @param {number} [params.receitasIsentas=0]
  * @param {number} [params.icmsST=0] - ICMS-ST destacado
  * @param {number} [params.ipiDestacado=0] - IPI destacado
- * @param {number} [params.pisRetidoFonte=0]
- * @param {number} [params.cofinsRetidaFonte=0]
- * @returns {Object} Detalhamento do cálculo
+ * @param {number} [params.pisRetidoFonte=0] - PIS retido na fonte (CSRF)
+ * @param {number} [params.cofinsRetidaFonte=0] - COFINS retida na fonte (CSRF)
+ * @param {number} [params.csllRetidaFonteMensal=0] - CSLL retida na fonte (CSRF) — informativo
+ * @param {number} [params.irrfRetidoFonteMensal=0] - IRRF retido na fonte — informativo
+ * @returns {Object} Detalhamento do cálculo com saldo PER/DCOMP
  */
 function calcularPISCOFINSMensal(params) {
   const {
@@ -769,7 +1322,9 @@ function calcularPISCOFINSMensal(params) {
     icmsST = 0,
     ipiDestacado = 0,
     pisRetidoFonte = 0,
-    cofinsRetidaFonte = 0
+    cofinsRetidaFonte = 0,
+    csllRetidaFonteMensal = 0,
+    irrfRetidoFonteMensal = 0
   } = params;
 
   const exclusoes = vendasCanceladas + descontosIncondicionais +
@@ -781,6 +1336,11 @@ function calcularPISCOFINSMensal(params) {
 
   const pisDevido = _arredondar(Math.max(0, pisBruto - pisRetidoFonte));
   const cofinsDevida = _arredondar(Math.max(0, cofinsBruta - cofinsRetidaFonte));
+
+  // Saldo credor (retenção > imposto devido) → PER/DCOMP
+  const saldoCredorPIS = _arredondar(Math.max(0, pisRetidoFonte - pisBruto));
+  const saldoCredorCOFINS = _arredondar(Math.max(0, cofinsRetidaFonte - cofinsBruta));
+  const temSaldoPERDCOMP = saldoCredorPIS > 0 || saldoCredorCOFINS > 0;
 
   return {
     regime: 'Cumulativo',
@@ -801,6 +1361,7 @@ function calcularPISCOFINSMensal(params) {
       bruto: pisBruto,
       retidoFonte: pisRetidoFonte,
       devido: pisDevido,
+      saldoCredor: saldoCredorPIS,
       codigoDARF: CODIGOS_DARF.PIS_CUMULATIVO
     },
     cofins: {
@@ -809,13 +1370,35 @@ function calcularPISCOFINSMensal(params) {
       bruta: cofinsBruta,
       retidaFonte: cofinsRetidaFonte,
       devida: cofinsDevida,
+      saldoCredor: saldoCredorCOFINS,
       codigoDARF: CODIGOS_DARF.COFINS_CUMULATIVO
+    },
+    retencoesFonte: {
+      pisRetido: pisRetidoFonte,
+      cofinsRetida: cofinsRetidaFonte,
+      csllRetida: csllRetidaFonteMensal,
+      irrfRetido: irrfRetidoFonteMensal,
+      totalCSRF: _arredondar(pisRetidoFonte + cofinsRetidaFonte + csllRetidaFonteMensal),
+      codigoDARFCSRF: CODIGOS_DARF_RETENCAO.CSRF_UNIFICADA,
+      codigoDARFIRRF: CODIGOS_DARF_RETENCAO.IRRF_SERVICOS,
+      dispensaCSRF: `Pagamentos <= R$ ${LIMITE_DISPENSA_CSRF.toLocaleString('pt-BR')}/mes ao mesmo fornecedor estao dispensados (Lei 10.833/2003, Art. 31, §3o).`
+    },
+    perDcomp: {
+      temSaldo: temSaldoPERDCOMP,
+      saldoPIS: saldoCredorPIS,
+      saldoCOFINS: saldoCredorCOFINS,
+      instrucao: temSaldoPERDCOMP
+        ? 'Saldo credor de retencoes excede o imposto devido. Utilize PER/DCOMP para compensar com outros tributos federais ou solicitar restituicao.'
+        : null,
+      baseLegal: 'IN RFB 1.717/2017 (PER/DCOMP)'
     },
     totalPISCOFINS: _arredondar(pisDevido + cofinsDevida),
     cargaCombinada: '3,65%',
     observacoes: [
-      'Regime cumulativo: SEM direito a créditos sobre insumos.',
-      'Receitas financeiras de empresa de consultoria: não integram a base (posição da RFB).',
+      'Regime cumulativo: SEM direito a creditos sobre insumos.',
+      'Receitas financeiras de empresa de consultoria: nao integram a base (posicao da RFB).',
+      'Retencoes CSRF (Lei 10.833/2003, Arts. 30-35): PIS 0,65% + COFINS 3% + CSLL 1% = 4,65%.',
+      'Dispensa: pagamentos <= R$ 5.000/mes ao mesmo fornecedor.',
       'Base Legal: Lei 10.637/2002 (PIS) e Lei 10.833/2003 (COFINS).'
     ]
   };
@@ -855,12 +1438,25 @@ function calcularAnualConsolidado(params) {
     socios = []
   } = params;
 
-  // ── Cálculos Trimestrais (IRPJ + CSLL) ──
+  // ── Cálculos Trimestrais (IRPJ + CSLL) com LC 224/2025 ──
+  const anoCalendario = params.anoCalendario || new Date().getFullYear();
+  let receitaAcumulada = 0;
   const resultadosTrimestres = trimestres.map((t, i) => {
-    const resultado = calcularLucroPresumidoTrimestral(t);
+    // Calcular receita bruta deste trimestre para acumular
+    const receitaTrimestre = (t.receitas || []).reduce((sum, r) => sum + (r.valor || 0), 0)
+      - (t.devolucoes || 0) - (t.cancelamentos || 0) - (t.descontosIncondicionais || 0);
+    receitaAcumulada += receitaTrimestre;
+
+    const resultado = calcularLucroPresumidoTrimestral({
+      ...t,
+      trimestreAtual: i + 1,
+      anoCalendario,
+      receitaBrutaAcumuladaAnoAte: receitaAcumulada
+    });
     return {
       trimestre: i + 1,
-      ...resultado.resumo
+      ...resultado.resumo,
+      lc224: resultado.lc224
     };
   });
 
@@ -895,16 +1491,14 @@ function calcularAnualConsolidado(params) {
     : 0;
 
   // ── Distribuição de Lucros Isentos ──
-  // Base Legal: IN RFB 1.700/2017, Art. 238
-  // Lucro distribuível isento = Base Presumida IRPJ − IRPJ − CSLL
-  // PIS e COFINS são tributos sobre receita, não sobre lucro, e não entram na dedução.
+  // IN RFB 1.700/2017, Art. 238: "diminuída de TODOS os impostos e contribuições"
+  // tributosFederais já inclui IRPJ + CSLL + PIS + COFINS
   const basePresumidaAnual = resultadosTrimestres.reduce((s, t) => s + t.baseCalculoIRPJ, 0);
-  const irpjCSLLAnual = _arredondar(totalIRPJ + totalCSLL);
-  const lucroDistribuivelPresumido = _arredondar(Math.max(0, basePresumidaAnual - irpjCSLLAnual));
+  const lucroDistribuivelPresumido = _arredondar(Math.max(0, basePresumidaAnual - tributosFederais));
 
   let lucroDistribuivelContabil = null;
   if (lucroContabilEfetivo !== null) {
-    lucroDistribuivelContabil = _arredondar(Math.max(0, lucroContabilEfetivo - irpjCSLLAnual));
+    lucroDistribuivelContabil = _arredondar(Math.max(0, lucroContabilEfetivo - tributosFederais));
   }
 
   const lucroDistribuivel = lucroDistribuivelContabil !== null
@@ -958,14 +1552,23 @@ function calcularAnualConsolidado(params) {
     distribuicaoLucros: {
       basePresumidaAnual: _arredondar(basePresumidaAnual),
       lucroContabilEfetivo,
-      irpjCSLLAnual,
       tributosFederais,
       lucroDistribuivelPresumido,
       lucroDistribuivelContabil,
       lucroDistribuivelFinal: lucroDistribuivel,
       tipoBase: lucroDistribuivelContabil !== null ? 'Contábil (escrituração completa)' : 'Presumido',
       porSocio: distribuicaoPorSocio,
-      baseLegal: 'IN RFB 1.700/2017, Art. 238 — Lucro distribuível isento = Base Presumida − IRPJ − CSLL. Isento de IR para PF residente (RIR/2018, Art. 725).'
+      baseLegal: 'IN RFB 1.700/2017, Art. 238; RIR/2018, Art. 725 — Lucros isentos diminuídos de TODOS os impostos e contribuições (IRPJ+CSLL+PIS+COFINS).'
+    },
+
+    // LC 224/2025 — Resumo anual do impacto
+    lc224: {
+      impactoBaseIRPJAnual: _arredondar(resultadosTrimestres.reduce((s, t) => s + (t.lc224 ? t.lc224.impactoBaseIRPJ : 0), 0)),
+      impactoBaseCSLLAnual: _arredondar(resultadosTrimestres.reduce((s, t) => s + (t.lc224 ? t.lc224.impactoBaseCSLL : 0), 0)),
+      impactoIRPJAnual: _arredondar(resultadosTrimestres.reduce((s, t) => s + (t.lc224 ? t.lc224.impactoIRPJ : 0), 0)),
+      impactoCSLLAnual: _arredondar(resultadosTrimestres.reduce((s, t) => s + (t.lc224 ? t.lc224.impactoCSLL : 0), 0)),
+      trimestresAfetados: resultadosTrimestres.filter(t => t.lc224 && t.lc224.aplicada).map(t => t.trimestre),
+      baseLegal: 'LC 224/2025, Art. 4º, §4º, VII; §5º'
     },
 
     detalhamentoTrimestral: resultadosTrimestres,
@@ -998,6 +1601,7 @@ function calcularAnualConsolidado(params) {
  * @param {number} [params.prejuizosFiscaisAcumulados=0] - Prejuízos para compensar no Lucro Real
  * @returns {Object} Comparativo detalhado entre os regimes
  */
+// Função interna — não exposta ao frontend. Usar calcularBreakEven() como alerta.
 function compararRegimes(params) {
   const {
     receitaBrutaAnual,
@@ -1063,8 +1667,14 @@ function compararRegimes(params) {
     const basePresumidaCSLL = _arredondar(receitaBrutaAnual * atividadeCSLL.percentual);
 
     const irpjNormal = _arredondar(basePresumidaIRPJ * ALIQUOTA_IRPJ);
-    const baseAdicional = Math.max(0, basePresumidaIRPJ - LIMITE_ADICIONAL_TRIMESTRAL * 4);
-    const irpjAdicional = _arredondar(baseAdicional * ALIQUOTA_ADICIONAL_IRPJ);
+    // CORREÇÃO: Adicional IRPJ deve ser calculado TRIMESTRE A TRIMESTRE (RIR/2018, Art. 624)
+    // Limite de R$ 60.000/trimestre. Assumindo receita uniforme nos 4 trimestres:
+    const baseTrimestralIRPJ = basePresumidaIRPJ / 4;
+    let irpjAdicional = 0;
+    for (let t = 0; t < 4; t++) {
+      irpjAdicional += Math.max(0, baseTrimestralIRPJ - LIMITE_ADICIONAL_TRIMESTRAL) * ALIQUOTA_ADICIONAL_IRPJ;
+    }
+    irpjAdicional = _arredondar(irpjAdicional);
     const irpjTotal = _arredondar(irpjNormal + irpjAdicional);
 
     const csllTotal = _arredondar(basePresumidaCSLL * ALIQUOTA_CSLL);
@@ -1075,12 +1685,11 @@ function compararRegimes(params) {
     const tributosFederais = _arredondar(irpjTotal + csllTotal + pisTotal + cofinsTotal);
     const cargaTotal = _arredondar(tributosFederais + issTotal + inssPatronal);
 
-    // Distribuição de lucros (IN RFB 1.700/2017, Art. 238: Base Presumida - IRPJ - CSLL)
-    const irpjCSLL = _arredondar(irpjTotal + csllTotal);
-    const lucroDistribPresumido = _arredondar(Math.max(0, basePresumidaIRPJ - irpjCSLL));
+    // Distribuição de lucros — IN RFB 1.700/2017, Art. 238
+    const lucroDistribPresumido = _arredondar(Math.max(0, basePresumidaIRPJ - tributosFederais));
     let lucroDistribContabil = null;
     if (lucroContabilEfetivo !== null) {
-      lucroDistribContabil = _arredondar(Math.max(0, lucroContabilEfetivo - irpjCSLL));
+      lucroDistribContabil = _arredondar(Math.max(0, lucroContabilEfetivo - tributosFederais));
     }
     const lucroDistribuivel = lucroDistribContabil !== null
       ? Math.max(lucroDistribPresumido, lucroDistribContabil)
@@ -1123,8 +1732,13 @@ function compararRegimes(params) {
     baseIRPJ = Math.max(0, baseIRPJ - compensacao);
 
     const irpjNormal = _arredondar(baseIRPJ * ALIQUOTA_IRPJ);
-    const baseAdicional = Math.max(0, baseIRPJ - LIMITE_ADICIONAL_TRIMESTRAL * 4);
-    const irpjAdicional = _arredondar(baseAdicional * ALIQUOTA_ADICIONAL_IRPJ);
+    // CORREÇÃO: Adicional IRPJ calculado TRIMESTRE A TRIMESTRE (RIR/2018, Art. 624)
+    const baseTrimestralIRPJReal = baseIRPJ / 4;
+    let irpjAdicional = 0;
+    for (let t = 0; t < 4; t++) {
+      irpjAdicional += Math.max(0, baseTrimestralIRPJReal - LIMITE_ADICIONAL_TRIMESTRAL) * ALIQUOTA_ADICIONAL_IRPJ;
+    }
+    irpjAdicional = _arredondar(irpjAdicional);
     const irpjTotal = _arredondar(irpjNormal + irpjAdicional);
 
     const csllTotal = _arredondar(baseIRPJ * ALIQUOTA_CSLL);
@@ -1185,8 +1799,13 @@ function compararRegimes(params) {
     baseIRPJ = Math.max(0, baseIRPJ - compensacao);
 
     const irpjNormalBruto = _arredondar(baseIRPJ * ALIQUOTA_IRPJ);
-    const baseAdicional = Math.max(0, baseIRPJ - LIMITE_ADICIONAL_TRIMESTRAL * 4);
-    const irpjAdicional = _arredondar(baseAdicional * ALIQUOTA_ADICIONAL_IRPJ);
+    // CORREÇÃO: Adicional IRPJ calculado TRIMESTRE A TRIMESTRE (RIR/2018, Art. 624)
+    const baseTrimestralIRPJSudam = baseIRPJ / 4;
+    let irpjAdicional = 0;
+    for (let t = 0; t < 4; t++) {
+      irpjAdicional += Math.max(0, baseTrimestralIRPJSudam - LIMITE_ADICIONAL_TRIMESTRAL) * ALIQUOTA_ADICIONAL_IRPJ;
+    }
+    irpjAdicional = _arredondar(irpjAdicional);
 
     // Incentivo SUDAM: redução de 75% sobre o IRPJ normal (não sobre o adicional)
     const reducaoSUDAM = _arredondar(irpjNormalBruto * PERCENTUAL_INCENTIVO_SUDAM);
@@ -1819,7 +2438,12 @@ function getAtividadesDisponiveis() {
     id: a.id,
     descricao: a.descricao,
     percentualIRPJ: a.percentual,
-    percentualCSLL: PERCENTUAIS_PRESUNCAO_CSLL.find(c => c.id === a.id)?.percentual || 0,
+    percentualCSLL: PERCENTUAIS_PRESUNCAO_CSLL.find(c => c.id === a.id)?.percentual || 0.12,
+    irpjMajorado: a.irpjMajorado || a.percentual * 1.10,
+    csllMajorada: (PERCENTUAIS_PRESUNCAO_CSLL.find(c => c.id === a.id)?.csllMajorada) || (PERCENTUAIS_PRESUNCAO_CSLL.find(c => c.id === a.id)?.percentual || 0.12) * 1.10,
+    temRequisitos: a.temRequisitos || false,
+    requisitos: a.requisitos || [],
+    alertaSeFalhar: a.alertaSeFalhar || null,
     cnaes: a.cnaes || []
   }));
 }
@@ -2647,6 +3271,9 @@ function _pdfGerarDicas(fd, anual) {
   const dist = anual.distribuicaoLucros;
   const tribFed = anual.consolidacao.tributosFederais;
 
+  // Normalizar: aceitar tanto 0.03 quanto 3 (percentual inteiro)
+  const aliquotaISS = fd.aliquotaISS > 1 ? fd.aliquotaISS : (fd.aliquotaISS || 0) * 100;
+
   const pIRPJ = PERCENTUAIS_PRESUNCAO_IRPJ.find(a => a.id === fd.atividadeId);
   const presuncao = pIRPJ ? pIRPJ.percentual : 0.32;
 
@@ -2718,12 +3345,12 @@ function _pdfGerarDicas(fd, anual) {
   }
 
   // 5. ISS Otimizacao
-  if (fd.aliquotaISS > 2 && rb > 0) {
-    const economiaISS = rb * ((fd.aliquotaISS - 2) / 100);
+  if (aliquotaISS > 2 && rb > 0) {
+    const economiaISS = rb * ((aliquotaISS - 2) / 100);
     dicas.push({
       tipo: 'info',
       titulo: 'ISS — Comparativo com Aliquota Minima',
-      descricao: `Se o ISS do seu municipio fosse 2% (minimo legal pela LC 116/2003) em vez de ${fd.aliquotaISS}%, a economia seria de ${_pdfFmtMoeda(economiaISS)}/ano.`,
+      descricao: `Se o ISS do seu municipio fosse 2% (minimo legal pela LC 116/2003) em vez de ${aliquotaISS}%, a economia seria de ${_pdfFmtMoeda(economiaISS)}/ano.`,
       economia: _pdfFmtMoeda(economiaISS) + '/ano (diferencial teorico)',
       baseLegal: 'LC 116/2003, Art. 8-A',
       acao: 'Consulte incentivos fiscais municipais disponiveis para sua atividade.'
@@ -2806,7 +3433,7 @@ function _pdfObrigacoes(doc) {
   y = _pdfTituloSecao(doc, y, 'Obrigacoes Acessorias');
 
   const body = [];
-  const chaves = ['DCTF', 'ECF', 'ECD', 'EFD_CONTRIBUICOES', 'DIRF', 'ESOCIAL'];
+  const chaves = ['DCTF', 'ECF', 'ECD', 'EFD_CONTRIBUICOES', 'DIRF', 'EFD_REINF', 'ESOCIAL'];
   chaves.forEach(key => {
     const ob = OBRIGACOES_ACESSORIAS[key];
     if (!ob) return;
@@ -2833,7 +3460,7 @@ function _pdfObrigacoes(doc) {
 
   y = _pdfInfoBox(doc, y,
     '* ECD e opcional no Lucro Presumido (pode usar Livro Caixa). Porem, e recomendada para distribuir lucro contabil efetivo superior a base presumida.\n' +
-    '** DIRF obrigatoria se houve retencoes de IR na fonte.',
+    '** DIRF obrigatoria se houve retencoes de IR na fonte. Nota: DIRF substituida por EFD-Reinf + eSocial a partir de 2025.',
     _PDF_CORES.azul
   );
 
@@ -2846,14 +3473,18 @@ function _pdfObrigacoes(doc) {
     const obsMes = [];
     obsMes.push('PIS/COFINS (ref. mes anterior) - dia 25');
     obsMes.push('DCTF - 15o dia util');
-    obsMes.push('EFD-Contribuicoes - 15o dia util do 2o mes');
+    obsMes.push('EFD-Contribuicoes - 10o dia util do 2o mes');
     obsMes.push('e-Social - dia 15');
+    obsMes.push('EFD-Reinf - dia 15');
     if ([0, 3, 6, 9].includes(i)) {
       const trimRef = i === 0 ? '(ref. 4o trim ano anterior)' : `(ref. ${Math.ceil(i / 3)}o trim)`;
       obsMes.push(`IRPJ/CSLL trimestral - ultimo dia util ${trimRef}`);
     }
     if (i === 4) {
-      obsMes.push('ECF e ECD (anuais) - 31/05');
+      obsMes.push('ECD (anual) - 31/05');
+    }
+    if (i === 6) {
+      obsMes.push('ECF (anual) - ultimo dia util de julho');
     }
     if (i === 1) {
       obsMes.push('DIRF (anual) - 29/02');
@@ -2944,7 +3575,7 @@ function _pdfParametros(doc, fd) {
     ['Atividade', fd.atividadeId || '-'],
     ['Estado', fd.estado || '-'],
     ['Municipio', fd.municipio || '-'],
-    ['Aliquota ISS', (fd.aliquotaISS || 0) + '%'],
+    ['Aliquota ISS', (fd.aliquotaISS > 1 ? fd.aliquotaISS : (fd.aliquotaISS || 0) * 100) + '%'],
     ['Porte', fd.porte || '-'],
     ['Receita Bruta Anual', _pdfFmtMoeda(fd.receitaBrutaAnual)],
     ['Receita Ano Anterior', _pdfFmtMoeda(fd.receitaAnterior)],
@@ -3079,6 +3710,854 @@ function exportPDF(appData) {
 
 
 // ─────────────────────────────────────────────────────────────────────────────
+// SEÇÃO 16A: SIMULADOR DE PRÓ-LABORE ÓTIMO (Etapa 3)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Simula o pró-labore ótimo para um sócio, encontrando o valor que minimiza
+ * a carga tributária total (INSS patronal + INSS retido + IRPF).
+ *
+ * A lógica é: quanto MENOR o pró-labore (respeitando o mínimo de 1 SM),
+ * MENOR o custo tributário total, pois a distribuição de lucros é isenta.
+ *
+ * ALERTA: Todo sócio-administrador DEVE receber pró-labore de pelo menos
+ * 1 salário mínimo (R$ 1.621,00 em 2026). A ausência gera risco de autuação
+ * pelo INSS com cobrança retroativa de 20% patronal + 11% do sócio + multa + juros.
+ *
+ * Base Legal: IN RFB 971/2009, Art. 57 (obrigatoriedade); Decreto 3.048/99,
+ * Art. 201 (contribuinte individual); Lei 9.249/95, Art. 10 (isenção lucros);
+ * IN RFB 1.700/2017, Art. 238 (limite distribuição isenta).
+ *
+ * @param {Object} socio - Dados do sócio
+ * @param {string} socio.nome - Nome do sócio
+ * @param {number} socio.participacao - % do capital social (decimal, ex: 0.65)
+ * @param {boolean} socio.isAdministrador - Se exerce atividade de administração
+ * @param {number} socio.proLaboreAtual - Pró-labore atual mensal
+ * @param {boolean} socio.temOutroVinculoCLT - Se já contribui INSS por outro vínculo
+ * @param {number} socio.dependentesIRPF - Número de dependentes para dedução IRPF
+ * @param {number} lucroDistribuivelIsento - Total de lucro distribuível isento (anual)
+ * @returns {Object} Cenários, ótimo, atual, economia anual e recomendação
+ */
+function simularProLaboreOtimo(socio, lucroDistribuivelIsento) {
+  const cenarios = [];
+  const MIN = SALARIO_MINIMO_2026;
+  const MAX = 30000;
+  const STEP = 250;
+  const dependentes = socio.dependentesIRPF || 0;
+
+  for (let pl = MIN; pl <= MAX; pl += STEP) {
+    // Ajustar primeiro valor para ser exatamente o SM
+    const proLabore = (pl === MIN) ? MIN : pl;
+
+    // === CUSTOS PARA A EMPRESA ===
+    const inssPatronal = calcularINSSPatronal(proLabore);
+    const custoEmpresaMensal = proLabore + inssPatronal;
+
+    // === CUSTOS PARA O SÓCIO ===
+    const inssRetido = socio.temOutroVinculoCLT ? 0 : calcularINSSSocio(proLabore);
+    const irpf = calcularIRPFProLabore2026(proLabore, inssRetido, dependentes);
+
+    // Líquido mensal via pró-labore
+    const liquidoProLabore = proLabore - inssRetido - irpf.irFinal;
+
+    // === DISTRIBUIÇÃO DE LUCROS (ISENTA) ===
+    const lucroDoSocio = _arredondar(lucroDistribuivelIsento * (socio.participacao || 1));
+
+    // === TOTAIS ANUAIS ===
+    const custoTotalEmpresaAnual = _arredondar(custoEmpresaMensal * 12);
+    const liquidoSocioAnual = _arredondar((liquidoProLabore * 12) + lucroDoSocio);
+    const tributosAnuais = _arredondar((inssPatronal + inssRetido + irpf.irFinal) * 12);
+
+    cenarios.push({
+      proLaboreMensal: proLabore,
+      inssPatronalMensal: inssPatronal,
+      inssRetidoMensal: inssRetido,
+      irpfMensal: irpf.irFinal,
+      aliquotaEfetivaIRPF: irpf.aliquotaEfetiva,
+      liquidoMensal: _arredondar(liquidoProLabore),
+      custoEmpresaMensal: _arredondar(custoEmpresaMensal),
+      custoEmpresaAnual: custoTotalEmpresaAnual,
+      liquidoSocioAnual: liquidoSocioAnual,
+      lucroDistribuivelSocio: lucroDoSocio,
+      tributosAnuais: tributosAnuais,
+      eficiencia: custoTotalEmpresaAnual > 0
+        ? _arredondar(liquidoSocioAnual / custoTotalEmpresaAnual, 4)
+        : 0
+    });
+  }
+
+  // Encontrar ótimo (menor custo tributário)
+  const cenariosOrdenados = [...cenarios].sort((a, b) => a.tributosAnuais - b.tributosAnuais);
+  const otimo = cenariosOrdenados[0];
+
+  // Cenário atual para comparação
+  const atual = cenarios.find(c => c.proLaboreMensal === socio.proLaboreAtual)
+    || _encontrarCenarioMaisProximo(cenarios, socio.proLaboreAtual || MIN);
+
+  const economiaAnual = _arredondar((atual.tributosAnuais || 0) - (otimo.tributosAnuais || 0));
+
+  // Cenários-chave para exibição rápida (5 cenários)
+  const tetoINSS = cenarios.find(c => c.proLaboreMensal >= TETO_INSS_2026)
+    || cenarios[cenarios.length - 1];
+  const intermediario = cenarios.find(c => c.proLaboreMensal >= 5000)
+    || cenarios[Math.floor(cenarios.length / 3)];
+
+  const cenariosChave = [
+    { ...cenarios[0], label: 'Minimo (1 SM)' },
+    { ...atual, label: 'Atual' },
+    { ...otimo, label: 'Otimo' },
+    { ...tetoINSS, label: 'Teto INSS' },
+    { ...intermediario, label: 'Intermediario' }
+  ];
+
+  // Remover duplicatas do cenariosChave
+  const vistos = new Set();
+  const cenariosChaveUnicos = cenariosChave.filter(c => {
+    const key = c.proLaboreMensal;
+    if (vistos.has(key)) return false;
+    vistos.add(key);
+    return true;
+  });
+
+  return {
+    cenarios,
+    cenariosChave: cenariosChaveUnicos,
+    otimo,
+    atual,
+    economiaAnual,
+    alerta: 'Todo socio-administrador DEVE receber pro-labore de pelo menos 1 salario minimo (R$ 1.621,00 em 2026). A ausencia gera risco de autuacao pelo INSS com cobranca retroativa de 20% patronal + 11% do socio + multa + juros.',
+    recomendacao: otimo.proLaboreMensal === SALARIO_MINIMO_2026
+      ? `O pro-labore otimo e o salario minimo (R$ ${SALARIO_MINIMO_2026.toLocaleString('pt-BR', {minimumFractionDigits: 2})}). Distribua o restante como lucros isentos.`
+      : `O pro-labore otimo e R$ ${otimo.proLaboreMensal.toLocaleString('pt-BR', {minimumFractionDigits: 2})}/mes.`,
+    baseLegal: 'IN RFB 971/2009, Art. 57; Decreto 3.048/99, Art. 201; Lei 9.249/95, Art. 10; IN RFB 1.700/2017, Art. 238'
+  };
+}
+
+/**
+ * Encontra o cenário com pró-labore mais próximo do valor informado.
+ * @private
+ */
+function _encontrarCenarioMaisProximo(cenarios, valor) {
+  let melhor = cenarios[0];
+  let menorDif = Math.abs(cenarios[0].proLaboreMensal - valor);
+  for (const c of cenarios) {
+    const dif = Math.abs(c.proLaboreMensal - valor);
+    if (dif < menorDif) { melhor = c; menorDif = dif; }
+  }
+  return melhor;
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SEÇÃO 16B: SIMULADOR DE JCP (Etapa 3)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Simula Juros sobre Capital Próprio (JCP) e compara com distribuição isenta
+ * e pró-labore adicional.
+ *
+ * No Lucro Presumido, o JCP NÃO reduz a base do IRPJ/CSLL (a base é presumida).
+ * Mas pode ser útil quando o lucro distribuível isento já se esgotou.
+ *
+ * Recomendação: SEMPRE usar distribuição isenta primeiro → JCP → pró-labore.
+ *
+ * Base Legal: Lei 9.249/95, Art. 9º e §§; LC 224/2025, Art. 8º (17,5% a partir
+ * de 01/04/2026); Lei 9.249/95, Art. 9º, §1º (limite 50%).
+ *
+ * @param {Object} params
+ * @param {number} params.patrimonioLiquido - PL da empresa
+ * @param {number} params.taxaTJLP - Taxa TJLP vigente (decimal, ex: 0.0612)
+ * @param {number} params.lucroLiquidoOuReservas - Lucro líquido ou lucros acumulados (para limite 50%)
+ * @param {number} params.lucroDistribuivelIsentoRestante - Quanto ainda pode distribuir isento
+ * @param {Date|string} params.dataReferencia - Data de referência para alíquota IRRF
+ * @returns {Object} JCP bruto, líquido, IRRF, comparativo 3 vias, recomendação
+ */
+function simularJCP(params) {
+  const {
+    patrimonioLiquido,
+    taxaTJLP,
+    lucroLiquidoOuReservas,
+    lucroDistribuivelIsentoRestante,
+    dataReferencia
+  } = params;
+
+  const dataRef = dataReferencia instanceof Date
+    ? dataReferencia
+    : new Date(dataReferencia || '2026-06-30');
+
+  // JCP máximo permitido
+  const jcpMaximoPL = _arredondar(patrimonioLiquido * taxaTJLP);
+  const limiteDeducao = _arredondar(lucroLiquidoOuReservas * 0.50);
+  const jcpPermitido = _arredondar(Math.min(jcpMaximoPL, limiteDeducao));
+
+  // IRRF sobre JCP
+  const aliquota = getAliquotaIRRFJCP(dataRef);
+  const irrfRetido = _arredondar(jcpPermitido * aliquota);
+  const jcpLiquido = _arredondar(jcpPermitido - irrfRetido);
+
+  // Comparativo: mesmo valor bruto via pró-labore
+  const mesmoValorBruto = jcpPermitido;
+  const inssPatronalPL = calcularINSSPatronal(mesmoValorBruto);
+  const inssRetidoPL = calcularINSSSocio(mesmoValorBruto);
+  const irpfPL = calcularIRPFProLabore2026(mesmoValorBruto, inssRetidoPL, 0);
+  const liquidoViaProlabore = _arredondar(mesmoValorBruto - inssRetidoPL - irpfPL.irFinal);
+  const custoTotalProlabore = _arredondar(mesmoValorBruto + inssPatronalPL);
+
+  // Via distribuição isenta (custo zero)
+  const valorDistribuicaoIsenta = Math.min(jcpPermitido, lucroDistribuivelIsentoRestante || 0);
+
+  return {
+    jcpBruto: jcpPermitido,
+    jcpMaximoPL: jcpMaximoPL,
+    limiteDeducao: limiteDeducao,
+    aliquotaIRRF: aliquota,
+    aliquotaIRRFPercentual: _arredondar(aliquota * 100, 1),
+    irrfRetido: irrfRetido,
+    jcpLiquido: jcpLiquido,
+    comparativo: {
+      viaDistribuicaoIsenta: {
+        valorBruto: valorDistribuicaoIsenta,
+        liquido: valorDistribuicaoIsenta,
+        custo: 0,
+        aliquotaEfetiva: 0,
+        nota: lucroDistribuivelIsentoRestante > 0
+          ? 'Se ha saldo de lucro distribuivel isento, SEMPRE e melhor que JCP.'
+          : 'Sem saldo isento disponivel.'
+      },
+      viaJCP: {
+        valorBruto: jcpPermitido,
+        liquido: jcpLiquido,
+        custo: irrfRetido,
+        aliquotaEfetiva: aliquota
+      },
+      viaProlabore: {
+        valorBruto: mesmoValorBruto,
+        liquido: liquidoViaProlabore,
+        custo: _arredondar(custoTotalProlabore - liquidoViaProlabore),
+        custoTotal: custoTotalProlabore,
+        aliquotaEfetiva: custoTotalProlabore > 0
+          ? _arredondar((custoTotalProlabore - liquidoViaProlabore) / custoTotalProlabore, 4)
+          : 0
+      }
+    },
+    recomendacao: lucroDistribuivelIsentoRestante > 0
+      ? 'Use primeiro a distribuicao de lucros isentos (custo ZERO). JCP so faz sentido quando o limite isento se esgota.'
+      : jcpLiquido > liquidoViaProlabore
+        ? `JCP e mais vantajoso que pro-labore adicional. Economia: R$ ${_arredondar(jcpLiquido - liquidoViaProlabore).toLocaleString('pt-BR', {minimumFractionDigits: 2})}.`
+        : 'Pro-labore e mais vantajoso que JCP neste cenario.',
+    baseLegal: 'Lei 9.249/95, Art. 9o e §§; LC 224/2025, Art. 8o (aliquota 17,5% a partir de 01/04/2026)'
+  };
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SEÇÃO 16C: REGIME DE CAIXA vs COMPETÊNCIA (Etapa 3)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Simula a diferença entre regime de Caixa e Competência para PIS/COFINS e
+ * IRPJ/CSLL, mostrando o impacto no fluxo de caixa.
+ *
+ * Não muda o TOTAL de impostos no ano, mas muda QUANDO pagar.
+ * Vantajoso quando há diferimento entre faturamento e recebimento.
+ *
+ * Base Legal: IN RFB 1.700/2017, Art. 223 e §§.
+ *
+ * @param {Object} params
+ * @param {number[]} params.faturamentoMensal - Array de 12 valores faturados
+ * @param {number[]} params.recebimentoMensal - Array de 12 valores recebidos
+ * @param {string} [params.atividadeId='servicos_gerais'] - ID da atividade
+ * @returns {Object} Comparativo mensal, total diferido, recomendação
+ */
+function simularRegimeCaixa(params) {
+  const {
+    faturamentoMensal,
+    recebimentoMensal,
+    atividadeId = 'servicos_gerais'
+  } = params;
+
+  // Garantir 12 meses
+  const fat = Array.isArray(faturamentoMensal) ? faturamentoMensal : new Array(12).fill(0);
+  const rec = Array.isArray(recebimentoMensal) ? recebimentoMensal : new Array(12).fill(0);
+
+  // Buscar percentuais de presunção
+  const irpjData = PERCENTUAIS_PRESUNCAO_IRPJ.find(p => p.id === atividadeId);
+  const csllData = PERCENTUAIS_PRESUNCAO_CSLL.find(p => p.id === atividadeId);
+  const percIRPJ = irpjData ? irpjData.percentual : 0.32;
+  const percCSLL = csllData ? csllData.percentual : 0.32;
+
+  const aliqPIS = ALIQUOTA_PIS_CUMULATIVO;
+  const aliqCOFINS = ALIQUOTA_COFINS_CUMULATIVO;
+
+  // PIS/COFINS mensal: competência vs caixa
+  const tributosCompetencia = fat.map((f, i) => ({
+    mes: i + 1,
+    base: f,
+    pis: _arredondar(f * aliqPIS),
+    cofins: _arredondar(f * aliqCOFINS),
+    totalPisCofins: _arredondar(f * (aliqPIS + aliqCOFINS))
+  }));
+
+  const tributosCaixa = rec.map((r, i) => ({
+    mes: i + 1,
+    base: r,
+    pis: _arredondar(r * aliqPIS),
+    cofins: _arredondar(r * aliqCOFINS),
+    totalPisCofins: _arredondar(r * (aliqPIS + aliqCOFINS))
+  }));
+
+  // Diferença mensal de fluxo de caixa
+  const diferencialMensal = fat.map((f, i) => {
+    const difBase = f - rec[i];
+    const economiaPisCofins = _arredondar(difBase * (aliqPIS + aliqCOFINS));
+    return {
+      mes: i + 1,
+      faturado: f,
+      recebido: rec[i],
+      diferenca: _arredondar(difBase),
+      economiaPisCofins: economiaPisCofins
+    };
+  });
+
+  // IRPJ/CSLL trimestral: recalcular com base no recebimento vs faturamento
+  const trimestresComparativo = [];
+  for (let t = 0; t < 4; t++) {
+    const mesesTrim = [t * 3, t * 3 + 1, t * 3 + 2];
+    const receitaCompetencia = mesesTrim.reduce((s, m) => s + (fat[m] || 0), 0);
+    const receitaCaixa = mesesTrim.reduce((s, m) => s + (rec[m] || 0), 0);
+
+    const baseIRPJComp = _arredondar(receitaCompetencia * percIRPJ);
+    const baseIRPJCaixa = _arredondar(receitaCaixa * percIRPJ);
+    const baseCSLLComp = _arredondar(receitaCompetencia * percCSLL);
+    const baseCSLLCaixa = _arredondar(receitaCaixa * percCSLL);
+
+    const irpjComp = _arredondar(baseIRPJComp * ALIQUOTA_IRPJ + Math.max(0, baseIRPJComp - LIMITE_ADICIONAL_TRIMESTRAL) * ALIQUOTA_ADICIONAL_IRPJ);
+    const irpjCaixa = _arredondar(baseIRPJCaixa * ALIQUOTA_IRPJ + Math.max(0, baseIRPJCaixa - LIMITE_ADICIONAL_TRIMESTRAL) * ALIQUOTA_ADICIONAL_IRPJ);
+    const csllComp = _arredondar(baseCSLLComp * ALIQUOTA_CSLL);
+    const csllCaixa = _arredondar(baseCSLLCaixa * ALIQUOTA_CSLL);
+
+    const pisCompTrim = mesesTrim.reduce((s, m) => s + (tributosCompetencia[m] ? tributosCompetencia[m].pis : 0), 0);
+    const cofinsCompTrim = mesesTrim.reduce((s, m) => s + (tributosCompetencia[m] ? tributosCompetencia[m].cofins : 0), 0);
+    const pisCaixaTrim = mesesTrim.reduce((s, m) => s + (tributosCaixa[m] ? tributosCaixa[m].pis : 0), 0);
+    const cofinsCaixaTrim = mesesTrim.reduce((s, m) => s + (tributosCaixa[m] ? tributosCaixa[m].cofins : 0), 0);
+
+    trimestresComparativo.push({
+      trimestre: t + 1,
+      competencia: {
+        receitaBruta: receitaCompetencia,
+        irpj: irpjComp,
+        csll: csllComp,
+        pis: _arredondar(pisCompTrim),
+        cofins: _arredondar(cofinsCompTrim),
+        total: _arredondar(irpjComp + csllComp + pisCompTrim + cofinsCompTrim)
+      },
+      caixa: {
+        receitaBruta: receitaCaixa,
+        irpj: irpjCaixa,
+        csll: csllCaixa,
+        pis: _arredondar(pisCaixaTrim),
+        cofins: _arredondar(cofinsCaixaTrim),
+        total: _arredondar(irpjCaixa + csllCaixa + pisCaixaTrim + cofinsCaixaTrim)
+      },
+      diferenca: _arredondar((irpjComp + csllComp + pisCompTrim + cofinsCompTrim) -
+        (irpjCaixa + csllCaixa + pisCaixaTrim + cofinsCaixaTrim))
+    });
+  }
+
+  const totalDiferidoPisCofins = _arredondar(diferencialMensal.reduce((s, f) => s + f.economiaPisCofins, 0));
+  const totalDiferidoIRPJCSLL = _arredondar(trimestresComparativo.reduce((s, t) => s + t.diferenca, 0) - totalDiferidoPisCofins);
+  const totalDiferido = _arredondar(trimestresComparativo.reduce((s, t) => s + t.diferenca, 0));
+  const totalFaturado = _arredondar(fat.reduce((s, v) => s + v, 0));
+  const totalRecebido = _arredondar(rec.reduce((s, v) => s + v, 0));
+
+  return {
+    competencia: { tributosMensais: tributosCompetencia },
+    caixa: { tributosMensais: tributosCaixa },
+    diferencialMensal: diferencialMensal,
+    trimestresComparativo: trimestresComparativo,
+    totalFaturado: totalFaturado,
+    totalRecebido: totalRecebido,
+    totalDiferido: totalDiferido,
+    totalDiferidoPisCofins: totalDiferidoPisCofins,
+    totalDiferidoIRPJCSLL: totalDiferidoIRPJCSLL,
+    recomendacao: totalDiferido > 0
+      ? `Regime de Caixa posterga R$ ${totalDiferido.toLocaleString('pt-BR', {minimumFractionDigits: 2})} em tributos no ano. Beneficio de fluxo de caixa, nao de reducao de imposto.`
+      : 'Regime de Competencia e mais favoravel neste cenario (recebimentos superam faturamento).',
+    requisitos: [
+      'Opcao irretratavel para o ano-calendario (IN RFB 1.700/2017, Art. 223)',
+      'Manter Livro Caixa se nao tiver escrituracao completa (ECD)',
+      'Controle detalhado de recebimentos por NF e cliente',
+      'Emissao de nota fiscal no momento do faturamento (mesmo que receba depois)'
+    ],
+    baseLegal: 'IN RFB 1.700/2017, Art. 223 e §§'
+  };
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SEÇÃO 16D: ESCRITURAÇÃO COMPLETA ECD — DISTRIBUIÇÃO AMPLIADA (Etapa 3)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Calcula o benefício de adotar a Escrituração Contábil Digital (ECD) para
+ * ampliar a distribuição de lucros isentos.
+ *
+ * Sem ECD: limite = Base Presumida IRPJ − todos os tributos
+ * Com ECD: limite = Lucro Líquido Contábil − todos os tributos
+ *
+ * Se o lucro contábil > base presumida (comum em empresas com alta margem),
+ * o sócio pode retirar MAIS sem pagar imposto.
+ *
+ * Base Legal: IN RFB 1.700/2017, Art. 238; IN RFB 1.774/2017 (ECD);
+ * RIR/2018, Art. 725.
+ *
+ * @param {Object} params
+ * @param {number} params.basePresumidaAnual - Base presumida IRPJ calculada pelo motor
+ * @param {number} params.lucroContabilReal - Lucro contábil real (informado pelo usuário)
+ * @param {number} params.tributosFederaisAnuais - IRPJ + CSLL + PIS + COFINS total
+ * @param {number} params.custoAnualECD - Custo anual do contador pela escrituração completa
+ * @returns {Object} Limites, distribuição extra, benefício líquido, recomendação
+ */
+function calcularBeneficioECD(params) {
+  const {
+    basePresumidaAnual,
+    lucroContabilReal,
+    tributosFederaisAnuais,
+    custoAnualECD
+  } = params;
+
+  const limitePresumido = _arredondar(Math.max(0, basePresumidaAnual - tributosFederaisAnuais));
+  const limiteContabil = _arredondar(Math.max(0, lucroContabilReal - tributosFederaisAnuais));
+
+  const distribuicaoExtraPossivel = _arredondar(Math.max(0, limiteContabil - limitePresumido));
+  const beneficioLiquido = _arredondar(distribuicaoExtraPossivel - custoAnualECD);
+
+  const percentualGanho = limitePresumido > 0
+    ? _arredondar((distribuicaoExtraPossivel / limitePresumido) * 100, 1)
+    : 0;
+
+  return {
+    limitePresumido: limitePresumido,
+    limiteContabil: limiteContabil,
+    distribuicaoExtra: distribuicaoExtraPossivel,
+    custoECD: custoAnualECD,
+    beneficioLiquido: beneficioLiquido,
+    percentualGanho: percentualGanho,
+    valeAPena: beneficioLiquido > 0,
+    recomendacao: beneficioLiquido > 0
+      ? `Com ECD, distribua R$ ${distribuicaoExtraPossivel.toLocaleString('pt-BR', {minimumFractionDigits: 2})} a mais por ano como lucro isento. Beneficio liquido (descontando custo da ECD): R$ ${beneficioLiquido.toLocaleString('pt-BR', {minimumFractionDigits: 2})}/ano.`
+      : custoAnualECD > 0
+        ? `O custo da ECD (R$ ${custoAnualECD.toLocaleString('pt-BR', {minimumFractionDigits: 2})}) supera o beneficio de R$ ${distribuicaoExtraPossivel.toLocaleString('pt-BR', {minimumFractionDigits: 2})}. Nao recomendado.`
+        : 'O lucro contabil nao excede a base presumida. ECD nao gera beneficio adicional na distribuicao.',
+    baseLegal: 'IN RFB 1.700/2017, Art. 238; IN RFB 1.774/2017 (ECD); RIR/2018, Art. 725'
+  };
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SEÇÃO 16E: BREAK-EVEN LP vs LUCRO REAL (Etapa 4)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Calcula o ponto de equilíbrio (break-even) entre Lucro Presumido e Lucro Real.
+ * Itera margens de 1% a 100% para encontrar onde a carga LR = carga LP.
+ *
+ * NÃO é um comparador de regimes completo — é um ALERTA INTELIGENTE para
+ * empresas no LP que podem estar pagando mais do que deveriam.
+ *
+ * No LR considera: IRPJ/CSLL sobre lucro real, PIS 1,65% + COFINS 7,6%
+ * não-cumulativo com créditos estimados (30% das despesas operacionais).
+ *
+ * Base Legal: Análise comparativa — Lei 9.249/95 (LP) e RIR/2018 (LR).
+ *
+ * @param {Object} params
+ * @param {number} params.receitaBrutaAnual - Receita bruta anual
+ * @param {string} params.atividadeId - ID da atividade (para percentual presunção)
+ * @param {number} params.folhaPagamentoAnual - Folha de pagamento anual (dedutível no LR)
+ * @param {number} params.despesasOperacionaisAnuais - Total de despesas operacionais
+ * @param {number} [params.aliquotaISS=0.03] - Alíquota de ISS
+ * @param {number} [params.creditosPISCOFINSEstimados=0] - Créditos PIS/COFINS no LR
+ * @returns {Object} breakEvenMargem, cargaLP, margens[], recomendação
+ */
+function calcularBreakEven(params) {
+  const {
+    receitaBrutaAnual,
+    atividadeId,
+    folhaPagamentoAnual = 0,
+    despesasOperacionaisAnuais = 0,
+    aliquotaISS = 0.03,
+    creditosPISCOFINSEstimados = 0
+  } = params;
+
+  const atividadeIRPJ = PERCENTUAIS_PRESUNCAO_IRPJ.find(a => a.id === atividadeId);
+  const atividadeCSLL = PERCENTUAIS_PRESUNCAO_CSLL.find(a => a.id === atividadeId);
+
+  if (!atividadeIRPJ || !atividadeCSLL) {
+    throw new Error(`Atividade nao encontrada: "${atividadeId}"`);
+  }
+
+  const percIRPJ = atividadeIRPJ.percentual;
+  const percCSLL = atividadeCSLL.percentual;
+
+  // ═══ CARGA NO LUCRO PRESUMIDO (fixa — não depende da margem real) ═══
+  const baseLPIRPJ = receitaBrutaAnual * percIRPJ;
+  const baseLPCSLL = receitaBrutaAnual * percCSLL;
+
+  // Adicional IRPJ trimestral: calcular por trimestre (receita uniforme)
+  const baseTrimIRPJ = baseLPIRPJ / 4;
+  let adicionalIRPJLP = 0;
+  for (let t = 0; t < 4; t++) {
+    adicionalIRPJLP += Math.max(0, baseTrimIRPJ - LIMITE_ADICIONAL_TRIMESTRAL) * ALIQUOTA_ADICIONAL_IRPJ;
+  }
+
+  const irpjLP = _arredondar(baseLPIRPJ * ALIQUOTA_IRPJ + adicionalIRPJLP);
+  const csllLP = _arredondar(baseLPCSLL * ALIQUOTA_CSLL);
+  const pisLP = _arredondar(receitaBrutaAnual * ALIQUOTA_PIS_CUMULATIVO);
+  const cofinsLP = _arredondar(receitaBrutaAnual * ALIQUOTA_COFINS_CUMULATIVO);
+  const issLP = _arredondar(receitaBrutaAnual * aliquotaISS);
+  const cargaLP = _arredondar(irpjLP + csllLP + pisLP + cofinsLP + issLP);
+
+  // ═══ CARGA NO LUCRO REAL POR MARGEM ═══
+  // Créditos PIS/COFINS estimados: se não informado, estimar como 30% das despesas
+  const creditosPC = creditosPISCOFINSEstimados > 0
+    ? creditosPISCOFINSEstimados
+    : _arredondar(despesasOperacionaisAnuais * 0.30 * (ALIQUOTA_PIS_NAO_CUMULATIVO + ALIQUOTA_COFINS_NAO_CUMULATIVO));
+
+  const margens = [];
+
+  for (let m = 1; m <= 100; m++) {
+    const margem = m / 100;
+    const lucroReal = receitaBrutaAnual * margem;
+
+    // IRPJ sobre lucro real
+    const baseTrimLR = lucroReal / 4;
+    let adicionalLR = 0;
+    for (let t = 0; t < 4; t++) {
+      adicionalLR += Math.max(0, baseTrimLR - LIMITE_ADICIONAL_TRIMESTRAL) * ALIQUOTA_ADICIONAL_IRPJ;
+    }
+    const irpjLR = _arredondar(lucroReal * ALIQUOTA_IRPJ + adicionalLR);
+    const csllLR = _arredondar(lucroReal * ALIQUOTA_CSLL);
+
+    // PIS/COFINS não-cumulativo com créditos
+    const pisBrutoLR = receitaBrutaAnual * ALIQUOTA_PIS_NAO_CUMULATIVO;
+    const cofinsBrutaLR = receitaBrutaAnual * ALIQUOTA_COFINS_NAO_CUMULATIVO;
+    const propPIS = ALIQUOTA_PIS_NAO_CUMULATIVO / (ALIQUOTA_PIS_NAO_CUMULATIVO + ALIQUOTA_COFINS_NAO_CUMULATIVO);
+    const pisLR = _arredondar(Math.max(0, pisBrutoLR - creditosPC * propPIS));
+    const cofinsLR = _arredondar(Math.max(0, cofinsBrutaLR - creditosPC * (1 - propPIS)));
+    const issLR = _arredondar(receitaBrutaAnual * aliquotaISS);
+    const cargaLR = _arredondar(irpjLR + csllLR + pisLR + cofinsLR + issLR);
+
+    margens.push({
+      margem: m,
+      cargaLP: cargaLP,
+      cargaLR: cargaLR,
+      diferencaLPvsLR: _arredondar(cargaLP - cargaLR),
+      lrMaisBarato: cargaLR < cargaLP
+    });
+  }
+
+  // ═══ ENCONTRAR PONTO DE CRUZAMENTO (break-even real) ═══
+  // cargaLP é fixa; cargaLR cresce com a margem.
+  // Break-even = margem onde as curvas se cruzam (LR passa de mais barato para mais caro).
+  // Abaixo do break-even: LR é mais barato. Acima: LP é mais vantajoso.
+  let breakEvenMargem = null;
+  const lrMaisBaratoEm1 = margens[0].lrMaisBarato;
+  const lrMaisBaratoEm100 = margens[99].lrMaisBarato;
+
+  if (lrMaisBaratoEm1 || lrMaisBaratoEm100) {
+    // Há pelo menos uma margem onde LR é mais barato — encontrar o cruzamento
+    for (let i = 0; i < 99; i++) {
+      if (margens[i].lrMaisBarato && !margens[i + 1].lrMaisBarato) {
+        // Cruzamento: LR era mais barato em m, LP passa a ser mais barato em m+1
+        breakEvenMargem = margens[i + 1].margem; // inteiro (ex: 21 para 21%)
+        break;
+      }
+    }
+    // Se LR é mais barato em TODAS as margens (sem cruzamento)
+    if (breakEvenMargem === null && lrMaisBaratoEm100) {
+      breakEvenMargem = null; // LR sempre mais barato, não há break-even
+    }
+  }
+  // Se LP é mais barato em todas (LR nunca mais barato), breakEvenMargem fica null
+
+  // Determinar qual regime vence em cada faixa
+  const lpSempreVantajoso = !lrMaisBaratoEm1 && !lrMaisBaratoEm100;
+  const lrSempreVantajoso = lrMaisBaratoEm1 && lrMaisBaratoEm100 && breakEvenMargem === null;
+
+  // Margem real atual (se despesas informadas)
+  const margemRealAtual = receitaBrutaAnual > 0
+    ? _arredondar(((receitaBrutaAnual - despesasOperacionaisAnuais) / receitaBrutaAnual) * 100, 1)
+    : null;
+
+  // Cenário na margem real (se disponível)
+  let cenarioMargemReal = null;
+  if (margemRealAtual !== null && margemRealAtual > 0 && margemRealAtual <= 100) {
+    const idx = Math.min(99, Math.max(0, Math.round(margemRealAtual) - 1));
+    cenarioMargemReal = margens[idx] || null;
+  }
+
+  // ═══ RECOMENDAÇÃO E ALERTA ═══
+  let recomendacao, alerta = null;
+
+  if (lpSempreVantajoso) {
+    recomendacao = `Lucro Presumido e vantajoso em TODAS as margens simuladas (1% a 100%). Carga fixa: R$ ${cargaLP.toLocaleString('pt-BR', {minimumFractionDigits: 2})}.`;
+  } else if (lrSempreVantajoso) {
+    recomendacao = `Lucro Real e mais barato em TODAS as margens simuladas (1% a 100%). Considere migrar para Lucro Real. Carga no LP: R$ ${cargaLP.toLocaleString('pt-BR', {minimumFractionDigits: 2})}.`;
+    alerta = 'ATENCAO: Lucro Real e mais barato que LP em todas as faixas de margem. Avalie com seu contador a migração.';
+  } else if (breakEvenMargem !== null) {
+    recomendacao = `Break-even em ${breakEvenMargem}%: abaixo dessa margem, Lucro Real e mais barato. Acima de ${breakEvenMargem}%, Lucro Presumido e vantajoso. Carga fixa no LP: R$ ${cargaLP.toLocaleString('pt-BR', {minimumFractionDigits: 2})}.`;
+    // Alerta se a margem real está abaixo do break-even (empresa deveria considerar LR)
+    if (margemRealAtual !== null && margemRealAtual < breakEvenMargem) {
+      alerta = `ATENCAO: Sua margem real estimada (${margemRealAtual}%) esta ABAIXO do break-even (${breakEvenMargem}%). Nessa faixa, Lucro Real pode ser mais economico. Consulte seu contador.`;
+    }
+  } else {
+    recomendacao = 'Lucro Presumido e vantajoso em todas as margens simuladas (1% a 100%).';
+  }
+
+  return {
+    presuncaoIRPJ: percIRPJ,
+    presuncaoCSLL: percCSLL,
+    cargaTributariaLP: cargaLP,
+    detalheLP: {
+      irpj: irpjLP,
+      csll: csllLP,
+      pis: pisLP,
+      cofins: cofinsLP,
+      iss: issLP
+    },
+    breakEvenMargem: breakEvenMargem,
+    lpSempreVantajoso: lpSempreVantajoso,
+    lrSempreVantajoso: lrSempreVantajoso,
+    margemRealAtual: margemRealAtual,
+    cenarioMargemReal: cenarioMargemReal,
+    margens: margens,
+    recomendacao: recomendacao,
+    alerta: alerta,
+    baseLegal: 'Analise comparativa: Lei 9.249/95 (LP) e RIR/2018 (LR). PIS/COFINS: Lei 10.637/2002 e Lei 10.833/2003.'
+  };
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SEÇÃO 16F: FLUXO DE CAIXA TRIBUTÁRIO / CALENDÁRIO (Etapa 4)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Gera o calendário tributário mensal com todos os vencimentos e valores.
+ *
+ * Tributos incluídos:
+ * - PIS: DARF 8109, dia 25 do mês seguinte, mensal
+ * - COFINS: DARF 2172, dia 25 do mês seguinte, mensal
+ * - IRPJ: DARF 2089, trimestral (com opção de parcelamento em 3 quotas)
+ * - CSLL: DARF 2372, trimestral (com opção de parcelamento em 3 quotas)
+ * - ISS: conforme legislação municipal (padrão dia 10 ou 15), mensal
+ * - INSS Patronal: GPS, dia 20 do mês seguinte, mensal
+ *
+ * Parcelamento IRPJ/CSLL: até 3 quotas (mínimo R$ 1.000/quota).
+ * Quotas 2 e 3 com SELIC acumulada + 1%.
+ *
+ * Base Legal: Lei 9.430/96, Arts. 5º e 6º (quotas); RIR/2018, Art. 856.
+ *
+ * @param {Object} params
+ * @param {Object} params.anualConsolidado - Resultado de calcularAnualConsolidado()
+ * @param {number} [params.anoCalendario=2026] - Ano-calendário
+ * @param {number} [params.aliquotaISS=0.03] - Alíquota ISS
+ * @param {number} [params.folhaPagamentoMensal=0] - Folha mensal para cálculo INSS
+ * @param {number} [params.aliquotaINSSTotal=0.235] - INSS patronal + RAT + terceiros
+ * @param {number} [params.diaVencimentoISS=15] - Dia de vencimento ISS municipal
+ * @param {boolean} [params.parcelarIRPJCSLL=false] - Parcelar em até 3 quotas
+ * @param {number} [params.taxaSelicMensal=0.01] - Taxa SELIC mensal estimada
+ * @returns {Object} Calendário 12 meses × tributos com totais
+ */
+function gerarCalendarioTributario(params) {
+  const {
+    anualConsolidado,
+    anoCalendario = 2026,
+    aliquotaISS = 0.03,
+    folhaPagamentoMensal = 0,
+    aliquotaINSSTotal = 0.235,
+    diaVencimentoISS = 15,
+    parcelarIRPJCSLL = false,
+    taxaSelicMensal = 0.01
+  } = params;
+
+  const mesesNomes = ['Janeiro','Fevereiro','Marco','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+
+  // Dados mensais de PIS/COFINS do consolidado
+  const detalhesMensais = (anualConsolidado && anualConsolidado.detalhamentoMensal) || [];
+  const detalhesTrim = (anualConsolidado && anualConsolidado.detalhamentoTrimestral) || [];
+
+  // IRPJ/CSLL por trimestre
+  const irpjTrimestral = detalhesTrim.map(t => t.irpjDevido || 0);
+  const csllTrimestral = detalhesTrim.map(t => t.csllDevida || 0);
+
+  // Parcelamento: calcular quotas por tributo e trimestre
+  function calcularQuotasTributo(valorTrimestral, parcelar) {
+    if (!parcelar || valorTrimestral < 2000) {
+      // Quota única (ou se valor total < 2 × R$ 1.000)
+      return [{ valor: valorTrimestral, juros: 0, quota: 1 }];
+    }
+    const maxQ = Math.min(3, Math.floor(valorTrimestral / 1000));
+    const quotas = [];
+    const valorBase = _arredondar(valorTrimestral / maxQ);
+    for (let q = 1; q <= maxQ; q++) {
+      const isUltima = q === maxQ;
+      const val = isUltima ? _arredondar(valorTrimestral - valorBase * (maxQ - 1)) : valorBase;
+      const juros = q === 1 ? 0 : _arredondar(val * (taxaSelicMensal * q + 0.01));
+      quotas.push({ valor: val, juros: juros, valorComJuros: _arredondar(val + juros), quota: q });
+    }
+    return quotas;
+  }
+
+  // Mapeamento: mês de vencimento IRPJ/CSLL
+  // T1 (jan-mar): vence abr, mai, jun
+  // T2 (abr-jun): vence jul, ago, set
+  // T3 (jul-set): vence out, nov, dez
+  // T4 (out-dez): vence jan+1, fev+1, mar+1
+  const vencimentosTrim = [
+    { trimestre: 1, mesesQuotas: [3, 4, 5] },     // T1 → abr(3), mai(4), jun(5)
+    { trimestre: 2, mesesQuotas: [6, 7, 8] },     // T2 → jul(6), ago(7), set(8)
+    { trimestre: 3, mesesQuotas: [9, 10, 11] },   // T3 → out(9), nov(10), dez(11)
+    { trimestre: 4, mesesQuotas: [12, 13, 14] }   // T4 → jan+1(12), fev+1(13), mar+1(14)
+  ];
+
+  // Gerar calendário de 12 meses
+  const calendario = [];
+  let totalGeralAcumulado = 0;
+
+  for (let m = 0; m < 12; m++) {
+    const mesInfo = {
+      mes: m + 1,
+      mesNome: mesesNomes[m],
+      tributos: {},
+      totalMes: 0,
+      totalAcumulado: 0
+    };
+
+    // PIS — referência mês anterior, vence dia 25 deste mês
+    const pisMesRef = m > 0 ? (detalhesMensais[m - 1] || {}) : {};
+    const pisDevido = pisMesRef.pis ? (pisMesRef.pis.devido || 0) : 0;
+    mesInfo.tributos.pis = {
+      valor: pisDevido,
+      codigoDARF: '8109',
+      vencimento: `Dia 25/${String(m + 1).padStart(2, '0')}`,
+      referencia: m > 0 ? mesesNomes[m - 1] : '(Dez ano anterior)'
+    };
+
+    // COFINS — idem PIS
+    const cofinsDevida = pisMesRef.cofins ? (pisMesRef.cofins.devida || 0) : 0;
+    mesInfo.tributos.cofins = {
+      valor: cofinsDevida,
+      codigoDARF: '2172',
+      vencimento: `Dia 25/${String(m + 1).padStart(2, '0')}`,
+      referencia: m > 0 ? mesesNomes[m - 1] : '(Dez ano anterior)'
+    };
+
+    // IRPJ e CSLL — trimestral (pode ter quota neste mês)
+    mesInfo.tributos.irpj = { valor: 0, codigoDARF: '2089', vencimento: '-', referencia: '-' };
+    mesInfo.tributos.csll = { valor: 0, codigoDARF: '2372', vencimento: '-', referencia: '-' };
+
+    for (let t = 0; t < 4; t++) {
+      const venc = vencimentosTrim[t];
+      const quotasIRPJ = calcularQuotasTributo(irpjTrimestral[t] || 0, parcelarIRPJCSLL);
+      const quotasCSLL = calcularQuotasTributo(csllTrimestral[t] || 0, parcelarIRPJCSLL);
+
+      for (let q = 0; q < quotasIRPJ.length; q++) {
+        const mesVenc = venc.mesesQuotas[q];
+        if (mesVenc === m) {
+          // Vencimento cai neste mês (dentro do ano calendário)
+          const quotaLabel = quotasIRPJ.length > 1 ? ` (Q${q + 1}/${quotasIRPJ.length})` : ' (unica)';
+          mesInfo.tributos.irpj.valor += quotasIRPJ[q].valorComJuros || quotasIRPJ[q].valor;
+          mesInfo.tributos.irpj.vencimento = `Ult. dia util/${String(m + 1).padStart(2, '0')}`;
+          mesInfo.tributos.irpj.referencia = `${venc.trimestre}o Trim${quotaLabel}`;
+
+          mesInfo.tributos.csll.valor += quotasCSLL[q] ? (quotasCSLL[q].valorComJuros || quotasCSLL[q].valor) : 0;
+          mesInfo.tributos.csll.vencimento = `Ult. dia util/${String(m + 1).padStart(2, '0')}`;
+          mesInfo.tributos.csll.referencia = `${venc.trimestre}o Trim${quotaLabel}`;
+        }
+      }
+    }
+
+    mesInfo.tributos.irpj.valor = _arredondar(mesInfo.tributos.irpj.valor);
+    mesInfo.tributos.csll.valor = _arredondar(mesInfo.tributos.csll.valor);
+
+    // ISS — mensal
+    const receitaMensal = detalhesMensais[m] ? (detalhesMensais[m].receitaBrutaMensal || 0) : 0;
+    const issValor = _arredondar(receitaMensal * aliquotaISS);
+    mesInfo.tributos.iss = {
+      valor: issValor,
+      vencimento: `Dia ${diaVencimentoISS}/${String(m + 1).padStart(2, '0')}`,
+      referencia: mesesNomes[m]
+    };
+
+    // INSS Patronal — GPS, dia 20 do mês seguinte (competência mês anterior)
+    const inssMensal = _arredondar(folhaPagamentoMensal * aliquotaINSSTotal);
+    mesInfo.tributos.inssPatronal = {
+      valor: inssMensal,
+      vencimento: `Dia 20/${String(m + 1).padStart(2, '0')}`,
+      referencia: m > 0 ? mesesNomes[m - 1] : '(Dez ano anterior)'
+    };
+
+    // Totais
+    mesInfo.totalMes = _arredondar(
+      mesInfo.tributos.pis.valor +
+      mesInfo.tributos.cofins.valor +
+      mesInfo.tributos.irpj.valor +
+      mesInfo.tributos.csll.valor +
+      mesInfo.tributos.iss.valor +
+      mesInfo.tributos.inssPatronal.valor
+    );
+
+    totalGeralAcumulado += mesInfo.totalMes;
+    mesInfo.totalAcumulado = _arredondar(totalGeralAcumulado);
+
+    calendario.push(mesInfo);
+  }
+
+  // Totais por tributo
+  const totais = {
+    pis: _arredondar(calendario.reduce((s, m) => s + m.tributos.pis.valor, 0)),
+    cofins: _arredondar(calendario.reduce((s, m) => s + m.tributos.cofins.valor, 0)),
+    irpj: _arredondar(calendario.reduce((s, m) => s + m.tributos.irpj.valor, 0)),
+    csll: _arredondar(calendario.reduce((s, m) => s + m.tributos.csll.valor, 0)),
+    iss: _arredondar(calendario.reduce((s, m) => s + m.tributos.iss.valor, 0)),
+    inssPatronal: _arredondar(calendario.reduce((s, m) => s + m.tributos.inssPatronal.valor, 0)),
+    total: _arredondar(totalGeralAcumulado)
+  };
+
+  // Meses com maior saída de caixa
+  const mesesOrdenados = [...calendario].sort((a, b) => b.totalMes - a.totalMes);
+  const picosCaixa = mesesOrdenados.slice(0, 3).map(m => ({
+    mes: m.mesNome,
+    valor: m.totalMes
+  }));
+
+  return {
+    anoCalendario,
+    parcelamento: parcelarIRPJCSLL,
+    calendario: calendario,
+    totais: totais,
+    picosCaixa: picosCaixa,
+    mediaMensal: _arredondar(totais.total / 12),
+    codigosDARF: {
+      pis: '8109',
+      cofins: '2172',
+      irpj: '2089',
+      csll: '2372'
+    },
+    observacoes: [
+      'Vencimentos aproximados — verificar calendario de feriados do municipio.',
+      'IRPJ/CSLL: quotas 2 e 3 acrescidas de SELIC acumulada + 1%.',
+      'Quotas minimas de R$ 1.000,00. Abaixo disso: quota unica obrigatoria.',
+      'ISS: vencimento conforme legislacao municipal (padrao dia ' + diaVencimentoISS + ').',
+      'INSS Patronal: GPS, competencia do mes anterior.'
+    ],
+    baseLegal: 'Lei 9.430/96, Arts. 5o e 6o (quotas); RIR/2018, Art. 856 (vencimentos); Lei 9.718/98 (PIS/COFINS).'
+  };
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
 // SEÇÃO 17: EXPORTAÇÕES
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -3099,6 +4578,28 @@ const LucroPresumido = {
   LIMITE_ADICIONAL_TRIMESTRAL,
   LIMITE_ADICIONAL_MENSAL,
 
+  // ── Constantes 2026 ──
+  SALARIO_MINIMO_2026,
+  TETO_INSS_2026,
+  INSS_PATRONAL_ALIQUOTA,
+  INSS_CONTRIBUINTE_INDIVIDUAL,
+  TABELA_IRPF_2026,
+  REDUTOR_IRPF_2026,
+  DEDUCAO_DEPENDENTE_IRPF,
+  DESCONTO_SIMPLIFICADO_IRPF,
+  ALIQUOTA_IRRF_JCP_ANTIGA,
+  ALIQUOTA_IRRF_JCP_NOVA,
+  DATA_VIGENCIA_JCP_NOVA,
+  LC224_DATA_VIGENCIA,
+  LC224_LIMITE_ISENCAO_ANUAL,
+  LC224_ACRESCIMO,
+  ISS_MINIMO,
+  ISS_MAXIMO,
+  LIMITE_RECEITA_LP,
+  LIMITE_DISPENSA_CSRF,
+  ALIQUOTA_CSRF_TOTAL,
+  LIMITE_RECEITA_ESC,
+
   // ── Tabelas de Referência ──
   PERCENTUAIS_PRESUNCAO_IRPJ,
   PERCENTUAIS_PRESUNCAO_CSLL,
@@ -3112,8 +4613,28 @@ const LucroPresumido = {
   calcularLucroPresumidoTrimestral,
   calcularPISCOFINSMensal,
   calcularAnualConsolidado,
-  compararRegimes,
   simulacaoRapida,
+
+  // ── Funções LC 224/2025 e IRPF 2026 (Etapa 2) ──
+  calcularBasePresumidaLC224,
+  getAliquotaIRRFJCP,
+  calcularIRPFProLabore2026,
+  calcularINSSSocio,
+  calcularINSSPatronal,
+
+  // ── Funções de Otimização (Etapa 3) ──
+  simularProLaboreOtimo,
+  simularJCP,
+  simularRegimeCaixa,
+  calcularBeneficioECD,
+
+  // ── Funções de Otimização (Etapa 4) ──
+  calcularBreakEven,
+  gerarCalendarioTributario,
+
+  // ── Constantes CSRF (Etapa 4) ──
+  CODIGOS_DARF_RETENCAO,
+  ALIQUOTAS_CSRF,
 
   // ── Funções de Análise ──
   verificarElegibilidade,
@@ -3158,7 +4679,7 @@ if (typeof window !== 'undefined') {
 function _executarDemonstracao() {
   console.log('\n');
   console.log('╔══════════════════════════════════════════════════════════════╗');
-  console.log('║   MOTOR DE CÁLCULO FISCAL — LUCRO PRESUMIDO v2.1           ║');
+  console.log('║   MOTOR DE CÁLCULO FISCAL — LUCRO PRESUMIDO v3.3           ║');
   console.log('║   AGROGEO BRASIL — Geotecnologia e Consultoria Ambiental   ║');
   console.log('╚══════════════════════════════════════════════════════════════╝');
 
@@ -3230,56 +4751,8 @@ function _executarDemonstracao() {
   console.log(`COFINS (3,00%): R$ ${_formatarMoeda(pisCofins.cofins.devida)}`);
   console.log(`Total:          R$ ${_formatarMoeda(pisCofins.totalPISCOFINS)}`);
 
-  // ── 6. Comparativo de Regimes ──
-  console.log('\n\n▸ 6. COMPARATIVO DE REGIMES TRIBUTÁRIOS');
-  console.log('─'.repeat(55));
-  const comparativo = compararRegimes({
-    receitaBrutaAnual: 2_350_000,
-    folhaPagamentoAnual: 1_000_000,
-    despesasOperacionaisAnuais: 1_800_000,
-    atividadeId: 'servicos_gerais',
-    aliquotaISS: 0.03,
-    aliquotaRAT: 0.03,
-    aliquotaTerceiros: 0.005,
-    creditosPISCOFINS: 80_000,
-    aliquotaSimplesEstimada: 0.15,
-    areaAtuacaoSUDAM: true,
-    elegivelSimples: false,
-    lucroContabilEfetivo: 550_000,
-    prejuizosFiscaisAcumulados: 0
-  });
-
-  console.log(`\nMargem de Lucro Real: ${comparativo.dadosEntrada.margemLucro}`);
-  console.log(`Área SUDAM: ${comparativo.dadosEntrada.areaAtuacaoSUDAM ? 'Sim' : 'Não'}`);
-  console.log('\nRanking:');
-  for (const r of comparativo.ranking) {
-    const estrela = r.posicao === 1 ? '⭐' : '  ';
-    console.log(`  ${estrela} ${r.posicao}º ${r.regime.padEnd(30)} Carga: R$ ${_formatarMoeda(r.cargaTotal).padStart(12)} (${r.percentualCarga})`);
-  }
-  console.log(`\n📌 Recomendação: ${comparativo.recomendacao.texto}`);
-  comparativo.recomendacao.alertas.forEach(a => console.log(`   ⚠️ ${a}`));
-
-  // ── 7. Vantagens e Desvantagens ──
-  console.log('\n\n▸ 7. VANTAGENS E DESVANTAGENS DO LUCRO PRESUMIDO');
-  console.log('─'.repeat(55));
-  const analise = analisarVantagensDesvantagens({
-    receitaBrutaAnual: 2_350_000,
-    despesasOperacionaisAnuais: 1_800_000,
-    atividadeId: 'servicos_gerais',
-    areaAtuacaoSUDAM: true,
-    temInvestimentosEquipamentos: true,
-    temPesquisaDesenvolvimento: false,
-    temReceitasSazonais: false
-  });
-
-  console.log(`\nAnálise: ${analise.analise}`);
-  console.log(`\n✅ Vantagens aplicáveis (${analise.pontuacao.vantagensAplicaveis}):`);
-  analise.vantagens.forEach(v => console.log(`   [${v.impacto.toUpperCase()}] ${v.titulo}`));
-  console.log(`\n❌ Desvantagens aplicáveis (${analise.pontuacao.desvantagensAplicaveis}):`);
-  analise.desvantagens.forEach(d => console.log(`   [${d.impacto.toUpperCase()}] ${d.titulo}`));
-
-  // ── 8. Riscos Fiscais ──
-  console.log('\n\n▸ 8. RISCOS FISCAIS E PEGADINHAS');
+  // ── 6. Riscos Fiscais ──
+  console.log('\n\n▸ 6. RISCOS FISCAIS E PEGADINHAS');
   console.log('─'.repeat(55));
   RISCOS_FISCAIS.filter(r => r.gravidade === 'critica' || r.gravidade === 'alta').forEach(r => {
     console.log(`\n  🔴 [${r.gravidade.toUpperCase()}] ${r.titulo}`);
@@ -3287,8 +4760,143 @@ function _executarDemonstracao() {
     console.log(`     Prevenção: ${r.prevencao}`);
   });
 
+  // ── 7. ETAPA 2: LC 224/2025 — Validação ──
+  console.log('\n\n▸ 7. ETAPA 2: LC 224/2025 — CÁLCULO BASE PRESUMIDA COM ACRÉSCIMO');
+  console.log('─'.repeat(55));
+  console.log('Cenário: Serviços (32%), receita R$ 2M/trim uniforme, ano 2026');
+
+  const trimLC224 = [1, 2, 3, 4];
+  let acumulado = 0;
+  let totalBaseIRPJ_LC224 = 0;
+  for (const t of trimLC224) {
+    acumulado += 2_000_000;
+    const res = calcularBasePresumidaLC224({
+      receitaBrutaTrimestral: 2_000_000,
+      receitaBrutaAcumuladaAnoAte: acumulado,
+      percentualPresuncaoOriginal: 0.32,
+      trimestreAtual: t,
+      anoCalendario: 2026
+    });
+    totalBaseIRPJ_LC224 += res.basePresumida;
+    console.log(`  T${t}: Base = R$ ${_formatarMoeda(res.basePresumida)} | LC224=${res.lc224Aplicavel ? 'SIM' : 'NÃO'} | Excedente: R$ ${_formatarMoeda(res.excedenteDoTrimestre)} | Impacto: R$ ${_formatarMoeda(res.impactoLC224)}`);
+  }
+  console.log(`  TOTAL BASE IRPJ ANUAL: R$ ${_formatarMoeda(totalBaseIRPJ_LC224)}`);
+  console.log(`  SEM LC 224: R$ ${_formatarMoeda(8_000_000 * 0.32)} | COM LC 224: R$ ${_formatarMoeda(totalBaseIRPJ_LC224)}`);
+  console.log(`  Impacto anual na base: R$ ${_formatarMoeda(totalBaseIRPJ_LC224 - 8_000_000 * 0.32)}`);
+  console.log(`  Esperado: R$ 72.000 a mais`);
+
+  // ── 8. ETAPA 2: JCP Alíquota Variável ──
+  console.log('\n\n▸ 8. ETAPA 2: JCP — ALÍQUOTA VARIÁVEL');
+  console.log('─'.repeat(55));
+  const dataAntes = new Date(2026, 2, 31); // 31/03/2026
+  const dataDepois = new Date(2026, 3, 1); // 01/04/2026
+  console.log(`  JCP em 31/03/2026: ${(getAliquotaIRRFJCP(dataAntes) * 100).toFixed(1)}% (esperado: 15.0%)`);
+  console.log(`  JCP em 01/04/2026: ${(getAliquotaIRRFJCP(dataDepois) * 100).toFixed(1)}% (esperado: 17.5%)`);
+
+  // ── 9. ETAPA 2: IRPF 2026 com Redutor ──
+  console.log('\n\n▸ 9. ETAPA 2: IRPF PRÓ-LABORE 2026 (Lei 15.270/2025)');
+  console.log('─'.repeat(55));
+  const cenariosPL = [1621, 3000, 5000, 7000, 10000, 15000];
+  for (const pl of cenariosPL) {
+    const inss = calcularINSSSocio(pl);
+    const irpf = calcularIRPFProLabore2026(pl, inss, 0);
+    const inssP = calcularINSSPatronal(pl);
+    console.log(`  PL R$ ${pl.toLocaleString('pt-BR').padStart(8)} | INSS Sócio: R$ ${_formatarMoeda(inss).padStart(8)} | INSS Patron: R$ ${_formatarMoeda(inssP).padStart(8)} | IRPF: R$ ${_formatarMoeda(irpf.irFinal).padStart(8)} (redutor: R$ ${_formatarMoeda(irpf.redutorAdicional).padStart(7)}) | Aliq.Efet: ${(irpf.aliquotaEfetiva * 100).toFixed(2)}%`);
+  }
+
+  // ── 10. ETAPA 3: Pró-Labore Ótimo ──
+  console.log('\n\n▸ 10. ETAPA 3: SIMULADOR DE PRÓ-LABORE ÓTIMO');
+  console.log('─'.repeat(55));
+  const simPL = simularProLaboreOtimo(
+    {
+      nome: 'Luis Fernando',
+      participacao: 0.65,
+      isAdministrador: true,
+      proLaboreAtual: 5000,
+      temOutroVinculoCLT: false,
+      dependentesIRPF: 0
+    },
+    300000 // lucro distribuível isento anual estimado
+  );
+  console.log(`  Ótimo: R$ ${_formatarMoeda(simPL.otimo.proLaboreMensal)}/mês`);
+  console.log(`  Atual: R$ ${_formatarMoeda(simPL.atual.proLaboreMensal)}/mês`);
+  console.log(`  Economia anual: R$ ${_formatarMoeda(simPL.economiaAnual)}`);
+  console.log(`  ${simPL.recomendacao}`);
+
+  // ── 11. ETAPA 3: Simulador JCP ──
+  console.log('\n\n▸ 11. ETAPA 3: SIMULADOR DE JCP');
+  console.log('─'.repeat(55));
+  const simJCP = simularJCP({
+    patrimonioLiquido: 500000,
+    taxaTJLP: 0.06,
+    lucroLiquidoOuReservas: 400000,
+    lucroDistribuivelIsentoRestante: 100000,
+    dataReferencia: new Date(2026, 5, 15) // Junho/2026
+  });
+  console.log(`  JCP Bruto: R$ ${_formatarMoeda(simJCP.jcpBruto)}`);
+  console.log(`  IRRF (${(simJCP.aliquotaIRRF * 100).toFixed(1)}%): R$ ${_formatarMoeda(simJCP.irrfRetido)}`);
+  console.log(`  JCP Líquido: R$ ${_formatarMoeda(simJCP.jcpLiquido)}`);
+  console.log(`  ${simJCP.recomendacao}`);
+
+  // ── 12. ETAPA 3: Regime de Caixa vs Competência ──
+  console.log('\n\n▸ 12. ETAPA 3: REGIME DE CAIXA vs COMPETÊNCIA');
+  console.log('─'.repeat(55));
+  const fat = Array(12).fill(196000); // ~R$ 2.35M/ano
+  const rec = [150000, 180000, 220000, 190000, 200000, 160000, 210000, 195000, 185000, 205000, 170000, 285000];
+  const simCaixa = simularRegimeCaixa({ faturamentoMensal: fat, recebimentoMensal: rec });
+  console.log(`  Total diferido no ano: R$ ${_formatarMoeda(simCaixa.totalDiferido)}`);
+  console.log(`  ${simCaixa.recomendacao}`);
+
+  // ── 13. ETAPA 3: Benefício da ECD ──
+  console.log('\n\n▸ 13. ETAPA 3: BENEFÍCIO DA ESCRITURAÇÃO COMPLETA (ECD)');
+  console.log('─'.repeat(55));
+  const simECD = calcularBeneficioECD({
+    basePresumidaAnual: 752000,
+    lucroContabilReal: 550000,
+    tributosFederaisAnuais: 250000,
+    custoAnualECD: 12000
+  });
+  console.log(`  Limite presumido: R$ ${_formatarMoeda(simECD.limitePresumido)}`);
+  console.log(`  Limite contábil:  R$ ${_formatarMoeda(simECD.limiteContabil)}`);
+  console.log(`  Distribuição extra: R$ ${_formatarMoeda(simECD.distribuicaoExtra)}`);
+  console.log(`  Benefício líquido: R$ ${_formatarMoeda(simECD.beneficioLiquido)}`);
+  console.log(`  ${simECD.recomendacao}`);
+
+  // ── 14. ETAPA 4: Break-Even LP vs Lucro Real ──
+  console.log('\n\n▸ 14. ETAPA 4: BREAK-EVEN LP vs LUCRO REAL');
+  console.log('─'.repeat(55));
+  const simBE = calcularBreakEven({
+    receitaBrutaAnual: 2350000,
+    atividadeId: 'servicos_gerais',
+    folhaPagamentoAnual: 1000000,
+    despesasOperacionaisAnuais: 1800000,
+    aliquotaISS: 0.03
+  });
+  console.log(`  Presunção atividade: ${(simBE.presuncaoAtividade * 100).toFixed(1)}%`);
+  console.log(`  Carga tributária LP: R$ ${_formatarMoeda(simBE.cargaTributariaLP)}`);
+  console.log(`  Break-even margem: ${simBE.breakEvenMargem ? (simBE.breakEvenMargem * 100).toFixed(1) + '%' : 'N/A'}`);
+  console.log(`  ${simBE.recomendacao}`);
+
+  // ── 15. ETAPA 4: Calendário Tributário ──
+  console.log('\n\n▸ 15. ETAPA 4: CALENDÁRIO TRIBUTÁRIO (resumo)');
+  console.log('─'.repeat(55));
+  const cal = gerarCalendarioTributario({
+    anoCalendario: 2026,
+    receitaBrutaAnual: 2350000,
+    irpjTrimestral: [28200, 28200, 28200, 28200],
+    csllTrimestral: [16920, 16920, 16920, 16920],
+    folhaPagamentoAnual: 1000000,
+    aliquotaISS: 0.03,
+    aliquotaRAT: 0.03,
+    aliquotaTerceiros: 0.005
+  });
+  console.log(`  Total anual: R$ ${_formatarMoeda(cal.totais.total)}`);
+  console.log(`  Média mensal: R$ ${_formatarMoeda(cal.mediaMensal)}`);
+  console.log(`  Picos de caixa:`);
+  cal.picosCaixa.forEach(p => console.log(`    ${p.mes}: R$ ${_formatarMoeda(p.valor)}`));
+
   console.log('\n\n═══════════════════════════════════════════════════════');
-  console.log('  Demonstração concluída. Motor pronto para integração.');
+  console.log('  Demonstração concluída. Motor v3.3.0 — Todas as etapas (1-4) prontas.');
   console.log('═══════════════════════════════════════════════════════\n');
 }
 
