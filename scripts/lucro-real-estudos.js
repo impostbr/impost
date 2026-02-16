@@ -2216,7 +2216,7 @@
             capitalSocial: _n(d.capitalSocial) || null,
             reservasCapital: _n(d.reservasCapital),
             reservasLucros: _n(d.reservasLucros),
-            lucrosAcumulados: _n(d.lucrosAcumulados),
+            lucrosAcumulados: _n(d.lucrosAcumulados) + _n(d.reservasLucros),
             prejuizosAcumulados: _n(d.prejuizosContabeis),
             tjlp: (_n(d.tjlp) || 6) / 100,
             lucroLiquidoAntes: llVal,
@@ -3048,7 +3048,7 @@
           capitalSocial: _n(d.capitalSocial) || null,
           reservasCapital: _n(d.reservasCapital),
           reservasLucros: _n(d.reservasLucros),
-          lucrosAcumulados: _n(d.lucrosAcumulados),
+          lucrosAcumulados: _n(d.lucrosAcumulados) + _n(d.reservasLucros),
           prejuizosAcumulados: _n(d.prejuizosContabeis),
           tjlp: (_n(d.tjlp) || 6) / 100,
           lucroLiquidoAntes: lucroLiquido,
@@ -3266,12 +3266,12 @@
     // ═══════════════════════════════════════════════════════════════════════
     //  PASSO 17 — Simulação ANUAL POR ESTIMATIVA
     // ═══════════════════════════════════════════════════════════════════════
-    var simAnual = _simularAnualEstimativa(d, receitaBruta, lucroRealFinal, ehFinanceira);
+    var simAnual = _simularAnualEstimativa(d, receitaBruta, lucroRealFinal, ehFinanceira, irpjAntesReducao, csllResult.csllDevida);
 
     // ═══════════════════════════════════════════════════════════════════════
     //  PASSO 18 — Suspensão/redução (informativo)
     // ═══════════════════════════════════════════════════════════════════════
-    var simSuspensao = _simularSuspensaoReducao(d, receitaBruta, lucroRealFinal, ehFinanceira);
+    var simSuspensao = _simularSuspensaoReducao(d, receitaBruta, lucroRealFinal, ehFinanceira, irpjAntesReducao, csllResult.csllDevida);
 
     // ═══════════════════════════════════════════════════════════════════════
     //  PASSO 19 — Recomendação de melhor forma de apuração
@@ -3309,11 +3309,12 @@
     var economiaGratificacao = _n(d.gratificacoesAdm) > 0 ? _r(_n(d.gratificacoesAdm) * 0.34) : 0;
     var economiaCPRBFinal = cprbResult ? cprbResult.economia : 0;
     var totalPDDEcon = _r((_n(d.perdasCreditos6Meses) + _n(d.perdasCreditosJudicial) + _n(d.perdasCreditosFalencia)) * 0.34);
-    var totalEconomias = _r(economiaJCP + economiaPrejuizo + economiaSUDAM + economiaIncentivos + economiaDepreciacao + economiaPisCofins + economiaCPRBFinal + totalPDDEcon);
+    var totalEconomias = _r(economiaJCP + economiaSUDAM + economiaIncentivos + economiaDepreciacao + economiaPisCofins + economiaCPRBFinal + totalPDDEcon);
     if (_n(d.gratificacoesAdm) > 0) totalEconomias += economiaGratificacao;
 
-    // Carga tributária bruta e otimizada
-    var cargaBruta = _r(irpjAntesReducao + csllResult.csllDevida + pisCofinsResult.totalAPagar + issAnual);
+    // Carga tributária bruta e otimizada (PIS/COFINS líquido de retenções)
+    var pisCofinsLiquido = _r(Math.max(pisCofinsResult.totalAPagar - _n(d.pisRetido) - _n(d.cofinsRetido), 0));
+    var cargaBruta = _r(irpjAntesReducao + csllResult.csllDevida + pisCofinsLiquido + issAnual);
     var cargaOtimizada = _r(Math.max(cargaBruta - totalEconomias, 0));
     var aliquotaEfetiva = receitaBruta > 0 ? _r(cargaBruta / receitaBruta * 100) : 0;
     var aliquotaOtimizada = receitaBruta > 0 ? _r(cargaOtimizada / receitaBruta * 100) : 0;
@@ -3358,7 +3359,7 @@
       for (var aP = 0; aP < horizonte; aP++) {
         if (aP > 0) receitaProj = _r(receitaProj * (1 + taxa));
         var fator = receitaProj / (receitaBruta || 1);
-        var cargaAno = _r((irpjAposReducao + csllResult.csllDevida + pisCofinsResult.totalAPagar + issAnual) * fator);
+        var cargaAno = _r((irpjAposReducao + csllResult.csllDevida + pisCofinsLiquido + issAnual) * fator);
         var econAno = _r(totalEconomias * fator);
         econAcum += econAno;
         projecaoCarga.push({
@@ -3580,7 +3581,7 @@
       composicao: {
         irpj: { valor: irpjAposReducao, percentual: cargaBruta > 0 ? _r(irpjAntesReducao / cargaBruta * 100) : 0 },
         csll: { valor: csllResult.csllDevida, percentual: cargaBruta > 0 ? _r(csllResult.csllDevida / cargaBruta * 100) : 0 },
-        pisCofins: { valor: pisCofinsResult.totalAPagar, percentual: cargaBruta > 0 ? _r(pisCofinsResult.totalAPagar / cargaBruta * 100) : 0 },
+        pisCofins: { valor: pisCofinsLiquido, percentual: cargaBruta > 0 ? _r(pisCofinsLiquido / cargaBruta * 100) : 0 },
         iss: { valor: issAnual, percentual: cargaBruta > 0 ? _r(issAnual / cargaBruta * 100) : 0 }
       },
 
@@ -4438,15 +4439,14 @@
       try {
         var simCompleta = LR.calcular.simulacaoCompleta({
           receitaBruta: ctx.receitaBruta,
-          lucroLiquido: ctx.lucroLiquido,
-          lucroAjustado: ctx.lucroAjustado,
+          lucroLiquidoContabil: ctx.lucroLiquido,
           patrimonioLiquido: ctx.plVal,
-          prejuizoFiscal: _n(d.prejuizoFiscal),
-          baseNegativaCSLL: _n(d.baseNegativaCSLL),
-          ehFinanceira: ctx.ehFinanceira,
-          isSUDAM: ctx.isSUDAM,
-          isSUDENE: ctx.isSUDENE,
-          temProjetoSUDAM: ctx.temProjetoSUDAM
+          saldoPrejuizoFiscal: _n(d.prejuizoFiscal),
+          saldoBaseNegativaCSLL: _n(d.baseNegativaCSLL),
+          lucrosAcumulados: _n(d.lucrosAcumulados) + _n(d.reservasLucros),
+          tjlp: (_n(d.tjlp) || 6) / 100,
+          ehInstituicaoFinanceira: ctx.ehFinanceira,
+          despesasIncentivos: ctx.despesasIncentivos || {}
         });
         if (simCompleta && simCompleta.economia && simCompleta.economia.total > 0) {
           ops.push({
@@ -4626,7 +4626,7 @@
     };
   }
 
-  function _simularAnualEstimativa(d, receitaBruta, lucroRealFinal, ehFinanceira) {
+  function _simularAnualEstimativa(d, receitaBruta, lucroRealFinal, ehFinanceira, irpjRealDoMotor, csllRealDoMotor) {
     var meses = [];
     var totalEstimIRPJ = 0;
     var totalEstimCSLL = 0;
@@ -4691,9 +4691,9 @@
       });
     }
 
-    // Ajuste anual: IRPJ real - estimativas
-    var irpjRealAnual = _r(lucroRealFinal * 0.15 + Math.max(lucroRealFinal - 240000, 0) * 0.10);
-    var csllRealAnual = _r(lucroRealFinal * (ehFinanceira ? 0.15 : 0.09));
+    // Ajuste anual: IRPJ real - estimativas (usa valores do motor quando disponíveis)
+    var irpjRealAnual = irpjRealDoMotor || _r(lucroRealFinal * 0.15 + Math.max(lucroRealFinal - 240000, 0) * 0.10);
+    var csllRealAnual = csllRealDoMotor || _r(lucroRealFinal * (ehFinanceira ? 0.15 : 0.09));
     var ajusteIRPJ = _r(irpjRealAnual - totalEstimIRPJ);
     var ajusteCSLL = _r(csllRealAnual - totalEstimCSLL);
 
@@ -4711,7 +4711,7 @@
     };
   }
 
-  function _simularSuspensaoReducao(d, receitaBruta, lucroRealFinal, ehFinanceira) {
+  function _simularSuspensaoReducao(d, receitaBruta, lucroRealFinal, ehFinanceira, irpjRealDoMotor, csllRealDoMotor) {
     if (!LR.calcular.suspensaoReducao) return null;
     var meses = [];
     var irpjPagoAcum = 0;
@@ -4755,9 +4755,9 @@
         estimCSLLMes = _r(baseEstCSLL * (ehFinanceira ? 0.15 : 0.09));
       }
 
-      // IRPJ real acumulado até o mês (proporcional)
-      var irpjRealAcum = _r((lucroRealFinal * 0.15 + Math.max(lucroRealFinal - 240000, 0) * 0.10) * m / 12);
-      var csllRealAcum = _r(lucroRealFinal * (ehFinanceira ? 0.15 : 0.09) * m / 12);
+      // IRPJ real acumulado até o mês (proporcional — usa valores do motor quando disponíveis)
+      var irpjRealAcum = _r((irpjRealDoMotor || (lucroRealFinal * 0.15 + Math.max(lucroRealFinal - 240000, 0) * 0.10)) * m / 12);
+      var csllRealAcum = _r((csllRealDoMotor || (lucroRealFinal * (ehFinanceira ? 0.15 : 0.09))) * m / 12);
 
       var sr = null;
       try {
@@ -5108,12 +5108,15 @@
     var deducoesReceita = r.pisCofins ? (r.pisCofins.totalAPagar || 0) : 0;
     s3 += _linha('(-) PIS/COFINS sobre Receita', deducoesReceita, 'Lei 10.637/02 + 10.833/03', 'res-sub');
     s3 += _linha('= RECEITA LÍQUIDA', _r(dre.receitaBruta - deducoesReceita), '', 'res-subtotal');
-    if (dre.cmv > 0) s3 += _linha('(-) CMV / Custos Operacionais', dre.cmv, '', 'res-sub');
-    if (dre.servicosTerceiros > 0) s3 += _linha('(-) Serviços de Terceiros', dre.servicosTerceiros, '', 'res-sub');
+    // Custos Totais (já inclui pessoal/folha, CMV e serviços de terceiros)
     s3 += _linha('(-) Custos Totais', dre.custosTotais, '', 'res-sub');
+    // Sub-itens informativos da composição dos custos
+    if (dre.folhaPagamento > 0) s3 += _linha('&emsp;Folha de Pagamento', dre.folhaPagamento, '', 'res-sub');
+    if (dre.cmv > 0) s3 += _linha('&emsp;CMV / Custos Operacionais', dre.cmv, '', 'res-sub');
+    if (dre.servicosTerceiros > 0) s3 += _linha('&emsp;Serviços de Terceiros', dre.servicosTerceiros, '', 'res-sub');
     s3 += _linha('= LUCRO BRUTO', _r(dre.receitaBruta - dre.custosTotais), '', 'res-subtotal');
-    if (dre.folhaPagamento > 0) s3 += _linha('(-) Despesas com Pessoal', dre.folhaPagamento, '', 'res-sub');
-    s3 += _linha('(-) Despesas Administrativas e Operacionais', _r(dre.despesasTotais - (dre.folhaPagamento || 0)), '', 'res-sub');
+    // Despesas operacionais (pessoal já nos custos — não duplicar)
+    s3 += _linha('(-) Despesas Administrativas e Operacionais', dre.despesasTotais, '', 'res-sub');
     if (dre.depreciacao > 0) s3 += _linha('(-) Depreciação e Amortização', dre.depreciacao, 'Art. 305-329 RIR/2018', 'res-sub');
     if (dre.receitaFinanceiras > 0) s3 += _linha('(+) Receitas Financeiras', dre.receitaFinanceiras, '', 'res-sub');
     s3 += '<tr class="res-total"><td><strong>= LUCRO LÍQUIDO DO EXERCÍCIO</strong></td><td class="res-valor"><strong>' + _m(dre.lucroLiquido) + '</strong></td></tr>';
@@ -5316,7 +5319,7 @@
     s4 += _linha('Lucro Real (base de cálculo)', r.lucroRealFinal, '', '');
     if (r.irpj) {
       s4 += _linha('IRPJ Normal (15%)', r.irpj.irpjNormal || _r(r.lucroRealFinal * 0.15), 'Art. 225', '');
-      s4 += _linha('Adicional (10% sobre excedente R$ 240.000)', r.irpj.adicional || _r(Math.max(r.lucroRealFinal - 240000, 0) * 0.10), 'Art. 228', '');
+      s4 += _linha('Adicional (10% sobre excedente R$ 240.000)', r.irpj.adicional || r.irpj.irpjAdicional || 0, 'Art. 228', '');
       s4 += _linha('= IRPJ Bruto', r.irpjAntesReducao, '', 'res-subtotal');
       if (r.irpj.deducaoIncentivos > 0 || (r.incentivosFiscais && r.incentivosFiscais.totalDeducaoFinal > 0)) {
         s4 += _linha('(-) Deduções por Incentivos Fiscais', r.irpj.deducaoIncentivos || r.incentivosFiscais.totalDeducaoFinal, 'Art. 641', 'res-sub res-economia');
@@ -5348,7 +5351,7 @@
       if (r.compensacao && r.compensacao.resumo && r.compensacao.resumo.compensacaoEfetiva && r.compensacao.resumo.compensacaoEfetiva.baseNegativaCSLL > 0) {
         s4 += _linha('(-) Compensação Base Negativa (30%)', r.compensacao.resumo.compensacaoEfetiva.baseNegativaCSLL, 'Art. 580-586', 'res-sub res-economia');
       }
-      s4 += _linha('Alíquota CSLL', '', '', '');
+      s4 += _linha('Alíquota CSLL', _pp(aliqCSLL * 100), '', '');
       s4 += '<tr><td>CSLL (' + _pp(aliqCSLL * 100) + ')</td><td class="res-valor">' + _m(r.csll.csllDevida) + '</td></tr>';
       var csllRetida = _n(d.csllRetido);
       if (csllRetida > 0) s4 += _linha('(-) CSLL Retida na Fonte', csllRetida, '', 'res-sub');
@@ -5388,8 +5391,9 @@
       var cofinsRetido = _n(d.cofinsRetido);
       if (pisRetido > 0) s4 += _linha('(-) PIS Retido na Fonte', pisRetido, '', 'res-sub');
       if (cofinsRetido > 0) s4 += _linha('(-) COFINS Retido na Fonte', cofinsRetido, '', 'res-sub');
-      s4 += '<tr class="res-total"><td><strong>= PIS/COFINS A PAGAR</strong></td><td class="res-valor"><strong>' + _m(pc.totalAPagar) + '</strong></td></tr>';
-      s4 += '<tr class="res-info-row"><td colspan="2">Alíquota Efetiva: ' + (pc.aliquotaEfetiva || _pp(_r(pc.totalAPagar / (dre.receitaBruta || 1) * 100))) + ' (nominal: 9,25%)</td></tr>';
+      var pisCofinsLiquido = _r(Math.max(pc.totalAPagar - pisRetido - cofinsRetido, 0));
+      s4 += '<tr class="res-total"><td><strong>' + (pisCofinsLiquido >= 0 ? '= PIS/COFINS A PAGAR' : '= SALDO CREDOR PIS/COFINS') + '</strong></td><td class="res-valor"><strong>' + _m(pisCofinsLiquido) + '</strong></td></tr>';
+      s4 += '<tr class="res-info-row"><td colspan="2">Alíquota Efetiva: ' + _pp(_r(pisCofinsLiquido / (dre.receitaBruta || 1) * 100)) + ' (nominal: 9,25%)</td></tr>';
     }
     s4 += '</table></div>';
 
@@ -5465,7 +5469,6 @@
     s6 += '<div class="res-mapa-breakdown"><h4>Detalhamento das Economias</h4>';
     s6 += '<table class="res-table">';
     if (eco.jcp > 0) s6 += _linha('JCP — Juros sobre Capital Próprio', eco.jcp, 'Art. 355-358', 'res-economia');
-    if (eco.prejuizo > 0) s6 += _linha('Compensação de Prejuízo Fiscal', eco.prejuizo, 'Art. 579-586', 'res-economia');
     if (eco.sudam > 0) s6 += _linha('Redução SUDAM/SUDENE (75%)', eco.sudam, 'Art. 627-637', 'res-economia');
     if (eco.incentivos > 0) s6 += _linha('Incentivos Fiscais (PAT, FIA, etc.)', eco.incentivos, 'Art. 641', 'res-economia');
     if (eco.depreciacao > 0) s6 += _linha('Economia Fiscal de Depreciação', eco.depreciacao, 'Art. 305-329', 'res-economia');
@@ -5474,7 +5477,13 @@
     if (eco.cprb > 0) s6 += _linha('CPRB — Desoneração da Folha', eco.cprb, 'Lei 12.546/2011', 'res-economia');
     if (eco.pddFiscal > 0) s6 += _linha('PDD Fiscal — Perdas no Recebimento', eco.pddFiscal, 'Art. 340-342 RIR/2018', 'res-economia');
     s6 += '<tr class="res-total res-economia"><td><strong>ECONOMIA TOTAL</strong></td><td class="res-valor"><strong>' + _m(eco.total) + '</strong></td></tr>';
-    s6 += '</table></div>';
+    s6 += '</table>';
+    if (eco.prejuizo > 0) {
+      s6 += '<div style="margin-top:8px;padding:8px 12px;background:rgba(16,185,129,0.08);border-left:3px solid #10b981;border-radius:4px;font-size:0.85em;color:#8892b0;">';
+      s6 += '<strong style="color:#10b981;">✓ Compensação de Prejuízo Fiscal:</strong> ' + _m(eco.prejuizo);
+      s6 += ' <em>(Art. 579-586 RIR/2018 — direito legal obrigatório, já refletido na carga base)</em></div>';
+    }
+    s6 += '</div>';
 
     // Projeções acumuladas
     if (r.projecao && r.projecao.projecaoCarga) {
@@ -5713,7 +5722,19 @@
       s12 += '<table class="res-table"><thead><tr><th>Obrigação</th><th>Periodicidade</th><th>Prazo</th><th>Descrição</th></tr></thead><tbody>';
       obrigacoes.forEach(function (ob) {
         if (ob) {
-          s12 += '<tr><td><strong>' + (ob.nome || ob.id || '—') + '</strong></td><td>' + (ob.periodicidade || '—') + '</td><td>' + (ob.prazo || '—') + '</td><td>' + (ob.descricao || '—') + '</td></tr>';
+          var _periodicidade = '—';
+          if (ob.prazo) {
+            var _pl = ob.prazo.toLowerCase();
+            if (_pl.indexOf('mensal') >= 0 || _pl.indexOf('mês') >= 0 || _pl.indexOf('15º') >= 0 || _pl.indexOf('10º') >= 0) _periodicidade = 'Mensal';
+            else if (_pl.indexOf('trimestral') >= 0 || _pl.indexOf('trimestre') >= 0) _periodicidade = 'Trimestral';
+            else if (_pl.indexOf('anual') >= 0 || _pl.indexOf('ano') >= 0 || _pl.indexOf('julho') >= 0 || _pl.indexOf('maio') >= 0 || _pl.indexOf('fevereiro') >= 0) _periodicidade = 'Anual';
+            else if (_pl.indexOf('contínuo') >= 0 || _pl.indexOf('continuo') >= 0) _periodicidade = 'Contínuo';
+            else if (_pl.indexOf('período') >= 0 || _pl.indexOf('periodo') >= 0) _periodicidade = 'Por Período';
+            else if (_pl.indexOf('prescrever') >= 0 || _pl.indexOf('5 anos') >= 0) _periodicidade = 'Permanente';
+            else if (_pl.indexOf('varia') >= 0) _periodicidade = 'Varia por UF';
+            else _periodicidade = ob.prazo.split('(')[0].trim() || '—';
+          }
+          s12 += '<tr><td><strong>' + (ob.obrigacao || ob.nome || ob.id || '—') + '</strong></td><td>' + _periodicidade + '</td><td>' + (ob.prazo || '—') + '</td><td>' + (ob.descricao || '—') + '</td></tr>';
         }
       });
       s12 += '</tbody></table>';
@@ -5806,6 +5827,10 @@
       var compensTotal = 0;
       if (r.compensacao && r.compensacao.resumo && r.compensacao.resumo.compensacaoEfetiva) {
         compensTotal = (r.compensacao.resumo.compensacaoEfetiva.prejuizoOperacional || 0) + (r.compensacao.resumo.compensacaoEfetiva.baseNegativaCSLL || 0);
+      }
+      // Fallback: ler do resultado do IRPJ se a compensação veio zerada
+      if (compensTotal === 0 && r.irpj) {
+        compensTotal = r.irpj.compensacaoPrejuizo || r.irpj.passo5_compensacao || 0;
       }
       valoresFormula[5] = compensTotal;
       valoresFormula[6] = r.lucroRealFinal || 0;
@@ -6369,7 +6394,6 @@
       var eco = r.economia;
       var items = [
         { label: 'JCP', val: eco.jcp },
-        { label: 'Prejuízo Fiscal', val: eco.prejuizo },
         { label: 'SUDAM/SUDENE', val: eco.sudam },
         { label: 'Incentivos Fiscais', val: eco.incentivos },
         { label: 'Depreciação', val: eco.depreciacao },
@@ -7236,6 +7260,10 @@
       if (r.compensacao && r.compensacao.resumo && r.compensacao.resumo.compensacaoEfetiva) {
         compTotPdf = (r.compensacao.resumo.compensacaoEfetiva.prejuizoOperacional || 0) + (r.compensacao.resumo.compensacaoEfetiva.baseNegativaCSLL || 0);
       }
+      // Fallback: ler do resultado do IRPJ se a compensação veio zerada
+      if (compTotPdf === 0 && r.irpj) {
+        compTotPdf = r.irpj.compensacaoPrejuizo || r.irpj.passo5_compensacao || 0;
+      }
       vfPdf[5] = compTotPdf;
       vfPdf[6] = r.lucroRealFinal || 0;
       vfPdf[7] = r.irpj ? (r.irpj.irpjNormal || 0) : 0;
@@ -7491,9 +7519,14 @@
       { cells: ['Débito COFINS (7,6%)', _m(pc.debitoCOFINS)] },
       { cells: ['Total Débitos', _m((pc.debitoPIS || 0) + (pc.debitoCOFINS || 0))], _subtotal: true },
       { cells: ['(-) Crédito PIS', _m(-(pc.creditoPIS || 0))], _eco: pc.creditoPIS > 0 },
-      { cells: ['(-) Crédito COFINS', _m(-(pc.creditoCOFINS || 0))], _eco: pc.creditoCOFINS > 0 },
-      { cells: ['= PIS/COFINS A PAGAR', _m(pc.totalAPagar)], _total: true }
+      { cells: ['(-) Crédito COFINS', _m(-(pc.creditoCOFINS || 0))], _eco: pc.creditoCOFINS > 0 }
     ];
+    var pdfPisRetido = _n(d.pisRetido);
+    var pdfCofinsRetido = _n(d.cofinsRetido);
+    if (pdfPisRetido > 0) pcRows.push({ cells: ['(-) PIS Retido na Fonte', _m(-pdfPisRetido)] });
+    if (pdfCofinsRetido > 0) pcRows.push({ cells: ['(-) COFINS Retido na Fonte', _m(-pdfCofinsRetido)] });
+    var pdfPisCofinsLiq = _r(Math.max(pc.totalAPagar - pdfPisRetido - pdfCofinsRetido, 0));
+    pcRows.push({ cells: ['= PIS/COFINS A PAGAR', _m(pdfPisCofinsLiq)], _total: true });
     if (pc.economiaCreditos > 0) {
       pcRows.push({ cells: ['Economia com Créditos Não-Cumulativos', _m(pc.economiaCreditos)], _eco: true });
     }
@@ -7787,7 +7820,19 @@
       h += '<div style="font-weight:700;font-size:10px;margin:8px 0 4px;">Obrigações Acessórias do Lucro Real</div>';
       var obrRows = [];
       obr.forEach(function (o) {
-        obrRows.push({ cells: [o.nome || '', o.periodicidade || '', o.prazo || '', o.descricao || ''] });
+        var _perPdf = '';
+        if (o.prazo) {
+          var _plp = o.prazo.toLowerCase();
+          if (_plp.indexOf('mensal') >= 0 || _plp.indexOf('mês') >= 0 || _plp.indexOf('15º') >= 0 || _plp.indexOf('10º') >= 0) _perPdf = 'Mensal';
+          else if (_plp.indexOf('trimestral') >= 0 || _plp.indexOf('trimestre') >= 0) _perPdf = 'Trimestral';
+          else if (_plp.indexOf('anual') >= 0 || _plp.indexOf('ano') >= 0 || _plp.indexOf('julho') >= 0 || _plp.indexOf('maio') >= 0 || _plp.indexOf('fevereiro') >= 0) _perPdf = 'Anual';
+          else if (_plp.indexOf('contínuo') >= 0 || _plp.indexOf('continuo') >= 0) _perPdf = 'Contínuo';
+          else if (_plp.indexOf('período') >= 0 || _plp.indexOf('periodo') >= 0) _perPdf = 'Por Período';
+          else if (_plp.indexOf('prescrever') >= 0 || _plp.indexOf('5 anos') >= 0) _perPdf = 'Permanente';
+          else if (_plp.indexOf('varia') >= 0) _perPdf = 'Varia por UF';
+          else _perPdf = o.prazo.split('(')[0].trim() || '';
+        }
+        obrRows.push({ cells: [o.obrigacao || o.nome || '', _perPdf, o.prazo || '', o.descricao || ''] });
       });
       h += tabelaHTML(['Obrigação', 'Periodicidade', 'Prazo', 'Descrição'], obrRows, { noAlignRight: true });
     }
@@ -8027,6 +8072,10 @@
       var compTotPdfC = 0;
       if (r.compensacao && r.compensacao.resumo && r.compensacao.resumo.compensacaoEfetiva) {
         compTotPdfC = (r.compensacao.resumo.compensacaoEfetiva.prejuizoOperacional || 0) + (r.compensacao.resumo.compensacaoEfetiva.baseNegativaCSLL || 0);
+      }
+      // Fallback: ler do resultado do IRPJ se a compensação veio zerada
+      if (compTotPdfC === 0 && r.irpj) {
+        compTotPdfC = r.irpj.compensacaoPrejuizo || r.irpj.passo5_compensacao || 0;
       }
       vfPdfC[5] = compTotPdfC;
       vfPdfC[6] = r.lucroRealFinal || 0;
@@ -8317,7 +8366,10 @@
     aba3.push(['Débito COFINS (7,6%)', mv(pc.debitoCOFINS)]);
     aba3.push(['(-) Crédito PIS', mv(-(pc.creditoPIS || 0))]);
     aba3.push(['(-) Crédito COFINS', mv(-(pc.creditoCOFINS || 0))]);
-    aba3.push(['PIS/COFINS a Pagar', mv(pc.totalAPagar)]);
+    var xlPisRet = _n(d.pisRetido), xlCofRet = _n(d.cofinsRetido);
+    if (xlPisRet > 0) aba3.push(['(-) PIS Retido na Fonte', mv(-xlPisRet)]);
+    if (xlCofRet > 0) aba3.push(['(-) COFINS Retido na Fonte', mv(-xlCofRet)]);
+    aba3.push(['PIS/COFINS a Pagar', mv(Math.max(pc.totalAPagar - xlPisRet - xlCofRet, 0))]);
     if (pc.economiaCreditos > 0) aba3.push(['Economia com Créditos', mv(pc.economiaCreditos)]);
     aba3.push([]);
     aba3.push(['ISS']);
