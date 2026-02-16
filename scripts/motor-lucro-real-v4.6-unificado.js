@@ -909,9 +909,9 @@ function compensarPrejuizo(lucroRealAntes, saldoPrejuizo) {
     lucroRealFinal,
     saldoRemanescente: novoSaldo,
     prejuizoPeriodo: 0,
-    economiaIRPJ: compensacao * 0.25,    // 15% + 10% potencial
+    economiaIRPJ: _calcularIRPJ(lucroRealAntes) - _calcularIRPJ(lucroRealFinal),
     economiaCSLL: compensacao * 0.09,
-    economiaTotal: compensacao * 0.34,
+    economiaTotal: (_calcularIRPJ(lucroRealAntes) - _calcularIRPJ(lucroRealFinal)) + (compensacao * 0.09),
   };
 }
 
