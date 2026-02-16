@@ -12,6 +12,8 @@
  *   • Bloco D2 — Valor Justo, MEP, Operações Exterior (CPC 18/46/02)
  *   • Bloco E — Lucro da Exploração SUDAM/SUDENE (Art. 615-627)
  *   • Bloco G — Retenções na Fonte IRRF/CSRF/ISS (Art. 714-786)
+ *   • Bloco H — Acréscimos Moratórios e Multas (Lei 9.430/96, Arts. 44, 47, 61, 63)
+ *   • Bloco I — Compensação Tributária PER/DCOMP (Lei 9.430/96, Arts. 73, 74, 74-A)
  *
  * INSTRUÇÕES:
  *   1. Arquivo único — basta importar: const motor = require('./motor-lucro-real-v4.6');
@@ -19,7 +21,7 @@
  *   3. Valores monetários em R$ (reais); taxas em decimal (0.15 = 15%)
  *   4. Todas as funções públicas exportadas no final do arquivo
  *
- * TOTAL DE FUNÇÕES: 71
+ * TOTAL DE FUNÇÕES: 80
  * ============================================================================
  */
 
@@ -5999,7 +6001,6 @@ const SETORES_PRIORITARIOS_SUDAM = {
         'Consultoria técnica ambiental',
         'Pesquisa e desenvolvimento'
       ],
-      relevanteAGROGEO: true,
       observacao: 'AGROGEO: Geotecnologia, CAR, PRA, LAR, georeferenciamento = serviços técnicos especializados'
     },
     {
@@ -7501,7 +7502,6 @@ const LEI_12973 = {
       paragrafo5: 'Na receita bruta INCLUEM-SE tributos sobre ela incidentes e valores de ajuste a valor presente (§5º)'
     },
     impactoRetencoes: 'A definição de receita bruta impacta diretamente a base de cálculo para fins de presunção do lucro (Art. 15 Lei 9.249) usada nas retenções pela Adm. Pública (Art. 720 RIR)',
-    relevanciaAGROGEO: 'AGROGEO presta serviços (inciso II) — receita bruta = preço dos serviços de georreferenciamento, CAR, PRA, LAR, topografia'
   },
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -7523,7 +7523,6 @@ const LEI_12973 = {
     },
     aplicaCSLL: 'Art. 9º, §11 — o disposto aplica-se também à CSLL',
     impactoRetencao: 'IRRF 15% sobre JCP calculado com base nestas contas do PL (Art. 726 RIR). Se PL inclui passivo reclassificado como ação, a base de JCP é maior → maior IRRF retido.',
-    relevanciaAGROGEO: 'Se AGROGEO distribuir JCP (viável no Lucro Real), a retenção de 15% é antecipação compensável com IRPJ'
   },
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -7538,7 +7537,6 @@ const LEI_12973 = {
       paragrafo3: 'NÃO são dedutíveis no lucro real e na base da CSLL os lucros/dividendos pagos a qualquer espécie de ação, ainda que classificados como despesa financeira (§3º)'
     },
     impactoRetencao: 'Dividendos continuam ISENTOS de retenção (Art. 725 RIR). Porém, se pagos como despesa financeira contabilmente, NÃO são dedutíveis para IRPJ/CSLL.',
-    relevanciaAGROGEO: 'Distribuição de lucros da AGROGEO aos sócios (65%/35%) — isenta de IRRF, tanto no Simples quanto no Lucro Real'
   },
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -7551,7 +7549,6 @@ const LEI_12973 = {
     receitaBrutaRef: 'Art. 12 do DL 1.598/1977 (definição da Lei 12.973)',
     deducoes: 'Deduzida de devoluções, vendas canceladas e descontos incondicionais',
     impactoRetencao: 'A base presumida da CSLL usa a mesma receita bruta redefinida pela Lei 12.973. Para serviços (AGROGEO), a base é 32% — relevante para CSRF retida (1% CSLL) e para cálculo da CSLL devida contra a qual se compensa a CSLL retida.',
-    relevanciaAGROGEO: 'Se AGROGEO optar por lucro presumido, a CSLL devida será 9% × (32% × Receita Bruta). A CSLL retida na fonte (1%) compensa contra esse valor.'
   },
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -7572,7 +7569,6 @@ const LEI_12973 = {
       combustiveis: { percentual: 0.016, descricao: '1,6% — revenda de combustíveis' }
     },
     impactoRetencao: 'Os percentuais de presunção são usados pela Adm. Pública para calcular o IRRF retido (Art. 720 RIR): IRRF = 15% × (percentual de presunção × valor pago). A Lei 12.973 confirmou a inclusão de serviços de infraestrutura vinculados a concessão na alíquota de 32%.',
-    relevanciaAGROGEO: 'Serviços da AGROGEO = 32% de presunção. Se receber de órgão público: IRRF = 15% × 32% = 4,8% sobre a NF.'
   },
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -7605,7 +7601,6 @@ const LEI_12973 = {
       aplicacao: 'Aplica-se ao ganho de capital do Art. 25, II, Art. 27, II e Art. 29, II da Lei 9.430/96'
     },
     impactoRetencao: 'A forma de apurar o ganho de capital afeta a base sobre a qual se calcula IRPJ/CSLL devidos, contra os quais as retenções (IRRF e CSRF) são compensadas.',
-    relevanciaAGROGEO: 'Se AGROGEO alienar ativos (veículos, equipamentos de topografia), o ganho de capital entra na base do IRPJ/CSLL — as retenções sofridas compensam contra esses valores.'
   },
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -7637,7 +7632,6 @@ const LEI_12973 = {
       regra: 'No lucro presumido/arbitrado, receitas financeiras de variações cambiais dos direitos/obrigações originadas de ajuste a valor presente NÃO integram a base do IR'
     },
     impactoRetencao: 'Ajustes a valor presente alteram o momento de reconhecimento da receita, podendo deslocar receita tributável entre períodos — afeta a base contra a qual retenções são compensadas.',
-    relevanciaAGROGEO: 'Relevante se AGROGEO tiver contratos de longo prazo com pagamento diferido (ex.: grandes projetos de georreferenciamento para fazendas).'
   },
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -7687,7 +7681,6 @@ const LEI_12973 = {
       }
     },
     impactoRetencao: 'Ganhos/perdas de valor justo afetam o lucro real e, portanto, a base de IRPJ/CSLL contra a qual retenções sofridas são compensadas. Se a AGROGEO tiver ativos avaliados a valor justo (terrenos, participações), o momento de tributação do ganho afeta o saldo de compensação.',
-    relevanciaAGROGEO: 'Relevante se AGROGEO tiver participações societárias, imóveis avaliados a valor justo, ou realizar subscrição de capital em outras empresas.'
   },
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -7743,7 +7736,6 @@ const LEI_12973 = {
       subcontas: 'Ganhos/perdas evidenciados em subcontas (Arts. 13 e 14) transferidos por incorporação/fusão/cisão mantêm o mesmo tratamento tributário na sucessora'
     },
     impactoRetencao: 'Goodwill e mais/menos-valia afetam o lucro real ao longo de até 5 anos (1/60 por mês), alterando a base de IRPJ/CSLL devidos e consequentemente o saldo de compensação de retenções sofridas.',
-    relevanciaAGROGEO: 'Relevante se AGROGEO adquirir ou incorporar outras empresas de consultoria ambiental/topografia. O goodwill amortizado reduz lucro real → menos IRPJ/CSLL devidos → retenções sofridas podem gerar saldo credor.'
   },
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -7762,7 +7754,6 @@ const LEI_12973 = {
       nota: 'A Lei 14.789/2023 substituiu este regime por crédito fiscal de subvenção'
     },
     impactoRetencao: 'Subvenções excluídas do lucro real reduziam a base de IRPJ/CSLL devidos → retenções sofridas compensavam contra valores menores → maior probabilidade de saldo credor.',
-    relevanciaAGROGEO: 'Se AGROGEO recebesse incentivos fiscais estaduais (ICMS/PA, por exemplo) ou doações/subvenções municipais, podia excluir da tributação. Com a Lei 14.789/2023, o tratamento mudou para crédito fiscal.'
   },
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -7786,7 +7777,6 @@ const LEI_12973 = {
     regra: 'Valores contabilizados como redução ao valor recuperável (impairment) somente reconhecidos no lucro real quando NÃO revertidos E ocorrer alienação ou baixa do bem',
     unidadeGeradoraCaixa: 'Se o ativo compõe UGC, o valor reconhecido no lucro real é proporcional à relação entre o valor contábil do ativo e o total da UGC na data do teste (parágrafo único)',
     impactoRetencao: 'Impairment não reconhecido no lucro real mantém a base de IRPJ/CSLL mais alta → mais imposto devido → mais espaço para compensar retenções sofridas.',
-    relevanciaAGROGEO: 'Se equipamentos da AGROGEO (drones, estações totais, veículos) sofrerem impairment, o efeito fiscal só aparece na alienação/baixa.'
   },
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -7797,7 +7787,6 @@ const LEI_12973 = {
     regra: 'Despesas de organização pré-operacionais/pré-industriais e de expansão NÃO são computadas no período em que incorridas',
     amortizacao: 'Podem ser excluídas do lucro real em quotas fixas mensais no prazo mínimo de 5 anos a partir do início das operações/atividades',
     impactoRetencao: 'Despesas pré-operacionais não deduzidas imediatamente mantêm a base de IRPJ/CSLL mais alta no curto prazo — retenções sofridas são compensadas mais rapidamente.',
-    relevanciaAGROGEO: 'Se AGROGEO expandir para nova filial ou nova atividade, as despesas de instalação serão amortizadas em 5+ anos para fins fiscais.'
   },
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -7807,7 +7796,6 @@ const LEI_12973 = {
     artigo: 'Art. 29 da Lei 12.973/2014',
     regra: 'Se o critério contábil de determinação da porcentagem executada for distinto dos previstos no §1º do art. 10 do DL 1.598, e implicar resultado diferente, a diferença deve ser adicionada ou excluída no lucro real',
     impactoRetencao: 'Ajustes de contratos de longo prazo alteram o lucro real do período → afetam a base de IRPJ/CSLL e o saldo de compensação de retenções.',
-    relevanciaAGROGEO: 'Relevante para grandes contratos de georreferenciamento/regularização fundiária com órgãos públicos (INCRA, ITERPA) que podem se estender por vários exercícios.'
   },
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -7879,7 +7867,6 @@ const LEI_12973 = {
         emIntimacao: '50% de redução se corrigida no prazo de intimação'
       }
     },
-    relevanciaAGROGEO: 'Com receita de ~R$ 2,35M, AGROGEO se enquadra no limite de R$ 100.000,00. Manter ECF/LALUR rigorosamente em dia para evitar multas.'
   },
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -7904,7 +7891,6 @@ const LEI_12973 = {
       valorUnitario: 'Valor unitário ≤ R$ 1.200,00',
       vidaUtil: 'Prazo de vida útil ≤ 1 ano'
     },
-    relevanciaAGROGEO: 'Equipamentos de topografia, drones, receptores GNSS acima de R$ 1.200,00 devem ser ativados e depreciados — não podem ser lançados como despesa direta.'
   },
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -9132,26 +9118,789 @@ function calcularReceitaBrutaLei12973(params) {
       csrf_total: Math.round(basePresuncaoServicos * 0.0465 * 100) / 100,
       nota: 'IRRF Adm. Pública = 15% × 32% × base presunção; CSRF = 4,65% × base presunção'
     },
-    relevanciaAGROGEO: 'Receita bruta da AGROGEO = preço dos serviços (inciso II) de georreferenciamento, CAR, PRA, LAR, topografia, defesa ambiental'
   };
 }
 
+
 // ============================================================================
-// EXPORTS
+// BLOCO H — ACRÉSCIMOS MORATÓRIOS E MULTAS (Lei 9.430/96, Arts. 44, 47, 61, 63)
 // ============================================================================
+
+/**
+ * Constantes de acréscimos moratórios — Lei 9.430/96
+ */
+const ACRESCIMOS_MORATORIOS = {
+  // Art. 61 — Multa de mora
+  MULTA_MORA_TAXA_DIA: 0.0033,      // 0,33% por dia de atraso
+  MULTA_MORA_TETO: 0.20,            // Teto: 20%
+  JUROS_SELIC_MES_PAGAMENTO: 0.01,  // 1% fixo no mês do pagamento
+
+  // Art. 44 — Multas de lançamento de ofício (redação Lei 14.689/2023)
+  MULTA_OFICIO: {
+    NORMAL: 0.75,               // 75% — falta de pagamento, declaração inexata
+    QUALIFICADA_100: 1.00,      // 100% — fraude/sonegação/conluio (Art. 71-73 Lei 4.502)
+    QUALIFICADA_150: 1.50,      // 150% — reincidência em 2 anos (§1º-A)
+    ISOLADA_ESTIMATIVA: 0.50,   // 50% — estimativa mensal não recolhida (Art. 44, II, b)
+  },
+
+  // Agravamento por não atendimento a intimação (§2º Art. 44)
+  FATOR_AGRAVAMENTO: 1.50,      // Multas majoradas em 50%
+
+  // Reduções previstas (Art. 6º Lei 8.218/91 + Art. 60 Lei 8.383/91)
+  REDUCOES: {
+    PAGAMENTO_30_DIAS:       0.50,  // 50% de redução se pagar em 30 dias da notificação
+    PAGAMENTO_COM_RECURSO:   0.70,  // 30% de redução se pagar antes do recurso ao CARF
+  },
+};
+
+/**
+ * Calcula a multa de mora sobre tributo pago em atraso.
+ * Base Legal: Lei 9.430/96, Art. 61
+ *
+ * @param {number} valorTributo       - Valor original do tributo/contribuição
+ * @param {number} diasAtraso         - Dias de atraso a partir do vencimento
+ * @returns {Object} Detalhamento da multa de mora
+ */
+function calcularMultaMora(valorTributo, diasAtraso) {
+  if (valorTributo <= 0) {
+    return {
+      baseLegal: 'Lei 9.430/1996, art. 61',
+      valorTributo: 0,
+      diasAtraso: 0,
+      percentualMulta: 0,
+      multaMora: 0,
+      alerta: 'Valor do tributo deve ser positivo',
+    };
+  }
+  if (diasAtraso <= 0) {
+    return {
+      baseLegal: 'Lei 9.430/1996, art. 61',
+      valorTributo: Math.round(valorTributo * 100) / 100,
+      diasAtraso: 0,
+      percentualMulta: 0,
+      multaMora: 0,
+      alerta: 'Tributo pago sem atraso — sem multa de mora',
+    };
+  }
+
+  // §1º: 0,33% por dia, a partir do 1º dia após o vencimento
+  const percentualBruto = diasAtraso * ACRESCIMOS_MORATORIOS.MULTA_MORA_TAXA_DIA;
+
+  // §2º: Limitado a 20%
+  const percentualAplicavel = Math.min(percentualBruto, ACRESCIMOS_MORATORIOS.MULTA_MORA_TETO);
+  const diasParaTeto = Math.ceil(ACRESCIMOS_MORATORIOS.MULTA_MORA_TETO / ACRESCIMOS_MORATORIOS.MULTA_MORA_TAXA_DIA);
+  const atingiuTeto = diasAtraso >= diasParaTeto;
+
+  const multaMora = Math.round(valorTributo * percentualAplicavel * 100) / 100;
+
+  return {
+    baseLegal: 'Lei 9.430/1996, art. 61',
+    artigo61: {
+      caput: 'Débitos não pagos no prazo — multa de mora de 0,33% por dia de atraso',
+      paragrafo1: 'Calculada a partir do 1º dia subsequente ao vencimento',
+      paragrafo2: 'Percentual limitado a 20%',
+    },
+    valorTributo: Math.round(valorTributo * 100) / 100,
+    diasAtraso,
+    percentualBruto: Math.round(percentualBruto * 10000) / 10000,
+    percentualAplicavel: Math.round(percentualAplicavel * 10000) / 10000,
+    atingiuTeto,
+    diasParaTeto,
+    multaMora,
+    alertas: atingiuTeto
+      ? [`Multa atingiu teto de 20% (após ${diasParaTeto} dias) — atraso de ${diasAtraso} dias não agrava mais a multa`]
+      : [],
+  };
+}
+
+/**
+ * Calcula juros de mora (SELIC) sobre tributo pago em atraso.
+ * Base Legal: Lei 9.430/96, Art. 61, §3º c/c Art. 5º, §3º
+ *
+ * @param {number} valorTributo         - Valor original do tributo
+ * @param {Array<number>} taxasSelicMes - Array com taxa SELIC mensal de cada mês intermediário
+ *                                        (do mês seguinte ao vencimento até mês anterior ao pagamento)
+ * @param {boolean} incluirMesPagamento - Se true, adiciona 1% do mês de pagamento (padrão: true)
+ * @returns {Object} Detalhamento dos juros de mora
+ */
+function calcularJurosMoraSelic(valorTributo, taxasSelicMes = [], incluirMesPagamento = true) {
+  if (valorTributo <= 0) {
+    return {
+      baseLegal: 'Lei 9.430/1996, art. 61, §3º c/c art. 5º, §3º',
+      valorTributo: 0,
+      jurosMora: 0,
+      alerta: 'Valor do tributo deve ser positivo',
+    };
+  }
+
+  // Soma das taxas SELIC dos meses intermediários
+  const selicAcumulada = taxasSelicMes.reduce((acc, t) => acc + t, 0);
+
+  // 1% fixo no mês do pagamento
+  const jurosMesPagamento = incluirMesPagamento
+    ? ACRESCIMOS_MORATORIOS.JUROS_SELIC_MES_PAGAMENTO
+    : 0;
+
+  const taxaTotalJuros = selicAcumulada + jurosMesPagamento;
+  const jurosMora = Math.round(valorTributo * taxaTotalJuros * 100) / 100;
+
+  return {
+    baseLegal: 'Lei 9.430/1996, art. 61, §3º c/c art. 5º, §3º',
+    artigo61_paragrafo3: {
+      regra: 'Juros SELIC acumulada mensalmente + 1% no mês do pagamento',
+      inicio: '1º dia do mês subsequente ao vencimento',
+      fim: 'Último dia do mês anterior ao pagamento + 1% mês pagamento',
+    },
+    valorTributo: Math.round(valorTributo * 100) / 100,
+    mesesIntermediarios: taxasSelicMes.length,
+    selicAcumulada: Math.round(selicAcumulada * 10000) / 10000,
+    jurosMesPagamento: Math.round(jurosMesPagamento * 10000) / 10000,
+    taxaTotalJuros: Math.round(taxaTotalJuros * 10000) / 10000,
+    jurosMora,
+  };
+}
+
+/**
+ * Calcula o total de acréscimos moratórios (multa + juros) para pagamento espontâneo.
+ * Base Legal: Lei 9.430/96, Art. 61 (integral)
+ *
+ * @param {Object} dados
+ * @param {number} dados.valorTributo     - Valor original do tributo
+ * @param {number} dados.diasAtraso       - Dias de atraso
+ * @param {Array<number>} dados.taxasSelicMes - Taxas SELIC mensais intermediárias
+ * @returns {Object} Consolidação de multa + juros + total a pagar
+ */
+function calcularAcrescimosMoratorios(dados) {
+  const {
+    valorTributo = 0,
+    diasAtraso = 0,
+    taxasSelicMes = [],
+  } = dados;
+
+  const multa = calcularMultaMora(valorTributo, diasAtraso);
+  const juros = calcularJurosMoraSelic(valorTributo, taxasSelicMes, true);
+
+  const totalAcrescimos = multa.multaMora + juros.jurosMora;
+  const totalAPagar = valorTributo + totalAcrescimos;
+
+  return {
+    baseLegal: 'Lei 9.430/1996, art. 61 (multa mora + juros SELIC)',
+    valorOriginal: Math.round(valorTributo * 100) / 100,
+    multaMora: multa.multaMora,
+    jurosMora: juros.jurosMora,
+    totalAcrescimos: Math.round(totalAcrescimos * 100) / 100,
+    totalAPagar: Math.round(totalAPagar * 100) / 100,
+    detalhamento: {
+      multa,
+      juros,
+    },
+    alertas: [
+      ...(multa.alertas || []),
+      diasAtraso > 0
+        ? `Pagamento espontâneo: multa de mora de ${(multa.percentualAplicavel * 100).toFixed(2)}% + juros SELIC de ${(juros.taxaTotalJuros * 100).toFixed(2)}%`
+        : 'Tributo em dia — sem acréscimos moratórios',
+    ],
+  };
+}
+
+/**
+ * Calcula multa de lançamento de ofício.
+ * Base Legal: Lei 9.430/96, Art. 44 (redação Lei 14.689/2023)
+ *
+ * @param {Object} dados
+ * @param {number} dados.valorDiferenca          - Diferença de imposto ou contribuição
+ * @param {string} dados.tipoInfracao            - 'normal' | 'qualificada' | 'reincidente'
+ * @param {boolean} dados.estimativaIsolada       - Se é multa isolada sobre estimativa (Art. 44, II, b)
+ * @param {boolean} dados.naoAtendeuIntimacao     - Se houve agravamento por não atendimento (§2º)
+ * @param {boolean} dados.pagamento30Dias         - Se pagou em 30 dias da notificação
+ * @param {boolean} dados.pagamentoAntesRecurso   - Se pagou antes do recurso ao CARF
+ * @returns {Object} Detalhamento da multa de ofício
+ */
+function calcularMultaOficio(dados) {
+  const {
+    valorDiferenca = 0,
+    tipoInfracao = 'normal',
+    estimativaIsolada = false,
+    naoAtendeuIntimacao = false,
+    pagamento30Dias = false,
+    pagamentoAntesRecurso = false,
+  } = dados;
+
+  if (valorDiferenca <= 0) {
+    return {
+      baseLegal: 'Lei 9.430/1996, art. 44 (redação Lei 14.689/2023)',
+      valorDiferenca: 0,
+      multaOficio: 0,
+      alerta: 'Sem diferença de imposto — sem multa de ofício',
+    };
+  }
+
+  let percentualBase;
+  let fundamentoEspecifico;
+  const alertas = [];
+
+  if (estimativaIsolada) {
+    // Art. 44, II, b — 50% sobre estimativa não paga
+    percentualBase = ACRESCIMOS_MORATORIOS.MULTA_OFICIO.ISOLADA_ESTIMATIVA;
+    fundamentoEspecifico = 'Art. 44, II, b — Multa isolada de 50% sobre estimativa mensal não recolhida';
+    alertas.push('Multa isolada: aplica-se mesmo que haja prejuízo fiscal ou base negativa de CSLL no ano');
+  } else {
+    switch (tipoInfracao) {
+      case 'qualificada':
+        // Art. 44, §1º, VI — 100% (fraude/sonegação/conluio — Arts. 71-73 Lei 4.502/64)
+        percentualBase = ACRESCIMOS_MORATORIOS.MULTA_OFICIO.QUALIFICADA_100;
+        fundamentoEspecifico = 'Art. 44, §1º, VI — 100% por sonegação, fraude ou conluio (Arts. 71-73 Lei 4.502/1964)';
+        alertas.push('§1º-C: A qualificação não se aplica se não houver comprovação de dolo individualizado');
+        alertas.push('§1º-C, II: Sentença penal absolutória com mérito afasta a qualificação');
+        break;
+      case 'reincidente':
+        // Art. 44, §1º, VII — 150% (reincidência em 2 anos)
+        percentualBase = ACRESCIMOS_MORATORIOS.MULTA_OFICIO.QUALIFICADA_150;
+        fundamentoEspecifico = 'Art. 44, §1º, VII — 150% por reincidência em ação dolosa no prazo de 2 anos (§1º-A)';
+        alertas.push('§1º-A: Reincidência conta 2 anos a partir do ATO DE LANÇAMENTO anterior, não da decisão');
+        break;
+      default:
+        // Art. 44, I — 75%
+        percentualBase = ACRESCIMOS_MORATORIOS.MULTA_OFICIO.NORMAL;
+        fundamentoEspecifico = 'Art. 44, I — 75% sobre diferença de imposto/contribuição';
+    }
+  }
+
+  // §2º — Agravamento de 50% por não atender intimação
+  let percentualFinal = percentualBase;
+  if (naoAtendeuIntimacao) {
+    percentualFinal = percentualBase * ACRESCIMOS_MORATORIOS.FATOR_AGRAVAMENTO;
+    alertas.push(`§2º: Multa majorada em 50% por não atendimento de intimação — de ${(percentualBase * 100).toFixed(0)}% para ${(percentualFinal * 100).toFixed(0)}%`);
+  }
+
+  // §3º — Reduções (Art. 6º Lei 8.218/91 + Art. 60 Lei 8.383/91)
+  let reducao = 0;
+  let reducaoDescricao = 'Nenhuma redução aplicada';
+  if (pagamento30Dias) {
+    reducao = ACRESCIMOS_MORATORIOS.REDUCOES.PAGAMENTO_30_DIAS;
+    reducaoDescricao = 'Redução de 50% — pagamento em 30 dias da notificação (Art. 6º Lei 8.218/91)';
+  } else if (pagamentoAntesRecurso) {
+    reducao = ACRESCIMOS_MORATORIOS.REDUCOES.PAGAMENTO_COM_RECURSO;
+    reducaoDescricao = 'Redução de 30% — pagamento antes de recurso ao CARF (Art. 60 Lei 8.383/91)';
+  }
+
+  const multaBruta = Math.round(valorDiferenca * percentualFinal * 100) / 100;
+  const valorReducao = Math.round(multaBruta * reducao * 100) / 100;
+  const multaLiquida = Math.round((multaBruta - valorReducao) * 100) / 100;
+
+  return {
+    baseLegal: 'Lei 9.430/1996, art. 44 (redação Lei 14.689/2023)',
+    fundamentoEspecifico,
+    valorDiferenca: Math.round(valorDiferenca * 100) / 100,
+    tipoInfracao,
+    estimativaIsolada,
+    percentuais: {
+      base: percentualBase,
+      agravamento: naoAtendeuIntimacao ? ACRESCIMOS_MORATORIOS.FATOR_AGRAVAMENTO : 1.0,
+      final: percentualFinal,
+    },
+    multaBruta,
+    reducao: {
+      percentual: reducao,
+      descricao: reducaoDescricao,
+      valor: valorReducao,
+    },
+    multaLiquida,
+    totalDevido: Math.round((valorDiferenca + multaLiquida) * 100) / 100,
+    alertas,
+    regraReincidencia: {
+      artigo: '§1º-A do Art. 44',
+      prazo: '2 anos contados do ato de lançamento anterior',
+      condicao: 'Comprovação de nova ação dolosa (Arts. 71-73 Lei 4.502/1964)',
+    },
+  };
+}
+
+/**
+ * Verifica se há suspensão da multa de ofício por exigibilidade suspensa.
+ * Base Legal: Lei 9.430/96, Art. 63
+ *
+ * @param {Object} dados
+ * @param {boolean} dados.exigibilidadeSuspensa   - Se há medida suspensiva (liminar, tutela, etc.)
+ * @param {string}  dados.tipoSuspensao           - 'liminar' | 'tutela_antecipada' | 'deposito' | 'parcelamento' | 'reclamacao_recurso'
+ * @param {boolean} dados.suspensaoAntesFiscalizacao - Se a suspensão ocorreu ANTES do início da fiscalização
+ * @param {string}  dados.dataConcessaoMedida      - Data da concessão da medida (ISO string)
+ * @param {string}  dados.dataInicioFiscalizacao   - Data do início da fiscalização (ISO string)
+ * @returns {Object} Análise da suspensão de multa de ofício
+ */
+function verificarSuspensaoMultaOficio(dados) {
+  const {
+    exigibilidadeSuspensa = false,
+    tipoSuspensao = '',
+    suspensaoAntesFiscalizacao = false,
+    dataConcessaoMedida = null,
+    dataInicioFiscalizacao = null,
+  } = dados;
+
+  const fundamentoCTN = {
+    liminar: 'Art. 151, IV do CTN — Concessão de medida liminar em mandado de segurança',
+    tutela_antecipada: 'Art. 151, V do CTN — Concessão de tutela antecipada em outras ações',
+    deposito: 'Art. 151, II do CTN — Depósito do montante integral',
+    parcelamento: 'Art. 151, VI do CTN — Parcelamento',
+    reclamacao_recurso: 'Art. 151, III do CTN — Reclamações e recursos administrativos',
+  };
+
+  if (!exigibilidadeSuspensa) {
+    return {
+      baseLegal: 'Lei 9.430/1996, art. 63',
+      suspensaoMulta: false,
+      descricao: 'Sem suspensão de exigibilidade — multa de ofício aplicável normalmente',
+      alertas: [],
+    };
+  }
+
+  const alertas = [];
+  let suspensaoAplicavel = false;
+
+  // Art. 63, caput — Só se aplica a medidas dos incisos IV e V do Art. 151 do CTN
+  const tiposSuspensiveisArt63 = ['liminar', 'tutela_antecipada'];
+  const tipoAceitoArt63 = tiposSuspensiveisArt63.includes(tipoSuspensao);
+
+  if (tipoAceitoArt63) {
+    // §1º — Deve ter ocorrido ANTES do início do procedimento de ofício
+    if (suspensaoAntesFiscalizacao) {
+      suspensaoAplicavel = true;
+      alertas.push('Art. 63, §1º: Suspensão válida — medida judicial concedida ANTES do início da fiscalização');
+    } else {
+      suspensaoAplicavel = false;
+      alertas.push('Art. 63, §1º: Suspensão NÃO aplicável — medida judicial foi concedida APÓS o início da fiscalização');
+      alertas.push('A RFB constituirá o crédito para prevenir decadência, MAS aplicará multa de ofício');
+    }
+  } else {
+    // Depósito, parcelamento, etc. — Art. 63 não se aplica, mas exigibilidade segue suspensa pelo CTN
+    suspensaoAplicavel = false;
+    alertas.push(`Tipo de suspensão "${tipoSuspensao}" não gera dispensa de multa de ofício pelo Art. 63`);
+    alertas.push('A exigibilidade segue suspensa pelo Art. 151 do CTN, mas multa de ofício pode ser lançada');
+  }
+
+  // §2º — Liminar interrompe multa de mora (não multa de ofício)
+  const interrupcaoMultaMora = tipoAceitoArt63;
+
+  return {
+    baseLegal: 'Lei 9.430/1996, art. 63',
+    artigo63: {
+      caput: 'Na constituição de crédito para prevenir decadência, se exigibilidade suspensa por liminar/tutela (Art. 151, IV e V do CTN), NÃO cabe multa de ofício',
+      paragrafo1: 'Aplica-se APENAS se a suspensão ocorreu ANTES do início da fiscalização',
+      paragrafo2: 'A interposição de ação com liminar INTERROMPE a multa de mora desde a concessão até 30 dias após decisão desfavorável',
+    },
+    exigibilidadeSuspensa: true,
+    tipoSuspensao,
+    fundamentoCTN: fundamentoCTN[tipoSuspensao] || 'Tipo de suspensão não mapeado',
+    suspensaoAntesFiscalizacao,
+    suspensaoMultaOficio: suspensaoAplicavel,
+    interrupcaoMultaMora,
+    dataConcessaoMedida,
+    dataInicioFiscalizacao,
+    alertas,
+    recomendacoes: suspensaoAplicavel
+      ? ['Manter a medida judicial vigente impede a aplicação de multa de ofício',
+         'Monitorar prazo — se decisão final for desfavorável, multa de mora volta a correr após 30 dias']
+      : ['Avaliar possibilidade de obter liminar/tutela ANTES de eventual fiscalização',
+         'Art. 47: Pagamento espontâneo até 20 dias do termo de início de fiscalização com acréscimos de procedimento espontâneo'],
+  };
+}
+
+/**
+ * Calcula o prazo de pagamento espontâneo sob fiscalização.
+ * Base Legal: Lei 9.430/96, Art. 47 (redação Lei 9.532/97)
+ *
+ * @param {string} dataTermoInicio       - Data do recebimento do termo de início de fiscalização (ISO string)
+ * @param {number} tributoDeclarado      - Valor do tributo já declarado mas não pago
+ * @returns {Object} Prazo e condições para pagamento espontâneo
+ */
+function calcularPrazoEspontaneo(dataTermoInicio, tributoDeclarado = 0) {
+  const dataInicio = new Date(dataTermoInicio);
+  const dataLimite = new Date(dataInicio);
+  dataLimite.setDate(dataLimite.getDate() + 20);
+
+  // Ajustar para dia útil (simplificado — não cai em sábado/domingo)
+  while (dataLimite.getDay() === 0 || dataLimite.getDay() === 6) {
+    dataLimite.setDate(dataLimite.getDate() + 1);
+  }
+
+  return {
+    baseLegal: 'Lei 9.430/1996, art. 47 (redação Lei 9.532/1997)',
+    artigo47: 'Submetido a fiscalização, pode pagar tributos JÁ DECLARADOS até 20 dias do termo de início, com acréscimos de procedimento espontâneo (multa mora + juros, SEM multa de ofício)',
+    dataTermoInicio: dataTermoInicio,
+    prazoLimite: dataLimite.toISOString().slice(0, 10),
+    diasUteis: 20,
+    tributoDeclarado: Math.round(tributoDeclarado * 100) / 100,
+    condicoes: [
+      'Tributos e contribuições JÁ DECLARADOS como devidos (DCTF, SPED, etc.)',
+      'Pagamento com multa de mora (Art. 61) + juros SELIC — SEM multa de ofício',
+      'Aplica-se a impostos e contribuições federais administrados pela RFB',
+      'NÃO se aplica a tributos lançados de ofício (diferenças apuradas pela fiscalização)',
+    ],
+    alertas: tributoDeclarado > 0
+      ? [`Tributo declarado de R$ ${tributoDeclarado.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} — pagar até ${dataLimite.toISOString().slice(0, 10)} para evitar multa de ofício`]
+      : ['Informar valor dos tributos declarados e não pagos para cálculo dos acréscimos'],
+  };
+}
 
 
 // ============================================================================
-// EXEMPLOS DE USO
+// BLOCO I — COMPENSAÇÃO DE TRIBUTOS FEDERAIS — PER/DCOMP (Lei 9.430/96, Art. 73-74)
 // ============================================================================
+
+/**
+ * Constantes para compensação de tributos federais (PER/DCOMP)
+ */
+const COMPENSACAO_TRIBUTARIA = {
+  // Art. 73 — Restituição e ressarcimento
+  VERIFICACAO_PREVIA: 'Verificação de ausência de débitos perante a Fazenda Nacional antes de restituição/ressarcimento',
+
+  // Art. 74 — Compensação mediante declaração (DCOMP)
+  PRAZO_HOMOLOGACAO: 5,     // 5 anos para homologação (§5º)
+  PRAZO_PAGAMENTO_NAO_HOMOLOGADA: 30,  // 30 dias para pagar após ciência de não homologação (§7º)
+  MULTA_NAO_HOMOLOGADA: 0.50,          // 50% sobre débito indevidamente compensado (§17)
+
+  // Art. 74-A — Limite mensal para créditos judiciais (Lei 14.873/2024)
+  LIMITE_MINIMO_JUDICIAL: 10000000.00,  // R$ 10 milhões — abaixo disso não há limite mensal
+  FRACAO_MINIMA_MENSAL: 1 / 60,         // Mínimo 1/60 do crédito total por mês
+  PRAZO_PRIMEIRA_DCOMP: 5,              // 5 anos do trânsito em julgado (§2º)
+};
+
+/**
+ * Hipóteses em que a compensação NÃO é permitida.
+ * Base Legal: Lei 9.430/96, Art. 74, §3º
+ */
+const VEDACOES_COMPENSACAO = [
+  {
+    inciso: 'I',
+    descricao: 'Saldo a restituir da DIRPF',
+    artigo: 'Art. 74, §3º, I',
+  },
+  {
+    inciso: 'II',
+    descricao: 'Tributos e contribuições devidos no registro da Declaração de Importação',
+    artigo: 'Art. 74, §3º, II',
+  },
+  {
+    inciso: 'III',
+    descricao: 'Débitos já encaminhados à PGFN para inscrição em Dívida Ativa',
+    artigo: 'Art. 74, §3º, III',
+  },
+  {
+    inciso: 'IV',
+    descricao: 'Débito consolidado em qualquer parcelamento concedido pela RFB',
+    artigo: 'Art. 74, §3º, IV',
+  },
+  {
+    inciso: 'V',
+    descricao: 'Débito já objeto de compensação não homologada (mesmo pendente de decisão)',
+    artigo: 'Art. 74, §3º, V',
+  },
+  {
+    inciso: 'VI',
+    descricao: 'Crédito objeto de pedido de restituição/ressarcimento já indeferido (mesmo pendente)',
+    artigo: 'Art. 74, §3º, VI',
+  },
+  {
+    inciso: 'VII',
+    descricao: 'Crédito sob procedimento fiscal de confirmação de liquidez e certeza',
+    artigo: 'Art. 74, §3º, VII',
+  },
+  {
+    inciso: 'VIII',
+    descricao: 'Quotas de salário-família e salário-maternidade',
+    artigo: 'Art. 74, §3º, VIII',
+  },
+  {
+    inciso: 'IX',
+    descricao: 'Estimativa mensal de IRPJ e CSLL (Art. 2º Lei 9.430)',
+    artigo: 'Art. 74, §3º, IX (Lei 13.670/2018)',
+    impactoLucroReal: 'VEDADA a compensação cruzada para quitar estimativas mensais — deve pagar via DARF',
+  },
+  {
+    inciso: 'X',
+    descricao: 'Crédito judicial que superar o limite mensal do Art. 74-A',
+    artigo: 'Art. 74, §3º, X (Lei 14.873/2024)',
+  },
+];
+
+/**
+ * Hipóteses em que a compensação é considerada NÃO DECLARADA.
+ * Base Legal: Lei 9.430/96, Art. 74, §12
+ */
+const COMPENSACAO_NAO_DECLARADA = [
+  {
+    inciso: '§12, I',
+    descricao: 'Compensação enquadrada em qualquer vedação do §3º',
+  },
+  {
+    inciso: '§12, II, a',
+    descricao: 'Crédito de terceiros',
+  },
+  {
+    inciso: '§12, II, b',
+    descricao: 'Crédito-prêmio de exportação (DL 491/69)',
+  },
+  {
+    inciso: '§12, II, c',
+    descricao: 'Crédito referente a título público',
+  },
+  {
+    inciso: '§12, II, d',
+    descricao: 'Crédito de decisão judicial NÃO transitada em julgado',
+  },
+  {
+    inciso: '§12, II, e',
+    descricao: 'Crédito não referente a tributos administrados pela RFB',
+  },
+  {
+    inciso: '§12, II, f',
+    descricao: 'Crédito fundado em alegação de inconstitucionalidade (salvo exceções STF)',
+    excecoes: [
+      'ADI julgada procedente pelo STF',
+      'Execução suspensa pelo Senado',
+      'Sentença transitada em julgado favorável',
+      'Súmula vinculante do STF',
+    ],
+  },
+  {
+    inciso: '§12, II, g',
+    descricao: 'Crédito de pagamento indevido com DARF inexistente (Lei 15.265/2025)',
+  },
+  {
+    inciso: '§12, II, h',
+    descricao: 'Crédito de PIS/COFINS não-cumulativo sem relação com atividades econômicas do sujeito passivo (Lei 15.265/2025)',
+  },
+];
+
+/**
+ * Analisa a viabilidade de compensação tributária via PER/DCOMP.
+ * Base Legal: Lei 9.430/96, Arts. 73, 74 e 74-A
+ *
+ * @param {Object} dados
+ * @param {number} dados.creditoApurado         - Valor do crédito apurado (restituição/ressarcimento)
+ * @param {string} dados.origemCredito           - 'pagamento_indevido' | 'saldo_negativo' | 'retencao_fonte' |
+ *                                                  'pis_cofins_nao_cumulativo' | 'judicial' | 'outro'
+ * @param {number} dados.debitoCompensar         - Valor do débito que se pretende compensar
+ * @param {string} dados.especieDebito           - 'irpj' | 'csll' | 'pis' | 'cofins' | 'ipi' | 'estimativa' | 'divida_ativa' | 'outro'
+ * @param {boolean} dados.debitoParcelado        - Se o débito está parcelado
+ * @param {boolean} dados.debitoInscritoDividaAtiva - Se o débito foi inscrito em Dívida Ativa
+ * @param {boolean} dados.creditoJudicial        - Se o crédito decorre de decisão judicial
+ * @param {boolean} dados.transitoEmJulgado      - Se a decisão judicial transitou em julgado
+ * @param {number} dados.valorTotalCreditoJudicial - Valor total do crédito judicial (para Art. 74-A)
+ * @returns {Object} Análise completa da compensação
+ */
+function analisarCompensacaoPERDCOMP(dados) {
+  const {
+    creditoApurado = 0,
+    origemCredito = '',
+    debitoCompensar = 0,
+    especieDebito = '',
+    debitoParcelado = false,
+    debitoInscritoDividaAtiva = false,
+    creditoJudicial = false,
+    transitoEmJulgado = false,
+    valorTotalCreditoJudicial = 0,
+  } = dados;
+
+  const vedacoesIdentificadas = [];
+  const alertas = [];
+  let compensacaoViavel = true;
+
+  // 1. Verificar vedações do §3º
+  if (especieDebito === 'estimativa') {
+    vedacoesIdentificadas.push(VEDACOES_COMPENSACAO[8]); // inciso IX
+    compensacaoViavel = false;
+    alertas.push('VEDADA: Estimativas mensais de IRPJ/CSLL NÃO podem ser compensadas via DCOMP (Lei 13.670/2018)');
+    alertas.push('Estimativas devem ser pagas exclusivamente por DARF ou suspensas com balanço/balancete mensal');
+  }
+
+  if (debitoInscritoDividaAtiva) {
+    vedacoesIdentificadas.push(VEDACOES_COMPENSACAO[2]); // inciso III
+    compensacaoViavel = false;
+    alertas.push('VEDADA: Débito inscrito em Dívida Ativa — compensação não permitida');
+  }
+
+  if (debitoParcelado) {
+    vedacoesIdentificadas.push(VEDACOES_COMPENSACAO[3]); // inciso IV
+    compensacaoViavel = false;
+    alertas.push('VEDADA: Débito consolidado em parcelamento — compensação não permitida');
+  }
+
+  // 2. Verificar crédito judicial
+  if (creditoJudicial && !transitoEmJulgado) {
+    compensacaoViavel = false;
+    alertas.push('COMPENSAÇÃO NÃO DECLARADA: Crédito judicial sem trânsito em julgado (§12, II, d)');
+  }
+
+  // 3. Art. 74-A — Limite mensal para créditos judiciais acima de R$ 10 milhões
+  let limitesMensais = null;
+  if (creditoJudicial && transitoEmJulgado && valorTotalCreditoJudicial >= COMPENSACAO_TRIBUTARIA.LIMITE_MINIMO_JUDICIAL) {
+    const limiteMensal = Math.round(valorTotalCreditoJudicial * COMPENSACAO_TRIBUTARIA.FRACAO_MINIMA_MENSAL * 100) / 100;
+    const mesesParaCompensar = Math.ceil(valorTotalCreditoJudicial / limiteMensal);
+
+    limitesMensais = {
+      baseLegal: 'Lei 9.430/1996, art. 74-A (Lei 14.873/2024)',
+      valorTotalCredito: valorTotalCreditoJudicial,
+      limiteMinimoMensal: limiteMensal,
+      nota: 'Limite efetivo será o maior entre 1/60 e o valor fixado por ato do Ministro da Fazenda',
+      mesesEstimados: mesesParaCompensar,
+      prazoMaximoPrimeiraDCOMP: `${COMPENSACAO_TRIBUTARIA.PRAZO_PRIMEIRA_DCOMP} anos do trânsito em julgado`,
+    };
+
+    alertas.push(`Art. 74-A: Crédito judicial de R$ ${valorTotalCreditoJudicial.toLocaleString('pt-BR')} — limite mensal mínimo de R$ ${limiteMensal.toLocaleString('pt-BR')} (1/60 avos)`);
+    alertas.push(`Compensação integral em aproximadamente ${mesesParaCompensar} meses`);
+  }
+
+  // 4. Calcular efeito da compensação
+  const valorEfetivoCompensacao = compensacaoViavel
+    ? Math.min(creditoApurado, debitoCompensar)
+    : 0;
+  const saldoCreditoRemanescente = compensacaoViavel
+    ? Math.max(0, creditoApurado - debitoCompensar)
+    : creditoApurado;
+  const saldoDebitoRemanescente = compensacaoViavel
+    ? Math.max(0, debitoCompensar - creditoApurado)
+    : debitoCompensar;
+
+  // 5. Risco de multa por não homologação
+  const riscoMulta = {
+    baseLegal: 'Art. 74, §17',
+    percentual: COMPENSACAO_TRIBUTARIA.MULTA_NAO_HOMOLOGADA,
+    valorPotencial: Math.round(valorEfetivoCompensacao * COMPENSACAO_TRIBUTARIA.MULTA_NAO_HOMOLOGADA * 100) / 100,
+    excecao: 'Multa de 50% — salvo nos casos de falsidade (que enseja penalidade maior)',
+    defesa: 'Manifestação de inconformidade (§9º) suspende exigibilidade da multa (§18)',
+  };
+
+  return {
+    baseLegal: 'Lei 9.430/1996, arts. 73, 74 e 74-A',
+    resumo: {
+      compensacaoViavel,
+      creditoApurado: Math.round(creditoApurado * 100) / 100,
+      debitoCompensar: Math.round(debitoCompensar * 100) / 100,
+      valorCompensado: Math.round(valorEfetivoCompensacao * 100) / 100,
+      saldoCreditoRemanescente: Math.round(saldoCreditoRemanescente * 100) / 100,
+      saldoDebitoRemanescente: Math.round(saldoDebitoRemanescente * 100) / 100,
+    },
+    mecanismo: {
+      artigo74_paragrafo1: 'Compensação efetuada mediante DCOMP (Declaração de Compensação)',
+      artigo74_paragrafo2: 'A declaração extingue o crédito tributário sob condição resolutória de homologação',
+      artigo74_paragrafo5: `Prazo de homologação: ${COMPENSACAO_TRIBUTARIA.PRAZO_HOMOLOGACAO} anos da entrega da DCOMP`,
+      artigo74_paragrafo6: 'DCOMP constitui confissão de dívida — instrumento hábil para exigência dos débitos',
+    },
+    vedacoesIdentificadas,
+    limitesMensaisJudiciais: limitesMensais,
+    riscoMulta,
+    fluxoPosNaoHomologacao: {
+      passo1: '§7º: Cientificação + intimação para pagar em 30 dias',
+      passo2: '§8º: Se não pagar, encaminhamento para Dívida Ativa (PGFN)',
+      alternativa: '§9º: Manifestação de inconformidade dentro dos 30 dias',
+      recurso: '§10: Recurso ao CARF contra decisão desfavorável da manifestação',
+      efeito: '§11: Manifestação e recurso suspendem exigibilidade do débito (Art. 151, III do CTN)',
+    },
+    artigo73: {
+      regra: 'Restituição/ressarcimento só após verificação de ausência de débitos perante a Fazenda Nacional',
+      compensacaoAutomatica: 'Se houver débitos não parcelados (inclusive Dívida Ativa), créditos são utilizados para quitação',
+    },
+    impactoLucroReal: {
+      estimativas: 'Art. 74, §3º, IX — VEDADA compensação para quitar estimativas mensais IRPJ/CSLL',
+      saldoNegativo: 'Art. 6º, §1º, II — Saldo negativo de IRPJ pode ser restituído ou compensado via Art. 74',
+      retencoes: 'IRRF/CSRF retidos na fonte podem compor saldo negativo e ser compensados',
+      prejuizoFiscal: 'Prejuízo fiscal NÃO gera crédito para PER/DCOMP — só compensa com lucro real futuro (trava 30%)',
+    },
+    alertas,
+    recomendacoes: compensacaoViavel
+      ? ['Protocolar DCOMP no e-CAC da RFB',
+         'Manter documentação suporte do crédito por 5 anos após a DCOMP',
+         'Monitorar homologação tácita — se 5 anos sem manifestação da RFB, compensação homologada']
+      : ['Verificar alternativa de pagamento via DARF com acréscimos moratórios',
+         'Avaliar parcelamento ordinário (até 60 meses) para débitos não compensáveis',
+         'Para saldo negativo: formalizar PER (Pedido Eletrônico de Restituição) via e-CAC'],
+  };
+}
+
+/**
+ * Simula o fluxo de caixa da compensação de créditos judiciais com limite mensal.
+ * Base Legal: Lei 9.430/96, Art. 74-A (Lei 14.873/2024)
+ *
+ * @param {Object} dados
+ * @param {number} dados.valorTotalCredito    - Valor total do crédito judicial transitado em julgado
+ * @param {number} dados.limiteMensal          - Limite mensal estabelecido (se 0, calcula o mínimo de 1/60)
+ * @param {Array<Object>} dados.debitosMensais - Array com débitos mensais previstos [{mes, irpj, csll, pis, cofins}]
+ * @returns {Object} Simulação mês a mês do uso do crédito
+ */
+function simularCompensacaoJudicial(dados) {
+  const {
+    valorTotalCredito = 0,
+    limiteMensal = 0,
+    debitosMensais = [],
+  } = dados;
+
+  if (valorTotalCredito < COMPENSACAO_TRIBUTARIA.LIMITE_MINIMO_JUDICIAL) {
+    return {
+      baseLegal: 'Lei 9.430/1996, art. 74-A (Lei 14.873/2024)',
+      aplicavel: false,
+      motivo: `Crédito de R$ ${valorTotalCredito.toLocaleString('pt-BR')} é inferior a R$ 10 milhões — sem limite mensal`,
+      recomendacao: 'Compensar integralmente sem restrição de limite mensal',
+    };
+  }
+
+  const limiteEfetivo = limiteMensal > 0
+    ? limiteMensal
+    : Math.round(valorTotalCredito * COMPENSACAO_TRIBUTARIA.FRACAO_MINIMA_MENSAL * 100) / 100;
+
+  let saldoCredito = valorTotalCredito;
+  const cronograma = [];
+
+  for (let i = 0; i < debitosMensais.length && saldoCredito > 0; i++) {
+    const mes = debitosMensais[i];
+    const totalDebitoMes = (mes.irpj || 0) + (mes.csll || 0) + (mes.pis || 0) + (mes.cofins || 0);
+
+    // Não pode compensar mais que o limite mensal E não mais que o débito disponível
+    const compensacaoMes = Math.min(limiteEfetivo, totalDebitoMes, saldoCredito);
+    const pagarDARF = Math.max(0, totalDebitoMes - compensacaoMes);
+
+    saldoCredito = Math.round((saldoCredito - compensacaoMes) * 100) / 100;
+
+    cronograma.push({
+      mes: mes.mes || `Mês ${i + 1}`,
+      totalDebito: Math.round(totalDebitoMes * 100) / 100,
+      compensado: Math.round(compensacaoMes * 100) / 100,
+      pagarDARF: Math.round(pagarDARF * 100) / 100,
+      saldoCreditoRestante: saldoCredito,
+    });
+  }
+
+  const totalCompensado = cronograma.reduce((s, m) => s + m.compensado, 0);
+  const totalDARF = cronograma.reduce((s, m) => s + m.pagarDARF, 0);
+
+  return {
+    baseLegal: 'Lei 9.430/1996, art. 74-A (Lei 14.873/2024)',
+    aplicavel: true,
+    parametros: {
+      valorTotalCredito,
+      limiteEfetivo,
+      mesesSimulados: debitosMensais.length,
+    },
+    cronograma,
+    totais: {
+      totalCompensado: Math.round(totalCompensado * 100) / 100,
+      totalPagoDARF: Math.round(totalDARF * 100) / 100,
+      saldoCreditoFinal: saldoCredito,
+    },
+    estimativaMesesParaEsgotar: saldoCredito > 0
+      ? `Crédito não esgotado nos ${debitosMensais.length} meses simulados — saldo de R$ ${saldoCredito.toLocaleString('pt-BR')}`
+      : `Crédito esgotado em ${cronograma.length} meses`,
+  };
+}
 
 
 // ============================================================================
 // EXPORTS — MÓDULO UNIFICADO v4.6
 // ============================================================================
 
-module.exports = {
+const _motorExports = {
   // --- Constantes e Tabelas ---
+  ACRESCIMOS_MORATORIOS,
   ADICOES,
   ALIQUOTAS,
   AREA_SUDAM,
@@ -9159,6 +9908,8 @@ module.exports = {
   ATIVIDADE_RURAL,
   BASE_NEGATIVA_CSLL,
   COMPENSACAO_GERAL,
+  COMPENSACAO_NAO_DECLARADA,
+  COMPENSACAO_TRIBUTARIA,
   CONSTANTES,
   CSRF,
   DEPRECIACAO,
@@ -9207,8 +9958,10 @@ module.exports = {
   VALOR_JUSTO,
   VARIACAO_CAMBIAL,
   VEDACOES,
+  VEDACOES_COMPENSACAO,
 
   // --- Funções de Cálculo ---
+  analisarCompensacaoPERDCOMP,
   analisarDedutibilidade,
   analisarEncargosFinanceirosVencidos,
   analisarImpactoLei12973,
@@ -9218,6 +9971,7 @@ module.exports = {
   arvoreDecisaoOtimizacao,
   avaliarEstoqueSemCustoIntegrado,
   calcularAmortizacao,
+  calcularAcrescimosMoratorios,
   calcularAmortizacaoGoodwill,
   calcularCSLL,
   calcularCSRF,
@@ -9237,14 +9991,18 @@ module.exports = {
   calcularIncentivos,
   calcularJCP,
   calcularJCPLei12973,
+  calcularJurosMoraSelic,
   calcularLimiteDoacoes,
   calcularLimitePrevidenciaComplementar,
   calcularLimiteRoyaltiesAssistencia,
   calcularLucroExploracao,
   calcularLucroRealAjustado,
   calcularLucrosExterior,
+  calcularMultaMora,
+  calcularMultaOficio,
   calcularPDD,
   calcularPISCOFINSNaoCumulativo,
+  calcularPrazoEspontaneo,
   calcularProporcaoIncentivada,
   calcularProvisoesTrabalhistas,
   calcularReceitaBrutaLei12973,
@@ -9270,6 +10028,7 @@ module.exports = {
   registrarPrejuizoParteB,
   registrarUtilizacaoParteB,
   simularCompensacaoPluranual,
+  simularCompensacaoJudicial,
   simularIncentivosRegionais,
   simularLucroRealCompleto,
   simularRegimeCambial,
@@ -9279,5 +10038,25 @@ module.exports = {
   verificarObrigatoriedadeLucroReal,
   verificarOmissaoReceita,
   verificarSubcapitalizacao,
+  verificarSuspensaoMultaOficio,
   verificarVedacoes,
 };
+
+// ============================================================================
+// DETECÇÃO DE AMBIENTE — Browser + Node.js
+// ============================================================================
+
+// Browser: expor como window.MotorLR
+if (typeof window !== 'undefined') {
+  window.MotorLR = _motorExports;
+}
+
+// Node.js / CommonJS
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = _motorExports;
+}
+
+// AMD
+if (typeof define === 'function' && define.amd) {
+  define(function() { return _motorExports; });
+}
