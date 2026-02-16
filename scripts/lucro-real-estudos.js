@@ -1244,9 +1244,6 @@
     h += _field("despesasBrindes", "Despesas com brindes", "money", {
       tip: "100% indedutível (Art. 13, VII Lei 9.249)",
     });
-    h += _field("multas", "Multas por infrações fiscais (punitivas)", "money", {
-      tip: "Indedutíveis (Art. 311, §5º). Multas compensatórias são dedutíveis.",
-    });
     h += _field("jurosVinculadasExterior", "Juros pagos a pessoa vinculada no exterior", "money", {
       tip: "Sujeito a regras de subcapitalização (Art. 249-251)",
     });
@@ -2433,10 +2430,8 @@
     var recTrib = Math.max(rb - isentas, 0);
     var pisCofDeb = _r(recTrib * 0.0925);
     var dep = _calcDepNormal();
-    var turnos = parseInt(d.turnosOperacao) || 1;
-    var multT = turnos === 3 ? 2.0 : turnos === 2 ? 1.5 : 1.0;
     var recFin = _n(d.receitaFinanceiras) + _n(d.receitasFinanceirasEspeciais);
-    return _r(rb - pisCofDeb - _calcTotalCustos() - _calcTotalDespesas() - _r(dep * multT) + recFin);
+    return _r(rb - pisCofDeb - _calcTotalCustos() - _calcTotalDespesas() - dep + recFin);
   }
 
   function _calcLucroAjustado() {
@@ -2599,6 +2594,8 @@
     var turnos = parseInt(d.turnosOperacao) || 1;
     var multTurnos = turnos === 3 ? 2.0 : turnos === 2 ? 1.5 : 1.0;
     var depAcelerada = _r(depAnual * multTurnos);
+    var depNormalDRE = depAnual;
+    var diferencaAcelerada = _r(depAcelerada - depAnual);
     var receitaFinanceiras = _n(d.receitaFinanceiras) + _n(d.receitasFinanceirasEspeciais);
     var receitaServicos = _n(d.receitaServicos) || (d.tipoAtividade && d.tipoAtividade.indexOf("SERVICO") >= 0 ? receitaBruta : 0);
     var receitaComercio = _n(d.receitaComercio) || (d.tipoAtividade === "COMERCIO_INDUSTRIA" ? receitaBruta : 0);
@@ -2618,7 +2615,7 @@
 
     var receitaLiquida = _r(receitaBruta - pisCofinsDebitosDRE);
     var lucroBruto = _r(receitaLiquida - custosTotais);
-    var lucroLiquido = _r(lucroBruto - despesasTotais - depAcelerada + receitaFinanceiras);
+    var lucroLiquido = _r(lucroBruto - despesasTotais - depNormalDRE + receitaFinanceiras);
     var margemLucro = receitaBruta > 0 ? _r(lucroLiquido / receitaBruta * 100) : 0;
 
     var dre = {
@@ -2635,7 +2632,7 @@
       cmv: _n(d.cmv),
       servicosTerceiros: _n(d.servicosTerceiros),
       despesasTotais: despesasTotais,
-      depreciacao: depAcelerada,
+      depreciacao: depNormalDRE,
       lucroBruto: lucroBruto,
       lucroLiquido: lucroLiquido,
       margemLucro: margemLucro
@@ -2738,6 +2735,15 @@
       lalur.lucroAjustado = lucroAjustado;
     }
 
+    // Depreciação acelerada por turnos: diferença é exclusão fiscal no LALUR
+    if (diferencaAcelerada > 0) {
+      exclusoesDetalhe.push({ desc: "Depreciação acelerada por turnos (exclusão LALUR)", valor: diferencaAcelerada, artigo: "Art. 323", tipo: "T" });
+      totalExclusoes = _r(totalExclusoes + diferencaAcelerada);
+      lucroAjustado = _r(lucroLiquido + totalAdicoes - totalExclusoes);
+      lalur.totalExclusoes = totalExclusoes;
+      lalur.lucroAjustado = lucroAjustado;
+    }
+
     // ═══════════════════════════════════════════════════════════════════════
     //  PASSO 3B — Despesas Indedutíveis Automáticas
     // ═══════════════════════════════════════════════════════════════════════
@@ -2747,9 +2753,9 @@
       despesasIndedutivelDetalhe.push({ desc: "Brindes", valor: _n(d.despesasBrindes), artigo: "Art. 13, VII Lei 9.249" });
       totalIndedutivelAuto += _n(d.despesasBrindes);
     }
-    if (_n(d.multas) > 0) {
-      despesasIndedutivelDetalhe.push({ desc: "Multas punitivas", valor: _n(d.multas), artigo: "Art. 311, §5º" });
-      totalIndedutivelAuto += _n(d.multas);
+    if (_n(d.multasPunitivas) > 0) {
+      despesasIndedutivelDetalhe.push({ desc: "Multas punitivas", valor: _n(d.multasPunitivas), artigo: "Art. 311, §5º" });
+      totalIndedutivelAuto += _n(d.multasPunitivas);
     }
     if (_n(d.provisoesContingencias) > 0) {
       despesasIndedutivelDetalhe.push({ desc: "Provisões para contingências", valor: _n(d.provisoesContingencias), artigo: "Art. 340" });
@@ -3333,7 +3339,7 @@
     var economiaGratificacao = _n(d.gratificacoesAdm) > 0 ? _r(_n(d.gratificacoesAdm) * 0.34) : 0;
     var economiaCPRBFinal = cprbResult ? cprbResult.economia : 0;
     var totalPDDEcon = _r((_n(d.perdasCreditos6Meses) + _n(d.perdasCreditosJudicial) + _n(d.perdasCreditosFalencia)) * 0.34);
-    var totalEconomias = _r(economiaJCP + economiaSUDAM + economiaIncentivos + economiaDepreciacao + economiaPisCofins + economiaCPRBFinal + totalPDDEcon);
+    var totalEconomias = _r(economiaJCP + economiaPrejuizo + economiaSUDAM + economiaIncentivos + economiaDepreciacao + economiaPisCofins + economiaCPRBFinal + totalPDDEcon);
     if (_n(d.gratificacoesAdm) > 0) totalEconomias += economiaGratificacao;
 
     // Carga tributária bruta e otimizada (PIS/COFINS líquido de retenções)
@@ -3677,7 +3683,9 @@
         cargaOtimizada: cargaOtimizada,
         aliquotaOtimizada: aliquotaOtimizada,
         totalRetencoes: totalRetencoes,
-        saldoEfetivo: saldoEfetivo
+        saldoEfetivo: saldoEfetivo,
+        issAnual: issAnual,
+        desembolsoTotal: _r(saldoEfetivo + issAnual)
       },
 
       // Seção 3: DRE + LALUR
@@ -5219,9 +5227,15 @@
       '</div>';
     // Card 6 — Saldo efetivo
     s2 += '<div class="res-summary-card">' +
-      '<div class="res-card-label">SALDO EFETIVO A PAGAR</div>' +
+      '<div class="res-card-label">SALDO FEDERAL A PAGAR</div>' +
       '<div class="res-card-value ' + (res.saldoEfetivo < 0 ? 'res-card-economia' : '') + '">' + _m(res.saldoEfetivo) + '</div>' +
-      '<div class="res-card-sub">' + (res.saldoEfetivo < 0 ? 'Saldo negativo — PER/DCOMP' : 'Após todas as compensações') + '</div>' +
+      '<div class="res-card-sub">' + (res.saldoEfetivo < 0 ? 'Saldo negativo — PER/DCOMP' : 'Federal — sem ISS de ' + _m(res.issAnual || 0)) + '</div>' +
+      '</div>';
+    // Card 7 — Desembolso Total (Federal + ISS)
+    s2 += '<div class="res-summary-card">' +
+      '<div class="res-card-label">DESEMBOLSO TOTAL (FED + ISS)</div>' +
+      '<div class="res-card-value">' + _m(res.desembolsoTotal) + '</div>' +
+      '<div class="res-card-sub">Inclui ISS municipal de ' + _m(res.issAnual || 0) + '</div>' +
       '</div>';
     s2 += '</div>';
     html += _secao(2, 'Painel Resumo Executivo', s2);
