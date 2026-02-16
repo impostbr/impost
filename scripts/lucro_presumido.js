@@ -72,7 +72,7 @@
  *   - Fix: PDF ISS normaliza alíquota (aceita tanto decimal 0.03 quanto inteiro 3)
  *   - Fix: Calendário PDF indica qual trimestre referencia cada vencimento IRPJ
  *   - Melhoria: Nota sobre lucro distribuível trimestral parcial (sem PIS/COFINS)
- *   - Confirmado: ESC CSLL 38,4% correto conforme LC 167/2019, Art. 12
+ *   - Fix: ESC CSLL corrigida de 38,4% para 32% — LC 167/2019 altera apenas IRPJ, não CSLL
  *
  * Base Legal:
  *   - Decreto 9.580/2018 (RIR/2018) — Arts. 587 a 601
@@ -518,7 +518,7 @@ const PERCENTUAIS_PRESUNCAO_IRPJ = [
     percentual: 0.32,
     irpjMajorado: 0.352,
     baseLegal: 'Lei 9.249/95, Art. 15, §1º, III, a',
-    cnaes: ['71.19-7', '71.12-0', '62.01-5', '69.20-6', '70.20-4', '73.11-4'],
+    cnaes: ['71.19-7', '71.12-0', '62.01-5', '62.04-0', '69.20-6', '70.20-4', '73.11-4'],
     observacoes: 'Inclui consultoria, engenharia, TI, contabilidade, advocacia e demais serviços profissionais.'
   },
   {
@@ -690,9 +690,9 @@ const PERCENTUAIS_PRESUNCAO_CSLL = [
   {
     id: 'esc',
     descricao: 'Empresa Simples de Crédito (ESC)',
-    percentual: 0.384,
-    csllMajorada: 0.4224,
-    baseLegal: 'Lei Complementar 167/2019, Art. 12 (altera Art. 20, II da Lei 9.249/95)'
+    percentual: 0.32,
+    csllMajorada: 0.352,
+    baseLegal: 'Lei 9.249/95, Art. 20, I — CSLL segue regra geral de serviços (32%). LC 167/2019 majorou apenas o IRPJ (Art. 15, §1º, IV).'
   }
 ];
 
@@ -1521,14 +1521,15 @@ function calcularAnualConsolidado(params) {
     : 0;
 
   // ── Distribuição de Lucros Isentos ──
-  // IN RFB 1.700/2017, Art. 238: "diminuída de TODOS os impostos e contribuições"
-  // tributosFederais já inclui IRPJ + CSLL + PIS + COFINS
+  // Art. 725 RIR/2018: lucro isento = base presumida − IRPJ − CSLL (PIS/COFINS NÃO entram)
+  // tributosDistribuicao = somente IRPJ + CSLL
   const basePresumidaAnual = resultadosTrimestres.reduce((s, t) => s + t.baseCalculoIRPJ, 0);
-  const lucroDistribuivelPresumido = _arredondar(Math.max(0, basePresumidaAnual - tributosFederais));
+  const tributosDistribuicao = _arredondar(totalIRPJ + totalCSLL);
+  const lucroDistribuivelPresumido = _arredondar(Math.max(0, basePresumidaAnual - tributosDistribuicao));
 
   let lucroDistribuivelContabil = null;
   if (lucroContabilEfetivo !== null) {
-    lucroDistribuivelContabil = _arredondar(Math.max(0, lucroContabilEfetivo - tributosFederais));
+    lucroDistribuivelContabil = _arredondar(Math.max(0, lucroContabilEfetivo - tributosDistribuicao));
   }
 
   const lucroDistribuivel = lucroDistribuivelContabil !== null
@@ -1582,13 +1583,13 @@ function calcularAnualConsolidado(params) {
     distribuicaoLucros: {
       basePresumidaAnual: _arredondar(basePresumidaAnual),
       lucroContabilEfetivo,
-      tributosFederais,
+      tributosDescontados: tributosDistribuicao,
       lucroDistribuivelPresumido,
       lucroDistribuivelContabil,
       lucroDistribuivelFinal: lucroDistribuivel,
       tipoBase: lucroDistribuivelContabil !== null ? 'Contábil (escrituração completa)' : 'Presumido',
       porSocio: distribuicaoPorSocio,
-      baseLegal: 'IN RFB 1.700/2017, Art. 238; RIR/2018, Art. 725 — Lucros isentos diminuídos de TODOS os impostos e contribuições (IRPJ+CSLL+PIS+COFINS).'
+      baseLegal: 'IN RFB 1.700/2017, Art. 238; RIR/2018, Art. 725 — Lucros distribuídos com isenção: base presumida diminuída de IRPJ e CSLL devidos.'
     },
 
     // LC 224/2025 — Resumo anual do impacto
@@ -3334,13 +3335,13 @@ function _pdfDistribuicao(doc, anual) {
 
   const linhasCalc = [
     ['Base presumida anual:', _pdfFmtMoeda(dist.basePresumidaAnual)],
-    ['(-) Tributos federais:', _pdfFmtMoeda(dist.tributosFederais)],
+    ['(-) IRPJ + CSLL:', _pdfFmtMoeda(dist.tributosDescontados)],
     ['(=) Lucro distribuivel (presumido):', _pdfFmtMoeda(dist.lucroDistribuivelPresumido)]
   ];
 
   if (dist.lucroDistribuivelContabil !== null && dist.lucroDistribuivelContabil !== undefined) {
     linhasCalc.push(['Lucro contabil efetivo:', _pdfFmtMoeda(dist.lucroContabilEfetivo)]);
-    linhasCalc.push(['(-) Tributos federais:', _pdfFmtMoeda(dist.tributosFederais)]);
+    linhasCalc.push(['(-) IRPJ + CSLL:', _pdfFmtMoeda(dist.tributosDescontados)]);
     linhasCalc.push(['(=) Lucro distribuivel (contabil):', _pdfFmtMoeda(dist.lucroDistribuivelContabil)]);
   }
 
