@@ -1,9 +1,26 @@
 /**
  * ╔══════════════════════════════════════════════════════════════════════════════╗
- * ║  LUCRO REAL — MAPEAMENTO UNIFICADO DE DADOS  v1.0                         ║
+ * ║  LUCRO REAL — MAPEAMENTO UNIFICADO DE DADOS  v2.0 (CORRIGIDO)            ║
  * ║  Fonte única de verdade para alimentar qualquer HTML ou JS                 ║
  * ║  Base Legal: RIR/2018 (Decreto 9.580/2018) + Lei 12.973/2014              ║
  * ║  Ano-Base: 2026                                                           ║
+ * ╠══════════════════════════════════════════════════════════════════════════════╣
+ * ║  CORREÇÕES v2.0:                                                          ║
+ * ║  1. pisCofins() — aceita campos individuais de créditos E baseCreditos     ║
+ * ║  2. compensarIntegrado() — portado do motor v4.6                          ║
+ * ║  3. compensarRetencoes() — portado do motor v4.6                          ║
+ * ║  4. saldoNegativo() — portado do motor v4.6                               ║
+ * ║  5. depreciacaoCompleta() — portado do motor v4.6                         ║
+ * ║  6. incentivos() — portado do motor v4.6                                  ║
+ * ║  7. estimativaMensal() — corrigida assinatura (aceita objeto)             ║
+ * ║  8. suspensaoReducao() — adicionada                                       ║
+ * ║  9. acrescimosMoratorios() — adicionada                                   ║
+ * ║ 10. multaOficio() — adicionada                                            ║
+ * ║ 11. compensacaoPERDCOMP() — adicionada                                    ║
+ * ║ 12. compensacaoJudicial() — adicionada                                    ║
+ * ║ 13. recomendarRegime() — adicionada                                       ║
+ * ║ 14. receitaBrutaCalc() — adicionada                                       ║
+ * ║ 15. LR.calcular.avancado — sub-objeto com funções avançadas               ║
  * ╚══════════════════════════════════════════════════════════════════════════════╝
  *
  * USO:
@@ -711,7 +728,7 @@
 
   LR.estrategiasEconomia = [
     { id: 1, nome: 'JCP — Juros sobre Capital Próprio', tipo: 'Dedução', complexidade: 'Baixa', risco: 'Baixo', impacto: '19% líquido do JCP pago', artigo: 'Art. 355-358' },
-    { id: 2, nome: 'Compensação de Prejuízos Fiscais', tipo: 'Dedução', complexidade: 'Baixa', risco: 'Baixo', impacto: 'Até 30% do lucro ajustado', artigo: 'Art. 261, III' },
+    { id: 2, nome: 'Compensação de Prejuízos Fiscais', tipo: 'Compensação', complexidade: 'Baixa', risco: 'Baixo', impacto: 'Até 30% do lucro ajustado', artigo: 'Art. 580-590' },
     { id: 3, nome: 'Incentivos Fiscais (PAT, FIA, Rouanet)', tipo: 'Dedução IRPJ', complexidade: 'Média', risco: 'Baixo', impacto: '~10% do IRPJ normal', artigo: 'Art. 226/228' },
     { id: 4, nome: 'Balanço de Suspensão/Redução', tipo: 'Timing', complexidade: 'Média', risco: 'Baixo', impacto: 'Até 100% da estimativa mensal', artigo: 'Art. 227-230' },
     { id: 5, nome: 'Depreciação Acelerada', tipo: 'Timing', complexidade: 'Média', risco: 'Baixo', impacto: '1-5% da receita', artigo: 'Art. 311-330' },
@@ -799,32 +816,57 @@
   };
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // 30. FUNÇÕES DE CÁLCULO ESSENCIAIS
+  // HELPER INTERNO — arredondamento 2 casas
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  function _r(v) { return Math.round(v * 100) / 100; }
+
+  // Helper privado — calcula IRPJ simples (para economia de compensação)
+  function _calcIRPJ(lucroReal) {
+    if (lucroReal <= 0) return 0;
+    var normal = lucroReal * LR.aliquotas.irpj.normal;
+    var baseAdicional = Math.max(0, lucroReal - LR.aliquotas.irpj.limiteAdicionalAno);
+    var adicional = baseAdicional * LR.aliquotas.irpj.adicional;
+    return normal + adicional;
+  }
+
+  // Helper privado — calcula IRPJ trimestral
+  function _calcIRPJTrimestral(lucroReal) {
+    if (lucroReal <= 0) return 0;
+    var normal = lucroReal * LR.aliquotas.irpj.normal;
+    var baseAdicional = Math.max(0, lucroReal - LR.aliquotas.irpj.limiteAdicionalTrimestre);
+    var adicional = baseAdicional * LR.aliquotas.irpj.adicional;
+    return normal + adicional;
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 30. FUNÇÕES DE CÁLCULO ESSENCIAIS (CORRIGIDAS)
   // ═══════════════════════════════════════════════════════════════════════════
 
   LR.calcular = {
 
     /**
      * Calcular IRPJ pelo Lucro Real
+     * Base Legal: Art. 258-261
      */
     irpj: function (dados) {
-      const d = Object.assign({
+      var d = Object.assign({
         lucroLiquido: 0, adicoes: 0, exclusoes: 0,
         prejuizoFiscal: 0, numMeses: 12, incentivos: 0,
         retencoesFonte: 0, estimativasPagas: 0
       }, dados);
 
-      const lucroAntesComp = d.lucroLiquido + d.adicoes - d.exclusoes;
-      const limiteCompensacao = Math.max(lucroAntesComp, 0) * 0.30;
-      const compensacao = Math.min(limiteCompensacao, d.prejuizoFiscal, Math.max(lucroAntesComp, 0));
-      const lucroReal = Math.max(lucroAntesComp - compensacao, 0);
+      var lucroAntesComp = d.lucroLiquido + d.adicoes - d.exclusoes;
+      var limiteCompensacao = Math.max(lucroAntesComp, 0) * 0.30;
+      var compensacao = Math.min(limiteCompensacao, d.prejuizoFiscal, Math.max(lucroAntesComp, 0));
+      var lucroReal = Math.max(lucroAntesComp - compensacao, 0);
 
-      const limiteAdicional = LR.aliquotas.irpj.limiteAdicionalMes * d.numMeses;
-      const irpjNormal = lucroReal * LR.aliquotas.irpj.normal;
-      const irpjAdicional = Math.max(lucroReal - limiteAdicional, 0) * LR.aliquotas.irpj.adicional;
-      const irpjDevido = irpjNormal + irpjAdicional;
-      const deducoes = Math.min(d.incentivos, irpjNormal);
-      const irpjAPagar = Math.max(irpjDevido - deducoes - d.retencoesFonte - d.estimativasPagas, 0);
+      var limiteAdicional = LR.aliquotas.irpj.limiteAdicionalMes * d.numMeses;
+      var irpjNormal = lucroReal * LR.aliquotas.irpj.normal;
+      var irpjAdicional = Math.max(lucroReal - limiteAdicional, 0) * LR.aliquotas.irpj.adicional;
+      var irpjDevido = irpjNormal + irpjAdicional;
+      var deducoes = Math.min(d.incentivos, irpjNormal);
+      var irpjAPagar = Math.max(irpjDevido - deducoes - d.retencoesFonte - d.estimativasPagas, 0);
 
       return {
         lucroLiquido: d.lucroLiquido,
@@ -848,19 +890,20 @@
 
     /**
      * Calcular CSLL
+     * Base Legal: Lei 7.689/88 + Lei 9.249/95
      */
     csll: function (dados) {
-      const d = Object.assign({
+      var d = Object.assign({
         lucroLiquido: 0, adicoes: 0, exclusoes: 0,
         baseNegativa: 0, financeira: false
       }, dados);
 
-      const base = d.lucroLiquido + d.adicoes - d.exclusoes;
-      const limiteComp = Math.max(base, 0) * 0.30;
-      const compensacao = Math.min(limiteComp, d.baseNegativa, Math.max(base, 0));
-      const baseCalculo = Math.max(base - compensacao, 0);
-      const aliq = d.financeira ? LR.aliquotas.csll.financeiras : LR.aliquotas.csll.geral;
-      const csllDevida = baseCalculo * aliq;
+      var base = d.lucroLiquido + d.adicoes - d.exclusoes;
+      var limiteComp = Math.max(base, 0) * 0.30;
+      var compensacao = Math.min(limiteComp, d.baseNegativa, Math.max(base, 0));
+      var baseCalculo = Math.max(base - compensacao, 0);
+      var aliq = d.financeira ? LR.aliquotas.csll.financeiras : LR.aliquotas.csll.geral;
+      var csllDevida = baseCalculo * aliq;
 
       return {
         baseAntesCompensacao: _r(base),
@@ -874,21 +917,22 @@
 
     /**
      * Calcular JCP máximo dedutível
+     * Base Legal: Art. 355-358
      */
     jcp: function (dados) {
-      const d = Object.assign({
+      var d = Object.assign({
         patrimonioLiquido: 0, tjlp: 0.06,
         lucroLiquidoAntes: 0, lucrosAcumulados: 0, numMeses: 12
       }, dados);
 
-      const tjlpProp = d.tjlp * (d.numMeses / 12);
-      const maxTJLP = d.patrimonioLiquido * tjlpProp;
-      const lim1 = d.lucroLiquidoAntes * 0.50;
-      const lim2 = d.lucrosAcumulados * 0.50;
-      const jcpDedutivel = Math.max(0, Math.min(maxTJLP, lim1, lim2));
-      const economiaIRPJ = jcpDedutivel * 0.25;
-      const economiaCSLL = jcpDedutivel * 0.09;
-      const custoIRRF = jcpDedutivel * 0.15;
+      var tjlpProp = d.tjlp * (d.numMeses / 12);
+      var maxTJLP = d.patrimonioLiquido * tjlpProp;
+      var lim1 = d.lucroLiquidoAntes * 0.50;
+      var lim2 = d.lucrosAcumulados * 0.50;
+      var jcpDedutivel = Math.max(0, Math.min(maxTJLP, lim1, lim2));
+      var economiaIRPJ = jcpDedutivel * 0.25;
+      var economiaCSLL = jcpDedutivel * 0.09;
+      var custoIRRF = jcpDedutivel * 0.15;
 
       return {
         jcpMaximoTJLP: _r(maxTJLP),
@@ -905,71 +949,161 @@
     },
 
     /**
-     * Calcular Estimativa Mensal
+     * Calcular Estimativa Mensal (CORRIGIDA — aceita objeto com campos detalhados)
+     * Base Legal: Art. 219-225
      */
-    estimativaMensal: function (receitaBruta, tipoAtividade) {
-      const p = LR.presuncoes[tipoAtividade];
-      if (!p) return { erro: 'Tipo de atividade não encontrado' };
+    estimativaMensal: function (dados) {
+      // Compatibilidade: aceita (receitaBruta, tipoAtividade) OU objeto
+      var d;
+      if (typeof dados === 'number') {
+        d = { receitaBruta: dados, tipoAtividade: arguments[1] || 'SERVICOS_GERAL' };
+      } else {
+        d = Object.assign({
+          receitaBruta: 0, tipoAtividade: 'SERVICOS_GERAL',
+          ganhosCapital: 0, demaisReceitas: 0,
+          irrfCompensavel: 0, incentivosDedutiveis: 0
+        }, dados);
+      }
 
-      const baseIRPJ = receitaBruta * p.irpj;
-      const baseCSLL = receitaBruta * p.csll;
-      const irpjNormal = baseIRPJ * 0.15;
-      const irpjAdicional = Math.max(baseIRPJ - 20000, 0) * 0.10;
-      const csllDevida = baseCSLL * 0.09;
+      var p = LR.presuncoes[d.tipoAtividade];
+      if (!p) return { erro: 'Tipo de atividade não encontrado: ' + d.tipoAtividade };
+
+      var baseIRPJ = d.receitaBruta * p.irpj + (d.ganhosCapital || 0) + (d.demaisReceitas || 0);
+      var baseCSLL = d.receitaBruta * p.csll + (d.ganhosCapital || 0) + (d.demaisReceitas || 0);
+      var irpjNormal = baseIRPJ * 0.15;
+      var irpjAdicional = Math.max(baseIRPJ - 20000, 0) * 0.10;
+      var irpjDevido = irpjNormal + irpjAdicional;
+      var deducoes = Math.min(d.incentivosDedutiveis || 0, irpjNormal);
+      var irpjAPagar = Math.max(irpjDevido - deducoes - (d.irrfCompensavel || 0), 0);
+      var csllDevida = baseCSLL * 0.09;
 
       return {
         atividade: p.label,
-        receitaBruta: receitaBruta,
+        receitaBruta: d.receitaBruta,
         presuncaoIRPJ: p.irpj,
         presuncaoCSLL: p.csll,
         baseIRPJ: _r(baseIRPJ),
         baseCSLL: _r(baseCSLL),
         irpjNormal: _r(irpjNormal),
         irpjAdicional: _r(irpjAdicional),
-        irpjDevido: _r(irpjNormal + irpjAdicional),
+        irpjDevido: _r(irpjDevido),
+        deducoes: _r(deducoes),
+        irrfCompensavel: d.irrfCompensavel || 0,
+        irpjAPagar: _r(irpjAPagar),
         csllDevida: _r(csllDevida),
-        totalAPagar: _r(irpjNormal + irpjAdicional + csllDevida)
+        totalAPagar: _r(irpjAPagar + csllDevida)
       };
     },
 
     /**
-     * Calcular PIS/COFINS Não-Cumulativo
+     * ═══════════════════════════════════════════════════════════════════════
+     * Calcular PIS/COFINS Não-Cumulativo (CORRIGIDO — BUG #1)
+     * ═══════════════════════════════════════════════════════════════════════
+     *
+     * CORREÇÃO: Agora aceita TANTO o campo consolidado "baseCreditos"
+     * QUANTO os campos individuais (comprasBensRevenda, insumosProducao,
+     * energiaEletrica, alugueisPJ, depreciacaoBens, devolucoes,
+     * freteArmazenagem, leasing, outrosCreditos).
+     *
+     * Se "baseCreditos" for passado E > 0, usa ele.
+     * Caso contrário, soma os campos individuais.
+     *
+     * Base Legal: Lei 10.637/02 (PIS) + Lei 10.833/03 (COFINS)
      */
     pisCofins: function (dados) {
-      const d = Object.assign({
-        receitaBruta: 0, isentas: 0, exportacao: 0, baseCreditos: 0
+      var d = Object.assign({
+        receitaBruta: 0, isentas: 0, exportacao: 0,
+        // Campo consolidado (retrocompatível)
+        baseCreditos: 0,
+        // Campos individuais (do motor v4.6)
+        comprasBensRevenda: 0,
+        insumosProducao: 0,
+        energiaEletrica: 0,
+        alugueisPJ: 0,
+        depreciacaoBens: 0,
+        devolucoes: 0,
+        freteArmazenagem: 0,
+        leasing: 0,
+        outrosCreditos: 0
       }, dados);
 
-      const tributavel = d.receitaBruta - d.isentas - d.exportacao;
-      const debPIS = tributavel * LR.aliquotas.pisCofins.pisNaoCumulativo;
-      const debCOFINS = tributavel * LR.aliquotas.pisCofins.cofinsNaoCumulativo;
-      const credPIS = d.baseCreditos * LR.aliquotas.pisCofins.pisNaoCumulativo;
-      const credCOFINS = d.baseCreditos * LR.aliquotas.pisCofins.cofinsNaoCumulativo;
+      // ─── CORREÇÃO PRINCIPAL ───
+      // Se baseCreditos consolidado não foi passado (ou é 0),
+      // somar os campos individuais
+      var totalBaseCreditos = d.baseCreditos;
+      if (!totalBaseCreditos || totalBaseCreditos === 0) {
+        totalBaseCreditos = d.comprasBensRevenda + d.insumosProducao
+          + d.energiaEletrica + d.alugueisPJ + d.depreciacaoBens
+          + d.devolucoes + d.freteArmazenagem + d.leasing + d.outrosCreditos;
+      }
+
+      var tributavel = d.receitaBruta - d.isentas - d.exportacao;
+      var debPIS = tributavel * LR.aliquotas.pisCofins.pisNaoCumulativo;
+      var debCOFINS = tributavel * LR.aliquotas.pisCofins.cofinsNaoCumulativo;
+      var credPIS = totalBaseCreditos * LR.aliquotas.pisCofins.pisNaoCumulativo;
+      var credCOFINS = totalBaseCreditos * LR.aliquotas.pisCofins.cofinsNaoCumulativo;
+
+      var pisAPagar = Math.max(debPIS - credPIS, 0);
+      var cofinsAPagar = Math.max(debCOFINS - credCOFINS, 0);
+      var saldoCredorPIS = Math.max(credPIS - debPIS, 0);
+      var saldoCredorCOFINS = Math.max(credCOFINS - debCOFINS, 0);
 
       return {
         receitaTributavel: _r(tributavel),
-        debitoPIS: _r(debPIS), debitoCOFINS: _r(debCOFINS),
-        creditoPIS: _r(credPIS), creditoCOFINS: _r(credCOFINS),
-        pisAPagar: _r(Math.max(debPIS - credPIS, 0)),
-        cofinsAPagar: _r(Math.max(debCOFINS - credCOFINS, 0)),
-        totalAPagar: _r(Math.max(debPIS - credPIS, 0) + Math.max(debCOFINS - credCOFINS, 0)),
+        debitoPIS: _r(debPIS),
+        debitoCOFINS: _r(debCOFINS),
+        creditoPIS: _r(credPIS),
+        creditoCOFINS: _r(credCOFINS),
+        creditos: {
+          baseTotal: _r(totalBaseCreditos),
+          pis: _r(credPIS),
+          cofins: _r(credCOFINS),
+          total: _r(credPIS + credCOFINS),
+          detalhamento: {
+            comprasBensRevenda: d.comprasBensRevenda,
+            insumosProducao: d.insumosProducao,
+            energiaEletrica: d.energiaEletrica,
+            alugueisPJ: d.alugueisPJ,
+            depreciacaoBens: d.depreciacaoBens,
+            devolucoes: d.devolucoes,
+            freteArmazenagem: d.freteArmazenagem,
+            leasing: d.leasing,
+            outrosCreditos: d.outrosCreditos
+          }
+        },
+        pisAPagar: _r(pisAPagar),
+        cofinsAPagar: _r(cofinsAPagar),
+        aPagar: {
+          pis: _r(pisAPagar),
+          cofins: _r(cofinsAPagar),
+          total: _r(pisAPagar + cofinsAPagar)
+        },
+        saldoCredor: {
+          pis: _r(saldoCredorPIS),
+          cofins: _r(saldoCredorCOFINS),
+          total: _r(saldoCredorPIS + saldoCredorCOFINS)
+        },
+        totalAPagar: _r(pisAPagar + cofinsAPagar),
         aliquotaEfetiva: d.receitaBruta > 0
-          ? _r((Math.max(debPIS - credPIS, 0) + Math.max(debCOFINS - credCOFINS, 0)) / d.receitaBruta * 100) + '%'
-          : '0%'
+          ? _r((pisAPagar + cofinsAPagar) / d.receitaBruta * 100) + '%'
+          : '0%',
+        economiaCreditos: _r(credPIS + credCOFINS),
+        artigos: 'Lei 10.637/02, Lei 10.833/03'
       };
     },
 
     /**
      * Calcular retenções integradas de uma NF
+     * Base Legal: Art. 714-786
      */
     retencoesNF: function (valorNF, opts) {
-      const o = Object.assign({ admPublica: false, simplesNacional: false, temCSRF: true, iss: 0 }, opts);
+      var o = Object.assign({ admPublica: false, simplesNacional: false, temCSRF: true, iss: 0 }, opts);
       if (o.simplesNacional) return { irrf: 0, csrf: 0, iss: 0, total: 0, liquido: valorNF, nota: 'Simples Nacional — sem retenções federais' };
 
-      const irrf = o.admPublica ? valorNF * 0.048 : valorNF * 0.015;
-      const csrf = o.temCSRF ? valorNF * 0.0465 : 0;
-      const iss = valorNF * o.iss;
-      const total = irrf + csrf + iss;
+      var irrf = o.admPublica ? valorNF * 0.048 : valorNF * 0.015;
+      var csrf = o.temCSRF ? valorNF * 0.0465 : 0;
+      var iss = valorNF * o.iss;
+      var total = irrf + csrf + iss;
 
       return {
         valorBruto: _r(valorNF),
@@ -984,19 +1118,20 @@
 
     /**
      * Calcular Lucro da Exploração (SUDAM/SUDENE)
+     * Base Legal: Art. 615-627
      */
     lucroExploracao: function (dados) {
-      const d = Object.assign({
+      var d = Object.assign({
         lucroLiquido: 0, receitasFinanceirasLiquidas: 0,
         resultadoMEP: 0, resultadoNaoOperacional: 0,
         receitasAnteriores: 0, csllDevida: 0, despFinLiquidas: 0
       }, dados);
 
-      const exclusoes = d.receitasFinanceirasLiquidas + Math.max(d.resultadoMEP, 0) +
+      var exclusoes = d.receitasFinanceirasLiquidas + Math.max(d.resultadoMEP, 0) +
         d.resultadoNaoOperacional + d.receitasAnteriores;
-      const adicoes = d.csllDevida + d.despFinLiquidas + Math.abs(Math.min(d.resultadoMEP, 0));
-      const lucroExploracao = d.lucroLiquido - exclusoes + adicoes;
-      const reducao75 = Math.max(lucroExploracao, 0) * LR.aliquotas.irpj.normal * 0.75;
+      var adicoes = d.csllDevida + d.despFinLiquidas + Math.abs(Math.min(d.resultadoMEP, 0));
+      var lucroExploracao = d.lucroLiquido - exclusoes + adicoes;
+      var reducao75 = Math.max(lucroExploracao, 0) * LR.aliquotas.irpj.normal * 0.75;
 
       return {
         lucroLiquido: d.lucroLiquido,
@@ -1009,29 +1144,747 @@
     },
 
     /**
+     * ═══════════════════════════════════════════════════════════════════════
+     * Compensar Integrado — Portado do motor v4.6 (BUG #4)
+     * ═══════════════════════════════════════════════════════════════════════
+     *
+     * Orquestra compensação de prejuízos operacionais, não-operacionais
+     * e base negativa da CSLL em sequência.
+     *
+     * Base Legal: Art. 579-586
+     */
+    compensarIntegrado: function (dados) {
+      var d = Object.assign({
+        lucroLiquido: 0, adicoes: 0, exclusoes: 0,
+        saldoPrejuizoOperacional: 0,
+        saldoPrejuizoNaoOperacional: 0,
+        saldoBaseNegativaCSLL: 0,
+        lucroNaoOperacional: 0,
+        atividadeRural: false,
+        trimestral: true
+      }, dados);
+
+      // 1. Lucro real ajustado antes da compensação
+      var lucroAjustado = d.lucroLiquido + d.adicoes - d.exclusoes;
+
+      var resultado = {
+        etapa1_lucroAjustado: {
+          lucroLiquido: d.lucroLiquido,
+          adicoes: d.adicoes,
+          exclusoes: d.exclusoes,
+          lucroRealAjustado: lucroAjustado,
+          temLucro: lucroAjustado > 0,
+          temPrejuizo: lucroAjustado < 0,
+          artigo: 'Art. 579-580'
+        },
+        etapa2_compensacaoNaoOperacional: null,
+        etapa3_compensacaoOperacional: null,
+        etapa4_compensacaoCSLL: null,
+        resumo: {
+          lucroRealAntes: lucroAjustado,
+          totalCompensado: 0,
+          lucroRealFinal: lucroAjustado,
+          baseCSLLFinal: lucroAjustado,
+          saldosPosCompensacao: {
+            prejuizoOperacional: d.saldoPrejuizoOperacional,
+            prejuizoNaoOperacional: d.saldoPrejuizoNaoOperacional,
+            baseNegativaCSLL: d.saldoBaseNegativaCSLL
+          },
+          economia: { irpj: 0, csll: 0, total: 0 }
+        },
+        artigo: 'Art. 579-586',
+        trimestral: d.trimestral
+      };
+
+      // Se lucro ajustado <= 0, registra prejuízo e retorna
+      if (lucroAjustado <= 0) {
+        var novoPrejuizo = Math.abs(lucroAjustado);
+        var prejNaoOp = d.lucroNaoOperacional < 0 ? Math.abs(d.lucroNaoOperacional) : 0;
+        var prejOp = novoPrejuizo - prejNaoOp;
+
+        resultado.resumo.novoPrejuizoOperacional = Math.max(0, prejOp);
+        resultado.resumo.novoPrejuizoNaoOperacional = prejNaoOp;
+        resultado.resumo.saldosPosCompensacao.prejuizoOperacional = d.saldoPrejuizoOperacional + Math.max(0, prejOp);
+        resultado.resumo.saldosPosCompensacao.prejuizoNaoOperacional = d.saldoPrejuizoNaoOperacional + prejNaoOp;
+        resultado.resumo.saldosPosCompensacao.baseNegativaCSLL = d.saldoBaseNegativaCSLL + novoPrejuizo;
+        resultado.resumo.lucroRealFinal = 0;
+        resultado.resumo.baseCSLLFinal = 0;
+        resultado.resumo.observacao = 'Prejuízo fiscal no período: R$ ' + novoPrejuizo.toFixed(2) + ' — registrar na Parte B do LALUR/LACS';
+
+        return resultado;
+      }
+
+      var lucroRealCorrente = lucroAjustado;
+      var baseCSLLCorrente = lucroAjustado;
+
+      // 2. Compensar prejuízos NÃO-OPERACIONAIS primeiro (Art. 581)
+      if (d.lucroNaoOperacional > 0 && d.saldoPrejuizoNaoOperacional > 0) {
+        var limNaoOp = d.lucroNaoOperacional * 0.30;
+        var compNaoOp = Math.min(limNaoOp, d.saldoPrejuizoNaoOperacional);
+
+        resultado.etapa2_compensacaoNaoOperacional = {
+          lucroNaoOperacional: d.lucroNaoOperacional,
+          saldoPrejuizoAnterior: d.saldoPrejuizoNaoOperacional,
+          compensacaoPermitida: _r(limNaoOp),
+          compensacaoEfetiva: _r(compNaoOp),
+          saldoPrejuizoRemanescente: _r(d.saldoPrejuizoNaoOperacional - compNaoOp),
+          artigo: 'Art. 581'
+        };
+
+        lucroRealCorrente -= compNaoOp;
+        baseCSLLCorrente -= compNaoOp;
+        resultado.resumo.totalCompensado += compNaoOp;
+        resultado.resumo.saldosPosCompensacao.prejuizoNaoOperacional = _r(d.saldoPrejuizoNaoOperacional - compNaoOp);
+      }
+
+      // 3. Compensar prejuízos OPERACIONAIS (trava 30%)
+      if (lucroRealCorrente > 0 && d.saldoPrejuizoOperacional > 0) {
+        var limOp = d.atividadeRural ? lucroRealCorrente : lucroRealCorrente * 0.30;
+        var compOp = Math.min(limOp, d.saldoPrejuizoOperacional);
+
+        var irpjSem = _calcIRPJ(lucroRealCorrente);
+        var irpjCom = _calcIRPJ(lucroRealCorrente - compOp);
+
+        resultado.etapa3_compensacaoOperacional = {
+          lucroRealAjustado: _r(lucroRealCorrente),
+          saldoPrejuizoAnterior: d.saldoPrejuizoOperacional,
+          compensacaoPermitida: _r(limOp),
+          compensacaoEfetiva: _r(compOp),
+          lucroRealAposCompensacao: _r(lucroRealCorrente - compOp),
+          saldoPrejuizoRemanescente: _r(d.saldoPrejuizoOperacional - compOp),
+          atividadeRural: d.atividadeRural,
+          economia: { irpj: _r(irpjSem - irpjCom) },
+          artigo: d.atividadeRural ? 'Art. 583' : 'Art. 580'
+        };
+
+        lucroRealCorrente -= compOp;
+        baseCSLLCorrente -= compOp;
+        resultado.resumo.totalCompensado += compOp;
+        resultado.resumo.saldosPosCompensacao.prejuizoOperacional = _r(d.saldoPrejuizoOperacional - compOp);
+        resultado.resumo.economia.irpj += _r(irpjSem - irpjCom);
+      }
+
+      // 4. Compensar base negativa da CSLL (trava 30%)
+      if (baseCSLLCorrente > 0 && d.saldoBaseNegativaCSLL > 0) {
+        var limCSLL = baseCSLLCorrente * 0.30;
+        var compCSLL = Math.min(limCSLL, d.saldoBaseNegativaCSLL);
+        var economiaCSLL = compCSLL * 0.09;
+
+        resultado.etapa4_compensacaoCSLL = {
+          baseCalculoCSLL: _r(baseCSLLCorrente),
+          saldoBaseNegativaAnterior: d.saldoBaseNegativaCSLL,
+          compensacaoPermitida: _r(limCSLL),
+          compensacaoEfetiva: _r(compCSLL),
+          baseCSLLAposCompensacao: _r(baseCSLLCorrente - compCSLL),
+          saldoBaseNegativaRemanescente: _r(d.saldoBaseNegativaCSLL - compCSLL),
+          economia: { csll: _r(economiaCSLL) },
+          artigo: 'Lei 9.065/1995, art. 16'
+        };
+
+        baseCSLLCorrente -= compCSLL;
+        resultado.resumo.saldosPosCompensacao.baseNegativaCSLL = _r(d.saldoBaseNegativaCSLL - compCSLL);
+        resultado.resumo.economia.csll += _r(economiaCSLL);
+      }
+
+      // Resumo final
+      resultado.resumo.lucroRealFinal = _r(Math.max(0, lucroRealCorrente));
+      resultado.resumo.baseCSLLFinal = _r(Math.max(0, baseCSLLCorrente));
+      resultado.resumo.economia.total = _r(resultado.resumo.economia.irpj + resultado.resumo.economia.csll);
+
+      return resultado;
+    },
+
+    /**
+     * ═══════════════════════════════════════════════════════════════════════
+     * Compensar Retenções — Portado do motor v4.6
+     * ═══════════════════════════════════════════════════════════════════════
+     *
+     * Compensa retenções sofridas (IRRF, PIS, COFINS, CSLL) com tributos devidos.
+     * IRRF → IRPJ; PIS → PIS; COFINS → COFINS; CSLL → CSLL
+     *
+     * Base Legal: Art. 717 (IRRF); Lei 10.833/2003, art. 36 (CSRF)
+     */
+    compensarRetencoes: function (params) {
+      var ret = params.retencoesSofridas || {};
+      var trib = params.tributosDevidos || {};
+
+      var irrfCompensavel = Math.min(ret.irrf || 0, trib.irpj || 0);
+      var saldoIRRF = _r((ret.irrf || 0) - irrfCompensavel);
+
+      var pisCompensavel = Math.min(ret.pis || 0, trib.pis || 0);
+      var saldoPIS = _r((ret.pis || 0) - pisCompensavel);
+
+      var cofinsCompensavel = Math.min(ret.cofins || 0, trib.cofins || 0);
+      var saldoCOFINS = _r((ret.cofins || 0) - cofinsCompensavel);
+
+      var csllCompensavel = Math.min(ret.csll || 0, trib.csll || 0);
+      var saldoCSLL = _r((ret.csll || 0) - csllCompensavel);
+
+      var totalCompensado = _r(irrfCompensavel + pisCompensavel + cofinsCompensavel + csllCompensavel);
+      var totalSaldoCredor = _r(saldoIRRF + saldoPIS + saldoCOFINS + saldoCSLL);
+
+      return {
+        descricao: 'Compensação de retenções sofridas com tributos devidos',
+        baseLegal: 'Art. 717 (IRRF); Lei 10.833/2003, art. 36 (CSRF)',
+        retencoesSofridas: {
+          irrf: ret.irrf || 0, pis: ret.pis || 0,
+          cofins: ret.cofins || 0, csll: ret.csll || 0,
+          total: _r((ret.irrf || 0) + (ret.pis || 0) + (ret.cofins || 0) + (ret.csll || 0))
+        },
+        tributosDevidos: {
+          irpj: trib.irpj || 0, csll: trib.csll || 0,
+          pis: trib.pis || 0, cofins: trib.cofins || 0,
+          total: _r((trib.irpj || 0) + (trib.csll || 0) + (trib.pis || 0) + (trib.cofins || 0))
+        },
+        compensacao: {
+          irrf_com_irpj: _r(irrfCompensavel),
+          pis_com_pis: _r(pisCompensavel),
+          cofins_com_cofins: _r(cofinsCompensavel),
+          csll_com_csll: _r(csllCompensavel),
+          totalCompensado: totalCompensado
+        },
+        tributosARecolher: {
+          irpj: _r((trib.irpj || 0) - irrfCompensavel),
+          csll: _r((trib.csll || 0) - csllCompensavel),
+          pis: _r((trib.pis || 0) - pisCompensavel),
+          cofins: _r((trib.cofins || 0) - cofinsCompensavel),
+          total: _r(
+            (trib.irpj || 0) - irrfCompensavel +
+            (trib.csll || 0) - csllCompensavel +
+            (trib.pis || 0) - pisCompensavel +
+            (trib.cofins || 0) - cofinsCompensavel
+          )
+        },
+        saldoCredor: {
+          irrf: saldoIRRF, pis: saldoPIS,
+          cofins: saldoCOFINS, csll: saldoCSLL,
+          total: totalSaldoCredor,
+          destinacao: totalSaldoCredor > 0
+            ? 'Saldo credor pode ser compensado em períodos seguintes via PER/DCOMP ou pedido de restituição'
+            : 'Sem saldo credor'
+        }
+      };
+    },
+
+    /**
+     * ═══════════════════════════════════════════════════════════════════════
+     * Saldo Negativo de IRPJ — Portado do motor v4.6
+     * ═══════════════════════════════════════════════════════════════════════
+     *
+     * Base Legal: Art. 235
+     */
+    saldoNegativo: function (irpjDevido, retencoesFonte, estimativasPagas, taxaSelic) {
+      taxaSelic = taxaSelic || 0;
+      var totalPago = retencoesFonte + estimativasPagas;
+      var saldo = totalPago - irpjDevido;
+
+      if (saldo <= 0) {
+        return { temSaldoNegativo: false, irpjAPagar: _r(Math.abs(saldo)) };
+      }
+
+      return {
+        temSaldoNegativo: true,
+        valorOriginal: _r(saldo),
+        atualizacaoSelic: _r(saldo * taxaSelic),
+        valorAtualizado: _r(saldo * (1 + taxaSelic)),
+        compensacao: 'Via PER/DCOMP (compensação com outros tributos federais)',
+        restituicao: 'Possível via PER/DCOMP (mais demorado)',
+        prazoDecadencial: '5 anos',
+        alerta: 'Verificar retenções não compensadas — dinheiro potencialmente "esquecido"',
+        artigo: 'Art. 235'
+      };
+    },
+
+    /**
+     * ═══════════════════════════════════════════════════════════════════════
+     * Depreciação Completa — Portado do motor v4.6
+     * ═══════════════════════════════════════════════════════════════════════
+     *
+     * Calcula depreciação com suporte a: bens usados (Art. 322),
+     * aceleração por turnos (Art. 323), incentivada (Art. 324-329),
+     * proporcional ao período de uso.
+     *
+     * Base Legal: Art. 311-330
+     */
+    depreciacaoCompleta: function (bem) {
+      var d = Object.assign({
+        tipo: null, custoAquisicao: 0, depreciacaoAcumulada: 0,
+        usado: false, vidaUtilRestante: null, turnos: 1,
+        incentivo: null, mesesUso: 12, relacionadoProducao: true
+      }, bem);
+
+      if (!d.tipo || d.custoAquisicao <= 0) {
+        return { erro: 'Tipo do bem e custo de aquisição positivo são obrigatórios' };
+      }
+
+      if (!d.relacionadoProducao) {
+        return {
+          tipo: d.tipo, custoAquisicao: d.custoAquisicao,
+          depreciacaoPeriodo: 0, dedutivel: false,
+          artigo: 'Art. 317 §5º',
+          motivo: 'Bem não relacionado com produção/comercialização — depreciação indedutível'
+        };
+      }
+
+      // Art. 313 §1º: Bem de pequeno valor
+      if (d.custoAquisicao <= LR.limites.ativoDespesaDireta) {
+        return {
+          tipo: d.tipo, custoAquisicao: d.custoAquisicao,
+          depreciacaoPeriodo: d.custoAquisicao, dedutivel: true,
+          artigo: 'Art. 313 §1º I',
+          motivo: 'Valor ≤ R$ ' + LR.limites.ativoDespesaDireta + ' — dedução integral como despesa'
+        };
+      }
+
+      // Tabela de taxas fiscais (mapeamento tipo → dados)
+      var TAXAS = {
+        edificios:          { taxa: 0.04, vidaUtil: 25 },
+        instalacoes:        { taxa: 0.10, vidaUtil: 10 },
+        maquinas:           { taxa: 0.10, vidaUtil: 10 },
+        moveis:             { taxa: 0.10, vidaUtil: 10 },
+        veiculosPassageiro: { taxa: 0.20, vidaUtil: 5 },
+        veiculosCarga:      { taxa: 0.20, vidaUtil: 5 },
+        computadores:       { taxa: 0.20, vidaUtil: 5 },
+        software:           { taxa: 0.20, vidaUtil: 5 },
+        ferramentas:        { taxa: 0.20, vidaUtil: 5 },
+        tratores:           { taxa: 0.25, vidaUtil: 4 },
+        drones:             { taxa: 0.20, vidaUtil: 5 },
+        gps_topografia:     { taxa: 0.20, vidaUtil: 5 }
+      };
+
+      var ACELERADA = {
+        atividadeRural:    { taxa: 1.0, multiplicador: null },
+        pesquisaInovacao:  { taxa: 1.0, multiplicador: null },
+        sudamSudene:       { taxa: 1.0, multiplicador: null },
+        veiculosCarga3x:   { taxa: null, multiplicador: 3 }
+      };
+
+      var TURNOS = { 1: 1.0, 2: 1.5, 3: 2.0 };
+
+      var infoBem = TAXAS[d.tipo];
+      if (!infoBem) {
+        return { erro: 'Tipo de bem "' + d.tipo + '" não encontrado na tabela de depreciação' };
+      }
+
+      var taxaAnual = infoBem.taxa;
+      var vidaUtilEfetiva = infoBem.vidaUtil;
+
+      // Art. 322: Bens usados
+      if (d.usado) {
+        var metadeVidaNovo = infoBem.vidaUtil / 2;
+        var restante = d.vidaUtilRestante || metadeVidaNovo;
+        vidaUtilEfetiva = Math.max(metadeVidaNovo, restante);
+        taxaAnual = 1 / vidaUtilEfetiva;
+      }
+
+      // Art. 323: Aceleração por turnos
+      var multiplicadorTurnos = 1;
+      if (d.tipo !== 'edificios' && d.turnos >= 2) {
+        multiplicadorTurnos = TURNOS[d.turnos] || 1;
+      }
+
+      var taxaEfetiva = taxaAnual * multiplicadorTurnos;
+      var depreciacaoAnualBruta = d.custoAquisicao * taxaEfetiva;
+
+      var fatorProporcional = d.mesesUso / 12;
+      var depreciacaoPeriodo = depreciacaoAnualBruta * fatorProporcional;
+
+      // Art. 317 §3º: Limite
+      var saldoDepreciavel = Math.max(0, d.custoAquisicao - d.depreciacaoAcumulada);
+      depreciacaoPeriodo = Math.min(depreciacaoPeriodo, saldoDepreciavel);
+
+      // Depreciação incentivada (Art. 324-329)
+      var depreciacaoIncentivada = 0;
+      var exclusaoLalur = 0;
+      var adicaoFuturaLalur = false;
+
+      if (d.incentivo && ACELERADA[d.incentivo]) {
+        var inc = ACELERADA[d.incentivo];
+        if (inc.taxa === 1.0) {
+          depreciacaoIncentivada = Math.max(0, saldoDepreciavel - depreciacaoPeriodo);
+          exclusaoLalur = depreciacaoIncentivada;
+        } else if (inc.multiplicador) {
+          var depAcelerada = d.custoAquisicao * taxaAnual * inc.multiplicador * fatorProporcional;
+          depreciacaoIncentivada = Math.max(0, Math.min(depAcelerada - depreciacaoPeriodo, saldoDepreciavel - depreciacaoPeriodo));
+          exclusaoLalur = depreciacaoIncentivada;
+        }
+        adicaoFuturaLalur = true;
+      }
+
+      var depreciacaoTotalPeriodo = depreciacaoPeriodo + depreciacaoIncentivada;
+      var novaDepreciacaoAcumulada = d.depreciacaoAcumulada + depreciacaoTotalPeriodo;
+      var limiteAtingido = novaDepreciacaoAcumulada >= d.custoAquisicao;
+
+      return {
+        tipo: d.tipo,
+        custoAquisicao: d.custoAquisicao,
+        depreciacaoAcumuladaAnterior: d.depreciacaoAcumulada,
+        saldoDepreciavelAnterior: saldoDepreciavel,
+        taxaNormal: infoBem.taxa,
+        taxaEfetiva: taxaEfetiva,
+        multiplicadorTurnos: multiplicadorTurnos,
+        mesesUso: d.mesesUso,
+        depreciacaoNormal: _r(depreciacaoPeriodo),
+        depreciacaoIncentivada: _r(depreciacaoIncentivada),
+        exclusaoLalur: _r(exclusaoLalur),
+        depreciacaoTotalPeriodo: _r(depreciacaoTotalPeriodo),
+        novaDepreciacaoAcumulada: _r(novaDepreciacaoAcumulada),
+        saldoDepreciavelRestante: _r(Math.max(0, d.custoAquisicao - novaDepreciacaoAcumulada)),
+        limiteAtingido: limiteAtingido,
+        adicaoFuturaLalur: adicaoFuturaLalur,
+        dedutivel: true,
+        vidaUtilEfetiva: vidaUtilEfetiva,
+        bemUsado: d.usado,
+        incentivo: d.incentivo || null,
+        economia: {
+          irpj: _r(depreciacaoTotalPeriodo * 0.25),
+          csll: _r(depreciacaoTotalPeriodo * 0.09),
+          total: _r(depreciacaoTotalPeriodo * 0.34)
+        },
+        alertas: limiteAtingido
+          ? ['Limite de depreciação atingido. A partir do próximo período, depreciação contábil deverá ser ADICIONADA ao lucro real (Art. 324 §3º / Art. 321 §único)']
+          : []
+      };
+    },
+
+    /**
+     * ═══════════════════════════════════════════════════════════════════════
+     * Incentivos Fiscais — Portado do motor v4.6
+     * ═══════════════════════════════════════════════════════════════════════
+     *
+     * Calcula deduções do IRPJ por incentivos fiscais.
+     * Base Legal: Art. 226 + Art. 228 + Art. 625-646
+     */
+    incentivos: function (irpjNormal, despesas) {
+      despesas = despesas || {};
+
+      var INCENTIVOS = [
+        { id: 'PAT', descricao: 'Programa de Alimentação do Trabalhador', limitePercentualIRPJ: 0.04 },
+        { id: 'FIA', descricao: 'Fundo da Criança e do Adolescente', limitePercentualIRPJ: 0.01 },
+        { id: 'FUNDO_IDOSO', descricao: 'Fundo do Idoso', limitePercentualIRPJ: 0.01 },
+        { id: 'ROUANET', descricao: 'Lei Rouanet — Atividades Culturais', limitePercentualIRPJ: 0.04 },
+        { id: 'VALE_CULTURA', descricao: 'Vale-Cultura', limitePercentualIRPJ: 0.01 },
+        { id: 'AUDIOVISUAL', descricao: 'Atividades Audiovisuais (FUNCINES)', limitePercentualIRPJ: 0.03 },
+        { id: 'ESPORTE', descricao: 'Lei do Esporte', limitePercentualIRPJ: 0.01 },
+        { id: 'LICENCA_MATERNIDADE', descricao: 'Prorrogação Licença-Maternidade', limitePercentualIRPJ: null },
+        { id: 'PRONON', descricao: 'PRONON — Apoio à Oncologia', limitePercentualIRPJ: 0.01 },
+        { id: 'PRONAS_PCD', descricao: 'PRONAS/PCD — Pessoa com Deficiência', limitePercentualIRPJ: 0.01 }
+      ];
+
+      var resultado = [];
+      var totalDeducao = 0;
+
+      for (var i = 0; i < INCENTIVOS.length; i++) {
+        var inc = INCENTIVOS[i];
+        var despesaIncentivo = despesas[inc.id] || 0;
+        if (despesaIncentivo <= 0) continue;
+
+        var deducaoCalculada = 0;
+        if (inc.id === 'PAT') {
+          deducaoCalculada = despesaIncentivo * 0.15;
+        } else if (inc.id === 'LICENCA_MATERNIDADE') {
+          deducaoCalculada = despesaIncentivo;
+        } else {
+          deducaoCalculada = despesaIncentivo;
+        }
+
+        var limiteIndividual = inc.limitePercentualIRPJ
+          ? irpjNormal * inc.limitePercentualIRPJ
+          : deducaoCalculada;
+
+        var deducaoFinal = Math.min(deducaoCalculada, limiteIndividual);
+
+        resultado.push({
+          incentivo: inc.id,
+          descricao: inc.descricao,
+          despesa: despesaIncentivo,
+          deducaoCalculada: _r(deducaoCalculada),
+          limiteIndividual: _r(limiteIndividual),
+          deducaoFinal: _r(deducaoFinal)
+        });
+
+        totalDeducao += deducaoFinal;
+      }
+
+      var totalFinal = Math.min(totalDeducao, irpjNormal);
+
+      return {
+        incentivos: resultado,
+        totalDeducaoCalculada: _r(totalDeducao),
+        totalDeducaoFinal: _r(totalFinal),
+        irpjNormal: irpjNormal,
+        percentualUtilizado: irpjNormal > 0
+          ? _r(totalFinal / irpjNormal * 100) + '%'
+          : '0%',
+        artigos: 'Art. 226, 228, 625-646'
+      };
+    },
+
+    /**
+     * ═══════════════════════════════════════════════════════════════════════
+     * Suspensão/Redução de Estimativa — Portado do motor v4.6
+     * ═══════════════════════════════════════════════════════════════════════
+     *
+     * Base Legal: Art. 227-230
+     */
+    suspensaoReducao: function (dados) {
+      var d = Object.assign({
+        estimativaDevidaMes: 0, irpjRealAcumulado: 0,
+        irpjPagoAcumulado: 0, csllRealAcumulada: 0,
+        csllPagaAcumulada: 0, estimativaCSLLMes: 0
+      }, dados);
+
+      var irpjMes, situacaoIRPJ;
+      if (d.irpjRealAcumulado <= d.irpjPagoAcumulado) {
+        irpjMes = 0; situacaoIRPJ = 'SUSPENSAO';
+      } else if (d.irpjRealAcumulado < d.irpjPagoAcumulado + d.estimativaDevidaMes) {
+        irpjMes = d.irpjRealAcumulado - d.irpjPagoAcumulado; situacaoIRPJ = 'REDUCAO';
+      } else {
+        irpjMes = d.estimativaDevidaMes; situacaoIRPJ = 'INTEGRAL';
+      }
+
+      var csllMes, situacaoCSLL;
+      if (d.csllRealAcumulada <= d.csllPagaAcumulada) {
+        csllMes = 0; situacaoCSLL = 'SUSPENSAO';
+      } else if (d.csllRealAcumulada < d.csllPagaAcumulada + d.estimativaCSLLMes) {
+        csllMes = d.csllRealAcumulada - d.csllPagaAcumulada; situacaoCSLL = 'REDUCAO';
+      } else {
+        csllMes = d.estimativaCSLLMes; situacaoCSLL = 'INTEGRAL';
+      }
+
+      return {
+        irpj: {
+          estimativaDevida: d.estimativaDevidaMes,
+          irpjRealAcumulado: d.irpjRealAcumulado,
+          irpjPagoAcumulado: d.irpjPagoAcumulado,
+          valorAPagar: _r(Math.max(irpjMes, 0)),
+          situacao: situacaoIRPJ
+        },
+        csll: {
+          estimativaDevida: d.estimativaCSLLMes,
+          csllRealAcumulada: d.csllRealAcumulada,
+          csllPagaAcumulada: d.csllPagaAcumulada,
+          valorAPagar: _r(Math.max(csllMes, 0)),
+          situacao: situacaoCSLL
+        },
+        economiaMes: _r(d.estimativaDevidaMes - Math.max(irpjMes, 0) + d.estimativaCSLLMes - Math.max(csllMes, 0)),
+        requisitos: [
+          'Balanço/balancete mensal levantado e transcrito no Diário (Art. 227, §1º, I)',
+          'Observar leis comerciais e fiscais (Art. 227, §1º, I)',
+          'Efeitos apenas para o período em curso (Art. 227, §1º, II)'
+        ],
+        artigos: 'Art. 227 a 230'
+      };
+    },
+
+    /**
+     * ═══════════════════════════════════════════════════════════════════════
+     * Acréscimos Moratórios — Portado do motor v4.6
+     * ═══════════════════════════════════════════════════════════════════════
+     *
+     * Base Legal: Lei 9.430/96, Art. 61
+     */
+    acrescimosMoratorios: function (dados) {
+      var d = Object.assign({
+        valorTributo: 0, diasAtraso: 0, taxasSelicMes: []
+      }, dados);
+
+      // Multa de mora: 0,33% por dia, teto 20%
+      var percentualBruto = d.diasAtraso * 0.0033;
+      var percentualAplicavel = Math.min(percentualBruto, 0.20);
+      var multaMora = _r(d.valorTributo * percentualAplicavel);
+
+      // Juros SELIC
+      var selicAcumulada = d.taxasSelicMes.reduce(function (acc, t) { return acc + t; }, 0);
+      var jurosMesPagamento = 0.01;
+      var taxaTotalJuros = selicAcumulada + jurosMesPagamento;
+      var jurosMora = _r(d.valorTributo * taxaTotalJuros);
+
+      var totalAcrescimos = _r(multaMora + jurosMora);
+
+      return {
+        baseLegal: 'Lei 9.430/1996, art. 61',
+        valorOriginal: _r(d.valorTributo),
+        multaMora: multaMora,
+        jurosMora: jurosMora,
+        totalAcrescimos: totalAcrescimos,
+        totalAPagar: _r(d.valorTributo + totalAcrescimos),
+        detalhamento: {
+          diasAtraso: d.diasAtraso,
+          percentualMulta: _r(percentualAplicavel * 100) + '%',
+          atingiuTetoMulta: d.diasAtraso >= 61,
+          selicAcumulada: selicAcumulada,
+          jurosMesPagamento: jurosMesPagamento,
+          taxaTotalJuros: taxaTotalJuros
+        }
+      };
+    },
+
+    /**
+     * ═══════════════════════════════════════════════════════════════════════
+     * Multa de Ofício — Portado do motor v4.6
+     * ═══════════════════════════════════════════════════════════════════════
+     *
+     * Base Legal: Lei 9.430/96, Art. 44 (redação Lei 14.689/2023)
+     */
+    multaOficio: function (dados) {
+      var d = Object.assign({
+        valorDiferenca: 0, tipoInfracao: 'normal',
+        estimativaIsolada: false, naoAtendeuIntimacao: false,
+        pagamento30Dias: false, pagamentoAntesRecurso: false
+      }, dados);
+
+      if (d.valorDiferenca <= 0) {
+        return { baseLegal: 'Lei 9.430/1996, art. 44', valorDiferenca: 0, multaOficio: 0 };
+      }
+
+      var percentualBase;
+      if (d.estimativaIsolada) {
+        percentualBase = 0.50;
+      } else if (d.tipoInfracao === 'qualificada') {
+        percentualBase = 1.00;
+      } else if (d.tipoInfracao === 'reincidente') {
+        percentualBase = 1.50;
+      } else {
+        percentualBase = 0.75;
+      }
+
+      var percentualFinal = percentualBase;
+      if (d.naoAtendeuIntimacao) {
+        percentualFinal = percentualBase * 1.50;
+      }
+
+      var reducao = 0;
+      if (d.pagamento30Dias) { reducao = 0.50; }
+      else if (d.pagamentoAntesRecurso) { reducao = 0.30; }
+
+      var multaBruta = _r(d.valorDiferenca * percentualFinal);
+      var valorReducao = _r(multaBruta * reducao);
+      var multaLiquida = _r(multaBruta - valorReducao);
+
+      return {
+        baseLegal: 'Lei 9.430/1996, art. 44 (redação Lei 14.689/2023)',
+        valorDiferenca: _r(d.valorDiferenca),
+        tipoInfracao: d.tipoInfracao,
+        percentualBase: percentualBase,
+        percentualFinal: percentualFinal,
+        multaBruta: multaBruta,
+        reducao: { percentual: reducao, valor: valorReducao },
+        multaLiquida: multaLiquida,
+        totalDevido: _r(d.valorDiferenca + multaLiquida)
+      };
+    },
+
+    /**
+     * ═══════════════════════════════════════════════════════════════════════
+     * Recomendar Regime (Trimestral vs Anual) — Portado do motor v4.6
+     * ═══════════════════════════════════════════════════════════════════════
+     *
+     * Base Legal: Art. 217-219, Art. 227-229
+     */
+    recomendarRegime: function (dados) {
+      var d = Object.assign({
+        lucrosMensais: [], prejuizoAcumulado: 0, temInvestimento: false
+      }, dados);
+
+      var lucroTotal = d.lucrosMensais.reduce(function (a, b) { return a + b; }, 0);
+      var temPrejuizoEmAlgunsMeses = d.lucrosMensais.some(function (l) { return l < 0; });
+      var lucroConcentradoNoFinal = d.lucrosMensais.slice(9, 12).reduce(function (a, b) { return a + b; }, 0) > lucroTotal * 0.5;
+
+      // Simulação Trimestral
+      var trimestres = [
+        d.lucrosMensais.slice(0, 3).reduce(function (a, b) { return a + b; }, 0),
+        d.lucrosMensais.slice(3, 6).reduce(function (a, b) { return a + b; }, 0),
+        d.lucrosMensais.slice(6, 9).reduce(function (a, b) { return a + b; }, 0),
+        d.lucrosMensais.slice(9, 12).reduce(function (a, b) { return a + b; }, 0)
+      ];
+
+      var irpjTrimestral = 0;
+      var saldoPrejTri = d.prejuizoAcumulado;
+      for (var i = 0; i < trimestres.length; i++) {
+        var lucroTri = trimestres[i];
+        if (lucroTri <= 0) {
+          saldoPrejTri += Math.abs(lucroTri);
+          continue;
+        }
+        var lim30 = lucroTri * 0.30;
+        var comp = Math.min(lim30, saldoPrejTri);
+        saldoPrejTri -= comp;
+        var lrFinal = lucroTri - comp;
+        if (lrFinal > 0) {
+          irpjTrimestral += lrFinal * 0.15;
+          irpjTrimestral += Math.max(lrFinal - 60000, 0) * 0.10;
+        }
+      }
+
+      // Simulação Anual
+      var irpjAnual = 0;
+      var saldoPrejAnual = d.prejuizoAcumulado;
+      if (lucroTotal > 0) {
+        var lim30a = lucroTotal * 0.30;
+        var compA = Math.min(lim30a, saldoPrejAnual);
+        saldoPrejAnual -= compA;
+        var lrAnual = lucroTotal - compA;
+        if (lrAnual > 0) {
+          irpjAnual = lrAnual * 0.15;
+          irpjAnual += Math.max(lrAnual - 240000, 0) * 0.10;
+        }
+      }
+
+      var recomendacao, motivos = [];
+      if (lucroConcentradoNoFinal || temPrejuizoEmAlgunsMeses) {
+        recomendacao = 'ANUAL';
+        motivos.push('Lucro concentrado no final ou meses com prejuízo → suspensão/redução economiza');
+      } else {
+        recomendacao = irpjAnual <= irpjTrimestral ? 'ANUAL' : 'TRIMESTRAL';
+        motivos.push('Simulação: IRPJ Trimestral = R$ ' + _r(irpjTrimestral).toFixed(2) + ' vs Anual = R$ ' + _r(irpjAnual).toFixed(2));
+      }
+
+      if (temPrejuizoEmAlgunsMeses) {
+        motivos.push('ANUAL permite suspensão de estimativas com balanço mensal (Art. 227)');
+      }
+      if (d.prejuizoAcumulado > 0) {
+        motivos.push('Prejuízo acumulado: no trimestral, trava de 30% aplica por trimestre (4 vezes); no anual, aplica uma vez');
+      }
+
+      return {
+        recomendacao: recomendacao,
+        motivos: motivos,
+        simulacao: {
+          trimestral: { irpjTotal: _r(irpjTrimestral), detalhamentoTrimestres: trimestres, saldoPrejuizoRemanescente: _r(saldoPrejTri) },
+          anual: { irpjTotal: _r(irpjAnual), saldoPrejuizoRemanescente: _r(saldoPrejAnual) },
+          economia: _r(Math.abs(irpjTrimestral - irpjAnual)),
+          regimeMaisBarato: irpjAnual <= irpjTrimestral ? 'ANUAL' : 'TRIMESTRAL'
+        },
+        alerta: 'Art. 229: A opção é IRRETRATÁVEL para todo o ano-calendário',
+        artigos: 'Art. 217-219, Art. 227-229'
+      };
+    },
+
+    /**
      * Simulação completa — tudo junto
      */
     simulacaoCompleta: function (empresa) {
-      const e = Object.assign({
+      var e = Object.assign({
         lucroLiquido: 0, receitaBruta: 0, adicoes: 0, exclusoes: 0,
         prejuizoFiscal: 0, baseNegativaCSLL: 0,
         patrimonioLiquido: 0, tjlp: 0.06, lucrosAcumulados: 0,
         retencoesFonte: 0, estimativasPagas: 0, numMeses: 12
       }, empresa);
 
-      const jcp = LR.calcular.jcp(e);
-      const lucroAjustado = e.lucroLiquido - jcp.jcpDedutivel;
+      var jcp = LR.calcular.jcp(e);
+      var lucroAjustado = e.lucroLiquido - jcp.jcpDedutivel;
 
-      const irpjSem = LR.calcular.irpj({ lucroLiquido: e.lucroLiquido, adicoes: e.adicoes, exclusoes: e.exclusoes, numMeses: e.numMeses });
-      const irpjCom = LR.calcular.irpj({
+      var irpjSem = LR.calcular.irpj({ lucroLiquido: e.lucroLiquido, adicoes: e.adicoes, exclusoes: e.exclusoes, numMeses: e.numMeses });
+      var irpjCom = LR.calcular.irpj({
         lucroLiquido: lucroAjustado, adicoes: e.adicoes, exclusoes: e.exclusoes,
         prejuizoFiscal: e.prejuizoFiscal, numMeses: e.numMeses,
         retencoesFonte: e.retencoesFonte, estimativasPagas: e.estimativasPagas
       });
-      const csll = LR.calcular.csll({ lucroLiquido: lucroAjustado, adicoes: e.adicoes, exclusoes: e.exclusoes, baseNegativa: e.baseNegativaCSLL });
+      var csll = LR.calcular.csll({ lucroLiquido: lucroAjustado, adicoes: e.adicoes, exclusoes: e.exclusoes, baseNegativa: e.baseNegativaCSLL });
 
-      const economiaJCP = jcp.economiaLiquida;
-      const economiaIRPJ = irpjSem.irpjDevido - irpjCom.irpjDevido;
+      var economiaJCP = jcp.economiaLiquida;
+      var economiaIRPJ = irpjSem.irpjDevido - irpjCom.irpjDevido;
 
       return {
         semOtimizacao: { irpjDevido: irpjSem.irpjDevido, aliquotaEfetiva: irpjSem.aliquotaEfetiva },
@@ -1045,8 +1898,6 @@
   // ═══════════════════════════════════════════════════════════════════════════
   // 31. HELPERS — FORMATAÇÃO E UTILITÁRIOS
   // ═══════════════════════════════════════════════════════════════════════════
-
-  function _r(v) { return Math.round(v * 100) / 100; }
 
   LR.helpers = {
     formatarMoeda: function (v) {
