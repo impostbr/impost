@@ -1,6 +1,6 @@
 /**
  * ╔══════════════════════════════════════════════════════════════════════════════╗
- * ║  LUCRO REAL — ESTUDOS TRIBUTÁRIOS  v2.1  (ARQUIVO UNIFICADO)              ║
+ * ║  LUCRO REAL — ESTUDOS TRIBUTÁRIOS  v2.2  (ARQUIVO UNIFICADO)              ║
  * ║  Wizard 7 etapas + Motor de diagnóstico + Exportação PDF/Excel            ║
  * ║  100% LUCRO REAL — Sem comparativo com Simples/Presumido                   ║
  * ║  Motor: cruza respostas do usuário com LucroRealMap (LR.calcular.*)        ║
@@ -20,7 +20,7 @@
  *   window.IMPOSTExport      — alias de compatibilidade para exportação
  *
  * IMPOST. — Inteligência em Modelagem de Otimização Tributária
- * Versão: 2.1.0 | Data: Fevereiro/2026
+ * Versão: 2.2.0 | Data: Fevereiro/2026
  *
  * NOTA: Este arquivo unifica os antigos lucro-real-estudos.js + lucro-real-estudos-export.js
  *       Não é mais necessário carregar o arquivo de exportação separadamente.
@@ -31,7 +31,7 @@
   // ═══════════════════════════════════════════════════════════════════════════
   //  CONSTANTES E HELPERS
   // ═══════════════════════════════════════════════════════════════════════════
-  const VERSAO = "2.1.0";
+  const VERSAO = "2.2.0";
   const LS_KEY_DADOS = "impost_lr_dados";
   const LS_KEY_STEP = "impost_lr_step";
   const LS_KEY_RESULTADOS = "impost_lr_resultados";
@@ -3457,6 +3457,100 @@
     }
 
     // ═══════════════════════════════════════════════════════════════════════
+    //  PASSO 22F — Acréscimos Moratórios e Multas (Bloco H)
+    //  Arts. 44, 47, 61, 63 — Lei 9.430/1996 + Lei 14.689/2023
+    // ═══════════════════════════════════════════════════════════════════════
+    var acrescimosMoratoriosResult = null;
+    var multaOficioResult = null;
+    var prazoEspontaneoResult = null;
+    var suspensaoMultaResult = null;
+
+    // Só calcula se o usuário informou dados de atraso/mora
+    var temDadosMora = _n(d.valorPrincipalMora) > 0 || d.dataVencimentoMora || d.dataPagamentoMora;
+    if (temDadosMora && LR.calcular) {
+      try {
+        var dadosMora = {
+          valorPrincipal: _n(d.valorPrincipalMora) || _r(cargaBruta / 12),
+          dataVencimento: d.dataVencimentoMora || null,
+          dataPagamento: d.dataPagamentoMora || null
+        };
+        if (LR.calcular.acrescimosMoratorios) {
+          acrescimosMoratoriosResult = LR.calcular.acrescimosMoratorios(dadosMora);
+        }
+      } catch(e) { if (typeof console !== 'undefined') console.warn('[Passo 22F] acrescimosMoratorios:', e.message); }
+    }
+
+    // Multa de ofício — simulação com base na carga tributária calculada
+    if (LR.calcular && LR.calcular.multaOficio) {
+      try {
+        multaOficioResult = LR.calcular.multaOficio({
+          valorTributo: _r(cargaBruta / 12),
+          tipo: d.tipoMultaOficio || 'PADRAO',
+          pagouEm30Dias: d.pagouMultaEm30Dias === true || d.pagouMultaEm30Dias === "true",
+          temConformidade: d.temConformidadeLei14689 === true || d.temConformidadeLei14689 === "true",
+          temTransacao: d.temTransacaoTributaria === true || d.temTransacaoTributaria === "true"
+        });
+      } catch(e) { if (typeof console !== 'undefined') console.warn('[Passo 22F] multaOficio:', e.message); }
+    }
+
+    // Prazo espontâneo — 20 dias do termo de fiscalização
+    if (LR.validar && LR.validar.prazoEspontaneo) {
+      try {
+        prazoEspontaneoResult = LR.validar.prazoEspontaneo({
+          dataTermoFiscalizacao: d.dataTermoFiscalizacao || null
+        });
+      } catch(e) { if (typeof console !== 'undefined') console.warn('[Passo 22F] prazoEspontaneo:', e.message); }
+    }
+
+    // Suspensão de multa de ofício por liminar/tutela
+    if (LR.validar && LR.validar.suspensaoMultaOficio) {
+      try {
+        suspensaoMultaResult = LR.validar.suspensaoMultaOficio({
+          temLiminar: d.temLiminarSuspensao === true || d.temLiminarSuspensao === "true",
+          temTutela: d.temTutelaSuspensao === true || d.temTutelaSuspensao === "true",
+          temDeposito: d.temDepositoJudicial === true || d.temDepositoJudicial === "true"
+        });
+      } catch(e) { if (typeof console !== 'undefined') console.warn('[Passo 22F] suspensaoMulta:', e.message); }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  PASSO 22G — Compensação PER/DCOMP (Bloco I)
+    //  Arts. 73, 74, 74-A — CTN + Lei 14.873/2024
+    // ═══════════════════════════════════════════════════════════════════════
+    var compensacaoPERDCOMPResult = null;
+    var compensacaoJudicialResult = null;
+
+    var temCreditoCompensavel = _n(d.creditoCompensavelValor) > 0 || (saldoNegResult && saldoNegResult.saldoNegativo > 0);
+    if (temCreditoCompensavel && LR.calcular) {
+      var valorCredComp = _n(d.creditoCompensavelValor) || (saldoNegResult ? (saldoNegResult.saldoNegativo || 0) : 0);
+      try {
+        if (LR.calcular.compensacaoPERDCOMP) {
+          compensacaoPERDCOMPResult = LR.calcular.compensacaoPERDCOMP({
+            creditoValor: valorCredComp,
+            creditoTipo: d.creditoCompensavelTipo || 'PAGAMENTO_INDEVIDO',
+            ehEstimativa: d.creditoEhEstimativa === true || d.creditoEhEstimativa === "true",
+            creditoPrescrito: d.creditoPrescrito === true || d.creditoPrescrito === "true",
+            temTransitoJulgado: d.creditoTemTransito === true || d.creditoTemTransito === "true",
+            debitoDestino: d.debitoDestinoCompensacao || 'IRPJ',
+            lucroRealFinal: lucroRealFinal,
+            cargaBruta: cargaBruta
+          });
+        }
+      } catch(e) { if (typeof console !== 'undefined') console.warn('[Passo 22G] compensacaoPERDCOMP:', e.message); }
+
+      // Simulação judicial — créditos > R$ 10 milhões
+      if (valorCredComp > 10000000 && LR.calcular.compensacaoJudicial) {
+        try {
+          compensacaoJudicialResult = LR.calcular.compensacaoJudicial({
+            valorCredito: valorCredComp,
+            prazoMeses: 60,
+            limiteMinimo: 10000000
+          });
+        } catch(e) { if (typeof console !== 'undefined') console.warn('[Passo 22G] compensacaoJudicial:', e.message); }
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
     //  PASSO 23 — Detector de oportunidades
     // ═══════════════════════════════════════════════════════════════════════
     var oportunidades = _detectarOportunidades(d, {
@@ -3656,7 +3750,17 @@
       arvoreDecisao: arvoreDecisao,
       elegibilidade: elegibilidade,
       retencoesAnuais: retencoesAnuais,
-      comparativoSUDAM: comparativoSUDAM
+      comparativoSUDAM: comparativoSUDAM,
+
+      // Novos resultados — BLOCO H (Acréscimos Moratórios)
+      acrescimosMoratorios: acrescimosMoratoriosResult,
+      multaOficio: multaOficioResult,
+      prazoEspontaneo: prazoEspontaneoResult,
+      suspensaoMulta: suspensaoMultaResult,
+
+      // Novos resultados — BLOCO I (PER/DCOMP)
+      compensacaoPERDCOMP: compensacaoPERDCOMPResult,
+      compensacaoJudicial: compensacaoJudicialResult
     };
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -6253,6 +6357,178 @@
     }
 
     // ═══════════════════════════════════════════════════════════════════════
+    //  SEÇÃO NOVA 20 — ACRÉSCIMOS MORATÓRIOS E MULTAS (Bloco H)
+    //  Arts. 44, 47, 61, 63 — Lei 9.430/1996 + Lei 14.689/2023
+    // ═══════════════════════════════════════════════════════════════════════
+    if (r.acrescimosMoratorios || r.multaOficio || LR.multasEMora) {
+      var sT = '';
+
+      // Tabela de referência — parâmetros legais
+      if (LR.multasEMora) {
+        var mm = LR.multasEMora;
+        sT += '<h4>Parâmetros Legais — Multas e Mora</h4>';
+        sT += '<table class="res-table"><thead><tr><th>Parâmetro</th><th>Valor</th><th>Base Legal</th></tr></thead><tbody>';
+        if (mm.multaMora) {
+          sT += '<tr><td>Multa de Mora (por dia de atraso)</td><td>' + _p(mm.multaMora.taxaDiaria || 0.0033) + '</td><td><span class="res-artigo">' + (mm.multaMora.artigo || 'Art. 61') + '</span></td></tr>';
+          sT += '<tr><td>Teto da Multa de Mora</td><td>' + _p(mm.multaMora.teto || 0.20) + '</td><td><span class="res-artigo">Art. 61</span></td></tr>';
+        }
+        if (mm.jurosMora) {
+          sT += '<tr><td>Juros de Mora</td><td>SELIC acumulada + 1% mês pagamento</td><td><span class="res-artigo">' + (mm.jurosMora.artigo || 'Art. 61, §3º') + '</span></td></tr>';
+        }
+        if (mm.multaOficio) {
+          sT += '<tr><td>Multa de Ofício — Padrão</td><td>' + _p(mm.multaOficio.padrao || 0.75) + '</td><td><span class="res-artigo">' + (mm.multaOficio.artigo || 'Art. 44') + '</span></td></tr>';
+          sT += '<tr><td>Multa de Ofício — Fraude/Sonegação</td><td>' + _p(mm.multaOficio.fraude || 1.50) + '</td><td><span class="res-artigo">Art. 44, §1º</span></td></tr>';
+          if (mm.multaOficio.agravamento) {
+            sT += '<tr><td>Agravamento (não atendimento intimação)</td><td>+' + _p(mm.multaOficio.agravamento.naoAtendimentoIntimacao || 0.50) + ' (teto ' + _p(mm.multaOficio.agravamento.percentualMaximo || 2.25) + ')</td><td><span class="res-artigo">Art. 44, §2º</span></td></tr>';
+          }
+          if (mm.multaOficio.reducoes) {
+            sT += '<tr><td>Redução — pagamento em 30 dias</td><td>-' + _p(mm.multaOficio.reducoes.pagamentoOuParcelamento30dias || 0.50) + '</td><td><span class="res-artigo">Art. 44, §3º</span></td></tr>';
+            if (mm.multaOficio.reducoes.conformidadeLei14689) {
+              sT += '<tr><td>Redução — Conformidade (Lei 14.689/2023)</td><td>Até -' + _p(mm.multaOficio.reducoes.conformidadeLei14689.comTransacao || 0.50) + ' c/ transação</td><td><span class="res-artigo">' + (mm.multaOficio.reducoes.conformidadeLei14689.artigo || 'Lei 14.689/2023') + '</span></td></tr>';
+            }
+          }
+        }
+        if (mm.prazoEspontaneo) {
+          sT += '<tr><td>Prazo para Pagamento Espontâneo</td><td>' + (mm.prazoEspontaneo.diasAposTermoFiscalizacao || 20) + ' dias do termo de fiscalização</td><td><span class="res-artigo">' + (mm.prazoEspontaneo.artigo || 'Art. 47') + '</span></td></tr>';
+        }
+        sT += '</tbody></table>';
+      }
+
+      // Resultado calculado — acréscimos moratórios
+      if (r.acrescimosMoratorios) {
+        var am = r.acrescimosMoratorios;
+        sT += '<h4 style="margin-top:16px;">Simulação de Acréscimos Moratórios</h4>';
+        sT += '<div class="res-cards-row">';
+        sT += '<div class="res-card"><div class="res-card-label">Valor Original</div><div class="res-card-value">' + _m(am.valorOriginal || 0) + '</div></div>';
+        sT += '<div class="res-card"><div class="res-card-label">Multa de Mora</div><div class="res-card-value res-negativo">' + _m(am.multaMora || 0) + '</div></div>';
+        sT += '<div class="res-card"><div class="res-card-label">Juros (SELIC)</div><div class="res-card-value res-negativo">' + _m(am.jurosMora || 0) + '</div></div>';
+        sT += '<div class="res-card"><div class="res-card-label">Total a Pagar</div><div class="res-card-value" style="color:#e74c3c;font-weight:700;">' + _m(am.valorTotal || 0) + '</div></div>';
+        sT += '</div>';
+        if (am.espontaneo) {
+          sT += '<div class="res-alert res-alert-info">Pagamento espontâneo — sem multa de ofício. Incide apenas multa de mora + juros SELIC.</div>';
+        }
+      }
+
+      // Resultado calculado — multa de ofício
+      if (r.multaOficio) {
+        var mo = r.multaOficio;
+        sT += '<h4 style="margin-top:16px;">Simulação de Multa de Ofício</h4>';
+        sT += '<div class="res-cards-row">';
+        sT += '<div class="res-card"><div class="res-card-label">Multa Calculada</div><div class="res-card-value res-negativo">' + _m(mo.multaOficio || mo.valorFinal || 0) + '</div></div>';
+        sT += '<div class="res-card"><div class="res-card-label">Percentual Aplicado</div><div class="res-card-value">' + _p(mo.percentualAplicado || 0.75) + '</div></div>';
+        sT += '</div>';
+        if (mo.reducoes && mo.reducoes.length > 0) {
+          sT += '<div class="res-alert res-alert-success">Reduções aplicadas: ' + mo.reducoes.join('; ') + '</div>';
+        }
+      }
+
+      // Suspensão de multa
+      if (r.suspensaoMulta && r.suspensaoMulta.suspensa) {
+        sT += '<div class="res-alert res-alert-success" style="margin-top:12px;"><strong>Multa de ofício suspensa</strong> — ' + (r.suspensaoMulta.motivo || 'Liminar/Tutela vigente') + ' <span class="res-artigo">Art. 63</span></div>';
+      }
+
+      // Prazo espontâneo
+      if (r.prazoEspontaneo && r.prazoEspontaneo.prazoFinal) {
+        sT += '<div class="res-alert res-alert-warning" style="margin-top:12px;"><strong>Prazo Espontâneo:</strong> até ' + new Date(r.prazoEspontaneo.prazoFinal).toLocaleDateString('pt-BR') + ' (' + (r.prazoEspontaneo.artigo || 'Art. 47') + '). Pagamento dentro deste prazo evita multa de ofício.</div>';
+      }
+
+      html += _secao('T', 'Acréscimos Moratórios e Multas', sT);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  SEÇÃO NOVA 21 — COMPENSAÇÃO PER/DCOMP (Bloco I)
+    //  Arts. 73, 74, 74-A — CTN + Lei 14.873/2024
+    // ═══════════════════════════════════════════════════════════════════════
+    if (r.compensacaoPERDCOMP || r.compensacaoJudicial || LR.compensacaoPERDCOMP) {
+      var sU = '';
+
+      // Tabela de vedações — referência legal
+      if (LR.compensacaoPERDCOMP) {
+        var cp = LR.compensacaoPERDCOMP;
+        if (cp.vedacoes && cp.vedacoes.length > 0) {
+          sU += '<h4>Vedações à Compensação (§3º do Art. 74)</h4>';
+          sU += '<table class="res-table"><thead><tr><th>Hipótese</th><th>Descrição</th><th>Artigo</th></tr></thead><tbody>';
+          cp.vedacoes.forEach(function (v) {
+            sU += '<tr><td>' + (v.id || '') + '</td><td>' + (v.descricao || '') + '</td><td><span class="res-artigo">' + (v.artigo || '') + '</span></td></tr>';
+          });
+          sU += '</tbody></table>';
+        }
+
+        if (cp.hipotesesNaoDeclarada && cp.hipotesesNaoDeclarada.length > 0) {
+          sU += '<h4 style="margin-top:16px;">Hipóteses de "Não Declarada" (§12 do Art. 74)</h4>';
+          sU += '<table class="res-table"><thead><tr><th>Hipótese</th><th>Descrição</th><th>Artigo</th></tr></thead><tbody>';
+          cp.hipotesesNaoDeclarada.forEach(function (h) {
+            sU += '<tr><td>' + (h.id || '') + '</td><td>' + (h.descricao || '') + '</td><td><span class="res-artigo">' + (h.artigo || '') + '</span></td></tr>';
+          });
+          sU += '</tbody></table>';
+        }
+
+        if (cp.multaCompensacaoIndevida) {
+          sU += '<div class="res-alert res-alert-danger" style="margin-top:12px;"><strong>⚠️ Multa por Compensação Indevida:</strong> ' + _p(cp.multaCompensacaoIndevida.percentual || 0.50) + ' sobre o valor não homologado (' + (cp.multaCompensacaoIndevida.artigo || '§17') + ')</div>';
+        }
+
+        if (cp.compensacaoJudicial) {
+          sU += '<div class="res-alert res-alert-warning" style="margin-top:12px;"><strong>Limite Judicial (Art. 74-A):</strong> ' + (cp.compensacaoJudicial.descricao || 'Créditos > R$ 10 milhões — 1/60 por mês') + '</div>';
+        }
+
+        if (cp.prazoDecadencial) {
+          sU += '<p style="color:#666;font-size:0.9em;margin-top:8px;">' + (cp.prazoDecadencial.descricao || '') + ' <span class="res-artigo">' + (cp.prazoDecadencial.artigo || 'Art. 168 CTN') + '</span></p>';
+        }
+      }
+
+      // Resultado calculado — análise PER/DCOMP
+      if (r.compensacaoPERDCOMP) {
+        var pdc = r.compensacaoPERDCOMP;
+        sU += '<h4 style="margin-top:16px;">Análise da Compensação Solicitada</h4>';
+        sU += '<div class="res-cards-row">';
+        sU += '<div class="res-card"><div class="res-card-label">Status</div><div class="res-card-value" style="color:' + (pdc.compensacaoPermitida ? '#2ecc71' : '#e74c3c') + ';">' + (pdc.compensacaoPermitida ? '✅ Permitida' : '❌ Vedada') + '</div></div>';
+        if (pdc.riscoMulta50 && pdc.riscoMulta50.aplicavel) {
+          sU += '<div class="res-card"><div class="res-card-label">Risco Multa 50%</div><div class="res-card-value res-negativo">' + _m(pdc.riscoMulta50.valor || 0) + '</div></div>';
+        }
+        if (pdc.impactoLucroReal) {
+          var impLR = pdc.impactoLucroReal;
+          if ((impLR.reducaoIRPJ || 0) > 0 || (impLR.reducaoCSLL || 0) > 0) {
+            sU += '<div class="res-card"><div class="res-card-label">Redução IRPJ</div><div class="res-card-value res-economia">' + _m(impLR.reducaoIRPJ || 0) + '</div></div>';
+            sU += '<div class="res-card"><div class="res-card-label">Redução CSLL</div><div class="res-card-value res-economia">' + _m(impLR.reducaoCSLL || 0) + '</div></div>';
+          }
+        }
+        sU += '</div>';
+
+        if (pdc.vedacoes && pdc.vedacoes.length > 0) {
+          sU += '<div class="res-alert res-alert-danger">Vedações identificadas: ' + pdc.vedacoes.join(', ') + '</div>';
+        }
+        if (pdc.hipotesesNaoDeclarada && pdc.hipotesesNaoDeclarada.length > 0) {
+          sU += '<div class="res-alert res-alert-warning">Risco de "não declarada": ' + pdc.hipotesesNaoDeclarada.join(', ') + '</div>';
+        }
+        if (pdc.recomendacoes && pdc.recomendacoes.length > 0) {
+          sU += '<h4 style="margin-top:12px;">Recomendações</h4><ul>';
+          pdc.recomendacoes.forEach(function (rec) { sU += '<li>' + rec + '</li>'; });
+          sU += '</ul>';
+        }
+      }
+
+      // Resultado calculado — compensação judicial (1/60)
+      if (r.compensacaoJudicial && r.compensacaoJudicial.sujeito) {
+        var cj = r.compensacaoJudicial;
+        sU += '<h4 style="margin-top:16px;">Cronograma de Compensação Judicial (Art. 74-A)</h4>';
+        sU += '<div class="res-cards-row">';
+        sU += '<div class="res-card"><div class="res-card-label">Limite Mensal</div><div class="res-card-value">' + _m(cj.limiteMensal || 0) + '</div></div>';
+        sU += '<div class="res-card"><div class="res-card-label">Prazo Total</div><div class="res-card-value">' + (cj.prazoTotal || 60) + ' meses</div></div>';
+        sU += '</div>';
+        if (cj.cronograma && cj.cronograma.length > 0) {
+          sU += '<details style="margin-top:8px;"><summary style="cursor:pointer;font-weight:600;">Ver cronograma mês a mês (' + cj.cronograma.length + ' parcelas)</summary>';
+          sU += '<table class="res-table" style="margin-top:6px;"><thead><tr><th>Mês</th><th>Compensação</th><th>Saldo Remanescente</th></tr></thead><tbody>';
+          cj.cronograma.forEach(function (p) {
+            sU += '<tr><td>' + (p.mes || p.parcela || '') + '</td><td>' + _m(p.valor || p.compensacao || 0) + '</td><td>' + _m(p.saldo || p.saldoRemanescente || 0) + '</td></tr>';
+          });
+          sU += '</tbody></table></details>';
+        }
+      }
+
+      html += _secao('U', 'Compensação PER/DCOMP', sU);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
     //  SEÇÃO 13 — CRONOGRAMA DE IMPLEMENTAÇÃO (condicional)
     // ═══════════════════════════════════════════════════════════════════════
     var situacao = d.situacaoAtual || '';
@@ -6290,7 +6566,7 @@
       s14 += '</div>';
     }
     s14 += '<div class="res-footer-data"><strong>Data de geração:</strong> ' + dataFormatada + ' às ' + dataHoje.toLocaleTimeString("pt-BR") + '</div>';
-    s14 += '<div class="res-footer-base">Base legal: RIR/2018 (Decreto 9.580/2018), Lei 7.689/1988, Lei 10.637/2002, Lei 10.833/2003, LC 116/2003</div>';
+    s14 += '<div class="res-footer-base">Base legal: RIR/2018 (Decreto 9.580/2018), Lei 7.689/1988, Lei 9.430/1996, Lei 10.637/2002, Lei 10.833/2003, Lei 14.689/2023, Lei 14.873/2024, LC 116/2003</div>';
     s14 += '<div class="res-footer-disclaimer">' + cfg.disclaimer + '</div>';
     if (cfg.mostrarMarcaImpost) {
       s14 += '<div class="res-footer-marca">' + cfg.nomeProduto + ' v' + VERSAO + ' — ' + cfg.subtitulo + '</div>';
@@ -8204,6 +8480,116 @@
 
 
     // ═════════════════════════════════════════════════════
+    //  SEÇÃO NOVA PDF 12 — ACRÉSCIMOS MORATÓRIOS (Bloco H)
+    // ═════════════════════════════════════════════════════
+
+    if (r.acrescimosMoratorios || r.multaOficio || LR.multasEMora) {
+      h += pageBreak();
+      h += secaoTitulo('⚖️', 'ACRÉSCIMOS MORATÓRIOS E MULTAS (Arts. 44, 47, 61, 63)');
+
+      if (LR.multasEMora) {
+        var mmPdf = LR.multasEMora;
+        var moraRefRows = [];
+        if (mmPdf.multaMora) {
+          moraRefRows.push({ cells: ['Multa de Mora (diária)', _pp((mmPdf.multaMora.taxaDiaria || 0.0033) * 100), mmPdf.multaMora.artigo || 'Art. 61'] });
+          moraRefRows.push({ cells: ['Teto Multa de Mora', _pp((mmPdf.multaMora.teto || 0.20) * 100), 'Art. 61'] });
+        }
+        if (mmPdf.jurosMora) {
+          moraRefRows.push({ cells: ['Juros de Mora', 'SELIC + 1%/mês', mmPdf.jurosMora.artigo || 'Art. 61, §3º'] });
+        }
+        if (mmPdf.multaOficio) {
+          moraRefRows.push({ cells: ['Multa Ofício Padrão', _pp((mmPdf.multaOficio.padrao || 0.75) * 100), mmPdf.multaOficio.artigo || 'Art. 44'] });
+          moraRefRows.push({ cells: ['Multa Ofício Fraude', _pp((mmPdf.multaOficio.fraude || 1.50) * 100), 'Art. 44, §1º'] });
+          if (mmPdf.multaOficio.reducoes && mmPdf.multaOficio.reducoes.conformidadeLei14689) {
+            moraRefRows.push({ cells: ['Redução Lei 14.689/2023', 'Até -' + _pp((mmPdf.multaOficio.reducoes.conformidadeLei14689.comTransacao || 0.50) * 100), mmPdf.multaOficio.reducoes.conformidadeLei14689.artigo || 'Lei 14.689/2023'] });
+          }
+        }
+        if (mmPdf.prazoEspontaneo) {
+          moraRefRows.push({ cells: ['Prazo Espontâneo', (mmPdf.prazoEspontaneo.diasAposTermoFiscalizacao || 20) + ' dias', mmPdf.prazoEspontaneo.artigo || 'Art. 47'] });
+        }
+        if (moraRefRows.length > 0) {
+          h += '<div style="font-weight:700;font-size:10px;margin:8px 0 4px;">Parâmetros Legais</div>';
+          h += tabelaHTML(['Parâmetro', 'Valor', 'Base Legal'], moraRefRows, { noAlignRight: true });
+        }
+      }
+
+      if (r.acrescimosMoratorios) {
+        var amPdf = r.acrescimosMoratorios;
+        h += '<div style="font-weight:700;font-size:10px;margin:12px 0 4px;">Simulação de Acréscimos Moratórios</div>';
+        var amRows = [];
+        amRows.push({ cells: ['Valor Original', _m(amPdf.valorOriginal || 0)] });
+        amRows.push({ cells: ['(+) Multa de Mora', _m(amPdf.multaMora || 0)] });
+        amRows.push({ cells: ['(+) Juros SELIC', _m(amPdf.jurosMora || 0)] });
+        amRows.push({ cells: ['(=) Total a Pagar', _m(amPdf.valorTotal || 0)], _highlight: true });
+        h += tabelaHTML(['Item', 'Valor'], amRows);
+      }
+
+      if (r.multaOficio) {
+        var moPdf = r.multaOficio;
+        h += '<div style="font-weight:700;font-size:10px;margin:12px 0 4px;">Simulação de Multa de Ofício</div>';
+        h += '<div style="font-size:9px;color:' + COR.text + ';">Percentual: ' + _pp((moPdf.percentualAplicado || 0.75) * 100) + ' — Multa: ' + _m(moPdf.multaOficio || moPdf.valorFinal || 0) + '</div>';
+        if (moPdf.reducoes && moPdf.reducoes.length > 0) {
+          h += '<div style="font-size:9px;color:' + COR.acento + ';margin-top:4px;">Reduções: ' + moPdf.reducoes.join('; ') + '</div>';
+        }
+      }
+
+      if (r.suspensaoMulta && r.suspensaoMulta.suspensa) {
+        h += '<div style="font-size:9px;color:' + COR.acento + ';margin-top:6px;">✅ Multa de ofício suspensa — ' + (r.suspensaoMulta.motivo || 'Liminar/Tutela') + ' (Art. 63)</div>';
+      }
+    }
+
+
+    // ═════════════════════════════════════════════════════
+    //  SEÇÃO NOVA PDF 13 — COMPENSAÇÃO PER/DCOMP (Bloco I)
+    // ═════════════════════════════════════════════════════
+
+    if (r.compensacaoPERDCOMP || r.compensacaoJudicial || LR.compensacaoPERDCOMP) {
+      h += pageBreak();
+      h += secaoTitulo('🔄', 'COMPENSAÇÃO PER/DCOMP (Arts. 73, 74, 74-A)');
+
+      if (LR.compensacaoPERDCOMP) {
+        var cpPdf = LR.compensacaoPERDCOMP;
+        if (cpPdf.vedacoes && cpPdf.vedacoes.length > 0) {
+          h += '<div style="font-weight:700;font-size:10px;margin:8px 0 4px;">Vedações (§3º do Art. 74)</div>';
+          var vedRows = [];
+          cpPdf.vedacoes.forEach(function (v) {
+            vedRows.push({ cells: [v.id || '', v.descricao || '', v.artigo || ''] });
+          });
+          h += tabelaHTML(['Hipótese', 'Descrição', 'Artigo'], vedRows, { noAlignRight: true });
+        }
+        if (cpPdf.multaCompensacaoIndevida) {
+          h += '<div style="font-size:9px;color:#e74c3c;margin:6px 0;">⚠️ Multa compensação indevida: ' + _pp((cpPdf.multaCompensacaoIndevida.percentual || 0.50) * 100) + ' sobre valor não homologado (' + (cpPdf.multaCompensacaoIndevida.artigo || '§17') + ')</div>';
+        }
+      }
+
+      if (r.compensacaoPERDCOMP) {
+        var pdcPdf = r.compensacaoPERDCOMP;
+        h += '<div style="font-weight:700;font-size:10px;margin:12px 0 4px;">Análise da Compensação</div>';
+        h += '<div style="font-size:9px;color:' + (pdcPdf.compensacaoPermitida ? COR.acento : '#e74c3c') + ';">' + (pdcPdf.compensacaoPermitida ? '✅ Compensação Permitida' : '❌ Compensação Vedada') + '</div>';
+        if (pdcPdf.vedacoes && pdcPdf.vedacoes.length > 0) {
+          h += '<div style="font-size:9px;color:#e74c3c;margin-top:4px;">Vedações: ' + pdcPdf.vedacoes.join(', ') + '</div>';
+        }
+        if (pdcPdf.riscoMulta50 && pdcPdf.riscoMulta50.aplicavel) {
+          h += '<div style="font-size:9px;color:#e74c3c;margin-top:4px;">Risco multa 50%: ' + _m(pdcPdf.riscoMulta50.valor || 0) + '</div>';
+        }
+      }
+
+      if (r.compensacaoJudicial && r.compensacaoJudicial.sujeito) {
+        var cjPdf = r.compensacaoJudicial;
+        h += '<div style="font-weight:700;font-size:10px;margin:12px 0 4px;">Compensação Judicial (Art. 74-A)</div>';
+        h += '<div style="font-size:9px;color:' + COR.text + ';">Limite mensal: ' + _m(cjPdf.limiteMensal || 0) + ' — Prazo: ' + (cjPdf.prazoTotal || 60) + ' meses</div>';
+        if (cjPdf.cronograma && cjPdf.cronograma.length > 0 && cjPdf.cronograma.length <= 12) {
+          var cjRows = [];
+          cjPdf.cronograma.forEach(function (p) {
+            cjRows.push({ cells: [p.mes || p.parcela || '', _m(p.valor || p.compensacao || 0), _m(p.saldo || p.saldoRemanescente || 0)] });
+          });
+          h += tabelaHTML(['Mês', 'Compensação', 'Saldo'], cjRows);
+        }
+      }
+    }
+
+
+    // ═════════════════════════════════════════════════════
     //  SEÇÃO 14 — DISCLAIMER + RODAPÉ
     // ═════════════════════════════════════════════════════
 
@@ -8694,6 +9080,152 @@
         aba14.push(['Dados consolidados disponíveis', 'Sim']);
       }
       addSheet('Consolidado', aba14, [35, 25]);
+    }
+
+
+    // ═════════════════════════════════════════════════════
+    //  ABA 15 — ACRÉSCIMOS MORATÓRIOS E MULTAS (Bloco H)
+    // ═════════════════════════════════════════════════════
+
+    if (r.acrescimosMoratorios || r.multaOficio || LR.multasEMora) {
+      var aba15 = [];
+      aba15.push(['ACRÉSCIMOS MORATÓRIOS E MULTAS — Arts. 44, 47, 61, 63']);
+      aba15.push([]);
+
+      // Parâmetros legais
+      if (LR.multasEMora) {
+        var mmXls = LR.multasEMora;
+        aba15.push(['PARÂMETROS LEGAIS']);
+        aba15.push(['Parâmetro', 'Valor', 'Base Legal']);
+        if (mmXls.multaMora) {
+          aba15.push(['Multa de Mora (diária)', pv(mmXls.multaMora.taxaDiaria || 0.0033), mmXls.multaMora.artigo || 'Art. 61']);
+          aba15.push(['Teto Multa de Mora', pv(mmXls.multaMora.teto || 0.20), 'Art. 61']);
+        }
+        if (mmXls.jurosMora) {
+          aba15.push(['Juros de Mora', 'SELIC acum. + 1%/mês', mmXls.jurosMora.artigo || 'Art. 61, §3º']);
+        }
+        if (mmXls.multaOficio) {
+          aba15.push(['Multa Ofício Padrão', pv(mmXls.multaOficio.padrao || 0.75), mmXls.multaOficio.artigo || 'Art. 44']);
+          aba15.push(['Multa Ofício Fraude', pv(mmXls.multaOficio.fraude || 1.50), 'Art. 44, §1º']);
+          if (mmXls.multaOficio.reducoes && mmXls.multaOficio.reducoes.pagamentoOuParcelamento30dias) {
+            aba15.push(['Redução pgto 30 dias', '-' + pv(mmXls.multaOficio.reducoes.pagamentoOuParcelamento30dias || 0.50), 'Art. 44, §3º']);
+          }
+          if (mmXls.multaOficio.reducoes && mmXls.multaOficio.reducoes.conformidadeLei14689) {
+            aba15.push(['Redução Lei 14.689/2023', 'Até -' + pv(mmXls.multaOficio.reducoes.conformidadeLei14689.comTransacao || 0.50), mmXls.multaOficio.reducoes.conformidadeLei14689.artigo || 'Lei 14.689/2023']);
+          }
+        }
+        if (mmXls.prazoEspontaneo) {
+          aba15.push(['Prazo Espontâneo', (mmXls.prazoEspontaneo.diasAposTermoFiscalizacao || 20) + ' dias', mmXls.prazoEspontaneo.artigo || 'Art. 47']);
+        }
+      }
+
+      // Simulação calculada
+      if (r.acrescimosMoratorios) {
+        var amXls = r.acrescimosMoratorios;
+        aba15.push([]);
+        aba15.push(['SIMULAÇÃO — ACRÉSCIMOS MORATÓRIOS']);
+        aba15.push(['Item', 'Valor']);
+        aba15.push(['Valor Original', mv(amXls.valorOriginal || 0)]);
+        aba15.push(['(+) Multa de Mora', mv(amXls.multaMora || 0)]);
+        aba15.push(['(+) Juros SELIC', mv(amXls.jurosMora || 0)]);
+        aba15.push(['(=) Total a Pagar', mv(amXls.valorTotal || 0)]);
+        aba15.push(['Pagamento Espontâneo?', amXls.espontaneo ? 'Sim' : 'Não']);
+      }
+
+      // Multa de ofício
+      if (r.multaOficio) {
+        var moXls = r.multaOficio;
+        aba15.push([]);
+        aba15.push(['SIMULAÇÃO — MULTA DE OFÍCIO']);
+        aba15.push(['Percentual Aplicado', pv(moXls.percentualAplicado || 0.75)]);
+        aba15.push(['Multa Calculada', mv(moXls.multaOficio || moXls.valorFinal || 0)]);
+        if (moXls.reducoes && moXls.reducoes.length > 0) {
+          aba15.push(['Reduções', moXls.reducoes.join('; ')]);
+        }
+      }
+
+      // Suspensão
+      if (r.suspensaoMulta && r.suspensaoMulta.suspensa) {
+        aba15.push([]);
+        aba15.push(['SUSPENSÃO MULTA DE OFÍCIO', 'Sim — ' + (r.suspensaoMulta.motivo || 'Liminar/Tutela'), 'Art. 63']);
+      }
+
+      addSheet('Mora e Multas', aba15, [30, 25, 30]);
+    }
+
+
+    // ═════════════════════════════════════════════════════
+    //  ABA 16 — COMPENSAÇÃO PER/DCOMP (Bloco I)
+    // ═════════════════════════════════════════════════════
+
+    if (r.compensacaoPERDCOMP || r.compensacaoJudicial || LR.compensacaoPERDCOMP) {
+      var aba16 = [];
+      aba16.push(['COMPENSAÇÃO PER/DCOMP — Arts. 73, 74, 74-A']);
+      aba16.push([]);
+
+      // Vedações — referência
+      if (LR.compensacaoPERDCOMP && LR.compensacaoPERDCOMP.vedacoes) {
+        aba16.push(['VEDAÇÕES À COMPENSAÇÃO (§3º do Art. 74)']);
+        aba16.push(['Hipótese', 'Descrição', 'Artigo']);
+        LR.compensacaoPERDCOMP.vedacoes.forEach(function (v) {
+          aba16.push([v.id || '', v.descricao || '', v.artigo || '']);
+        });
+        aba16.push([]);
+      }
+
+      // Hipóteses "não declarada"
+      if (LR.compensacaoPERDCOMP && LR.compensacaoPERDCOMP.hipotesesNaoDeclarada) {
+        aba16.push(['HIPÓTESES DE "NÃO DECLARADA" (§12 do Art. 74)']);
+        aba16.push(['Hipótese', 'Descrição', 'Artigo']);
+        LR.compensacaoPERDCOMP.hipotesesNaoDeclarada.forEach(function (h) {
+          aba16.push([h.id || '', h.descricao || '', h.artigo || '']);
+        });
+        aba16.push([]);
+      }
+
+      // Multa compensação indevida
+      if (LR.compensacaoPERDCOMP && LR.compensacaoPERDCOMP.multaCompensacaoIndevida) {
+        aba16.push(['Multa compensação indevida', pv(LR.compensacaoPERDCOMP.multaCompensacaoIndevida.percentual || 0.50), LR.compensacaoPERDCOMP.multaCompensacaoIndevida.artigo || '§17']);
+      }
+
+      // Análise calculada
+      if (r.compensacaoPERDCOMP) {
+        var pdcXls = r.compensacaoPERDCOMP;
+        aba16.push([]);
+        aba16.push(['ANÁLISE DA COMPENSAÇÃO']);
+        aba16.push(['Compensação Permitida?', pdcXls.compensacaoPermitida ? 'SIM' : 'NÃO']);
+        if (pdcXls.vedacoes && pdcXls.vedacoes.length > 0) {
+          aba16.push(['Vedações Identificadas', pdcXls.vedacoes.join(', ')]);
+        }
+        if (pdcXls.hipotesesNaoDeclarada && pdcXls.hipotesesNaoDeclarada.length > 0) {
+          aba16.push(['Risco "Não Declarada"', pdcXls.hipotesesNaoDeclarada.join(', ')]);
+        }
+        if (pdcXls.riscoMulta50 && pdcXls.riscoMulta50.aplicavel) {
+          aba16.push(['Risco Multa 50%', mv(pdcXls.riscoMulta50.valor || 0)]);
+        }
+        if (pdcXls.impactoLucroReal) {
+          if ((pdcXls.impactoLucroReal.reducaoIRPJ || 0) > 0) aba16.push(['Redução IRPJ', mv(pdcXls.impactoLucroReal.reducaoIRPJ)]);
+          if ((pdcXls.impactoLucroReal.reducaoCSLL || 0) > 0) aba16.push(['Redução CSLL', mv(pdcXls.impactoLucroReal.reducaoCSLL)]);
+        }
+      }
+
+      // Cronograma judicial
+      if (r.compensacaoJudicial && r.compensacaoJudicial.sujeito) {
+        var cjXls = r.compensacaoJudicial;
+        aba16.push([]);
+        aba16.push(['COMPENSAÇÃO JUDICIAL (Art. 74-A, Lei 14.873/2024)']);
+        aba16.push(['Limite Mensal', mv(cjXls.limiteMensal || 0)]);
+        aba16.push(['Prazo Total', (cjXls.prazoTotal || 60) + ' meses']);
+        if (cjXls.cronograma && cjXls.cronograma.length > 0) {
+          aba16.push([]);
+          aba16.push(['Mês', 'Compensação', 'Saldo Remanescente']);
+          cjXls.cronograma.forEach(function (p) {
+            aba16.push([p.mes || p.parcela || '', mv(p.valor || p.compensacao || 0), mv(p.saldo || p.saldoRemanescente || 0)]);
+          });
+        }
+      }
+
+      addSheet('PER-DCOMP', aba16, [25, 40, 20]);
     }
 
 
