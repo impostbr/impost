@@ -632,8 +632,9 @@
     for (var d = 0; d < dicas.length; d++) {
       if (dicas[d].tipo === 'economia' && dicas[d].impactoEstimado && dicas[d].impactoEstimado > 0) {
         var jaDuplicado = false;
+        var tituloNormalizado = (dicas[d].titulo || '').toLowerCase().trim();
         for (var f = 0; f < fontes.length; f++) {
-          if (fontes[f].fonte === dicas[d].titulo) {
+          if ((fontes[f].fonte || '').toLowerCase().trim() === tituloNormalizado) {
             jaDuplicado = true;
             break;
           }
@@ -867,6 +868,9 @@
     _validarParams(params, ['receitaBrutaAnual'], 'calcularEstudoCompleto');
 
     var receitaBrutaAnual = params.receitaBrutaAnual;
+    if (typeof receitaBrutaAnual !== 'number' || receitaBrutaAnual <= 0) {
+      throw new Error('calcularEstudoCompleto: receitaBrutaAnual deve ser um numero positivo.');
+    }
     var atividadeId = params.atividadeId || DEFAULTS.atividadeId;
     var receitas = params.receitas || [{ atividadeId: atividadeId, valor: receitaBrutaAnual }];
     var folha = params.folhaPagamentoAnual || 0;
@@ -906,11 +910,21 @@
     }
 
     // ── 2. Quatro trimestres ──
+    // Suporte a receita sazonal: se params.receitasPorTrimestre existir (array de 4),
+    // usa valores individuais; caso contrario, divide por 4.
+    var receitasPorTrim = params.receitasPorTrimestre || null;
     var trimestral = [];
     var trimestresData = [];
+    var acumuladoAte = 0;
     for (var q = 1; q <= 4; q++) {
+      var fatorTrim = receitasPorTrim ? (receitasPorTrim[q - 1] || 0) : null;
       var dadosTri = {
         receitas: receitas.map(function (r) {
+          if (fatorTrim !== null) {
+            // Distribuir proporcionalmente ao fator do trimestre
+            var proporcao = receitaBrutaAnual > 0 ? r.valor / receitaBrutaAnual : 0;
+            return { atividadeId: r.atividadeId, valor: _arredondar(fatorTrim * proporcao) };
+          }
           return { atividadeId: r.atividadeId, valor: _arredondar(r.valor / 4) };
         }),
         devolucoes: _arredondar(devolucoes / 4),
@@ -927,7 +941,7 @@
         csllRetidaFonte: _arredondar(csllRetida / 4),
         trimestreAtual: q,
         anoCalendario: 2026,
-        receitaBrutaAcumuladaAnoAte: _arredondar(receitaBrutaAnual / 4 * q)
+        receitaBrutaAcumuladaAnoAte: _arredondar((fatorTrim !== null ? (acumuladoAte += fatorTrim) : (receitaBrutaAnual / 4 * q)))
       };
       trimestresData.push(dadosTri);
       try {
@@ -1282,7 +1296,7 @@
     _testarEstudo: _testarEstudo,
 
     // Versão
-    VERSION: '2.0.0'
+    VERSION: '2.1.0'
   };
 
   if (typeof module !== 'undefined' && module.exports) {
