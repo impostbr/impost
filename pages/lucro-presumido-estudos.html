@@ -1184,18 +1184,18 @@ function addSocio() {
 // ─────────────────────────────────────────────────────────────────────────
 function gatherFormData() {
   const d = {};
-  d.razaoSocial = $('razaoSocial').value;
-  d.cnpj = $('cnpj').value;
-  d.cnaePrincipal = $('cnaePrincipal').value;
+  d.razaoSocial = ($('razaoSocial').value || '').trim();
+  d.cnpj = ($('cnpj').value || '').trim();
+  d.cnaePrincipal = ($('cnaePrincipal').value || '').trim();
   d.atividadeId = $('atividadeId').value || 'servicos_gerais';
   d.estado = $('estado').value;
   d.municipio = $('municipio').value;
-  d.aliquotaISS = parseFloat($('aliquotaISS').value) || 5;
+  d.aliquotaISS = Math.max(2, Math.min(5, parseFloat($('aliquotaISS').value) || 5));
   d.porte = $('porte').value;
   d.receitaAnterior = parseMoney($('receitaAnterior').value);
   d.folhaPagamento = parseMoney($('folhaPagamento').value);
-  d.aliquotaRAT = parseFloat($('aliquotaRAT').value) || 3;
-  d.aliquotaTerceiros = parseFloat($('aliquotaTerceiros').value) || 0.5;
+  d.aliquotaRAT = Math.max(1, Math.min(3, parseFloat($('aliquotaRAT').value) || 3));
+  d.aliquotaTerceiros = Math.max(0, Math.min(5.8, parseFloat($('aliquotaTerceiros').value) || 0.5));
   d.creditosPISCOFINS = parseMoney($('creditosPISCOFINS').value);
   d.aliquotaSimples = parseFloat($('aliquotaSimples').value) || 15;
   d.lucroContabil = parseMoney($('lucroContabil').value);
@@ -1236,8 +1236,17 @@ function gatherFormData() {
   $$('#tbodyReceitasSimp tr').forEach(tr => {
     const sel = tr.querySelector('.rec-ativ');
     const inp = tr.querySelector('.money');
-    if (sel && inp) d.receitas.push({ atividadeId: sel.value, valor: parseMoney(inp.value) });
+    if (sel && inp) {
+      const valor = parseMoney(inp.value);
+      if (valor > 0) {
+        d.receitas.push({ atividadeId: sel.value, valor: Math.max(0, valor) });
+      }
+    }
   });
+  // Garantir pelo menos uma receita (evita divisao por zero no motor)
+  if (d.receitas.length === 0) {
+    d.receitas.push({ atividadeId: d.atividadeId, valor: 0 });
+  }
   d.receitaBrutaAnual = d.receitas.reduce((s, r) => s + r.valor, 0);
   // Socios
   d.socios = [];
@@ -1263,6 +1272,15 @@ function gatherFormData() {
 // ─────────────────────────────────────────────────────────────────────────
 function runAllCalculations() {
   const d = gatherFormData();
+  // Validar receita minima
+  if (!d.receitaBrutaAnual || d.receitaBrutaAnual <= 0) {
+    alert('Informe ao menos uma receita com valor positivo na etapa financeira antes de calcular.');
+    return;
+  }
+  // Validar limite de receita para Lucro Presumido (R$ 78M conforme Lei 10.637/2002)
+  if (d.receitaBrutaAnual > 78000000) {
+    if (!confirm('A receita bruta anual de ' + formatMoney(d.receitaBrutaAnual) + ' excede o limite de R$ 78.000.000 para o Lucro Presumido (Lei 10.637/2002, Art. 46). A empresa seria OBRIGADA ao Lucro Real. Deseja continuar a simulacao mesmo assim?')) return;
+  }
   // Validar composicao societaria
   if (d.socios.length > 0) {
     const totalPct = d.socios.reduce((s, sc) => s + sc.percentual, 0);
@@ -1333,7 +1351,10 @@ function renderSimulacao(d) {
         <div class="kpi"><div class="kpi-label">Total Tributos Federais</div><div class="kpi-value" style="color:var(--danger)">${formatMoney(sim.totalTributosFederais)}</div></div>
         <div class="kpi"><div class="kpi-label">Aliquota Efetiva</div><div class="kpi-value" style="color:var(--info)">${sim.aliquotaEfetiva}</div></div>
       </div>
-      <div class="info-box info" style="margin-top:12px"><strong>Atividade:</strong> ${sim.atividade}<br>${sim.observacao}</div>`;
+      <div class="info-box info" style="margin-top:12px"><strong>Atividade:</strong> ${sim.atividade}<br>${sim.observacao}</div>
+      <div style="margin-top:16px;padding:12px;background:rgba(100,116,139,.08);border-radius:6px;border-left:3px solid var(--text3)">
+        <p style="font-size:10px;color:var(--text3);line-height:1.5;margin:0"><strong>AVISO LEGAL:</strong> Os calculos apresentados sao estimativas baseadas na legislacao vigente (RIR/2018, IN RFB 1.700/2017, LC 224/2025) e nos dados informados pelo usuario. Este sistema NAO substitui a orientacao de um contador ou advogado tributarista. Os resultados devem ser validados por profissional habilitado antes de qualquer tomada de decisao fiscal. O IMPOST nao se responsabiliza por decisoes tomadas com base exclusivamente nesta simulacao.</p>
+      </div>`;
   } catch(e) {
     $('tabSim').innerHTML = `<div class="info-box danger">Erro: ${e.message}</div>`;
   }
@@ -1595,6 +1616,7 @@ function renderAnual(d) {
     html += '<div class="chart-wrap"><div class="chart-title">Carga Tributaria por Trimestre</div><canvas id="chartTrimAnual"></canvas></div>';
     html += '<div class="chart-wrap"><div class="chart-title">Composicao dos Tributos</div><canvas id="chartComposicao"></canvas></div>';
     html += '</div>';
+    html += '<div style="margin-top:16px;padding:12px;background:rgba(100,116,139,.08);border-radius:6px;border-left:3px solid var(--text3)"><p style="font-size:10px;color:var(--text3);line-height:1.5;margin:0"><strong>AVISO LEGAL:</strong> Simulacao baseada na legislacao vigente e nos dados informados. NAO substitui orientacao profissional. Valide com contador habilitado antes de qualquer decisao fiscal.</p></div>';
     $('tabAnual').innerHTML = html;
     // Render charts
     renderQuarterlyChart(anual);
@@ -2336,11 +2358,14 @@ function renderCaixaCompChart(result) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// 9B. BREAK-EVEN LP vs LR (Etapa 4)
+// 9B. BREAK-EVEN LP vs LR — FALLBACK LOCAL
+// Usado APENAS quando EstudoLP.calcularBreakEven nao esta disponivel.
+// A versao do EstudoLP e mais completa (inclui ISS e INSS no calculo).
 // ─────────────────────────────────────────────────────────────────────────
 function calcularBreakEvenLocal(fd, anual) {
   const receita = fd.receitaBrutaAnual || 0;
   if (receita <= 0) return null;
+  if (!anual || !anual.consolidacao) return null;
 
   // Carga LP fixa (já calculada pelo motor)
   const cargaLP = anual.consolidacao.cargaTributariaTotal || 0;
@@ -2752,7 +2777,7 @@ function updateSidebar() {
   $('sbReceita').textContent = formatMoney(receita);
   $('sbRegime').textContent = 'Lucro Presumido';
   const anual = App.results.anual;
-  if (anual) {
+  if (anual && anual.consolidacao) {
     $('sbCarga').textContent = formatMoney(anual.consolidacao.cargaTributariaTotal);
     $('sbCargaPct').textContent = anual.consolidacao.percentualCargaTributaria + ' da receita';
   }
@@ -2928,10 +2953,16 @@ function exportPDF() {
       // Fallback: impressao do navegador com estilo otimizado
       var style = document.createElement('style');
       style.id = 'printStyle';
-      style.textContent = '@media print { .topbar, .sidebar, .stepper, .wz-nav, .res-tabs, .tb-btn, .export-grid { display: none !important; } .layout { display: block; } .main-area { max-width: 100%; padding: 0; } .wz-panel { display: block !important; } .tab-panel { display: block !important; page-break-inside: avoid; margin-bottom: 20px; } body { background: #fff; color: #000; } .wz-card, .kpi, .regime-card, .risk-card, .adv-card, .tip-card { background: #f8f8f8; border: 1px solid #ddd; color: #000; } .sb-value, .kpi-value, .rc-total { color: #000; } }';
+      style.textContent = '@media print { .topbar, .sidebar, .stepper, .wz-nav, .res-tabs, .tb-btn, .export-grid { display: none !important; } .layout { display: block; } .main-area { max-width: 100%; padding: 0; } .wz-panel { display: block !important; } .tab-panel { display: block !important; page-break-inside: avoid; margin-bottom: 20px; } body { background: #fff; color: #000; } .wz-card, .kpi, .regime-card, .risk-card, .adv-card, .tip-card { background: #f8f8f8; border: 1px solid #ddd; color: #000; } .sb-value, .kpi-value, .rc-total { color: #000; } .print-disclaimer { display: block !important; } }';
       document.head.appendChild(style);
+      // Adicionar disclaimer no rodape para impressao
+      var disclaimer = document.createElement('div');
+      disclaimer.className = 'print-disclaimer';
+      disclaimer.style.cssText = 'display:none;margin-top:40px;padding:16px;border-top:2px solid #ccc;font-size:9px;color:#666;line-height:1.5';
+      disclaimer.innerHTML = '<strong>AVISO LEGAL:</strong> Este relatorio foi gerado pelo sistema IMPOST e contem estimativas baseadas na legislacao vigente (RIR/2018, IN RFB 1.700/2017, LC 224/2025) e nos dados informados pelo usuario. NAO constitui parecer contabil ou juridico. Os resultados devem ser validados por contador ou advogado tributarista habilitado antes de qualquer tomada de decisao fiscal. Gerado em: ' + new Date().toLocaleString('pt-BR');
+      document.body.appendChild(disclaimer);
       window.print();
-      setTimeout(function() { var ps = document.getElementById('printStyle'); if (ps) ps.remove(); }, 1000);
+      setTimeout(function() { var ps = document.getElementById('printStyle'); if (ps) ps.remove(); if (disclaimer.parentNode) disclaimer.remove(); }, 1000);
     }
   } catch(e) {
     console.error('Erro PDF:', e);
@@ -2982,6 +3013,11 @@ function exportExcel() {
       csv += `Recomendacao;${comp.recomendacao.melhorRegime}\n`;
       csv += `Economia Potencial;${comp.recomendacao.economiaAnual}\n`;
     }
+    csv += '\n';
+    csv += 'AVISO LEGAL;\n';
+    csv += 'Os calculos sao estimativas baseadas na legislacao vigente e nos dados informados.;\n';
+    csv += 'NAO substitui orientacao de contador ou advogado tributarista habilitado.;\n';
+    csv += 'Gerado em;' + new Date().toLocaleString('pt-BR') + '\n';
     const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
