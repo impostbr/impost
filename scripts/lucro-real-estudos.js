@@ -2227,7 +2227,7 @@
             'JCP máximo (PL × TJLP): ' + _m(jcpRes.jcpMaximoTJLP) + '<br>' +
             'Limite 1 — 50% lucro líquido: ' + _m(jcpRes.limite50LL) + '<br>' +
             'Limite 2 — 50% lucros acum. + reservas: ' + _m(jcpRes.limite50Reservas) + '<br>' +
-            '<strong>JCP dedutível (menor dos 3): ' + _m(jcpRes.jcpDedutivel) + '</strong><br>' +
+            '<strong>JCP dedutível: ' + _m(jcpRes.jcpDedutivel) + '</strong><br>' +
             'Economia IRPJ (25%): ' + _m(jcpRes.economiaIRPJ) + '<br>' +
             'Economia CSLL (9%): ' + _m(jcpRes.economiaCSLL) + '<br>' +
             '(-) Custo IRRF (15%): ' + _m(jcpRes.custoIRRF) + '<br>' +
@@ -4927,7 +4927,10 @@
 
   function _recomendarApuracao(simTri, simAnual, simSuspensao, d) {
     var totalTri = simTri.total;
-    var totalAnual = simAnual.totalEstimativas;
+    // CORREÇÃO: Comparar custo FINAL real de cada regime, não estimativas vs definitivo.
+    // No regime anual, o custo final é irpjRealAnual + csllRealAnual (ajuste anual),
+    // não a soma das estimativas mensais.
+    var totalAnual = (simAnual.irpjRealAnual || 0) + (simAnual.csllRealAnual || 0);
     var temMes = d.preencherMesAMes === true || d.preencherMesAMes === "true";
 
     // Verificar sazonalidade
