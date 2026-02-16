@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Estudo Lucro Presumido v3.3.0 | IMPOST.</title>
+<title>Estudo Lucro Presumido v3.3.1 | IMPOST.</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
@@ -805,10 +805,16 @@ function maskCNPJ(input) {
 }
 
 function maskMoney(input) {
-  let v = input.value.replace(/\D/g, '');
-  if (!v) { input.value = ''; return; }
-  v = (parseInt(v, 10) / 100).toFixed(2);
-  input.value = Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  var raw = input.value.replace(/[^0-9]/g, '');
+  if (!raw) { input.value = ''; return; }
+  if (raw.length > 15) raw = raw.slice(0, 15);
+  while (raw.length < 3) raw = '0' + raw;
+  var inteiro = raw.slice(0, -2).replace(/^0+/, '') || '0';
+  var centavos = raw.slice(-2);
+  var partes = [];
+  var i = inteiro.length;
+  while (i > 0) { partes.unshift(inteiro.slice(Math.max(0, i - 3), i)); i -= 3; }
+  input.value = partes.join('.') + ',' + centavos;
 }
 
 function debounce(fn, ms) {
@@ -2733,7 +2739,15 @@ function destroyChart(name) {
 function updateSidebar() {
   const d = App.formData || {};
   $('sbEmpresa').textContent = d.razaoSocial || '--';
-  $('sbCnae').textContent = $('cnaePrincipal').value ? $('cnaePrincipal').value + ' ' + ($('cnaeBusca').value || '').substring(0, 30) : '--';
+  var cnaeCod = $('cnaePrincipal').value || '';
+  var cnaeBuscaVal = $('cnaeBusca').value || '';
+  if (cnaeCod && cnaeBuscaVal.indexOf(cnaeCod) === 0) {
+    $('sbCnae').textContent = cnaeBuscaVal.substring(0, 40);
+  } else if (cnaeCod) {
+    $('sbCnae').textContent = cnaeCod + ' ' + cnaeBuscaVal.substring(0, 30);
+  } else {
+    $('sbCnae').textContent = '--';
+  }
   const receita = d.receitaBrutaAnual || 0;
   $('sbReceita').textContent = formatMoney(receita);
   $('sbRegime').textContent = 'Lucro Presumido';
@@ -2900,23 +2914,28 @@ function carregarEstudo() {
 function exportPDF() {
   try {
     gatherFormData();
-    const d = App.formData;
+    var d = App.formData;
     if (!d.receitaBrutaAnual || d.receitaBrutaAnual <= 0) {
       alert('Calcule os resultados primeiro (etapa 5) antes de exportar o PDF.');
       return;
     }
     // Tenta usar o gerador de PDF profissional do motor
     if (typeof LucroPresumido !== 'undefined' && typeof LucroPresumido.exportPDF === 'function') {
-      // Motor exportPDF espera { formData, results } — usar App diretamente
       LucroPresumido.exportPDF(App);
+    } else if (typeof LucroPresumido !== 'undefined' && typeof LucroPresumido.gerarRelatorioPDF === 'function') {
+      LucroPresumido.gerarRelatorioPDF(App);
     } else {
-      // Fallback: window.print()
+      // Fallback: impressao do navegador com estilo otimizado
+      var style = document.createElement('style');
+      style.id = 'printStyle';
+      style.textContent = '@media print { .topbar, .sidebar, .stepper, .wz-nav, .res-tabs, .tb-btn, .export-grid { display: none !important; } .layout { display: block; } .main-area { max-width: 100%; padding: 0; } .wz-panel { display: block !important; } .tab-panel { display: block !important; page-break-inside: avoid; margin-bottom: 20px; } body { background: #fff; color: #000; } .wz-card, .kpi, .regime-card, .risk-card, .adv-card, .tip-card { background: #f8f8f8; border: 1px solid #ddd; color: #000; } .sb-value, .kpi-value, .rc-total { color: #000; } }';
+      document.head.appendChild(style);
       window.print();
+      setTimeout(function() { var ps = document.getElementById('printStyle'); if (ps) ps.remove(); }, 1000);
     }
   } catch(e) {
     console.error('Erro PDF:', e);
-    // Fallback em caso de erro
-    if (confirm('Erro ao gerar PDF profissional: ' + e.message + '\n\nDeseja usar a impressao do navegador como alternativa?')) {
+    if (confirm('Erro ao gerar PDF: ' + e.message + '\n\nDeseja usar a impressao do navegador como alternativa?')) {
       window.print();
     }
   }
