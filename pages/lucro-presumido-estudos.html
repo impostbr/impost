@@ -1342,6 +1342,7 @@ function renderSimulacao(d) {
     const sim = LucroPresumido.simulacaoRapida(receitaTrim, d.atividadeId);
     App.results.simulacao = sim;
     $('tabSim').innerHTML = `
+      <div class="info-box warn" style="margin-bottom:16px"><strong>ESTIMATIVA SIMPLIFICADA:</strong> Esta aba apresenta uma estimativa rapida que <strong>NAO considera</strong> deducoes da receita bruta (devolucoes, cancelamentos), adicoes obrigatorias (rendimentos financeiros, ganhos de capital) nem retencoes na fonte (IRRF, CSRF). Para valores precisos e detalhados, consulte as abas <strong>Trimestral</strong>, <strong>PIS/COFINS</strong> e <strong>Anual</strong>.</div>
       <div class="kpi-grid">
         <div class="kpi"><div class="kpi-label">Receita Trimestral</div><div class="kpi-value" style="color:var(--accent)">${formatMoney(sim.receitaBrutaTrimestral)}</div></div>
         <div class="kpi"><div class="kpi-label">Base IRPJ</div><div class="kpi-value">${formatMoney(sim.baseIRPJ)}</div><div class="kpi-sub">${sim.percentualPresuncaoIRPJ}</div></div>
@@ -1448,6 +1449,7 @@ function renderTrimestral(d) {
       if (totalImpacto > 0) {
         const impostoExtra = totalImpacto * 0.24; // ~15% IRPJ + 9% CSLL
         lc224Html += `<div class="info-box warn" style="margin-top:8px"><strong>LC 224/2025:</strong> A receita anual de ${formatMoney(d.receitaBrutaAnual)} excede o limite de R$ 5.000.000. A base presumida IRPJ aumenta em ${formatMoney(totalImpacto)}, gerando ~${formatMoney(impostoExtra)} a mais em IRPJ+CSLL.<br><small>Vigencia: A partir do 2o trimestre de 2026 (01/04/2026). LC 224/2025, Art. 14.</small></div>`;
+        lc224Html += `<div class="info-box danger" style="margin-top:8px"><strong>INSEGURANCA JURIDICA:</strong> A majoracao da base de calculo do lucro presumido pela LC 224/2025 e objeto de questionamentos judiciais. Ha liminares concedidas suspendendo a aplicacao do acrescimo de 10% para empresas com receita acima de R$ 5M. Consulte seu advogado tributarista sobre a viabilidade de medida judicial para sua empresa.<br><small>Referencia: Acoes judiciais contra Art. 14 da LC 224/2025. Situacao sujeita a alteracao.</small></div>`;
       } else {
         lc224Html += `<div class="info-box info" style="margin-top:8px">A LC 224/2025 so se aplica a partir do 2o trimestre de 2026 (vigencia 01/04/2026). Nos trimestres anteriores, nao ha impacto.</div>`;
       }
@@ -1474,25 +1476,47 @@ function renderPISCOFINS(d) {
     for (let m = 0; m < 12; m++) {
       const result = LucroPresumido.calcularPISCOFINSMensal({
         receitaBrutaMensal: receitaMensal,
-        vendasCanceladas: d.cancelamentos / 12,
-        descontosIncondicionais: d.descontos / 12,
-        pisRetidoFonte: d.pisRetido / 12,
-        cofinsRetidaFonte: d.cofinsRetida / 12,
+        vendasCanceladas: ((d.devolucoes || 0) + (d.cancelamentos || 0)) / 12,
+        descontosIncondicionais: (d.descontos || 0) / 12,
+        pisRetidoFonte: (d.pisRetido || 0) / 12,
+        cofinsRetidaFonte: (d.cofinsRetida || 0) / 12,
         csllRetidaFonteMensal: csllRetidaMensal,
         irrfRetidoFonteMensal: irrfRetidoMensal
       });
       mesesResults.push(result);
     }
     App.results.piscofins = mesesResults;
-    let html = '<table class="dyn-table"><thead><tr><th>Mes</th><th class="right">Receita</th><th class="right">Base</th><th class="right">PIS 0,65%</th><th class="right">COFINS 3,00%</th><th class="right">Total 3,65%</th></tr></thead><tbody>';
-    let totRec = 0, totBase = 0, totPIS = 0, totCOF = 0, totT = 0;
-    mesesResults.forEach((r, i) => {
-      const total = r.pis.devido + r.cofins.devida;
-      totRec += r.receitaBrutaMensal; totBase += r.baseCalculo; totPIS += r.pis.devido; totCOF += r.cofins.devida; totT += total;
-      html += `<tr><td>${mesesNomes[i]}</td><td class="right mono">${formatMoney(r.receitaBrutaMensal)}</td><td class="right mono">${formatMoney(r.baseCalculo)}</td><td class="right mono">${formatMoney(r.pis.devido)}</td><td class="right mono">${formatMoney(r.cofins.devida)}</td><td class="right mono" style="font-weight:700">${formatMoney(total)}</td></tr>`;
-    });
-    html += `<tr style="background:var(--bg);font-weight:700"><td>TOTAL</td><td class="right mono">${formatMoney(totRec)}</td><td class="right mono">${formatMoney(totBase)}</td><td class="right mono">${formatMoney(totPIS)}</td><td class="right mono">${formatMoney(totCOF)}</td><td class="right mono">${formatMoney(totT)}</td></tr>`;
-    html += '</tbody></table>';
+    // Verificar se há retenções para decidir o layout da tabela
+    const temRetencoesPIS = mesesResults.some(r => r.pis.retidoFonte > 0);
+    const temRetencoesCOFINS = mesesResults.some(r => r.cofins.retidaFonte > 0);
+    const temRetencoes = temRetencoesPIS || temRetencoesCOFINS;
+    let html = '';
+    if (temRetencoes) {
+      // Tabela expandida com Bruto / Retido / Devido
+      html += '<table class="dyn-table"><thead><tr><th>Mes</th><th class="right">Receita</th><th class="right">Base</th><th class="right">PIS Bruto</th><th class="right">PIS Retido</th><th class="right">PIS Devido</th><th class="right">COFINS Bruta</th><th class="right">COFINS Retida</th><th class="right">COFINS Devida</th><th class="right">Total Devido</th></tr></thead><tbody>';
+      let totRec = 0, totBase = 0, totPISB = 0, totPISR = 0, totPISD = 0, totCOFB = 0, totCOFR = 0, totCOFD = 0, totT = 0;
+      mesesResults.forEach((r, i) => {
+        const total = r.pis.devido + r.cofins.devida;
+        totRec += r.receitaBrutaMensal; totBase += r.baseCalculo;
+        totPISB += r.pis.bruto; totPISR += r.pis.retidoFonte; totPISD += r.pis.devido;
+        totCOFB += r.cofins.bruta; totCOFR += r.cofins.retidaFonte; totCOFD += r.cofins.devida;
+        totT += total;
+        html += `<tr><td>${mesesNomes[i]}</td><td class="right mono">${formatMoney(r.receitaBrutaMensal)}</td><td class="right mono">${formatMoney(r.baseCalculo)}</td><td class="right mono">${formatMoney(r.pis.bruto)}</td><td class="right mono" style="color:var(--success)">${formatMoney(r.pis.retidoFonte)}</td><td class="right mono">${formatMoney(r.pis.devido)}</td><td class="right mono">${formatMoney(r.cofins.bruta)}</td><td class="right mono" style="color:var(--success)">${formatMoney(r.cofins.retidaFonte)}</td><td class="right mono">${formatMoney(r.cofins.devida)}</td><td class="right mono" style="font-weight:700">${formatMoney(total)}</td></tr>`;
+      });
+      html += `<tr style="background:var(--bg);font-weight:700"><td>TOTAL</td><td class="right mono">${formatMoney(totRec)}</td><td class="right mono">${formatMoney(totBase)}</td><td class="right mono">${formatMoney(totPISB)}</td><td class="right mono" style="color:var(--success)">${formatMoney(totPISR)}</td><td class="right mono">${formatMoney(totPISD)}</td><td class="right mono">${formatMoney(totCOFB)}</td><td class="right mono" style="color:var(--success)">${formatMoney(totCOFR)}</td><td class="right mono">${formatMoney(totCOFD)}</td><td class="right mono">${formatMoney(totT)}</td></tr>`;
+      html += '</tbody></table>';
+    } else {
+      // Tabela simplificada (sem retenções)
+      html += '<table class="dyn-table"><thead><tr><th>Mes</th><th class="right">Receita</th><th class="right">Base</th><th class="right">PIS 0,65%</th><th class="right">COFINS 3,00%</th><th class="right">Total 3,65%</th></tr></thead><tbody>';
+      let totRec = 0, totBase = 0, totPIS = 0, totCOF = 0, totT = 0;
+      mesesResults.forEach((r, i) => {
+        const total = r.pis.devido + r.cofins.devida;
+        totRec += r.receitaBrutaMensal; totBase += r.baseCalculo; totPIS += r.pis.devido; totCOF += r.cofins.devida; totT += total;
+        html += `<tr><td>${mesesNomes[i]}</td><td class="right mono">${formatMoney(r.receitaBrutaMensal)}</td><td class="right mono">${formatMoney(r.baseCalculo)}</td><td class="right mono">${formatMoney(r.pis.devido)}</td><td class="right mono">${formatMoney(r.cofins.devida)}</td><td class="right mono" style="font-weight:700">${formatMoney(total)}</td></tr>`;
+      });
+      html += `<tr style="background:var(--bg);font-weight:700"><td>TOTAL</td><td class="right mono">${formatMoney(totRec)}</td><td class="right mono">${formatMoney(totBase)}</td><td class="right mono">${formatMoney(totPIS)}</td><td class="right mono">${formatMoney(totCOF)}</td><td class="right mono">${formatMoney(totT)}</td></tr>`;
+      html += '</tbody></table>';
+    }
     html += `<div class="info-box info" style="margin-top:12px"><strong>Regime:</strong> Cumulativo | <strong>DARF PIS:</strong> ${mesesResults[0].pis.codigoDARF} | <strong>DARF COFINS:</strong> ${mesesResults[0].cofins.codigoDARF}<br>Vencimento: Dia 25 do mes seguinte ao fato gerador.</div>`;
 
     // CSRF — Retencoes na fonte (Lei 10.833/2003, Arts. 30-35)
@@ -1555,10 +1579,10 @@ function renderAnual(d) {
     for (let m = 0; m < 12; m++) {
       meses.push({
         receitaBrutaMensal: d.receitaBrutaAnual / 12,
-        vendasCanceladas: d.cancelamentos / 12,
-        descontosIncondicionais: d.descontos / 12,
-        pisRetidoFonte: d.pisRetido / 12,
-        cofinsRetidaFonte: d.cofinsRetida / 12
+        vendasCanceladas: ((d.devolucoes || 0) + (d.cancelamentos || 0)) / 12,
+        descontosIncondicionais: (d.descontos || 0) / 12,
+        pisRetidoFonte: (d.pisRetido || 0) / 12,
+        cofinsRetidaFonte: (d.cofinsRetida || 0) / 12
       });
     }
     const socios = d.socios.length ? d.socios : [{ nome: 'Socio Unico', percentual: 1 }];
@@ -1575,7 +1599,8 @@ function renderAnual(d) {
     App.results.anual = anual;
     // KPI cards
     let html = `<div class="kpi-grid">
-      <div class="kpi"><div class="kpi-label">Receita Bruta Anual</div><div class="kpi-value" style="color:var(--accent)">${formatMoney(anual.receitaBrutaAnual)}</div></div>
+      <div class="kpi"><div class="kpi-label">Receita Bruta Informada</div><div class="kpi-value" style="color:var(--accent)">${formatMoney(d.receitaBrutaAnual)}</div></div>
+      <div class="kpi"><div class="kpi-label">Receita Liquida (Base)</div><div class="kpi-value" style="color:var(--accent)">${formatMoney(anual.receitaBrutaAnual)}</div><div class="kpi-sub">Apos deducoes (devolucoes, cancelamentos, descontos)</div></div>
       <div class="kpi"><div class="kpi-label">Carga Tributaria Total</div><div class="kpi-value" style="color:var(--danger)">${formatMoney(anual.consolidacao.cargaTributariaTotal)}</div></div>
       <div class="kpi"><div class="kpi-label">% sobre Receita</div><div class="kpi-value" style="color:var(--warn)">${anual.consolidacao.percentualCargaTributaria}</div></div>
       <div class="kpi"><div class="kpi-label">Lucro Distribuivel Isento</div><div class="kpi-value" style="color:var(--success)">${formatMoney(anual.distribuicaoLucros.lucroDistribuivelFinal)}</div></div>
@@ -1609,6 +1634,7 @@ function renderAnual(d) {
       if (impactoTotal > 0) {
         const impostoExtra = impactoTotal * 0.24;
         html += `<div class="info-box warn" style="margin-top:16px"><strong>LC 224/2025:</strong> Receita acima de R$ 5M gera acrescimo de 10% na base presumida. Impacto anual na base: <strong>+${formatMoney(impactoTotal)}</strong> | Impacto estimado em IRPJ+CSLL: <strong>+${formatMoney(impostoExtra)}</strong><br><small>Vigencia a partir de 01/04/2026. Veja detalhes na aba Trimestral.</small></div>`;
+        html += `<div class="info-box danger" style="margin-top:8px"><strong>INSEGURANCA JURIDICA:</strong> A majoracao pela LC 224/2025 e objeto de questionamentos judiciais com liminares concedidas. Consulte advogado tributarista sobre medida judicial para sua empresa.</div>`;
       }
     }
 
@@ -1729,9 +1755,15 @@ function renderDistribuicao(d) {
   const anual = App.results.anual;
   if (!anual) { $('tabDistribuicao').innerHTML = '<div class="info-box warn">Calcule os resultados anuais primeiro.</div>'; return; }
   const dist = anual.distribuicaoLucros;
-  let html = `<div class="kpi-grid"><div class="kpi"><div class="kpi-label">Lucro Distribuivel Isento</div><div class="kpi-value" style="color:var(--success)">${formatMoney(dist.lucroDistribuivelFinal)}</div><div class="kpi-sub">Base: ${dist.tipoBase}</div></div>`;
-  if (dist.lucroDistribuivelPresumido != null) html += `<div class="kpi"><div class="kpi-label">Base Presumida</div><div class="kpi-value mono">${formatMoney(dist.lucroDistribuivelPresumido)}</div></div>`;
-  if (dist.lucroDistribuivelContabil != null) html += `<div class="kpi"><div class="kpi-label">Base Contabil</div><div class="kpi-value mono">${formatMoney(dist.lucroDistribuivelContabil)}</div></div>`;
+  let html = `<div class="kpi-grid">
+    <div class="kpi"><div class="kpi-label">Base Presumida IRPJ (Anual)</div><div class="kpi-value mono">${formatMoney(dist.basePresumidaAnual)}</div></div>
+    <div class="kpi"><div class="kpi-label">(-) Tributos Federais</div><div class="kpi-value mono" style="color:var(--danger)">${formatMoney(dist.tributosFederais)}</div><div class="kpi-sub">IRPJ + CSLL + PIS + COFINS</div></div>
+    <div class="kpi"><div class="kpi-label">(=) Lucro Distribuivel Presumido</div><div class="kpi-value mono" style="color:var(--success)">${formatMoney(dist.lucroDistribuivelPresumido)}</div></div>`;
+  if (dist.lucroDistribuivelContabil != null) {
+    html += `<div class="kpi"><div class="kpi-label">Lucro Contabil Efetivo</div><div class="kpi-value mono">${formatMoney(dist.lucroContabilEfetivo)}</div></div>`;
+    html += `<div class="kpi"><div class="kpi-label">Lucro Distribuivel Contabil</div><div class="kpi-value mono" style="color:var(--success)">${formatMoney(dist.lucroDistribuivelContabil)}</div></div>`;
+  }
+  html += `<div class="kpi"><div class="kpi-label">Lucro Distribuivel Final (Isento IR)</div><div class="kpi-value" style="color:var(--success);font-size:20px">${formatMoney(dist.lucroDistribuivelFinal)}</div><div class="kpi-sub">Base: ${dist.tipoBase}</div></div>`;
   html += '</div>';
   // Per partner table
   if (dist.porSocio && dist.porSocio.length) {
@@ -1967,6 +1999,15 @@ function recalcProLabore() {
 
     // Recomendacao
     html += `<div class="info-box success" style="margin:16px 0"><strong>Recomendacao:</strong> ${result.recomendacao}</div>`;
+
+    // Alerta de riscos do pro-labore minimo
+    if (result.otimo && result.otimo.proLaboreMensal <= 1621) {
+      html += `<div class="info-box warn" style="margin:0 0 16px 0"><strong>ATENCAO — RISCOS DO PRO-LABORE MINIMO:</strong><br>
+        1. <strong>Risco previdenciario:</strong> Pro-labore no salario minimo resulta em aposentadoria no piso. Se o socio nao tem outro vinculo CLT ou contribuicao complementar ao INSS, o beneficio previdenciario sera limitado a 1 salario minimo.<br>
+        2. <strong>Risco de autuacao:</strong> A RFB pode questionar pro-labore muito baixo em empresas com alta lucratividade, caracterizando distribuicao disfarçada de lucros (Art. 528 RIR/2018). Recomenda-se manter proporcionalidade entre pro-labore e funcoes exercidas.<br>
+        3. <strong>Contribuicao complementar:</strong> Para garantir beneficios previdenciarios maiores, o socio pode complementar a contribuicao ao INSS como contribuinte individual (aliquota de 20% sobre valor entre o minimo e o teto).<br>
+        <small>Base: IN RFB 971/2009, Art. 57; RIR/2018, Art. 528; Decreto 3.048/99</small></div>`;
+    }
 
     // Tabela de cenarios-chave
     html += `<h3 style="color:var(--text);margin:16px 0 8px;font-size:14px">Cenarios-Chave</h3>`;
@@ -2986,7 +3027,9 @@ function exportExcel() {
     csv += `CNAE;${d.cnaePrincipal || ''}\n`;
     csv += `Estado;${d.estado || ''}\n`;
     csv += `Municipio;${d.municipio || ''}\n`;
-    csv += `Receita Bruta Anual;${d.receitaBrutaAnual || 0}\n`;
+    csv += `Receita Bruta Informada;${d.receitaBrutaAnual || 0}\n`;
+    const anualCSV = App.results.anual;
+    csv += `Receita Liquida (Base);${anualCSV ? anualCSV.receitaBrutaAnual : (d.receitaBrutaAnual || 0)}\n`;
     csv += `Folha de Pagamento Anual;${d.folhaPagamento || 0}\n`;
     csv += `Total Despesas;${d.totalDespesas || 0}\n`;
     csv += '\n';
