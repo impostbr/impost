@@ -1065,7 +1065,10 @@ function calcularLucroPresumidoTrimestral(params) {
   // ── Passo 1: Receita Bruta Trimestral ──
   const receitaBrutaTotal = receitas.reduce((sum, r) => sum + (r.valor || 0), 0);
   const deducoesDaReceita = devolucoes + cancelamentos + descontosIncondicionais;
-  const receitaBrutaAjustada = receitaBrutaTotal - deducoesDaReceita;
+  // FIX: Receita ajustada não pode ser negativa (deduções > receita)
+  const receitaBrutaAjustadaRaw = receitaBrutaTotal - deducoesDaReceita;
+  const receitaBrutaAjustada = Math.max(0, receitaBrutaAjustadaRaw);
+  const deducoesExcedentes = _arredondar(Math.max(0, -receitaBrutaAjustadaRaw));
 
   // ── Passo 2: Base Presumida por Atividade (com LC 224/2025) ──
   const detalhamentoIRPJ = [];
@@ -1091,7 +1094,8 @@ function calcularLucroPresumidoTrimestral(params) {
 
     // Proporção das deduções da receita para cada atividade
     const proporcao = receitaBrutaTotal > 0 ? receita.valor / receitaBrutaTotal : 0;
-    const receitaLiquidaAtividade = receita.valor - (deducoesDaReceita * proporcao);
+    // FIX: Garantir que a receita líquida por atividade não seja negativa
+    const receitaLiquidaAtividade = Math.max(0, receita.valor - (deducoesDaReceita * proporcao));
 
     // LC 224/2025: Aplicar proporcionalização por atividade (§5º, II)
     // Cada atividade recebe o excedente proporcional à sua receita
@@ -1207,10 +1211,15 @@ function calcularLucroPresumidoTrimestral(params) {
   const irpjAdicional = _arredondar(baseAdicional * ALIQUOTA_ADICIONAL_IRPJ);
   const irpjBruto = _arredondar(irpjNormal + irpjAdicional);
   const irpjDevido = _arredondar(Math.max(0, irpjBruto - irrfRetidoFonte));
+  // FIX: Capturar saldo credor de IRRF para PER/DCOMP
+  const saldoCredorIRPJ = _arredondar(Math.max(0, irrfRetidoFonte - irpjBruto));
 
   // ── Passo 6: Cálculo da CSLL ──
   const csllBruta = _arredondar(baseCalculoCSLL * ALIQUOTA_CSLL);
   const csllDevida = _arredondar(Math.max(0, csllBruta - csllRetidaFonte));
+  // FIX: Capturar saldo credor de CSLL para PER/DCOMP
+  const saldoCredorCSLL = _arredondar(Math.max(0, csllRetidaFonte - csllBruta));
+  const temSaldoCredorIRPJCSLL = saldoCredorIRPJ > 0 || saldoCredorCSLL > 0;
 
   // ── Passo 7: Alíquota Efetiva ──
   const totalImpostos = irpjDevido + csllDevida;
@@ -1254,7 +1263,12 @@ function calcularLucroPresumidoTrimestral(params) {
       aliquotaEfetivaBase: `${aliquotaEfetivaBase}%`,
       lucroDistribuidoPresumido,
       codigoDARF_IRPJ: CODIGOS_DARF.IRPJ_PRESUMIDO,
-      codigoDARF_CSLL: CODIGOS_DARF.CSLL_PRESUMIDO
+      codigoDARF_CSLL: CODIGOS_DARF.CSLL_PRESUMIDO,
+      // FIX: Novos campos para saldo credor e deduções excedentes
+      deducoesExcedentes,
+      saldoCredorIRPJ,
+      saldoCredorCSLL,
+      temSaldoCredorIRPJCSLL
     },
 
     // Detalhamento da composição da base
