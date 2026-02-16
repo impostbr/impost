@@ -2190,6 +2190,7 @@
         '(+) Total de Adições: ' + _m(adicoes) + '<br>' +
         '(-) Total de Exclusões: ' + _m(exclusoes) + '<br>' +
         '<strong>= LUCRO AJUSTADO: ' + _m(lucroAjustado) + '</strong> <span style="color:#95a5a6;font-size:0.85em">(antes de ajustes automáticos — valor preliminar)</span><br>' +
+        '<span style="color:#e67e22;font-size:0.82em;">⚠️ Valor parcial — PIS/COFINS sobre receita e depreciação fiscal serão deduzidos automaticamente nas próximas etapas, reduzindo esta base.</span><br>' +
         'Margem de Lucro: ' + margem.toFixed(1) + '%' +
         alertas;
     }
@@ -2893,7 +2894,7 @@
       adicoes: totalAdicoes,
       exclusoes: totalExclusoes,
       prejuizoFiscal: vedaCompensacao ? 0 : prejuizoFiscal,
-      numMeses: d.apuracaoLR === "trimestral" ? 3 : 12,
+      numMeses: 12,
       incentivos: totalDeducoesIncentivos,
       retencoesFonte: totalIRRF,
       estimativasPagas: estimIRPJPagas,
@@ -2903,6 +2904,16 @@
     // Aplicar redução SUDAM/SUDENE sobre o IRPJ
     var irpjAntesReducao = irpjResult.irpjDevido;
     var irpjAposReducao = _r(Math.max(irpjAntesReducao - reducaoSUDAM, 0));
+
+    // ═══ CORREÇÃO BUG 1: Na apuração trimestral, usar simulação trimestral (adicional correto) ═══
+    var simTrimestral = _simularTrimestral(d, lucroAjustado, prejuizoFiscal, baseNegCSLL, vedaCompensacao, ehFinanceira);
+    if (d.apuracaoLR === "trimestral") {
+      irpjResult.irpjAdicional = _r(simTrimestral.trimestres.reduce(function(s, t) { return s + t.irpjAdicional; }, 0));
+      irpjResult.irpjNormal = _r(simTrimestral.trimestres.reduce(function(s, t) { return s + t.irpjNormal; }, 0));
+      irpjResult.irpjDevido = _r(irpjResult.irpjNormal + irpjResult.irpjAdicional);
+      irpjAntesReducao = irpjResult.irpjDevido;
+      irpjAposReducao = _r(Math.max(irpjAntesReducao - reducaoSUDAM, 0));
+    }
 
     // ═══════════════════════════════════════════════════════════════════════
     //  PASSO 6A — Subcapitalização
@@ -2923,6 +2934,9 @@
     if (subcapResult && subcapResult.excedeu === true && subcapResult.jurosIndedutiveis > 0) {
       irpjAposReducao = _r(irpjAposReducao + _r(subcapResult.jurosIndedutiveis * 0.25));
     }
+
+    // ═══ CORREÇÃO BUG 3: Gravar irpjAPagar corrigido (pós-SUDAM/subcap) no objeto ═══
+    irpjResult.irpjAPagar = _r(irpjAposReducao - totalIRRF - estimIRPJPagas);
 
     // ═══════════════════════════════════════════════════════════════════════
     //  PASSO 7 — CSLL → LR.calcular.csll()
@@ -3291,7 +3305,7 @@
     // ═══════════════════════════════════════════════════════════════════════
     //  PASSO 16 — Simulação TRIMESTRAL
     // ═══════════════════════════════════════════════════════════════════════
-    var simTrimestral = _simularTrimestral(d, lucroAjustado, prejuizoFiscal, baseNegCSLL, vedaCompensacao, ehFinanceira);
+    // var simTrimestral = _simularTrimestral(...); // Movido para PASSO 6 (BUG 1 fix)
 
     // ═══════════════════════════════════════════════════════════════════════
     //  PASSO 17 — Simulação ANUAL POR ESTIMATIVA
@@ -3407,7 +3421,7 @@
     // ═══════════════════════════════════════════════════════════════════════
     //  PASSO 22 — Fluxo de caixa tributário mensal
     // ═══════════════════════════════════════════════════════════════════════
-    var fluxoCaixa = _gerarFluxoCaixaMensal(d, receitaBruta, receitaServicos, issAliquota, irpjAposReducao, csllResult.csllDevida, pisCofinsResult);
+    var fluxoCaixa = _gerarFluxoCaixaMensal(d, receitaBruta, receitaServicos, issAliquota, irpjAposReducao, csllResult.csllDevida, pisCofinsResult, simTrimestral);
 
     // ═══════════════════════════════════════════════════════════════════════
     //  PASSO 22A — Relatório Consolidado (PARTE 5)
@@ -3645,23 +3659,43 @@
     // ═══════════════════════════════════════════════════════════════════════
     var obrigacoes = LR.obrigacoes || [];
 
-    // ═══════════════════════════════════════════════════════════════════════
-    //  PASSO 26 — Códigos DARF
-    // ═══════════════════════════════════════════════════════════════════════
+    // PASSO 26 — DARFs (CORRIGIDO — enriquecer com periodicidade e prazo)
     var darfs = [];
+    var _darfMeta = {
+      '0220': { tributo: 'IRPJ', periodicidade: 'Trimestral', prazo: 'Último dia útil do mês subsequente ao trimestre' },
+      '2362': { tributo: 'IRPJ', periodicidade: 'Mensal', prazo: 'Último dia útil do mês subsequente' },
+      '2430': { tributo: 'IRPJ', periodicidade: 'Anual', prazo: 'Último dia útil de março do ano seguinte' },
+      '6012': { tributo: 'CSLL', periodicidade: 'Trimestral', prazo: 'Último dia útil do mês subsequente ao trimestre' },
+      '2484': { tributo: 'CSLL', periodicidade: 'Mensal', prazo: 'Último dia útil do mês subsequente' },
+      '6773': { tributo: 'CSLL', periodicidade: 'Anual', prazo: 'Último dia útil de março do ano seguinte' },
+      '6912': { tributo: 'PIS', periodicidade: 'Mensal', prazo: 'Dia 25 do mês subsequente' },
+      '5856': { tributo: 'COFINS', periodicidade: 'Mensal', prazo: 'Dia 25 do mês subsequente' },
+      '5706': { tributo: 'IRRF s/ JCP', periodicidade: 'Por evento', prazo: 'Até 3º dia útil após pagamento/crédito' }
+    };
+    function _enriquecerDarf(df) {
+      if (!df) return null;
+      var meta = _darfMeta[df.codigo] || {};
+      return {
+        codigo: df.codigo,
+        tributo: df.tributo || df.nome || meta.tributo || df.descricao || '—',
+        descricao: df.descricao || '',
+        periodicidade: df.periodicidade || meta.periodicidade || '—',
+        prazo: df.prazo || df.vencimento || meta.prazo || '—'
+      };
+    }
     if (LR.darf) {
       if (d.apuracaoLR === "trimestral") {
-        darfs.push(LR.darf.irpjTrimestral);
-        darfs.push(LR.darf.csllTrimestral);
+        darfs.push(_enriquecerDarf(LR.darf.irpjTrimestral));
+        darfs.push(_enriquecerDarf(LR.darf.csllTrimestral));
       } else {
-        darfs.push(LR.darf.irpjMensal);
-        darfs.push(LR.darf.csllMensal);
-        darfs.push(LR.darf.irpjAnualAjuste);
-        darfs.push(LR.darf.csllAnualAjuste);
+        darfs.push(_enriquecerDarf(LR.darf.irpjMensal));
+        darfs.push(_enriquecerDarf(LR.darf.csllMensal));
+        darfs.push(_enriquecerDarf(LR.darf.irpjAnualAjuste));
+        darfs.push(_enriquecerDarf(LR.darf.csllAnualAjuste));
       }
-      darfs.push(LR.darf.pisNaoCumulativo);
-      darfs.push(LR.darf.cofinsNaoCumulativo);
-      if (jcpResult && jcpResult.jcpDedutivel > 0) darfs.push(LR.darf.jcpIrrf);
+      darfs.push(_enriquecerDarf(LR.darf.pisNaoCumulativo));
+      darfs.push(_enriquecerDarf(LR.darf.cofinsNaoCumulativo));
+      if (jcpResult && jcpResult.jcpDedutivel > 0) darfs.push(_enriquecerDarf(LR.darf.jcpIrrf));
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -5050,13 +5084,19 @@
   //  FLUXO DE CAIXA TRIBUTÁRIO MENSAL
   // ═══════════════════════════════════════════════════════════════════════════
 
-  function _gerarFluxoCaixaMensal(d, receitaBruta, receitaServicos, issAliquota, irpjAnual, csllAnual, pisCofinsResult) {
+  function _gerarFluxoCaixaMensal(d, receitaBruta, receitaServicos, issAliquota, irpjAnual, csllAnual, pisCofinsResult, simTrimestralData) {
     var apuracao = d.apuracaoLR || "trimestral";
     var temMes = d.preencherMesAMes === true || d.preencherMesAMes === "true";
     var meses = [];
     var pisAnual = pisCofinsResult.pisAPagar || (pisCofinsResult.aPagar ? pisCofinsResult.aPagar.pis : 0);
     var cofinsAnual = pisCofinsResult.cofinsAPagar || (pisCofinsResult.aPagar ? pisCofinsResult.aPagar.cofins : 0);
     var totalFluxo = 0;
+
+    // ═══ CORREÇÃO: Deduzir retenções na fonte do fluxo ═══
+    var retIRRFMes = _r((_n(d.irrfRetidoPrivado) + _n(d.irrfRetidoPublico)) / 12);
+    var retCSLLMes = _r(_n(d.csllRetido) / 12);
+    var retPISMes = _r(_n(d.pisRetido) / 12);
+    var retCOFINSMes = _r(_n(d.cofinsRetido) / 12);
 
     for (var m = 1; m <= 12; m++) {
       var recMes = temMes ? _n(d["receitaMes" + m]) : _r(receitaBruta / 12);
@@ -5076,8 +5116,14 @@
       if (apuracao === "trimestral") {
         // Concentrado nos meses 3, 6, 9, 12
         if (m % 3 === 0) {
-          irpjMes = _r(irpjAnual / 4);
-          csllMes = _r(csllAnual / 4);
+          var triIdx = (m / 3) - 1;
+          if (simTrimestralData && simTrimestralData.trimestres && simTrimestralData.trimestres[triIdx]) {
+            irpjMes = _r(simTrimestralData.trimestres[triIdx].irpjTotal);
+            csllMes = _r(simTrimestralData.trimestres[triIdx].csll);
+          } else {
+            irpjMes = _r(irpjAnual / 4);
+            csllMes = _r(csllAnual / 4);
+          }
         }
       } else {
         // Estimativa mensal
@@ -5085,17 +5131,23 @@
         csllMes = _r(csllAnual / 12);
       }
 
-      var totalMes = _r(irpjMes + csllMes + pisMes + cofinsMes + issMes);
+      var irpjEfetivo = Math.max(_r(irpjMes - (irpjMes > 0 ? retIRRFMes : 0)), 0);
+      var csllEfetivo = Math.max(_r(csllMes - (csllMes > 0 ? retCSLLMes : 0)), 0);
+      var pisEfetivo = Math.max(_r(pisMes - retPISMes), 0);
+      var cofinsEfetivo = Math.max(_r(cofinsMes - retCOFINSMes), 0);
+      var totalMes = _r(irpjEfetivo + csllEfetivo + pisEfetivo + cofinsEfetivo + issMes);
       totalFluxo += totalMes;
 
       meses.push({
         mes: m,
-        irpj: irpjMes,
-        csll: csllMes,
-        pis: pisMes,
-        cofins: cofinsMes,
+        irpj: irpjEfetivo,
+        csll: csllEfetivo,
+        pis: pisEfetivo,
+        cofins: cofinsEfetivo,
         iss: issMes,
-        total: totalMes
+        total: totalMes,
+        irpjBruto: irpjMes,
+        csllBruto: csllMes
       });
     }
 
@@ -5632,23 +5684,39 @@
     s6 += '</div>';
 
     // Breakdown das economias
-    s6 += '<div class="res-mapa-breakdown"><h4>Detalhamento das Economias</h4>';
-    s6 += '<table class="res-table">';
-    if (eco.jcp > 0) s6 += _linha('JCP — Juros sobre Capital Próprio', eco.jcp, 'Art. 355-358', 'res-economia');
-    if (eco.sudam > 0) s6 += _linha('Redução SUDAM/SUDENE (75%)', eco.sudam, 'Art. 627-637', 'res-economia');
-    if (eco.incentivos > 0) s6 += _linha('Incentivos Fiscais (PAT, FIA, etc.)', eco.incentivos, 'Art. 641', 'res-economia');
-    if (eco.depreciacao > 0) s6 += _linha('Economia Fiscal de Depreciação', eco.depreciacao, 'Art. 305-329', 'res-economia');
-    if (eco.pisCofinsCreditos > 0) s6 += _linha('Créditos PIS/COFINS', eco.pisCofinsCreditos, 'Art. 3º', 'res-economia');
-    if (eco.gratificacao > 0) s6 += _linha('Conversão Gratificação → Pró-labore', eco.gratificacao, 'Art. 358, §1º', 'res-economia');
-    if (eco.cprb > 0) s6 += _linha('CPRB — Desoneração da Folha', eco.cprb, 'Lei 12.546/2011', 'res-economia');
-    if (eco.pddFiscal > 0) s6 += _linha('PDD Fiscal — Perdas no Recebimento', eco.pddFiscal, 'Art. 340-342 RIR/2018', 'res-economia');
-    s6 += '<tr class="res-total res-economia"><td><strong>ECONOMIA TOTAL</strong></td><td class="res-valor"><strong>' + _m(eco.total) + '</strong></td></tr>';
-    s6 += '</table>';
-    if (eco.prejuizo > 0) {
-      s6 += '<div style="margin-top:8px;padding:8px 12px;background:rgba(16,185,129,0.08);border-left:3px solid #10b981;border-radius:4px;font-size:0.85em;color:#8892b0;">';
-      s6 += '<strong style="color:#10b981;">✓ Compensação de Prejuízo Fiscal:</strong> ' + _m(eco.prejuizo);
-      s6 += ' <em>(Art. 579-586 RIR/2018 — direito legal obrigatório, já refletido na carga base)</em></div>';
+    // Breakdown separado: Planejamento vs Já Incorporados
+    s6 += '<div class="res-mapa-breakdown">';
+    var temAdicionais = (eco.jcp > 0 || eco.sudam > 0 || eco.incentivos > 0 || eco.gratificacao > 0 || eco.cprb > 0);
+    if (temAdicionais) {
+      s6 += '<h4>💡 Economias por Ação de Planejamento Tributário</h4>';
+      s6 += '<p style="font-size:0.82em;color:#8892b0;margin-bottom:8px;">Estratégias que você pode implementar para reduzir a carga:</p>';
+      s6 += '<table class="res-table">';
+      if (eco.jcp > 0) s6 += _linha('JCP — Juros sobre Capital Próprio', eco.jcp, 'Art. 355-358', 'res-economia');
+      if (eco.sudam > 0) s6 += _linha('Redução SUDAM/SUDENE (75%)', eco.sudam, 'Art. 627-637', 'res-economia');
+      if (eco.incentivos > 0) s6 += _linha('Incentivos Fiscais (PAT, FIA, etc.)', eco.incentivos, 'Art. 641', 'res-economia');
+      if (eco.gratificacao > 0) s6 += _linha('Conversão Gratificação → Pró-labore', eco.gratificacao, 'Art. 358, §1º', 'res-economia');
+      if (eco.cprb > 0) s6 += _linha('CPRB — Desoneração da Folha', eco.cprb, 'Lei 12.546/2011', 'res-economia');
+      var subPlan = _r((eco.jcp || 0) + (eco.sudam || 0) + (eco.incentivos || 0) + (eco.gratificacao || 0) + (eco.cprb || 0));
+      s6 += '<tr class="res-total res-economia"><td><strong>SUBTOTAL PLANEJAMENTO</strong></td><td class="res-valor"><strong>' + _m(subPlan) + '</strong></td></tr>';
+      s6 += '</table>';
     }
+    var temEmbutidas = (eco.depreciacao > 0 || eco.pisCofinsCreditos > 0 || eco.pddFiscal > 0 || eco.prejuizo > 0);
+    if (temEmbutidas) {
+      s6 += '<h4 style="margin-top:16px;">✅ Economias Já Incorporadas na Carga Base</h4>';
+      s6 += '<p style="font-size:0.82em;color:#8892b0;margin-bottom:8px;">Direitos legais e créditos já refletidos no cálculo:</p>';
+      s6 += '<table class="res-table">';
+      if (eco.depreciacao > 0) s6 += _linha('Economia Fiscal de Depreciação', eco.depreciacao, 'Art. 305-329', 'res-economia');
+      if (eco.pisCofinsCreditos > 0) s6 += _linha('Créditos PIS/COFINS (não-cumulativo)', eco.pisCofinsCreditos, 'Art. 3º', 'res-economia');
+      if (eco.pddFiscal > 0) s6 += _linha('PDD Fiscal — Perdas no Recebimento', eco.pddFiscal, 'Art. 340-342', 'res-economia');
+      if (eco.prejuizo > 0) s6 += _linha('Compensação de Prejuízo Fiscal', eco.prejuizo, 'Art. 579-586', 'res-economia');
+      var subEmb = _r((eco.depreciacao || 0) + (eco.pisCofinsCreditos || 0) + (eco.pddFiscal || 0) + (eco.prejuizo || 0));
+      s6 += '<tr class="res-total"><td><strong>SUBTOTAL JÁ APLICADO</strong></td><td class="res-valor"><strong>' + _m(subEmb) + '</strong></td></tr>';
+      s6 += '</table>';
+    }
+    s6 += '<div style="margin-top:12px;padding:12px 16px;background:rgba(16,185,129,0.1);border-radius:8px;text-align:center;">';
+    s6 += '<div style="font-size:0.85em;color:#666;">ECONOMIA TOTAL (Planejamento + Direitos Legais)</div>';
+    s6 += '<div style="font-size:1.4em;font-weight:700;color:#10b981;">' + _m(eco.total) + '</div>';
+    s6 += '</div>';
     s6 += '</div>';
 
     // Projeções acumuladas
@@ -6012,7 +6080,7 @@
       valoresFormula[5] = compensTotal;
       valoresFormula[6] = r.lucroRealFinal || 0;
       valoresFormula[7] = r.irpj ? (r.irpj.irpjNormal || 0) : 0;
-      valoresFormula[8] = r.irpj ? (r.irpj.adicional || 0) : 0;
+      valoresFormula[8] = r.irpj ? (r.irpj.irpjAdicional || r.irpj.adicional || 0) : 0;
       valoresFormula[9] = r.irpjAntesReducao || 0;
       valoresFormula[10] = (r.incentivosFiscais ? (r.incentivosFiscais.totalDeducaoFinal || r.incentivosFiscais.economiaTotal || 0) : 0) + (r.reducaoSUDAM || 0);
       var totalRetForm = _n(d.irrfRetidoPrivado) + _n(d.irrfRetidoPublico);
@@ -7616,7 +7684,7 @@
       vfPdf[5] = compTotPdf;
       vfPdf[6] = r.lucroRealFinal || 0;
       vfPdf[7] = r.irpj ? (r.irpj.irpjNormal || 0) : 0;
-      vfPdf[8] = r.irpj ? (r.irpj.adicional || 0) : 0;
+      vfPdf[8] = r.irpj ? (r.irpj.irpjAdicional || r.irpj.adicional || 0) : 0;
       vfPdf[9] = r.irpjAntesReducao || 0;
       vfPdf[10] = (r.incentivosFiscais ? (r.incentivosFiscais.totalDeducaoFinal || r.incentivosFiscais.economiaTotal || 0) : 0) + (r.reducaoSUDAM || 0);
       var retFormPdf = (r.retencoes ? r.retencoes.irrf : 0) || 0;
@@ -8434,7 +8502,7 @@
       vfPdfC[5] = compTotPdfC;
       vfPdfC[6] = r.lucroRealFinal || 0;
       vfPdfC[7] = irpj.irpjNormal || 0;
-      vfPdfC[8] = irpj.adicional || 0;
+      vfPdfC[8] = irpj.irpjAdicional || irpj.adicional || 0;
       vfPdfC[9] = r.irpjAntesReducao || 0;
       vfPdfC[10] = (r.incentivosFiscais ? (r.incentivosFiscais.totalDeducaoFinal || r.incentivosFiscais.economiaTotal || 0) : 0) + (r.reducaoSUDAM || 0);
       var retFormPdfC = r.retencoes ? (r.retencoes.irrf || 0) : 0;
