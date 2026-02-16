@@ -537,7 +537,7 @@ const PERCENTUAIS_PRESUNCAO_IRPJ = [
     irpjMajorado: 0.352,
     baseLegal: 'Lei 9.249/95, Art. 15, §1º, III, c',
     cnaes: ['77.11-0', '77.19-5'],
-    observacoes: 'Locação de bens MÓVEIS e cessão de direitos. Para locação de IMÓVEIS próprios, usar imobiliaria_locacao.'
+    observacoes: 'Locação de bens MÓVEIS e cessão de direitos. Para locação de IMÓVEIS próprios, usar imobiliaria_locacao. NOTA: Há divergência interpretativa sobre a presunção de CSLL para locação de bens móveis — a abordagem conservadora (32%) é aplicada por padrão. Consulte SC COSIT 7/2021 e jurisprudência favorável à alíquota de 12%.'
   },
   {
     id: 'imobiliaria_locacao',
@@ -664,7 +664,8 @@ const PERCENTUAIS_PRESUNCAO_CSLL = [
     descricao: 'Locação de bens MÓVEIS e cessão de direitos',
     percentual: 0.32,
     csllMajorada: 0.352,
-    baseLegal: 'Lei 9.249/95, Art. 20, I'
+    baseLegal: 'Lei 9.249/95, Art. 20, I',
+    observacoes: 'NOTA: A aplicação de 32% para locação de bens móveis é a abordagem conservadora. Há divergência interpretativa: a SC COSIT 7/2021 aplica 32%, mas a interpretação majoritária da RFB e jurisprudência entende que locação de bens móveis não é prestação de serviços, cabendo CSLL a 12% (regra geral). Consulte seu advogado tributarista para avaliar a posição mais adequada ao seu caso.'
   },
   {
     id: 'imobiliaria_locacao',
