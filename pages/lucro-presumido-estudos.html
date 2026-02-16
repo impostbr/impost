@@ -869,9 +869,10 @@ function goToStep(n) {
 }
 
 function nextStep() {
+  // Sempre coleta dados do formulário antes de navegar (mantém sidebar atualizado)
+  gatherFormData();
   if (App.currentStep === 4) {
     // Validate: ensure at least some revenue is entered
-    gatherFormData();
     if (!App.formData.receitaBrutaAnual || App.formData.receitaBrutaAnual <= 0) {
       alert('Informe pelo menos uma receita na etapa 3 (Dados Financeiros) antes de calcular os resultados.');
       goToStep(3);
@@ -884,23 +885,29 @@ function nextStep() {
 }
 
 function prevStep() {
+  gatherFormData();
   goToStep(App.currentStep - 1);
 }
 
 // ─────────────────────────────────────────────────────────────────────────
 // 4. STEP 1 — CNAE SEARCH
 // ─────────────────────────────────────────────────────────────────────────
+function normalizeCnae(str) {
+  return (str || '').replace(/[.\-\/\s]/g, '').toLowerCase();
+}
+
 function initCnaeSearch() {
   const input = $('cnaeBusca');
   const results = $('cnaeResults');
   if (!input || !results) return;
   const search = debounce(function() {
-    const q = input.value.trim().toLowerCase();
-    if (q.length < 2 || !window.BANCO_CNAE) { results.classList.remove('open'); return; }
+    const raw = input.value.trim().toLowerCase();
+    const qNorm = normalizeCnae(raw);
+    if (raw.length < 2 || !window.BANCO_CNAE) { results.classList.remove('open'); return; }
     const matches = window.BANCO_CNAE.filter(c => {
-      const cod = (c.codigo || '').toLowerCase();
+      const codNorm = normalizeCnae(c.codigo);
       const desc = (c.descricao || '').toLowerCase();
-      return cod.includes(q) || desc.includes(q);
+      return codNorm.includes(qNorm) || desc.includes(raw);
     }).slice(0, 30);
     if (!matches.length) { results.innerHTML = '<div class="sr-item" style="color:var(--text3)">Nenhum resultado encontrado</div>'; results.classList.add('open'); return; }
     results.innerHTML = matches.map(c => `<div class="sr-item" data-codigo="${c.codigo}" data-desc="${c.descricao}" data-cat="${c.categoria || ''}"><span class="sr-code">${c.codigo}</span><span class="sr-desc">${c.descricao}</span><span class="sr-cat">${c.categoria || ''}</span></div>`).join('');
@@ -950,9 +957,10 @@ function addCnaeSecundario() {
   const inp = $('cnaeSecBusca' + id);
   const res = $('cnaeSecResults' + id);
   const searchSec = debounce(function() {
-    const q = inp.value.trim().toLowerCase();
-    if (q.length < 2 || !window.BANCO_CNAE) { res.classList.remove('open'); return; }
-    const matches = window.BANCO_CNAE.filter(c => (c.codigo || '').toLowerCase().includes(q) || (c.descricao || '').toLowerCase().includes(q)).slice(0, 15);
+    const raw = inp.value.trim().toLowerCase();
+    const qNorm = normalizeCnae(raw);
+    if (raw.length < 2 || !window.BANCO_CNAE) { res.classList.remove('open'); return; }
+    const matches = window.BANCO_CNAE.filter(c => normalizeCnae(c.codigo).includes(qNorm) || (c.descricao || '').toLowerCase().includes(raw)).slice(0, 15);
     if (!matches.length) { res.innerHTML = '<div class="sr-item">Nenhum resultado</div>'; res.classList.add('open'); return; }
     res.innerHTML = matches.map(c => `<div class="sr-item" data-codigo="${c.codigo}" data-desc="${c.descricao}"><span class="sr-code">${c.codigo}</span><span class="sr-desc">${c.descricao}</span></div>`).join('');
     res.classList.add('open');
@@ -1757,7 +1765,7 @@ function renderDistribuicao(d) {
   const dist = anual.distribuicaoLucros;
   let html = `<div class="kpi-grid">
     <div class="kpi"><div class="kpi-label">Base Presumida IRPJ (Anual)</div><div class="kpi-value mono">${formatMoney(dist.basePresumidaAnual)}</div></div>
-    <div class="kpi"><div class="kpi-label">(-) Tributos Federais</div><div class="kpi-value mono" style="color:var(--danger)">${formatMoney(dist.tributosFederais)}</div><div class="kpi-sub">IRPJ + CSLL + PIS + COFINS</div></div>
+    <div class="kpi"><div class="kpi-label">(-) IRPJ + CSLL Devidos</div><div class="kpi-value mono" style="color:var(--danger)">${formatMoney(dist.tributosDescontados)}</div><div class="kpi-sub">Somente IRPJ e CSLL (Art. 725 RIR/2018)</div></div>
     <div class="kpi"><div class="kpi-label">(=) Lucro Distribuivel Presumido</div><div class="kpi-value mono" style="color:var(--success)">${formatMoney(dist.lucroDistribuivelPresumido)}</div></div>`;
   if (dist.lucroDistribuivelContabil != null) {
     html += `<div class="kpi"><div class="kpi-label">Lucro Contabil Efetivo</div><div class="kpi-value mono">${formatMoney(dist.lucroContabilEfetivo)}</div></div>`;
@@ -1773,7 +1781,7 @@ function renderDistribuicao(d) {
     });
     html += '</tbody></table>';
   }
-  html += `<div class="info-box info" style="margin-top:16px"><strong>Base legal:</strong> ${dist.baseLegal}<br><br><strong>Base presumida:</strong> Lucro distribuivel = Base presumida IRPJ - Tributos federais. Limite de isencao.<br><strong>Base contabil:</strong> Se a empresa possui escrituracao contabil completa (ECD), pode distribuir o lucro contabil efetivo (se maior que o presumido) com isencao de IR. Excedente sem escrituracao e tributado.</div>`;
+  html += `<div class="info-box info" style="margin-top:16px"><strong>Base legal:</strong> ${dist.baseLegal}<br><br><strong>Base presumida:</strong> Lucro distribuivel isento = Base presumida IRPJ - IRPJ - CSLL devidos (Art. 725 RIR/2018). PIS e COFINS nao entram neste calculo.<br><strong>Base contabil:</strong> Se a empresa possui escrituracao contabil completa (ECD), pode distribuir o lucro contabil efetivo (se maior que o presumido) com isencao de IR. Excedente sem escrituracao e tributado.</div>`;
   $('tabDistribuicao').innerHTML = html;
 }
 
@@ -2200,11 +2208,9 @@ function recalcJCP() {
 
 function recalcECD() {
   const anual = App.results.anual;
-  const tributosFederais = anual ? (
+  const tributosDistribuicao = anual ? (
     (anual.tributos.irpj.anual || 0) +
-    (anual.tributos.csll.anual || 0) +
-    (anual.tributos.pis.anual || 0) +
-    (anual.tributos.cofins.anual || 0)
+    (anual.tributos.csll.anual || 0)
   ) : 0;
   const basePresumida = anual && anual.distribuicaoLucros ? (anual.distribuicaoLucros.basePresumidaAnual || 0) : 0;
 
@@ -2212,7 +2218,7 @@ function recalcECD() {
     const result = LucroPresumido.calcularBeneficioECD({
       basePresumidaAnual: basePresumida,
       lucroContabilReal: parseMoney($('ecdLucroContabil').value),
-      tributosFederaisAnuais: tributosFederais,
+      tributosFederaisAnuais: tributosDistribuicao,
       custoAnualECD: parseMoney($('ecdCusto').value)
     });
     App.results.ecd = result;
