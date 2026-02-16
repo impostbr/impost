@@ -9,7 +9,7 @@
  * Arquitetura:
  *   HTML (UI/render) → lucro-presumido-estudos.js (análise) → lucro_presumido.js (motor)
  *
- * Versão: 1.0.0
+ * Versão: 2.0.0
  * Data: Fevereiro/2026
  *
  * Dependência: lucro_presumido.js deve ser carregado ANTES deste arquivo.
@@ -765,6 +765,21 @@
     var ano = agora.getFullYear();
     var dataFormatada = dia + '/' + mes + '/' + ano;
 
+    // Ações de economia rankeadas por valor
+    var acoesEconomia = [];
+    if (economia.fontes && economia.fontes.length > 0) {
+      var fontesOrdenadas = economia.fontes.slice().sort(function(a, b) {
+        return (b.valor || 0) - (a.valor || 0);
+      });
+      for (var ae = 0; ae < Math.min(5, fontesOrdenadas.length); ae++) {
+        acoesEconomia.push({
+          acao: fontesOrdenadas[ae].fonte,
+          valor: fontesOrdenadas[ae].valor,
+          tipo: fontesOrdenadas[ae].tipo
+        });
+      }
+    }
+
     return {
       empresa: razaoSocial,
       cnpj: cnpj,
@@ -780,6 +795,7 @@
       nivelOportunidade: economia.nivelOportunidade,
       recomendacaoPrincipal: economia.recomendacaoPrincipal,
       top3Dicas: top3,
+      acoesEconomia: acoesEconomia,
       regimeRecomendado: regimeRecomendado,
       dataEstudo: dataFormatada
     };
@@ -829,6 +845,21 @@
    * @param {boolean} params.elegivelSimples
    * @param {string} params.razaoSocial
    * @param {string} params.cnpj
+   *
+   * // ── Pró-Labore (para simularProLaboreOtimo) ──
+   * @param {Array} [params.sociosDetalhados] - [{nome, participacao, isAdministrador, proLaboreAtual, temOutroVinculoCLT, dependentesIRPF}]
+   *
+   * // ── JCP (para simularJCP) ──
+   * @param {number} [params.patrimonioLiquido] - PL da empresa
+   * @param {number} [params.taxaTJLP] - Taxa TJLP vigente (decimal, ex: 0.0612)
+   * @param {number} [params.lucroLiquidoOuReservas] - Lucro líquido ou lucros acumulados
+   *
+   * // ── Regime de Caixa (para simularRegimeCaixa) ──
+   * @param {number[]} [params.faturamentoMensal] - Array de 12 valores faturados (R$)
+   * @param {number[]} [params.recebimentoMensal] - Array de 12 valores recebidos (R$)
+   *
+   * // ── ECD (para calcularBeneficioECD) ──
+   * @param {number} [params.custoAnualECD] - Custo anual do contador pela escrituração completa
    *
    * @returns {Object} Resultado completo com todas as análises
    */
@@ -942,6 +973,104 @@
       anual = { erro: e.message, receitaBrutaAnual: receitaBrutaAnual, consolidacao: null, distribuicaoLucros: null };
     }
 
+    // ── 4A. Pró-labore ótimo (por sócio) ──
+    var resultProLabore = [];
+    if (params.sociosDetalhados && params.sociosDetalhados.length > 0) {
+      var lucroDistribuivel = (anual && anual.distribuicaoLucros)
+        ? anual.distribuicaoLucros.lucroDistribuivelFinal
+        : 0;
+
+      for (var s = 0; s < params.sociosDetalhados.length; s++) {
+        try {
+          var simPL = LucroPresumido.simularProLaboreOtimo(
+            params.sociosDetalhados[s],
+            lucroDistribuivel
+          );
+          resultProLabore.push(simPL);
+        } catch (e) {
+          resultProLabore.push({ erro: e.message, socio: params.sociosDetalhados[s].nome });
+        }
+      }
+    }
+
+    var proLaboreConsolidado = null;
+    var economiaProLaboreTotal = 0;
+    for (var p = 0; p < resultProLabore.length; p++) {
+      if (resultProLabore[p].economiaAnual) {
+        economiaProLaboreTotal += resultProLabore[p].economiaAnual;
+      }
+    }
+    if (economiaProLaboreTotal > 0) {
+      proLaboreConsolidado = {
+        economiaAnual: economiaProLaboreTotal,
+        recomendacao: resultProLabore.length === 1
+          ? resultProLabore[0].recomendacao
+          : 'Otimização do pró-labore de ' + resultProLabore.length + ' sócios.'
+      };
+    }
+
+    // ── 4B. JCP ──
+    var resultJCP = null;
+    if (params.patrimonioLiquido > 0 && params.lucroLiquidoOuReservas > 0) {
+      var lucroDistribuivelIsentoRestante = (anual && anual.distribuicaoLucros)
+        ? anual.distribuicaoLucros.lucroDistribuivelFinal
+        : 0;
+
+      // Descontar economia do pró-labore já alocada (se houver)
+      if (economiaProLaboreTotal > 0) {
+        lucroDistribuivelIsentoRestante = Math.max(0, lucroDistribuivelIsentoRestante - economiaProLaboreTotal);
+      }
+
+      try {
+        resultJCP = LucroPresumido.simularJCP({
+          patrimonioLiquido: params.patrimonioLiquido,
+          taxaTJLP: params.taxaTJLP || 0.0612,
+          lucroLiquidoOuReservas: params.lucroLiquidoOuReservas,
+          lucroDistribuivelIsentoRestante: lucroDistribuivelIsentoRestante,
+          dataReferencia: new Date()
+        });
+      } catch (e) {
+        resultJCP = { erro: e.message };
+      }
+    }
+
+    // ── 4C. Regime Caixa vs Competência ──
+    var resultCaixa = null;
+    if (params.faturamentoMensal && params.faturamentoMensal.length === 12 &&
+        params.recebimentoMensal && params.recebimentoMensal.length === 12) {
+      try {
+        resultCaixa = LucroPresumido.simularRegimeCaixa({
+          faturamentoMensal: params.faturamentoMensal,
+          recebimentoMensal: params.recebimentoMensal,
+          atividadeId: atividadeId
+        });
+      } catch (e) {
+        resultCaixa = { erro: e.message };
+      }
+    }
+
+    // ── 4D. ECD (Escrituração Contábil Digital) ──
+    var resultECD = null;
+    if (lucroContabil > 0) {
+      var basePresumidaAnual = (anual && anual.distribuicaoLucros)
+        ? anual.distribuicaoLucros.basePresumidaAnual
+        : 0;
+      var tributosFederaisAnuais = (anual && anual.consolidacao)
+        ? anual.consolidacao.tributosFederais
+        : 0;
+
+      try {
+        resultECD = LucroPresumido.calcularBeneficioECD({
+          basePresumidaAnual: basePresumidaAnual,
+          lucroContabilReal: lucroContabil,
+          tributosFederaisAnuais: tributosFederaisAnuais,
+          custoAnualECD: params.custoAnualECD || 0
+        });
+      } catch (e) {
+        resultECD = { erro: e.message };
+      }
+    }
+
     // ── 5. Vantagens/Desvantagens ──
     var vantagens = null;
     try {
@@ -998,9 +1127,9 @@
     var economiaPotencial = null;
     try {
       economiaPotencial = calcularEconomiaPotencial({
-        proLabore: null,
-        ecd: null,
-        caixaComp: null,
+        proLabore: proLaboreConsolidado,
+        ecd: resultECD,
+        caixaComp: resultCaixa,
         breakeven: resultBreakeven,
         dicas: resultDicas
       });
@@ -1046,6 +1175,13 @@
       vantagens: vantagens,
       breakeven: resultBreakeven,
       dicas: resultDicas,
+
+      // Resultados individuais dos simuladores
+      proLabore: resultProLabore,
+      jcp: resultJCP,
+      regimeCaixa: resultCaixa,
+      ecd: resultECD,
+
       economiaPotencial: economiaPotencial,
       lc224: lc224,
       resumoExecutivo: resumoExecutivo,
@@ -1091,7 +1227,21 @@
         { nome: 'Luis Fernando', percentual: 0.65 },
         { nome: 'Elton Oderdenge', percentual: 0.35 }
       ],
-      elegivelSimples: false
+      elegivelSimples: false,
+
+      // Novos parâmetros — simuladores de economia
+      sociosDetalhados: [
+        { nome: 'Luis Fernando', participacao: 0.65, isAdministrador: true,
+          proLaboreAtual: 5000, temOutroVinculoCLT: false, dependentesIRPF: 0 },
+        { nome: 'Elton Oderdenge', participacao: 0.35, isAdministrador: true,
+          proLaboreAtual: 3000, temOutroVinculoCLT: false, dependentesIRPF: 0 }
+      ],
+      patrimonioLiquido: 500000,
+      taxaTJLP: 0.0612,
+      lucroLiquidoOuReservas: 400000,
+      faturamentoMensal: [196000,196000,196000,196000,196000,196000,196000,196000,196000,196000,196000,196000],
+      recebimentoMensal: [150000,180000,220000,190000,200000,160000,210000,195000,185000,205000,170000,285000],
+      custoAnualECD: 12000
     });
 
     console.log('Receita:', resultado.anual.receitaBrutaAnual);
@@ -1102,6 +1252,11 @@
     console.log('Recomendação:', resultado.breakeven.recomendacao);
     console.log('Dicas:', resultado.dicas.length);
     console.log('Economia Potencial:', resultado.economiaPotencial.totalEconomiaAnual);
+    console.log('Pró-Labore Economia:', resultado.economiaPotencial.totalEconomiaAnual);
+    console.log('Regime Caixa Diferimento:', resultado.regimeCaixa ? resultado.regimeCaixa.totalDiferido : 'N/A');
+    console.log('ECD Benefício:', resultado.ecd ? resultado.ecd.beneficioLiquido : 'N/A');
+    console.log('JCP Bruto:', resultado.jcp ? resultado.jcp.jcpBruto : 'N/A');
+    console.log('Ações Economia:', resultado.resumoExecutivo.acoesEconomia || []);
     console.log('Regime Recomendado:', resultado.resumoExecutivo.regimeRecomendado);
     console.log('LC 224:', resultado.lc224 ? 'Aplicável' : 'N/A');
     console.log('═══ FIM TESTE ═══');
@@ -1127,7 +1282,7 @@
     _testarEstudo: _testarEstudo,
 
     // Versão
-    VERSION: '1.0.0'
+    VERSION: '2.0.0'
   };
 
   if (typeof module !== 'undefined' && module.exports) {
