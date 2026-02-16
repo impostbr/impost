@@ -2189,7 +2189,7 @@
         '<strong>= LUCRO LÍQUIDO CONTÁBIL: ' + _m(ll) + '</strong><br>' +
         '(+) Total de Adições: ' + _m(adicoes) + '<br>' +
         '(-) Total de Exclusões: ' + _m(exclusoes) + '<br>' +
-        '<strong>= LUCRO AJUSTADO: ' + _m(lucroAjustado) + '</strong><br>' +
+        '<strong>= LUCRO AJUSTADO: ' + _m(lucroAjustado) + '</strong> <span style="color:#95a5a6;font-size:0.85em">(antes de ajustes automáticos — valor preliminar)</span><br>' +
         'Margem de Lucro: ' + margem.toFixed(1) + '%' +
         alertas;
     }
@@ -2755,7 +2755,7 @@
     }
     if (_n(d.multasPunitivas) > 0) {
       despesasIndedutivelDetalhe.push({ desc: "Multas punitivas", valor: _n(d.multasPunitivas), artigo: "Art. 311, §5º" });
-      totalIndedutivelAuto += _n(d.multasPunitivas);
+      // Não somar — já incluído em _calcTotalAdicoes()
     }
     if (_n(d.provisoesContingencias) > 0) {
       despesasIndedutivelDetalhe.push({ desc: "Provisões para contingências", valor: _n(d.provisoesContingencias), artigo: "Art. 340" });
@@ -2893,7 +2893,7 @@
       adicoes: totalAdicoes,
       exclusoes: totalExclusoes,
       prejuizoFiscal: vedaCompensacao ? 0 : prejuizoFiscal,
-      numMeses: 12,
+      numMeses: d.apuracaoLR === "trimestral" ? 3 : 12,
       incentivos: totalDeducoesIncentivos,
       retencoesFonte: totalIRRF,
       estimativasPagas: estimIRPJPagas,
@@ -8748,7 +8748,7 @@
     aba1.push(['Carga Otimizada', mv(res.cargaOtimizada)]);
     aba1.push(['Alíquota Otimizada (%)', pv(res.aliquotaOtimizada / 100)]);
     aba1.push(['Retenções a Compensar', mv(res.totalRetencoes)]);
-    aba1.push(['Saldo Efetivo a Pagar', mv(res.saldoEfetivo)]);
+    aba1.push(['Saldo Federal a Pagar', mv(res.saldoEfetivo)]);
     aba1.push([]);
     aba1.push(['FONTES DE ECONOMIA', 'Valor Anual', 'Base Legal']);
     var ecoKeys3 = ['jcp', 'prejuizo', 'sudam', 'incentivos', 'depreciacao', 'pisCofinsCreditos', 'gratificacao', 'cprb', 'pddFiscal'];
