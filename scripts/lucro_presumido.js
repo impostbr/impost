@@ -5,9 +5,31 @@
  *
  * AGROGEO BRASIL - Geotecnologia e Consultoria Ambiental
  * Autor: Luis Fernando | Proprietário AGROGEO BRASIL
- * Versão: 3.3.0
+ * Versão: 3.4.0
  * Data: Fevereiro/2026
  * Localização: Novo Progresso, Pará (Amazônia Legal - SUDAM)
+ *
+ * Changelog v3.4.0:
+ *   - SEÇÃO 14A: Base Legal Complementar — 18 leis/normas detalhadas
+ *   - Lei 9.718/1998: VEDACOES_LP_DETALHADAS (Art. 14, I-VIII), PIS/COFINS Arts. 2º e 3º
+ *   - Lei 12.814/2013: Referência correta do limite R$ 78M
+ *   - Lei 10.684/2003: CSLL 32% para serviços (Art. 22)
+ *   - Lei 11.727/2008: REQUISITOS_HOSPITALAR_8PCT com serviços abrangidos/não abrangidos
+ *   - IN RFB 1.700/2017: REGULAMENTACAO_IN_RFB (distribuição lucros, regime caixa, atividades mistas)
+ *   - DL 1.598/1977: CONCEITO_RECEITA_BRUTA (Art. 12, redação Lei 12.973/2014)
+ *   - Lei 9.430/1996: REGRAS_ESPECIFICAS_LP_9430 (Arts. 51-54, Art. 26)
+ *   - RIR/2018: MAPA_RIR_2018_LP (artigos consolidados do LP)
+ *   - Lei 7.689/1988: Histórico alíquota CSLL
+ *   - Lei 12.973/2014: ALTERACOES_LEI_12973_2014 (impactos no LP)
+ *   - MULTAS_E_PENALIDADES: consolidação (Lei 9.430/96, Arts. 44 e 61)
+ *   - RETENCOES_FONTE_LP: IRRF, CSRF, CSLL Adm. Pública completos
+ *   - COMPENSACAO_TRIBUTARIA: PER/DCOMP, vedações, DARF mínimo
+ *   - LC 116/2003: ISS_DETALHAMENTO (alíquotas, local incidência)
+ *   - CSLL_ALIQUOTAS_POR_SETOR: diferenciação financeiras vs regra geral
+ *   - Lei 8.212/1991: INSS_PATRONAL_DETALHAMENTO (Art. 22)
+ *   - TABELA_IRRF_SERVICOS_PJ: retenções fonte entre PJs
+ *   - TRANSICOES: PRESUMIDO_PARA_REAL e REAL_PARA_PRESUMIDO
+ *   - Impedimentos: securitização (Lei 14.430/2022) e SCP sócio ostensivo LR
  *
  * Changelog v3.3.0 (versão final):
  *   - ETAPA 4: (removido comparativo LR — ferramenta exclusiva LP)
@@ -796,6 +818,18 @@ const IMPEDIMENTOS_LUCRO_PRESUMIDO = [
     descricao: 'Sociedade em Conta de Participação (SCP) em determinadas circunstâncias',
     baseLegal: 'RIR/2018, Art. 257',
     verificacao: (dados) => dados.isSCP === true
+  },
+  {
+    id: 'scp_socio_ostensivo_lr',
+    descricao: 'Sócio ostensivo de SCP quando tributado pelo Lucro Real — vedação ao LP para parcela do resultado da SCP',
+    baseLegal: 'Lei 9.718/1998, Art. 14, VII',
+    verificacao: (dados) => dados.isSocioOstensivoSCPnoLucroReal === true
+  },
+  {
+    id: 'securitizacao',
+    descricao: 'Atividade de securitização de créditos imobiliários, financeiros e do agronegócio',
+    baseLegal: 'Lei 9.718/1998, Art. 14, VIII (incluído pela Lei 14.430/2022)',
+    verificacao: (dados) => dados.isSecuritizadora === true
   }
 ];
 
@@ -1817,8 +1851,589 @@ const TRANSICOES = {
       'PIS/COFINS mudam para regime cumulativo (0,65% + 3%).'
     ],
     baseLegal: 'LC 123/2006, Art. 30 e Lei 9.430/1996, Art. 26'
+  },
+
+  PRESUMIDO_PARA_REAL: {
+    descricao: 'Transição do Lucro Presumido para Lucro Real',
+    procedimentos: [
+      'Manifestar opção pelo LR com pagamento de estimativa ou LALUR no 1º trimestre.',
+      'Implementar escrituração contábil completa (ECD obrigatória).',
+      'Abrir LALUR/LACS para controle de adições e exclusões.',
+      'Levantar balanço de abertura no LR.',
+      'Verificar estoque de prejuízos fiscais anteriores (só se houver).',
+      'Adequar sistema para PIS/COFINS não-cumulativo (9,25% com créditos).'
+    ],
+    alertas: [
+      'Opção é irretratável para o ano-calendário.',
+      'NÃO é possível compensar prejuízos do período no LP.',
+      'PIS/COFINS muda para regime não-cumulativo (9,25% COM créditos sobre insumos).',
+      'Custo contábil aumenta significativamente.'
+    ],
+    baseLegal: 'Lei 9.430/1996, Art. 26; Lei 9.718/1998, Art. 14'
+  },
+
+  REAL_PARA_PRESUMIDO: {
+    descricao: 'Transição do Lucro Real para Lucro Presumido',
+    procedimentos: [
+      'Verificar se PJ atende TODOS os requisitos do LP (receita ≤ R$ 78M, sem vedações).',
+      'Manifestar opção com 1º DARF de IRPJ-LP do 1º trimestre.',
+      'OBRIGATÓRIO: adicionar saldos de tributação diferida do LALUR à base do 1º trimestre (Art. 54 Lei 9.430/96).',
+      'Verificar saldos de depreciação acelerada, variação cambial diferida, provisões.',
+      'Simplificar escrituração (pode usar Livro Caixa em vez de ECD).'
+    ],
+    alertas: [
+      'Saldos diferidos do LALUR devem ser oferecidos à tributação no 1º trimestre — NÃO pode "esquecer".',
+      'Prejuízos fiscais acumulados no LR são PERDIDOS (não compensáveis no LP).',
+      'PIS/COFINS volta ao regime cumulativo (3,65% SEM créditos).',
+      'Distribuição de lucros: limite passa a ser base presumida − tributos (ou lucro contábil se mantiver ECD).'
+    ],
+    baseLegal: 'Lei 9.430/1996, Arts. 26 e 54'
   }
 };
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SEÇÃO 14A: BASE LEGAL COMPLEMENTAR
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Detalhamento das referências legais citadas no motor de cálculo.
+// Cada constante contém baseLegal com citação precisa (Lei, Artigo, Parágrafo).
+// Adicionado na v3.4.0.
+//
+
+/**
+ * Vedações detalhadas ao Lucro Presumido — Art. 14 da Lei 9.718/1998.
+ * Base Legal: Lei 9.718/1998, Art. 14 (redação atualizada pela Lei 12.814/2013 e Lei 14.430/2022).
+ *
+ * Lista todos os incisos I a VIII com a redação vigente.
+ */
+const VEDACOES_LP_DETALHADAS = [
+  {
+    inciso: 'I',
+    descricao: 'Receita bruta total no ano-calendário anterior superior a R$ 78.000.000,00',
+    baseLegal: 'Lei 9.718/1998, Art. 14, I (redação Lei 12.814/2013, Art. 7º)',
+    nota: 'Limite anterior de R$ 48.000.000 (Lei 10.637/2002) revogado pela Lei 12.814/2013'
+  },
+  {
+    inciso: 'II',
+    descricao: 'Instituições financeiras: bancos comerciais, bancos de investimento, bancos de desenvolvimento, caixas econômicas, sociedades de crédito, financiamento e investimento, sociedades de crédito imobiliário, corretoras de títulos e valores mobiliários, distribuidoras de títulos e valores mobiliários, empresas de arrendamento mercantil, cooperativas de crédito, empresas de seguros privados, entidades de previdência privada aberta e empresas de capitalização',
+    baseLegal: 'Lei 9.718/1998, Art. 14, II'
+  },
+  {
+    inciso: 'III',
+    descricao: 'Que tiverem lucros, rendimentos ou ganhos de capital oriundos do exterior',
+    baseLegal: 'Lei 9.718/1998, Art. 14, III'
+  },
+  {
+    inciso: 'IV',
+    descricao: 'Que, autorizadas pela legislação tributária, usufruam de benefícios fiscais relativos à isenção ou redução do imposto, calculado com base no lucro da exploração',
+    baseLegal: 'Lei 9.718/1998, Art. 14, IV (cf. Lei 11.941/2009, Art. 19)'
+  },
+  {
+    inciso: 'V',
+    descricao: 'Que, no decorrer do ano-calendário, tenham efetuado pagamento mensal pelo regime de estimativa (Lei 9.430/96, Art. 2º)',
+    baseLegal: 'Lei 9.718/1998, Art. 14, V'
+  },
+  {
+    inciso: 'VI',
+    descricao: 'Que explorem atividade de factoring: prestação cumulativa e contínua de serviços de assessoria creditícia, mercadológica, gestão de crédito, seleção de riscos, administração de contas a pagar e a receber, compras de direitos creditórios resultantes de vendas mercantis a prazo ou de prestação de serviços',
+    baseLegal: 'Lei 9.718/1998, Art. 14, VI',
+    nota: 'Factoring pode optar pelo LP desde a Lei 12.249/2010; vedação original do inciso VI foi alterada. Verificar redação vigente.'
+  },
+  {
+    inciso: 'VII',
+    descricao: 'Que possuam parcela do resultado de Sociedade em Conta de Participação (SCP), quando o sócio ostensivo for tributado pelo Lucro Real',
+    baseLegal: 'Lei 9.718/1998, Art. 14, VII'
+  },
+  {
+    inciso: 'VIII',
+    descricao: 'Que exerçam atividade de securitização de créditos imobiliários, financeiros e do agronegócio',
+    baseLegal: 'Lei 9.718/1998, Art. 14, VIII (incluído pela Lei 14.430/2022)'
+  }
+];
+
+/**
+ * PIS/COFINS Cumulativo — Arts. 2º e 3º da Lei 9.718/1998.
+ * Base Legal: Lei 9.718/1998, Arts. 2º e 3º.
+ *
+ * No Lucro Presumido, PIS/COFINS segue regime CUMULATIVO.
+ */
+const PIS_COFINS_LEI_9718 = {
+  baseLegal: 'Lei 9.718/1998, Arts. 2º e 3º',
+  art2: {
+    descricao: 'As contribuições para PIS/PASEP e COFINS são devidas pelas pessoas jurídicas de direito privado e as que lhes são equiparadas pela legislação do imposto de renda',
+    baseCalculo: 'Receita bruta da pessoa jurídica (regime cumulativo quando LP)',
+    aliquotas: { PIS: 0.0065, COFINS: 0.03 }
+  },
+  art3ExclusoesReceitaBruta: [
+    { inciso: 'I', descricao: 'Vendas canceladas' },
+    { inciso: 'II', descricao: 'Descontos incondicionais concedidos' },
+    { inciso: 'III', descricao: 'IPI quando destacado como receita na nota fiscal' },
+    { inciso: 'IV', descricao: 'ICMS-ST cobrado como substituto tributário' },
+    { inciso: 'V', descricao: 'Receitas de exportação de mercadorias e serviços (CF/88, Art. 149, §2º, I)' }
+  ],
+  art3Paragrafo1: 'Na determinação da base de cálculo, são também excluídas as receitas isentas ou com alíquota reduzida a zero',
+  nota: 'No LP, não há direito a créditos de PIS/COFINS (regime cumulativo). PIS/COFINS não-cumulativo aplica-se ao Lucro Real.'
+};
+
+/**
+ * Limite de receita bruta para opção pelo Lucro Presumido.
+ * Atualizado pela Lei 12.814/2013, Art. 7º (revoga limite anterior de R$ 48M da Lei 10.637/2002).
+ * Base Legal: Lei 12.814/2013, Art. 7º c/c Lei 9.718/1998, Art. 14, I.
+ *
+ * Nota: O limite de R$ 78.000.000,00 vigora desde 01/01/2014.
+ */
+const HISTORICO_LIMITE_RECEITA_LP = {
+  baseLegal: 'Lei 12.814/2013, Art. 7º c/c Lei 9.718/1998, Art. 14, I',
+  limiteAtual: 78_000_000.00,
+  vigenciaAtual: 'Desde 01/01/2014',
+  historico: [
+    { limite: 24_000_000.00, vigencia: 'Até 31/12/2002', lei: 'Lei 9.718/1998, Art. 14 (redação original)' },
+    { limite: 48_000_000.00, vigencia: '01/01/2003 a 31/12/2013', lei: 'Lei 10.637/2002' },
+    { limite: 78_000_000.00, vigencia: 'A partir de 01/01/2014', lei: 'Lei 12.814/2013, Art. 7º' }
+  ]
+};
+
+/**
+ * Base Legal da CSLL 32% para serviços.
+ * Lei 10.684/2003, Art. 22 — Altera Art. 20 da Lei 9.249/1995.
+ *
+ * Atividades com CSLL 32%: serviços em geral, intermediação de negócios,
+ * locação/cessão de bens móveis, factoring.
+ * Vigência: a partir de 01/09/2003.
+ *
+ * Nota: A referência correta para os 32% da CSLL é:
+ * Lei 9.249/95, Art. 20, caput, com redação dada pela Lei 10.684/2003, Art. 22.
+ * Anteriormente, a CSLL de serviços era 12% (como comércio/indústria).
+ */
+const CSLL_32PCT_SERVICOS = {
+  baseLegal: 'Lei 9.249/95, Art. 20, caput, com redação dada pela Lei 10.684/2003, Art. 22',
+  vigencia: 'A partir de 01/09/2003',
+  percentual: 0.32,
+  atividadesAbrangidas: [
+    'Prestação de serviços em geral (exceto hospitalares e transporte)',
+    'Intermediação de negócios',
+    'Administração, locação ou cessão de bens imóveis, móveis e direitos de qualquer natureza',
+    'Factoring (prestação cumulativa e contínua de assessoria creditícia)'
+  ],
+  nota: 'Antes da Lei 10.684/2003, serviços em geral tinham CSLL de 12%. A alteração elevou para 32% alinhando com o percentual do IRPJ para essas atividades.'
+};
+
+/**
+ * Requisitos detalhados para presunção reduzida de 8% em serviços hospitalares.
+ * Base Legal: Lei 11.727/2008, Art. 29; Lei 9.249/95, Art. 15, §1º, III, "a";
+ *             IN RFB 1.700/2017, Art. 33, §3º e §4º.
+ *
+ * REQUISITOS CUMULATIVOS: ambos devem ser atendidos simultaneamente.
+ */
+const REQUISITOS_HOSPITALAR_8PCT = {
+  baseLegal: 'Lei 11.727/2008, Art. 29; Lei 9.249/95, Art. 15, §1º, III, "a"; IN RFB 1.700/2017, Art. 33, §3º e §4º',
+  requisitos: [
+    {
+      id: 'sociedade_empresaria',
+      descricao: 'Ser sociedade empresária registrada na Junta Comercial (NÃO pode ser sociedade simples)',
+      fundamentacao: 'Lei 11.727/2008, Art. 29; CC/2002, Art. 982'
+    },
+    {
+      id: 'normas_anvisa',
+      descricao: 'Cumprir normas da ANVISA para funcionamento',
+      fundamentacao: 'Lei 11.727/2008, Art. 29'
+    }
+  ],
+  servicosAbrangidos: [
+    'Serviços hospitalares propriamente ditos',
+    'Serviços de auxílio diagnóstico e terapia',
+    'Patologia clínica',
+    'Imagenologia (RX, ultrassom, tomografia, ressonância)',
+    'Anatomia patológica e citopatologia',
+    'Medicina nuclear',
+    'Análises e patologias clínicas',
+    'Radioterapia, quimioterapia, diálise, hemoterapia',
+    'Serviços de pronto-socorro',
+    'Cirurgias (em ambiente hospitalar)'
+  ],
+  servicosNaoAbrangidos: [
+    'Simples consultas médicas (em consultório)',
+    'Serviço de profissional liberal individual',
+    'Serviços prestados em clínica SEM internação ou procedimentos complexos'
+  ],
+  alertaFalha: 'Se NÃO atender AMBOS os requisitos cumulativos → presunção sobe para 32% (IRPJ) e 32% (CSLL)'
+};
+
+/**
+ * Regulamentação detalhada da IN RFB 1.700/2017 (atual IN RFB 2.058/2021).
+ * Artigos relevantes para o Lucro Presumido.
+ *
+ * Base Legal: IN RFB 1.700/2017 e IN RFB 2.058/2021.
+ */
+const REGULAMENTACAO_IN_RFB = {
+  distribuicaoLucros: {
+    artigo: 'IN RFB 1.700/2017, Art. 238 (atual IN RFB 2.058/2021)',
+    regra: 'Lucros isentos = base presumida MENOS todos os impostos e contribuições (IRPJ + CSLL + PIS + COFINS)',
+    escrituracaoContabil: 'Se PJ mantiver escrituração contábil completa (ECD), pode distribuir lucro contábil efetivo se maior que a presunção fiscal',
+    baseLegalECD: 'IN RFB 1.700/2017, Art. 238, parágrafo único'
+  },
+  regimeCaixa: {
+    artigo: 'IN RFB 1.700/2017, Art. 215 e Lei 8.981/1995, Art. 30',
+    regra: 'PJ no LP pode optar pelo regime de caixa para reconhecimento de receitas',
+    condicoes: [
+      'Opção manifestada na ECF do ano-calendário',
+      'Irretratável para o ano inteiro',
+      'Aplicável apenas para receitas de venda de bens/serviços a prazo',
+      'Receitas financeiras e ganhos de capital seguem regime de competência'
+    ],
+    atividadesImobiliarias: 'Atividades imobiliárias (loteamento, incorporação, construção p/ venda) DEVEM usar regime de caixa — Art. 30 da Lei 8.981/95'
+  },
+  construcaoComMaterial: {
+    artigo: 'IN RFB 1.700/2017, Art. 33, §4º',
+    regra: 'Empreitada com fornecimento de TODOS os materiais indispensáveis à obra: percentual de 8%',
+    requisito: 'Contrato deve prever expressamente o fornecimento de TODOS os materiais. Se parcial → 32%'
+  },
+  atividadesMistas: {
+    artigo: 'Lei 9.249/95, Art. 15, §2º; IN RFB 1.700/2017, Art. 33, §1º',
+    regra: 'PJ com atividades diversificadas: aplicar percentual correspondente a CADA atividade separadamente'
+  }
+};
+
+/**
+ * Conceito legal de Receita Bruta — DL 1.598/1977, Art. 12.
+ * Redação dada pela Lei 12.973/2014.
+ *
+ * Base Legal: Decreto-Lei 1.598/1977, Art. 12 (redação Lei 12.973/2014).
+ * Esta definição se aplica tanto ao Lucro Real quanto ao Presumido
+ * para fins de aplicação dos percentuais de presunção.
+ */
+const CONCEITO_RECEITA_BRUTA = {
+  baseLegal: 'Decreto-Lei 1.598/1977, Art. 12 (redação Lei 12.973/2014)',
+  componentes: [
+    'I — Produto da venda de bens nas operações de conta própria',
+    'II — Preço da prestação de serviços em geral',
+    'III — Resultado auferido nas operações de conta alheia',
+    'IV — Receitas da atividade ou objeto principal não compreendidas nos incisos I a III'
+  ],
+  exclusoes: [
+    'Devoluções e vendas canceladas',
+    'Descontos incondicionais concedidos',
+    'Tributos sobre ela incidentes (IPI, ICMS-ST quando destacado pelo substituto)',
+    'Valores decorrentes do ajuste a valor presente (Lei 6.404/76, Art. 183, VIII)'
+  ],
+  nota: 'Esta definição se aplica tanto ao Lucro Real quanto ao Presumido para fins de aplicação dos percentuais de presunção.'
+};
+
+/**
+ * Regras específicas do Lucro Presumido — Lei 9.430/1996, Arts. 51-54 e Art. 26.
+ * Base Legal: Lei 9.430/1996.
+ *
+ * Detalha artigos referenciados nos cálculos mas não formalizados como constantes.
+ */
+const REGRAS_ESPECIFICAS_LP_9430 = {
+  jcpEFinanceiros: {
+    artigo: 'Lei 9.430/1996, Art. 51',
+    regra: 'JCP recebidos e rendimentos/ganhos de operações financeiras são ADICIONADOS ao lucro presumido. IR-fonte sobre eles é ANTECIPAÇÃO do devido.',
+    nota: 'Diferente do que ocorre no art. 76, II da Lei 8.981/95 (que torna IR-fonte definitivo para renda fixa/variável), o art. 51 da Lei 9.430 torna a retenção em ANTECIPAÇÃO.'
+  },
+  ganhoCapitalReavaliacao: {
+    artigo: 'Lei 9.430/1996, Art. 52',
+    regra: 'Na apuração de ganho de capital no LP, valores de reavaliação SÓ podem ser computados no custo se comprovado que foram tributados.'
+  },
+  valoresRecuperados: {
+    artigo: 'Lei 9.430/1996, Art. 53',
+    regra: 'Valores recuperados (custos, despesas, perdas de crédito deduzidos anteriormente) devem ser ADICIONADOS ao lucro presumido.',
+    excecao: 'Exceto se comprovar que: (a) não deduziu no lucro real anterior; ou (b) refere-se a período já no presumido.'
+  },
+  transicaoRealParaPresumido: {
+    artigo: 'Lei 9.430/1996, Art. 54 (redação Lei 12.973/2014)',
+    regra: 'PJ que migra do Lucro Real para Presumido deve ADICIONAR à base do 1º período TODOS os saldos de tributação diferida controlados no LALUR/e-LALUR.',
+    exemplos: [
+      'Depreciação acelerada não tributada',
+      'Variação cambial diferida',
+      'Provisões temporariamente indedutíveis que foram excluídas do lucro real',
+      'Lucro inflacionário diferido (se remanescente)'
+    ]
+  },
+  opcaoIrretratavel: {
+    artigo: 'Lei 9.430/1996, Art. 26',
+    regras: [
+      '§1º: Opção manifestada com pagamento da 1ª ou única quota do 1º trimestre',
+      '§2º: PJ que iniciar no 2º trimestre manifesta no 1º DARF do trimestre de início',
+      '§3º: Mudança para LR no mesmo ano → multa + juros sobre diferença',
+      '§4º: Mudança só admitida antes da ECF e antes de procedimento de ofício'
+    ]
+  }
+};
+
+/**
+ * Mapa de artigos do RIR/2018 (Decreto 9.580/2018) relevantes ao Lucro Presumido.
+ * Base Legal: Decreto 9.580/2018 — Regulamento do Imposto de Renda.
+ *
+ * Consolida todos os artigos do RIR referenciados no motor de cálculo.
+ */
+const MAPA_RIR_2018_LP = {
+  titulo: 'Decreto 9.580/2018 — Regulamento do Imposto de Renda — Artigos do Lucro Presumido',
+  artigos: {
+    'Art. 587': { tema: 'Limite de receita bruta para opção pelo LP', leiOrigem: 'Lei 9.718/98, Art. 14' },
+    'Art. 588': { tema: 'Período de apuração trimestral', leiOrigem: 'Lei 9.430/96, Art. 1º' },
+    'Art. 589': { tema: 'Manifestação da opção', leiOrigem: 'Lei 9.430/96, Art. 26' },
+    'Art. 590': { tema: 'Percentual de presunção 8% (caput)', leiOrigem: 'Lei 9.249/95, Art. 15' },
+    'Art. 591': { tema: 'Percentual 1,6% — combustíveis', leiOrigem: 'Lei 9.249/95, Art. 15, §1º, I' },
+    'Art. 592': { tema: 'Percentual 16% — transporte passageiros e financeiras', leiOrigem: 'Lei 9.249/95, Art. 15, §1º, II' },
+    'Art. 593': { tema: 'Percentual 32% — serviços, intermediação, locação, factoring', leiOrigem: 'Lei 9.249/95, Art. 15, §1º, III' },
+    'Art. 594': { tema: 'Atividades diversificadas', leiOrigem: 'Lei 9.249/95, Art. 15, §2º' },
+    'Art. 595': { tema: 'Acréscimos à base (ganhos de capital, receitas financeiras, etc.)', leiOrigem: 'Lei 8.981/95, Art. 32; Lei 9.430/96, Art. 25, II' },
+    'Art. 596': { tema: 'Conceito de receita bruta', leiOrigem: 'DL 1.598/77, Art. 12' },
+    'Art. 597': { tema: 'Regime de caixa — atividades imobiliárias', leiOrigem: 'Lei 8.981/95, Art. 30' },
+    'Art. 598': { tema: 'Alíquota 15% + adicional 10%', leiOrigem: 'Lei 9.249/95, Art. 3º; Lei 9.430/96, Art. 4º' },
+    'Art. 599': { tema: 'Pagamento em quotas (até 3)', leiOrigem: 'Lei 9.430/96, Art. 5º' },
+    'Art. 600': { tema: 'Deduções do imposto apurado (IRRF, incentivos)', leiOrigem: 'Lei 8.981/95, Art. 34' },
+    'Art. 601': { tema: 'Omissão de receita', leiOrigem: 'Lei 9.249/95, Art. 24' },
+    'Art. 624': { tema: 'Adicional do IRPJ — cálculo trimestral', leiOrigem: 'Lei 9.249/95, Art. 3º, §1º' },
+    'Art. 725': { tema: 'Isenção de dividendos na distribuição', leiOrigem: 'Lei 9.249/95, Art. 10' },
+    'Art. 257': { tema: 'PJs obrigadas ao Lucro Real (vedações ao LP)', leiOrigem: 'Lei 9.718/98, Art. 14' }
+  }
+};
+
+/**
+ * Histórico da alíquota CSLL.
+ * Base Legal: Lei 7.689/1988 c/c alterações posteriores.
+ *
+ * - Lei 7.689/1988: Instituiu a CSLL (alíquota original variou)
+ * - Lei 9.249/1995, Art. 19: Fixou em 8%
+ * - Lei 10.637/2002, Art. 37: Elevou para 9% (vigente desde 01/02/2003)
+ * - Instituições financeiras: 15% (Lei 13.169/2015) ou 20% em períodos específicos
+ *
+ * Alíquota vigente regra geral: 9%
+ * Base Legal consolidada: Lei 7.689/88 c/c Lei 10.637/2002, Art. 37
+ */
+const HISTORICO_ALIQUOTA_CSLL = {
+  baseLegal: 'Lei 7.689/1988 c/c Lei 10.637/2002, Art. 37',
+  aliquotaVigente: 0.09,
+  historico: [
+    { aliquota: 'Variável', vigencia: '1989–1995', lei: 'Lei 7.689/1988 (redação original)' },
+    { aliquota: 0.08, vigencia: '1996–2002', lei: 'Lei 9.249/1995, Art. 19' },
+    { aliquota: 0.09, vigencia: 'Desde 01/02/2003', lei: 'Lei 10.637/2002, Art. 37' }
+  ],
+  nota: 'Alíquota de 9% aplica-se a todas as PJ não-financeiras, inclusive no Lucro Presumido.'
+};
+
+/**
+ * Alterações da Lei 12.973/2014 com impacto no Lucro Presumido.
+ * Base Legal: Lei 12.973/2014.
+ * Vigência: a partir de 01/01/2015 (opção antecipada em 2014).
+ */
+const ALTERACOES_LEI_12973_2014 = {
+  baseLegal: 'Lei 12.973/2014',
+  vigencia: 'A partir de 01/01/2015 (opção antecipada em 2014)',
+  impactosNoLP: [
+    {
+      tema: 'Ganho de capital — investimento, imobilizado e intangível',
+      artigo: 'Altera Lei 9.430/96, Art. 25, §1º',
+      regra: 'Ganho = valor alienação − valor contábil (depreciação acumulada considerada)'
+    },
+    {
+      tema: 'Ajuste a valor presente',
+      artigo: 'Altera Lei 9.430/96, Art. 25, inciso II',
+      regra: 'Ajuste a valor presente (Lei 6.404/76, Art. 183, VIII) deve ser adicionado à base'
+    },
+    {
+      tema: 'Valor justo — exclusão',
+      artigo: 'Altera Lei 9.430/96, Art. 25, §3º',
+      regra: 'Ganhos de avaliação a valor justo NÃO integram a base quando apurados'
+    },
+    {
+      tema: 'Transição LR → LP — saldos diferidos',
+      artigo: 'Altera Lei 9.430/96, Art. 54',
+      regra: 'Obrigação de adicionar saldos de tributação diferida no 1º período de LP'
+    },
+    {
+      tema: 'Definição de receita bruta',
+      artigo: 'Altera DL 1.598/77, Art. 12',
+      regra: 'Nova definição de receita bruta abrangendo receitas da atividade principal'
+    }
+  ]
+};
+
+/**
+ * Tabela consolidada de multas e penalidades fiscais.
+ * Referências legais diversas — detalhamento dos RISCOS_FISCAIS.
+ */
+const MULTAS_E_PENALIDADES = {
+  moraVoluntaria: {
+    baseLegal: 'Lei 9.430/1996, Art. 61',
+    calculo: '0,33% por dia de atraso, limitado a 20%',
+    juros: 'SELIC acumulada + 1% no mês do pagamento'
+  },
+  lancamentoOficio: {
+    baseLegal: 'Lei 9.430/1996, Art. 44 (redação Lei 14.689/2023)',
+    multa75: 'Falta de pagamento, declaração inexata, falta de declaração',
+    multa100: 'Sonegação, fraude, conluio (arts. 71-73 da Lei 4.502/64)',
+    multa150: 'Reincidência (dentro de 2 anos) nos casos de sonegação/fraude/conluio'
+  },
+  omissaoReceita: {
+    baseLegal: 'Lei 9.249/1995, Art. 24',
+    multa: '300% sobre a diferença de imposto devida por omissão de receita no LP',
+    nota: 'No LP diversificado, receita omitida é atribuída à atividade com percentual MAIS ALTO'
+  },
+  atrasoDeclaracao: {
+    baseLegal: 'Lei 8.981/1995, Art. 88',
+    multa: '1% ao mês sobre IR devido (mínimo R$ 500 para PJ)',
+    maximo: '20% do IR devido'
+  },
+  dctfAtraso: {
+    baseLegal: 'Lei 10.426/2002, Art. 7º',
+    multa: '2% ao mês sobre tributos informados (mínimo R$ 500)',
+    maximo: '20% dos tributos informados'
+  },
+  ecfAtraso: {
+    baseLegal: 'IN RFB 1.422/2013, Art. 6º; Lei 12.766/2012, Art. 8º',
+    multaReceita0a3_6M: 'R$ 500/mês de atraso',
+    multaReceitaAcima3_6M: 'R$ 1.500/mês de atraso',
+    nota: 'Pode ser reduzida em 50% se entregue antes de intimação'
+  }
+};
+
+/**
+ * Retenções na fonte aplicáveis ao Lucro Presumido — detalhamento completo.
+ * Inclui IRRF, CSRF e retenções da Administração Pública.
+ *
+ * Base Legal: Decreto 9.580/2018 (RIR), Lei 10.833/2003, Lei 9.430/1996.
+ */
+const RETENCOES_FONTE_LP = {
+  irrfServicos: {
+    baseLegal: 'Decreto 9.580/2018, Art. 714; IN RFB 1.234/2012',
+    aliquota: 0.015,
+    codigoDARF: '1708',
+    aplicacao: 'Serviços profissionais prestados por PJ a outras PJs',
+    limiteDispensa: 10.00,
+    limiteDispensaBaseLegal: 'Lei 9.430/96, Art. 67',
+    natureza: 'Antecipação do IRPJ devido (compensável no trimestre)'
+  },
+  irrfAdmPublica: {
+    baseLegal: 'Lei 9.430/1996, Art. 64',
+    formula: 'Valor pago × percentual presunção (art. 15 Lei 9.249) × 15%',
+    codigoDARF: '6190',
+    aplicacao: 'Pagamentos de órgãos federais a PJs',
+    natureza: 'Antecipação (compensável com IRPJ mesma espécie — art. 64, §4º)'
+  },
+  csllAdmPublica: {
+    baseLegal: 'Lei 9.430/1996, Art. 64, §6º',
+    aliquota: 0.01,
+    codigoDARF: '6190',
+    natureza: 'Antecipação (compensável apenas com CSLL)'
+  },
+  csrf: {
+    baseLegal: 'Lei 10.833/2003, Arts. 30-35',
+    aliquotas: { PIS: 0.0065, COFINS: 0.03, CSLL: 0.01, total: 0.0465 },
+    codigoDARF: '5952',
+    limiteDispensa: 5000.00,
+    natureza: 'Antecipação (cada tributo compensável com sua espécie)',
+    dispensas: [
+      'Pagamentos ≤ R$ 5.000/mês ao mesmo fornecedor (Lei 10.833/2003, Art. 31, §3º)',
+      'Pagamentos a PJs optantes pelo Simples Nacional',
+      'Pagamentos a PJs imunes ou isentas'
+    ]
+  },
+  irrfAluguel: {
+    baseLegal: 'RIR/2018, Art. 683',
+    aliquota: 0.015,
+    codigoDARF: '3208',
+    aplicacao: 'Aluguéis pagos por PJ a outra PJ',
+    natureza: 'Antecipação do IRPJ'
+  }
+};
+
+/**
+ * Compensação tributária — PER/DCOMP.
+ * Base Legal: Lei 9.430/1996, Art. 74; IN RFB 1.717/2017.
+ */
+const COMPENSACAO_TRIBUTARIA = {
+  baseLegal: 'Lei 9.430/1996, Art. 74; IN RFB 1.717/2017',
+  regras: [
+    'Crédito tributário (restituição ou ressarcimento) pode ser compensado com débitos próprios administrados pela RFB',
+    'Compensação via DCOMP (Declaração de Compensação) ou PER (Pedido de Restituição)',
+    'Cada espécie de tributo retido só compensa com a mesma espécie (IRRF → IRPJ; CSLL retida → CSLL)',
+    'Vedada compensação de tributo com exigibilidade suspensa'
+  ],
+  vedacoesLP: [
+    'A vedação do art. 74, §3º, IX (débitos de estimativa mensal) NÃO se aplica ao LP — aplica-se apenas ao Lucro Real por estimativa',
+    'LP pode compensar normalmente via DCOMP'
+  ],
+  limiteCreditoJudicial: {
+    baseLegal: 'Lei 9.430/96, Art. 74-A (Lei 14.873/2024)',
+    regra: 'Créditos judiciais > R$ 10 milhões: compensação limitada a 1/60 por mês (mínimo)',
+    nota: 'Verificar se PJ tem crédito judicial antes de planejar compensações'
+  },
+  darf_minimo: {
+    baseLegal: 'Lei 9.430/1996, Arts. 67 e 68',
+    regraRetencao: 'Dispensada retenção de IRRF ≤ R$ 10,00',
+    regraDARF: 'Vedado DARF < R$ 10,00 — acumular para períodos seguintes'
+  }
+};
+
+/**
+ * Detalhamento do ISS — Lei Complementar 116/2003.
+ * Base Legal: LC 116/2003 c/c LC 157/2016.
+ */
+const ISS_DETALHAMENTO = {
+  baseLegal: 'Lei Complementar 116/2003',
+  aliquotaMinima: 0.02,
+  aliquotaMinimaBaseLegal: 'LC 157/2016, Art. 8-A',
+  aliquotaMaxima: 0.05,
+  regras: [
+    'ISS é tributo MUNICIPAL — alíquota definida por cada município dentro dos limites',
+    'Lista de serviços anexa à LC 116/2003 — taxativa quanto aos gêneros, exemplificativa quanto às espécies',
+    'Local de incidência: em geral, no município do ESTABELECIMENTO PRESTADOR',
+    'Exceções ao local: construção civil, diversões, serviços portuários → local da prestação'
+  ],
+  exemplosCNAEeISS: [
+    { cnae: '71.12-0', servico: 'Engenharia', itemLC116: '7.01/7.03', aliquotaUsual: '2% a 5%' },
+    { cnae: '62.01-5', servico: 'Desenvolvimento de software', itemLC116: '1.01/1.04', aliquotaUsual: '2% a 5%' },
+    { cnae: '69.20-6', servico: 'Contabilidade/Auditoria', itemLC116: '17.18/17.19', aliquotaUsual: '2% a 5%' }
+  ],
+  nota: 'No LP, o ISS é cobrado SEPARADAMENTE (não incluído na base de IRPJ/CSLL como no Simples). O ISS NÃO reduz a receita bruta para fins de presunção.'
+};
+
+/**
+ * Alíquotas da CSLL diferenciadas por setor.
+ * Base Legal: Lei 7.689/88 c/c alterações.
+ */
+const CSLL_ALIQUOTAS_POR_SETOR = {
+  baseLegal: 'Lei 7.689/88 c/c alterações',
+  regraGeral: { aliquota: 0.09, vigencia: 'Desde 01/02/2003 (Lei 10.637/2002, Art. 37)' },
+  instituicoesFinanceiras: {
+    aliquota: 0.20,
+    vigencia: 'Lei 13.169/2015 (prorrogada)',
+    entidades: ['Bancos', 'Financeiras', 'Seguradoras', 'Capitalização', 'Cooperativas de crédito', 'Administradoras de cartão']
+  },
+  nota: 'No LP regra geral (empresas não financeiras), a alíquota é SEMPRE 9%.'
+};
+
+/**
+ * Detalhamento do INSS Patronal — Lei 8.212/1991, Art. 22.
+ * Base Legal: Lei 8.212/1991, Art. 22.
+ */
+const INSS_PATRONAL_DETALHAMENTO = {
+  baseLegal: 'Lei 8.212/1991, Art. 22',
+  componentes: [
+    { nome: 'Contribuição patronal', aliquota: 0.20, incideSobre: 'Total da folha de pagamento (sem teto)', artigo: 'Art. 22, I e III' },
+    { nome: 'RAT/SAT', aliquota: '0.01 a 0.03', incideSobre: 'Total da folha', artigo: 'Art. 22, II', nota: 'Conforme grau de risco do CNAE. Pode ser ajustado pelo FAP (0.5 a 2.0)' },
+    { nome: 'Terceiros (Sistema S)', aliquota: '0.058', incideSobre: 'Total da folha', artigo: 'Lei 8.029/90 e decretos', nota: 'Varia conforme atividade: SENAC/SESC (comércio), SENAI/SESI (indústria), etc.' },
+    { nome: 'Contribuinte individual (sócio)', aliquota: 0.11, incideSobre: 'Pró-labore (limitado ao teto INSS)', artigo: 'Art. 21, §1º c/c Decreto 3.048/99, Art. 201' },
+    { nome: 'Patronal sobre contribuinte individual', aliquota: 0.20, incideSobre: 'Pró-labore (SEM teto)', artigo: 'Art. 22, III' }
+  ]
+};
+
+/**
+ * Tabela de IRRF sobre serviços prestados entre PJs.
+ * Base Legal: Decreto 9.580/2018 (RIR) e IN RFB 1.234/2012.
+ */
+const TABELA_IRRF_SERVICOS_PJ = [
+  { tipo: 'Serviços profissionais (limpeza, conservação, segurança, locação de mão de obra)', aliquota: 0.01, codigoDARF: '1708', baseLegal: 'RIR/2018, Art. 716; IN RFB 1.234/2012' },
+  { tipo: 'Serviços profissionais prestados por associados de cooperativas de trabalho', aliquota: 0.015, codigoDARF: '3280', baseLegal: 'RIR/2018, Art. 714' },
+  { tipo: 'Serviços de assessoria, consultoria, engenharia, contabilidade, advocacia, etc.', aliquota: 0.015, codigoDARF: '1708', baseLegal: 'RIR/2018, Art. 714' },
+  { tipo: 'Comissões e corretagens pagas a PJs', aliquota: 0.015, codigoDARF: '8045', baseLegal: 'RIR/2018, Art. 718' },
+  { tipo: 'Serviços de propaganda e publicidade', aliquota: 0.015, codigoDARF: '8045', baseLegal: 'RIR/2018, Art. 718' },
+  { tipo: 'Aluguéis pagos a PJ', aliquota: 0.015, codigoDARF: '3208', baseLegal: 'RIR/2018, Art. 683' }
+];
 
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -3961,6 +4576,26 @@ const LucroPresumido = {
   // ── Constantes CSRF (Etapa 4) ──
   CODIGOS_DARF_RETENCAO,
   ALIQUOTAS_CSRF,
+
+  // ── Base Legal Complementar (v3.4.0) ──
+  VEDACOES_LP_DETALHADAS,
+  PIS_COFINS_LEI_9718,
+  HISTORICO_LIMITE_RECEITA_LP,
+  CSLL_32PCT_SERVICOS,
+  REQUISITOS_HOSPITALAR_8PCT,
+  REGULAMENTACAO_IN_RFB,
+  CONCEITO_RECEITA_BRUTA,
+  REGRAS_ESPECIFICAS_LP_9430,
+  MAPA_RIR_2018_LP,
+  HISTORICO_ALIQUOTA_CSLL,
+  ALTERACOES_LEI_12973_2014,
+  MULTAS_E_PENALIDADES,
+  RETENCOES_FONTE_LP,
+  COMPENSACAO_TRIBUTARIA,
+  ISS_DETALHAMENTO,
+  CSLL_ALIQUOTAS_POR_SETOR,
+  INSS_PATRONAL_DETALHAMENTO,
+  TABELA_IRRF_SERVICOS_PJ,
 
   // ── Funções de Análise ──
   verificarElegibilidade,
