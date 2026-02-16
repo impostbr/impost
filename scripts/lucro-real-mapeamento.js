@@ -1,11 +1,11 @@
 /**
  * ╔══════════════════════════════════════════════════════════════════════════════╗
- * ║  LUCRO REAL — MAPEAMENTO UNIFICADO DE DADOS  v2.0 (CORRIGIDO)            ║
+ * ║  LUCRO REAL — MAPEAMENTO UNIFICADO DE DADOS  v2.1 (CORRIGIDO)            ║
  * ║  Fonte única de verdade para alimentar qualquer HTML ou JS                 ║
  * ║  Base Legal: RIR/2018 (Decreto 9.580/2018) + Lei 12.973/2014              ║
  * ║  Ano-Base: 2026                                                           ║
  * ╠══════════════════════════════════════════════════════════════════════════════╣
- * ║  CORREÇÕES v2.0:                                                          ║
+ * ║  CORREÇÕES v2.1 (inclui v2.0):                                             ║
  * ║  1. pisCofins() — aceita campos individuais de créditos E baseCreditos     ║
  * ║  2. compensarIntegrado() — portado do motor v4.6                          ║
  * ║  3. compensarRetencoes() — portado do motor v4.6                          ║
@@ -21,6 +21,9 @@
  * ║ 13. recomendarRegime() — adicionada                                       ║
  * ║ 14. receitaBrutaCalc() — adicionada                                       ║
  * ║ 15. LR.calcular.avancado — sub-objeto com funções avançadas               ║
+ * ║ 16. JCP: Math.min → Math.max (Lei 9.249/95 Art. 9° §1°)                  ║
+ * ║ 17. CSLL estimativa mensal: alíquota 15% p/ inst. financeiras              ║
+ * ║ 18. Removido bloco LR.agrogeo (dados pessoais — LGPD)                     ║
  * ╚══════════════════════════════════════════════════════════════════════════════╝
  *
  * USO:
@@ -92,7 +95,7 @@
     issRetido: {
       minima: 0.02,                      // 2% (piso constitucional)
       maxima: 0.05,                      // 5%
-      novoProgresso: 0.05,               // 5% em Novo Progresso-PA
+      exemploMunicipio: 0.05,             // 5% alíquota exemplo (região Norte)
       artigoBase: 'LC 116/2003, art. 3º e 6º'
     }
   };
@@ -464,7 +467,7 @@
       artigo: 'LC 116/2003',
       aliquotaMin: 0.02,
       aliquotaMax: 0.05,
-      novoProgresso: 0.05,
+      exemploMunicipio: 0.05,
       nota: 'ISS NÃO deduz do IRPJ — é tributo municipal tratado na DRE'
     }
   };
@@ -478,7 +481,7 @@
     lei: 'LC 124/2007',
     estados: ['AC', 'AP', 'AM', 'MA', 'MT', 'PA', 'RO', 'RR', 'TO'],
     descricao: 'Amazônia Legal',
-    novoProgresso: { estado: 'PA', ibge: '1505031', elegivel: true },
+    exemploMunicipio: { estado: 'PA', ibge: '1505031', elegivel: true },
     reducao75: {
       percentual: 0.75,
       prazo: 10,
@@ -508,7 +511,7 @@
       { id: 'INFRA', label: 'Infraestrutura' },
       { id: 'MINERAL', label: 'Mineral' },
       { id: 'PESCA', label: 'Pesca e Aquicultura' },
-      { id: 'SERVICOS_TEC', label: 'Serviços Técnicos Especializados', relevanteAGROGEO: true },
+      { id: 'SERVICOS_TEC', label: 'Serviços Técnicos Especializados', relevante: true },
       { id: 'DIGITAL', label: 'Inclusão Digital' },
       { id: 'TURISMO', label: 'Turismo' },
       { id: 'QUIMICA', label: 'Química' },
@@ -929,7 +932,10 @@
       var maxTJLP = d.patrimonioLiquido * tjlpProp;
       var lim1 = d.lucroLiquidoAntes * 0.50;
       var lim2 = d.lucrosAcumulados * 0.50;
-      var jcpDedutivel = Math.max(0, Math.min(maxTJLP, lim1, lim2));
+      // CORREÇÃO: Lei 9.249/95, Art. 9°, §1° — JCP limitado ao MAIOR entre
+      // 50% do lucro líquido do período OU 50% de lucros acumulados + reservas
+      var limiteLegal = Math.max(lim1, lim2);
+      var jcpDedutivel = Math.max(0, Math.min(maxTJLP, limiteLegal));
       var economiaIRPJ = jcpDedutivel * 0.25;
       var economiaCSLL = jcpDedutivel * 0.09;
       var custoIRRF = jcpDedutivel * 0.15;
@@ -944,7 +950,7 @@
         economiaTotal: _r(economiaIRPJ + economiaCSLL),
         custoIRRF: _r(custoIRRF),
         economiaLiquida: _r(economiaIRPJ + economiaCSLL - custoIRRF),
-        limiteUtilizado: jcpDedutivel === maxTJLP ? 'TJLP' : jcpDedutivel === lim1 ? '50% Lucro' : '50% Reservas'
+        limiteUtilizado: jcpDedutivel === maxTJLP ? 'TJLP' : jcpDedutivel === limiteLegal ? (lim1 >= lim2 ? '50% Lucro' : '50% Reservas') : 'TJLP'
       };
     },
 
@@ -975,7 +981,9 @@
       var irpjDevido = irpjNormal + irpjAdicional;
       var deducoes = Math.min(d.incentivosDedutiveis || 0, irpjNormal);
       var irpjAPagar = Math.max(irpjDevido - deducoes - (d.irrfCompensavel || 0), 0);
-      var csllDevida = baseCSLL * 0.09;
+      // CORREÇÃO: Usar alíquota correta de CSLL (15% para inst. financeiras, 9% demais)
+      var aliqCSLL = (d.financeira === true || d.financeira === 'true') ? 0.15 : 0.09;
+      var csllDevida = baseCSLL * aliqCSLL;
 
       return {
         atividade: p.label,
@@ -1956,27 +1964,6 @@
       if (dados.securitizadora) motivos.push('Securitizadora');
       return { obrigada: motivos.length > 0, motivos: motivos };
     }
-  };
-
-  // ═══════════════════════════════════════════════════════════════════════════
-  // 32. CONTEXTO AGROGEO BRASIL
-  // ═══════════════════════════════════════════════════════════════════════════
-
-  LR.agrogeo = {
-    razaoSocial: 'AGROGEO BRASIL',
-    municipio: 'Novo Progresso',
-    uf: 'PA',
-    regiao: 'SUDAM — Amazônia Legal',
-    atividade: 'Geotecnologia e consultoria ambiental',
-    servicos: ['Georeferenciamento', 'CAR', 'PRA', 'LAR', 'Topografia', 'Defesa Ambiental', 'Titulação de Terras'],
-    tipoPresuncao: 'SERVICOS_GERAL',
-    cnaeGrupo: '71 — Serviços de arquitetura e engenharia; testes e análises técnicas',
-    setorSUDAM: 'SERVICOS_TEC',
-    participacao: { luis: 0.65, elton: 0.35 },
-    regimeAtual: 'Simples Nacional',
-    receitaAnual: 2350000,
-    folhaAnual: 1000000,
-    nota: 'Se migrar para Lucro Real: retenção de 9,45% em NFs para órgãos públicos + elegível redução 75% IRPJ via SUDAM'
   };
 
   // ═══════════════════════════════════════════════════════════════════════════
