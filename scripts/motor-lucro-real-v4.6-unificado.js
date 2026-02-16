@@ -1009,8 +1009,10 @@ function calcularEstimativaMensal(dados) {
   const irpjAPagar = Math.max(irpjDevido - deducoes - irrfCompensavel, 0);
 
   // CSLL estimada (mesma lógica mas com presunção CSLL)
+  // CORREÇÃO: Usar alíquota correta de CSLL (15% para inst. financeiras, 9% demais)
   const baseCSLL = receitaBrutaMensal * presuncao.csll + ganhosCapital + demaisReceitas;
-  const csllDevida = baseCSLL * CONSTANTES.CSLL_ALIQUOTA_GERAL;
+  const aliqCSLLEstimativa = (dados.financeira === true) ? CONSTANTES.CSLL_ALIQUOTA_FINANCEIRAS : CONSTANTES.CSLL_ALIQUOTA_GERAL;
+  const csllDevida = baseCSLL * aliqCSLLEstimativa;
 
   return {
     presuncaoUtilizada: presuncao.descricao,
@@ -1192,8 +1194,10 @@ function calcularJCP(dados) {
   // Limite 2: 50% de (lucros acumulados + reservas de lucros)
   const limite2 = lucrosAcumulados * CONSTANTES.JCP_LIMITE_LUCROS_ACUMULADOS;
 
-  // JCP dedutível = menor dos três
-  const jcpDedutivel = Math.max(0, Math.min(jcpMaximoTJLP, limite1, limite2));
+  // CORREÇÃO: Lei 9.249/95, Art. 9°, §1° — JCP limitado ao MAIOR entre
+  // 50% do lucro líquido do período OU 50% de lucros acumulados + reservas
+  const limiteLegal = Math.max(limite1, limite2);
+  const jcpDedutivel = Math.max(0, Math.min(jcpMaximoTJLP, limiteLegal));
 
   // Economia tributária
   const economiaIRPJ = jcpDedutivel * 0.25;    // 15% + 10% adicional
@@ -1223,8 +1227,8 @@ function calcularJCP(dados) {
       ? ((economiaLiquida / jcpDedutivel) * 100).toFixed(1) + '%'
       : '0%',
     limiteUtilizado: jcpDedutivel === jcpMaximoTJLP ? 'TJLP'
-      : jcpDedutivel === limite1 ? '50% Lucro Líquido'
-      : '50% Lucros Acumulados',
+      : jcpDedutivel === limiteLegal ? (limite1 >= limite2 ? '50% Lucro Líquido' : '50% Lucros Acumulados')
+      : 'TJLP',
     artigos: 'Art. 355 a 358',
   };
 }
@@ -2057,7 +2061,7 @@ function gerarMapaEconomia(empresa) {
     bloco: '7.2 — SUDAM/SUDENE',
     artigos: 'Art. 615-627',
     acao: 'Verificar elegibilidade do projeto; calcular lucro da exploração',
-    nota: 'Aplicável a Novo Progresso/PA (região SUDAM) — VERIFICAR PROJETO APROVADO',
+    nota: 'Aplicável a empresas em região SUDAM/SUDENE — VERIFICAR PROJETO APROVADO',
   });
 
   // 8. Revisão de despesas indedutíveis
@@ -5895,15 +5899,15 @@ const AREA_SUDAM = {
     'PA': {
       nome: 'Pará',
       inclui: 'Todo o estado',
-      exemplosCidades: ['Belém', 'Marabá', 'Santarém', 'Novo Progresso', 'Altamira', 'Itaituba']
+      exemplosCidades: ['Belém', 'Marabá', 'Santarém', 'Altamira', 'Itaituba', 'Paragominas']
     }
   },
-  novoProgresso: {
+  exemploMunicipio: {
     estado: 'PA',
     codigoIBGE: '1505031',
     areaAtuacao: 'SUDAM',
     elegivel: true,
-    observacao: 'Novo Progresso-PA está integralmente na área de atuação da SUDAM (Amazônia Legal)'
+    observacao: 'Municípios do Pará estão integralmente na área de atuação da SUDAM (Amazônia Legal)'
   }
 };
 
@@ -6001,7 +6005,7 @@ const SETORES_PRIORITARIOS_SUDAM = {
         'Consultoria técnica ambiental',
         'Pesquisa e desenvolvimento'
       ],
-      observacao: 'AGROGEO: Geotecnologia, CAR, PRA, LAR, georeferenciamento = serviços técnicos especializados'
+      observacao: 'Geotecnologia, CAR, PRA, LAR, georeferenciamento = serviços técnicos especializados'
     },
     {
       id: 'TEXTIL',
@@ -6293,7 +6297,7 @@ function verificarElegibilidade(dados) {
     const matchDescricao = setor.exemplos.some(e => atividadeLower.includes(e.toLowerCase())) ||
       atividadeLower.includes(setor.descricao.toLowerCase());
 
-    // Match específico para AGROGEO
+    // Match específico para serviços técnicos especializados
     const matchGeo = atividadeLower.includes('geotecnologia') ||
       atividadeLower.includes('georeferenc') ||
       atividadeLower.includes('ambiental') ||
@@ -6762,7 +6766,7 @@ function calcularReinvestimento30(dados) {
 
 /**
  * Calcula a economia total combinando redução 75% + reinvestimento 30%.
- * Função principal para simulação AGROGEO.
+ * Função principal para simulação de incentivos regionais.
  *
  * @param {Object} dados
  * @param {number} dados.lucroLiquido - Lucro líquido antes do IRPJ (após CSLL)
@@ -6881,7 +6885,7 @@ function simularIncentivosRegionais(dados) {
 
 /**
  * Simula comparativo completo: Simples Nacional vs Lucro Real COM incentivos SUDAM.
- * Função específica para AGROGEO BRASIL.
+ * Função genérica para empresas em região SUDAM/SUDENE.
  *
  * @param {Object} dados
  * @param {number} dados.receitaBrutaAnual - Receita bruta anual (ex: 2_350_000)
@@ -7176,7 +7180,7 @@ const IRRF_SERVICOS_PROFISSIONAIS = {
     'terapêutica ocupacional', 'tradução ou interpretação comercial',
     'urbanismo', 'veterinária'
   ],
-  servicosAGROGEO: [
+  servicosGeotecnologia: [
     'engenharia',        // georeferenciamento, topografia
     'geologia',          // estudos ambientais
     'elaboração de projetos', // PRA, LAR
@@ -7265,7 +7269,7 @@ const IRRF_ADMINISTRACAO_PUBLICA = {
   },
   aliquotaBase: 0.15,
   exemplos: {
-    servicos_AGROGEO: '15% × 32% × valor = 4,8% efetivo sobre serviços',
+    servicos_geral: '15% × 32% × valor = 4,8% efetivo sobre serviços',
     comercio: '15% × 8% × valor = 1,2% efetivo'
   },
   dispensaSimples: 'Art. 720 §6º — optantes pelo Simples Nacional NÃO sofrem retenção',
@@ -7430,8 +7434,8 @@ const ISS_RETIDO = {
     'Serviços de informática (item 1.01 a 1.09)',
     'Quando o município exigir via legislação local'
   ],
-  municipioNovoProgresso: {
-    aliquotaISS: 0.05,   // 5% — alíquota típica do município de Novo Progresso-PA
+  municipioExemplo: {
+    aliquotaISS: 0.05,   // 5% — alíquota típica de municípios da região Norte
     nota: 'Verificar legislação municipal vigente — código tributário do município'
   },
   deducaoIRPJ: 'ISS retido NÃO deduz do IRPJ — é tributo municipal, tratado na DRE como despesa',
@@ -7453,7 +7457,7 @@ const RETENCOES_ADM_PUBLICA_UNIFICADA = {
   },
   prazo: 'Recolhimento até o último dia útil do 2º decêndio do mês subsequente',
   dispensaSimplesNacional: true,
-  nota: 'AGROGEO, se migrar para Lucro Real, passará a sofrer retenção de 9,45% em NFs para órgãos públicos'
+  nota: 'Empresas que migrarem para Lucro Real passarão a sofrer retenção de 9,45% em NFs para órgãos públicos'
 };
 
 /**
@@ -7548,7 +7552,7 @@ const LEI_12973 = {
     percentualServicos: 0.32, // 32% para serviços (inciso III do §1º do art. 15)
     receitaBrutaRef: 'Art. 12 do DL 1.598/1977 (definição da Lei 12.973)',
     deducoes: 'Deduzida de devoluções, vendas canceladas e descontos incondicionais',
-    impactoRetencao: 'A base presumida da CSLL usa a mesma receita bruta redefinida pela Lei 12.973. Para serviços (AGROGEO), a base é 32% — relevante para CSRF retida (1% CSLL) e para cálculo da CSLL devida contra a qual se compensa a CSLL retida.',
+    impactoRetencao: 'A base presumida da CSLL usa a mesma receita bruta redefinida pela Lei 12.973. Para serviços, a base é 32% — relevante para CSRF retida (1% CSLL) e para cálculo da CSLL devida contra a qual se compensa a CSLL retida.',
   },
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -7680,7 +7684,7 @@ const LEI_12973 = {
         semSubconta: 'Se não evidenciada em subconta, perda é INDEDUTÍVEL (§1º)'
       }
     },
-    impactoRetencao: 'Ganhos/perdas de valor justo afetam o lucro real e, portanto, a base de IRPJ/CSLL contra a qual retenções sofridas são compensadas. Se a AGROGEO tiver ativos avaliados a valor justo (terrenos, participações), o momento de tributação do ganho afeta o saldo de compensação.',
+    impactoRetencao: 'Ganhos/perdas de valor justo afetam o lucro real e, portanto, a base de IRPJ/CSLL contra a qual retenções sofridas são compensadas. Se a empresa tiver ativos avaliados a valor justo (terrenos, participações), o momento de tributação do ganho afeta o saldo de compensação.',
   },
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -8463,7 +8467,7 @@ function calcularIRRFJCP(params) {
  * 7. Calcular folha de pagamento com retenções (IRRF + INSS)
  *
  * Calcula IRRF individual de cada funcionário + totais da folha.
- * AGROGEO: ~R$ 1M/ano de folha ≈ ~R$ 83.333/mês
+ * Exemplo: ~R$ 1M/ano de folha ≈ ~R$ 83.333/mês
  *
  * @param {Object} params
  * @param {Array<Object>} params.funcionarios - Lista de funcionários
@@ -8560,7 +8564,7 @@ function calcularFolhaPagamento(params) {
 /**
  * 8. Controlar saldo de retenções para compensação no período
  *
- * Consolida IRRF/PIS/COFINS/CSLL retidos sobre a AGROGEO (quando AGROGEO é prestadora)
+ * Consolida IRRF/PIS/COFINS/CSLL retidos sobre a empresa (quando a empresa é prestadora)
  * e calcula quanto pode ser compensado com os tributos devidos.
  *
  * @param {Object} params
@@ -8649,7 +8653,7 @@ function compensarRetencoes(params) {
 /**
  * 9. Simular impacto das retenções na migração Simples → Lucro Real
  *
- * No Simples Nacional, a AGROGEO NÃO sofre retenções (LC 123/2006).
+ * No Simples Nacional, a empresa NÃO sofre retenções (LC 123/2006).
  * Ao migrar para Lucro Real, passa a sofrer IRRF 1,5% + CSRF 4,65% + ISS
  * sobre TODAS as NFs emitidas.
  *
