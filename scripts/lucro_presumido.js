@@ -5,8 +5,21 @@
  *
  * AGROGEO BRASIL - Geotecnologia e Consultoria Ambiental
  * Autor: Luis Fernando | Proprietário AGROGEO BRASIL
- * Versão: 3.4.1
+ * Versão: 3.5.1
  * Data: Fevereiro/2026
+ *
+ * Changelog v3.5.1:
+ *   - Merge: v3.4.1 (melhorias) + v3.5.0 (cobertura completa IN 1.700/2017)
+ *   - 6 atividades adicionais IRPJ/CSLL: infraestrutura_concessao, coleta_residuos,
+ *     exploracao_rodovia, suprimento_agua_esgoto, servicos_limpeza_locacao_mao_obra,
+ *     instituicao_financeira_16
+ *   - SEÇÕES 17-32: Acréscimos, Exclusões, Percentual 16%, Lucro Arbitrado,
+ *     Ganho Capital, Variação Cambial, Renda Variável, Arrendamento, Concessão,
+ *     Deduções IF, Distribuição lucros, Otimizações, Regras condicionais,
+ *     Regime caixa detalhado, Vedações, Metadados
+ *   - Funções: verificarPercentualReduzido16(), calcularLucroArbitrado()
+ *   - Todas as seções 17-32 agora EXPORTADAS no objeto LucroPresumido (correção v3.5.0)
+ *   - Mantidas melhorias v3.4.1: observações SC COSIT 7/2021, disclaimer PDF
  *
  * Changelog v3.4.1:
  *   - Validação de entrada em simulacaoRapida() e calcularAnualConsolidado()
@@ -559,12 +572,66 @@ const PERCENTUAIS_PRESUNCAO_IRPJ = [
   },
   {
     id: 'construcao_sem_material',
-    descricao: 'Construção — Empreitada SEM fornecimento de materiais',
+    descricao: 'Construção — Empreitada SEM fornecimento de materiais ou emprego PARCIAL de materiais',
     percentual: 0.32,
     irpjMajorado: 0.352,
-    baseLegal: 'Lei 9.249/95, Art. 15, §1º, III, e',
+    baseLegal: 'Lei 9.249/95, Art. 15, §1º, III, e / IN RFB 1.700/2017, Art. 33, §1º, IV, d',
     cnaes: ['41.20-4', '42.11-1'],
-    observacoes: 'Empreitada sem fornecimento de todos os materiais indispensáveis. Se fornece TODOS os materiais → usar construcao_com_material (8%).'
+    observacoes: 'Empreitada sem fornecimento de todos os materiais indispensáveis, ou por administração, ou com emprego PARCIAL. Se fornece TODOS os materiais → usar construcao_com_material (8%).'
+  },
+  {
+    id: 'infraestrutura_concessao',
+    descricao: 'Construção/recuperação/reforma/ampliação/melhoramento de infraestrutura em concessão de serviços públicos',
+    percentual: 0.32,
+    irpjMajorado: 0.352,
+    baseLegal: 'IN RFB 1.700/2017, Art. 33, §1º, IV, e',
+    cnaes: ['42.11-1', '42.12-0', '42.13-8'],
+    observacoes: 'Independente do emprego parcial ou total de materiais. Aplica-se 32% sempre em concessão de serviço público.'
+  },
+  {
+    id: 'coleta_residuos',
+    descricao: 'Coleta e transporte de resíduos até aterros sanitários ou local de descarte',
+    percentual: 0.32,
+    irpjMajorado: 0.352,
+    baseLegal: 'IN RFB 1.700/2017, Art. 33, §1º, IV, g',
+    cnaes: ['38.11-4', '38.12-2'],
+    observacoes: 'Coleta, transporte e destinação de resíduos. NÃO confundir com transporte de cargas (8%).'
+  },
+  {
+    id: 'exploracao_rodovia',
+    descricao: 'Exploração de rodovia mediante cobrança de preço dos usuários — concessionárias/subconcessionárias',
+    percentual: 0.32,
+    irpjMajorado: 0.352,
+    baseLegal: 'IN RFB 1.700/2017, Art. 33, §1º, IV, h (redação IN RFB 1881/2019)',
+    cnaes: ['52.21-4'],
+    observacoes: 'Conservação, manutenção, melhoramento, operação, monitoração e assistência aos usuários.'
+  },
+  {
+    id: 'suprimento_agua_esgoto',
+    descricao: 'Suprimento de água tratada e coleta/tratamento de esgotos — concessionárias/subconcessionárias',
+    percentual: 0.32,
+    irpjMajorado: 0.352,
+    baseLegal: 'IN RFB 1.700/2017, Art. 33, §1º, IV, i (redação IN RFB 1881/2019)',
+    cnaes: ['36.00-6', '37.01-1', '37.02-9'],
+    observacoes: 'Concessionárias e subconcessionárias de serviço público de água e esgoto.'
+  },
+  {
+    id: 'servicos_limpeza_locacao_mao_obra',
+    descricao: 'Serviços em geral como limpeza e locação de mão de obra (ainda que fornecidos materiais)',
+    percentual: 0.32,
+    irpjMajorado: 0.352,
+    baseLegal: 'IN RFB 1.700/2017, Art. 33, §2º',
+    cnaes: ['81.11-7', '81.12-5', '81.21-4', '78.10-8', '78.20-5'],
+    observacoes: 'O fornecimento de materiais NÃO reduz o percentual para 8%. Permanece 32%.'
+  },
+  {
+    id: 'instituicao_financeira_16',
+    descricao: 'Instituições financeiras optantes do Refis (bancos, corretoras, seguradoras, capitalização, previdência aberta)',
+    percentual: 0.16,
+    irpjMajorado: 0.176,
+    baseLegal: 'IN RFB 1.700/2017, Art. 33, §1º, III, b',
+    cnaes: ['64.*', '65.*', '66.*'],
+    observacoes: 'Percentual de 16% para estimativa mensal. Regra geral: instituições financeiras são OBRIGADAS ao Lucro Real. Exceção: Refis (Art. 214, §5º-A, IN 1700/2017).'
   },
   {
     id: 'esc',
@@ -683,10 +750,53 @@ const PERCENTUAIS_PRESUNCAO_CSLL = [
   },
   {
     id: 'construcao_sem_material',
-    descricao: 'Construção — Empreitada SEM fornecimento de materiais',
+    descricao: 'Construção — Empreitada SEM fornecimento de materiais ou emprego PARCIAL',
     percentual: 0.32,
     csllMajorada: 0.352,
-    baseLegal: 'Lei 9.249/95, Art. 20, I'
+    baseLegal: 'Lei 9.249/95, Art. 20, I / IN RFB 1.700/2017, Art. 34, §1º, IX'
+  },
+  {
+    id: 'infraestrutura_concessao',
+    descricao: 'Construção/recuperação/reforma/ampliação de infraestrutura em concessão',
+    percentual: 0.32,
+    csllMajorada: 0.352,
+    baseLegal: 'IN RFB 1.700/2017, Art. 34, §1º, V (redação IN RFB 1881/2019)'
+  },
+  {
+    id: 'coleta_residuos',
+    descricao: 'Coleta de resíduos e transporte até aterros/local de descarte',
+    percentual: 0.32,
+    csllMajorada: 0.352,
+    baseLegal: 'IN RFB 1.700/2017, Art. 34, §1º, VII (redação IN RFB 1881/2019)'
+  },
+  {
+    id: 'exploracao_rodovia',
+    descricao: 'Exploração de rodovia por concessionárias/subconcessionárias',
+    percentual: 0.32,
+    csllMajorada: 0.352,
+    baseLegal: 'IN RFB 1.700/2017, Art. 34, §1º, VI (redação IN RFB 1881/2019)'
+  },
+  {
+    id: 'suprimento_agua_esgoto',
+    descricao: 'Suprimento de água tratada e coleta/tratamento de esgotos',
+    percentual: 0.32,
+    csllMajorada: 0.352,
+    baseLegal: 'IN RFB 1.700/2017, Art. 34, §1º, VIII (redação IN RFB 1881/2019)'
+  },
+  {
+    id: 'servicos_limpeza_locacao_mao_obra',
+    descricao: 'Serviços em geral como limpeza e locação de mão de obra',
+    percentual: 0.32,
+    csllMajorada: 0.352,
+    baseLegal: 'IN RFB 1.700/2017, Art. 34, §3º'
+  },
+  {
+    id: 'instituicao_financeira_16',
+    descricao: 'Instituições financeiras (Refis)',
+    percentual: 0.12,
+    csllMajorada: 0.132,
+    baseLegal: 'Lei 9.249/95, Art. 20, III — CSLL de instituições financeiras no LP segue 12% (transporte/serviços hospitalares)',
+    nota: 'Nota: A alíquota da CSLL (9% regra geral, 20% para financeiras) é separada do percentual de presunção'
   },
   {
     id: 'esc',
@@ -4537,6 +4647,986 @@ function gerarCalendarioTributario(params) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Exportação para uso como módulo ES ou CommonJS
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SEÇÃO 17: ACRÉSCIMOS À BASE DE CÁLCULO (IN RFB 1.700/2017, Art. 215, §3º)
+// ═══════════════════════════════════════════════════════════════════════════════
+//
+// Receitas que são ADICIONADAS à base do LP SEM aplicar percentual de presunção.
+// São 15 tipos listados nos §§3º e 3º-A do Art. 215.
+//
+
+/**
+ * Acréscimos obrigatórios à base de cálculo do Lucro Presumido.
+ * Estas receitas NÃO passam pelo percentual de presunção — entram integralmente na base.
+ *
+ * Base Legal: IN RFB 1.700/2017, Art. 215, §3º.
+ */
+const ACRESCIMOS_BASE_CALCULO = [
+  {
+    cod: 'ACR_01',
+    descricao: 'Ganhos de capital na alienação de participações societárias permanentes (investimentos)',
+    aplicaA: 'IRPJ_CSLL',
+    artigo: 'Art. 215, §3º, I, a',
+    formula: 'valor_alienacao - valor_contabil_ajustado'
+  },
+  {
+    cod: 'ACR_02',
+    descricao: 'Ganhos de capital em operações de hedge (proteção financeira)',
+    aplicaA: 'IRPJ_CSLL',
+    artigo: 'Art. 215, §3º, I, b'
+  },
+  {
+    cod: 'ACR_03',
+    descricao: 'Locação de imóvel quando NÃO for objeto social da empresa (deduzida de encargos necessários)',
+    aplicaA: 'IRPJ_CSLL',
+    artigo: 'Art. 215, §3º, I, c',
+    nota: 'Se locação de imóvel for objeto social → aplica percentual de presunção normalmente (32%)'
+  },
+  {
+    cod: 'ACR_04',
+    descricao: 'Juros SELIC sobre impostos restituídos ou compensados',
+    aplicaA: 'IRPJ_CSLL',
+    artigo: 'Art. 215, §3º, I, d'
+  },
+  {
+    cod: 'ACR_05',
+    descricao: 'Rendimentos de mútuo (empréstimos entre PJ↔PJ ou PJ↔PF)',
+    aplicaA: 'IRPJ_CSLL',
+    artigo: 'Art. 215, §3º, I, e'
+  },
+  {
+    cod: 'ACR_06',
+    descricao: 'Variações monetárias de créditos/obrigações em função de índices ou coeficientes legais/contratuais',
+    aplicaA: 'IRPJ_CSLL',
+    artigo: 'Art. 215, §3º, I, f'
+  },
+  {
+    cod: 'ACR_07',
+    descricao: 'Ganhos de capital na devolução de capital em bens ou direitos',
+    aplicaA: 'IRPJ_CSLL',
+    artigo: 'Art. 215, §3º, I, g'
+  },
+  {
+    cod: 'ACR_08',
+    descricao: 'SOMENTE IRPJ: diferença entre valor recebido e valor entregue em devolução de patrimônio de instituição isenta',
+    aplicaA: 'IRPJ',
+    artigo: 'Art. 215, §3º, I, h'
+  },
+  {
+    cod: 'ACR_09',
+    descricao: 'SOMENTE CSLL: valor TOTAL recebido de instituição isenta (devolução de patrimônio)',
+    aplicaA: 'CSLL',
+    artigo: 'Art. 215, §3º, I, i'
+  },
+  {
+    cod: 'ACR_10',
+    descricao: 'Rendimentos e ganhos líquidos em aplicações de renda fixa e renda variável',
+    aplicaA: 'IRPJ_CSLL',
+    artigo: 'Art. 215, §3º, II',
+    nota: 'IR-fonte sobre estas receitas é ANTECIPAÇÃO (compensável no trimestre)'
+  },
+  {
+    cod: 'ACR_11',
+    descricao: 'Juros sobre capital próprio (JCP) auferidos de outras empresas',
+    aplicaA: 'IRPJ_CSLL',
+    artigo: 'Art. 215, §3º, III'
+  },
+  {
+    cod: 'ACR_12',
+    descricao: 'Valores recuperados de custos e despesas (exceto se não foram deduzidos em período anterior de Lucro Real)',
+    aplicaA: 'IRPJ_CSLL',
+    artigo: 'Art. 215, §3º, IV'
+  },
+  {
+    cod: 'ACR_13',
+    descricao: 'Excesso de preço de transferência em exportações a empresas vinculadas (ANUAL, acrescido no último trimestre)',
+    aplicaA: 'IRPJ_CSLL',
+    artigo: 'Art. 215, §3º, V',
+    periodicidade: 'ANUAL_ULTIMO_TRIMESTRE'
+  },
+  {
+    cod: 'ACR_14',
+    descricao: 'Diferença de receita financeira por preço de transferência (ANUAL, acrescido no último trimestre)',
+    aplicaA: 'IRPJ_CSLL',
+    artigo: 'Art. 215, §3º, VI',
+    periodicidade: 'ANUAL_ULTIMO_TRIMESTRE'
+  },
+  {
+    cod: 'ACR_15',
+    descricao: 'Multas e vantagens por rescisão de contrato (inclusive indenizações recebidas)',
+    aplicaA: 'IRPJ_CSLL',
+    artigo: 'Art. 215, §3º, VII'
+  }
+];
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SEÇÃO 18: EXCLUSÕES DA BASE DE CÁLCULO (IN RFB 1.700/2017, Art. 215/217)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Receitas que NÃO integram a base de cálculo do Lucro Presumido.
+ * Base Legal: IN RFB 1.700/2017, Arts. 215 e 217.
+ */
+const EXCLUSOES_BASE_CALCULO = [
+  {
+    cod: 'EXC_01',
+    descricao: 'AVP (Ajuste a Valor Presente) apropriado como receita financeira',
+    artigo: 'Art. 215, §5º'
+  },
+  {
+    cod: 'EXC_02',
+    descricao: 'AVP de receitas do §3º (acréscimos) apropriado como receita financeira',
+    artigo: 'Art. 215, §7º'
+  },
+  {
+    cod: 'EXC_03',
+    descricao: 'Receita de construção de infraestrutura em concessão de serviço público (quando contrapartida = ativo intangível)',
+    artigo: 'Art. 215, §8º, I'
+  },
+  {
+    cod: 'EXC_04',
+    descricao: 'Ganho de Ajuste a Valor Justo (AVJ) registrado em conta de receita',
+    artigo: 'Art. 217, I'
+  },
+  {
+    cod: 'EXC_05',
+    descricao: 'Ganho de AVJ reclassificado do Patrimônio Líquido para conta de receita',
+    artigo: 'Art. 217, II'
+  },
+  {
+    cod: 'EXC_06',
+    descricao: 'Variações monetárias cambiais de saldos de juros a apropriar (AVP)',
+    artigo: 'Art. 215, §29'
+  },
+  {
+    cod: 'EXC_07',
+    descricao: 'Variações monetárias de arrendamento mercantil (arrendatária) sobre contraprestações/juros a apropriar — exceto vencidas',
+    artigo: 'Art. 215, §§30-32',
+    redacaoDadaPor: 'IN RFB 1881/2019'
+  }
+];
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SEÇÃO 19: PERCENTUAL REDUZIDO 16% — MICRO PRESTADORAS (Art. 215, §§10-13)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Regra do percentual reduzido de 16% para micro prestadoras de serviços.
+ *
+ * PJ que presta EXCLUSIVAMENTE serviços das alíneas b, c, d, f, g, j do Art. 33
+ * e tem receita bruta anual ≤ R$ 120.000,00 pode usar 16% em vez de 32%.
+ *
+ * Base Legal: IN RFB 1.700/2017, Art. 215, §§10-13 (redação IN RFB 1881/2019).
+ */
+const PERCENTUAL_REDUZIDO_16PCT = {
+  percentualNormal: 0.32,
+  percentualReduzido: 0.16,
+  limiteReceitaBrutaAnual: 120_000.00,
+  baseLegal: 'IN RFB 1.700/2017, Art. 215, §§10-13 (redação IN RFB 1881/2019)',
+
+  alineasElegiveis: [
+    { alinea: 'b', descricao: 'Intermediação de negócios', artigo: 'Art. 33, §1º, IV, b' },
+    { alinea: 'c', descricao: 'Administração, locação ou cessão de bens imóveis, móveis e direitos', artigo: 'Art. 33, §1º, IV, c' },
+    { alinea: 'd', descricao: 'Construção por administração ou empreitada de mão de obra', artigo: 'Art. 33, §1º, IV, d' },
+    { alinea: 'f', descricao: 'Factoring (assessoria creditícia, compra de direitos creditórios)', artigo: 'Art. 33, §1º, IV, f' },
+    { alinea: 'g', descricao: 'Coleta e transporte de resíduos até aterros sanitários', artigo: 'Art. 33, §1º, IV, g' },
+    { alinea: 'j', descricao: 'Qualquer outra espécie de serviço não mencionada (residual)', artigo: 'Art. 33, §1º, IV, j' }
+  ],
+
+  alineasNaoElegiveis: [
+    { alinea: 'a', descricao: 'Serviços de profissão legalmente regulamentada (médicos, advogados, engenheiros, contadores, etc.)' },
+    { alinea: 'e', descricao: 'Construção de infraestrutura em concessão de serviços públicos' },
+    { alinea: 'h', descricao: 'Exploração de rodovias por concessionárias' },
+    { alinea: 'i', descricao: 'Suprimento de água e coleta/tratamento de esgotos' }
+  ],
+
+  condicoesCumulativas: [
+    'Prestar EXCLUSIVAMENTE serviços das alíneas elegíveis (b, c, d, f, g, j)',
+    'Receita bruta ANUAL ≤ R$ 120.000,00'
+  ],
+
+  regraEstouro: {
+    gatilho: 'Receita bruta acumulada no ano excede R$ 120.000',
+    efeito: 'Pagar a diferença de imposto postergado, trimestre a trimestre',
+    prazo: 'Quota única até o último dia útil do mês subsequente ao trimestre em que ocorreu o excesso',
+    acrescimos: 'Sem acréscimos moratórios se pago dentro do prazo',
+    artigo: 'Art. 215, §§11-13'
+  },
+
+  nota: 'ATENÇÃO: O percentual reduzido de 16% se aplica APENAS ao IRPJ. A CSLL permanece 32% para serviços.'
+};
+
+/**
+ * Verifica se empresa é elegível ao percentual reduzido de 16%.
+ * @param {Object} params
+ * @param {string} params.atividadeId - ID da atividade
+ * @param {number} params.receitaBrutaAnual - Receita bruta anual
+ * @param {boolean} params.exclusivamenteServicosElegiveis - Se presta EXCLUSIVAMENTE serviços elegíveis
+ * @returns {Object} { elegivel, percentual, motivo }
+ */
+function verificarPercentualReduzido16(params) {
+  const { atividadeId, receitaBrutaAnual, exclusivamenteServicosElegiveis } = params;
+
+  const idsElegiveis = ['intermediacao', 'locacao_cessao', 'imobiliaria_locacao', 'construcao_sem_material',
+                        'factoring', 'coleta_residuos', 'servicos_gerais', 'servicos_limpeza_locacao_mao_obra'];
+
+  if (!exclusivamenteServicosElegiveis) {
+    return { elegivel: false, percentual: 0.32, motivo: 'Empresa não presta exclusivamente serviços das alíneas b,c,d,f,g,j.' };
+  }
+  if (receitaBrutaAnual > PERCENTUAL_REDUZIDO_16PCT.limiteReceitaBrutaAnual) {
+    return { elegivel: false, percentual: 0.32, motivo: `Receita bruta anual (R$ ${_formatarMoeda(receitaBrutaAnual)}) excede o limite de R$ 120.000,00.` };
+  }
+
+  return { elegivel: true, percentual: 0.16, motivo: 'Elegível ao percentual reduzido de 16% (IN RFB 1.700/2017, Art. 215, §10).' };
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SEÇÃO 20: LUCRO ARBITRADO (IN RFB 1.700/2017, Arts. 226-237)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Motor completo do Lucro Arbitrado.
+ * Percentuais de presunção com acréscimo de 20% sobre os do LP.
+ *
+ * Base Legal: IN RFB 1.700/2017, Arts. 226-237.
+ */
+const LUCRO_ARBITRADO = {
+  descricao: 'O lucro arbitrado é utilizado quando a escrituração é imprestável ou a empresa não cumpre obrigações que permitam apuração pelo Lucro Real ou Presumido.',
+  baseLegal: 'IN RFB 1.700/2017, Arts. 226-237',
+
+  percentuaisArbitradoIRPJ: [
+    { atividade: 'Revenda de combustíveis', lpPercent: 0.016, arbitradoPercent: 0.0192, artigo: 'Art. 227, §4º, I' },
+    { atividade: 'Hospitalar (soc. empresária + Anvisa)', lpPercent: 0.08, arbitradoPercent: 0.096, artigo: 'Art. 227, §4º, II, a' },
+    { atividade: 'Transporte de carga', lpPercent: 0.08, arbitradoPercent: 0.096, artigo: 'Art. 227, §4º, II, b' },
+    { atividade: 'Atividades imobiliárias', lpPercent: 0.08, arbitradoPercent: 0.096, artigo: 'Art. 227, §4º, II, c' },
+    { atividade: 'Empreitada com todos os materiais', lpPercent: 0.08, arbitradoPercent: 0.096, artigo: 'Art. 227, §4º, II, d' },
+    { atividade: 'Demais atividades (regra geral)', lpPercent: 0.08, arbitradoPercent: 0.096, artigo: 'Art. 227, §4º, II, e' },
+    { atividade: 'Transporte de passageiros', lpPercent: 0.16, arbitradoPercent: 0.192, artigo: 'Art. 227, §4º, III' },
+    { atividade: 'Serviços em geral (32%)', lpPercent: 0.32, arbitradoPercent: 0.384, artigo: 'Art. 227, §4º, IV' },
+    { atividade: 'Instituições financeiras', lpPercent: 0.16, arbitradoPercent: 0.45, artigo: 'Art. 227, §26', nota: 'Percentual diferenciado (não segue regra dos 20%)' },
+    { atividade: 'Limpeza/locação de mão de obra', lpPercent: 0.32, arbitradoPercent: 0.384, artigo: 'Art. 227, §4º-A' }
+  ],
+
+  csllArbitrado: 'Mesmos percentuais do resultado presumido (Art. 34) — NÃO recebe acréscimo de 20%',
+
+  hipotesesArbitramento: [
+    { id: 'HIP_01', descricao: 'Obrigada ao Lucro Real porém sem escrituração exigida', artigo: 'Art. 226, I' },
+    { id: 'HIP_02', descricao: 'Escrituração com fraude, vícios ou erros que a tornem imprestável', artigo: 'Art. 226, II' },
+    { id: 'HIP_03', descricao: 'Não apresentação de livros e documentos ao Fisco', artigo: 'Art. 226, III' },
+    { id: 'HIP_04', descricao: 'Opção indevida pelo Lucro Presumido (quando obrigada ao LR)', artigo: 'Art. 226, IV' },
+    { id: 'HIP_05', descricao: 'Comissário ou representante de PJ estrangeira com descumprimento de obrigações', artigo: 'Art. 226, V' },
+    { id: 'HIP_06', descricao: 'Livro Razão não mantido em boa ordem ou sem hashcode SPED', artigo: 'Art. 226, VI' },
+    { id: 'HIP_07', descricao: 'Não escriturar ou apresentar FCONT (período aplicável)', artigo: 'Art. 226, VII' },
+    { id: 'HIP_08', descricao: 'Não escriturar ou apresentar ECF', artigo: 'Art. 226, VIII' }
+  ],
+
+  // Quando a receita bruta é desconhecida, usar uma das alternativas:
+  receitaDesconhecidaAlternativas: [
+    { id: 'ALT_01', formula: '1.5 × lucro_real_ultimo_periodo_conhecido', artigo: 'Art. 232, I' },
+    { id: 'ALT_02', formula: '0.12 × (ativo_circulante + ativo_não_circulante)', artigo: 'Art. 232, II' },
+    { id: 'ALT_03', formula: '0.21 × capital_social_corrigido', artigo: 'Art. 232, III' },
+    { id: 'ALT_04', formula: '0.15 × patrimônio_líquido', artigo: 'Art. 232, IV' },
+    { id: 'ALT_05', formula: '0.40 × compras_de_mercadorias', artigo: 'Art. 232, V' },
+    { id: 'ALT_06', formula: '0.40 × (folha_pagamento + compras_matéria_prima)', artigo: 'Art. 232, VI' },
+    { id: 'ALT_07', formula: '0.80 × valores_empregados_em_atividade', artigo: 'Art. 232, VII' },
+    { id: 'ALT_08', formula: '0.90 × aluguel_devido_no_período', artigo: 'Art. 232, VIII' }
+  ],
+
+  convivenciaComLP: {
+    regra: 'Trimestres com lucro arbitrado podem CONVIVER com LP nos demais trimestres do ano',
+    condicao: 'Desde que a empresa não esteja obrigada ao Lucro Real',
+    artigo: 'Art. 236'
+  }
+};
+
+/**
+ * Calcula lucro arbitrado para um trimestre.
+ * @param {Object} params
+ * @param {number} params.receitaBrutaTrimestral - Receita bruta do trimestre (se conhecida)
+ * @param {string} params.atividadeId - ID da atividade
+ * @param {boolean} [params.receitaConhecida=true] - Se a receita bruta é conhecida
+ * @param {Object} [params.dadosAlternativos] - Dados para cálculo alternativo (se receita desconhecida)
+ * @returns {Object} Resultado do arbitramento
+ */
+function calcularLucroArbitrado(params) {
+  const { receitaBrutaTrimestral = 0, atividadeId = 'servicos_gerais', receitaConhecida = true, dadosAlternativos = {} } = params;
+
+  // Buscar percentual arbitrado
+  const atividadeIRPJ = PERCENTUAIS_PRESUNCAO_IRPJ.find(a => a.id === atividadeId);
+  const atividadeCSLL = PERCENTUAIS_PRESUNCAO_CSLL.find(a => a.id === atividadeId);
+
+  if (!atividadeIRPJ) throw new Error(`Atividade não encontrada: "${atividadeId}"`);
+
+  const percentualLP = atividadeIRPJ.percentual;
+  const percentualArbitrado = _arredondar(percentualLP * 1.20, 4); // Acréscimo de 20%
+  const percentualCSLL = atividadeCSLL ? atividadeCSLL.percentual : 0.12;
+
+  if (receitaConhecida) {
+    const baseIRPJ = _arredondar(receitaBrutaTrimestral * percentualArbitrado);
+    const baseCSLL = _arredondar(receitaBrutaTrimestral * percentualCSLL); // CSLL NÃO tem acréscimo
+
+    const irpjNormal = _arredondar(baseIRPJ * ALIQUOTA_IRPJ);
+    const irpjAdicional = _arredondar(Math.max(0, baseIRPJ - LIMITE_ADICIONAL_TRIMESTRAL) * ALIQUOTA_ADICIONAL_IRPJ);
+    const csll = _arredondar(baseCSLL * ALIQUOTA_CSLL);
+
+    return {
+      tipo: 'RECEITA_CONHECIDA',
+      receitaBruta: receitaBrutaTrimestral,
+      percentualLP: percentualLP,
+      percentualArbitrado: percentualArbitrado,
+      percentualCSLL: percentualCSLL,
+      baseIRPJ: baseIRPJ,
+      baseCSLL: baseCSLL,
+      irpjNormal: irpjNormal,
+      irpjAdicional: irpjAdicional,
+      irpjTotal: _arredondar(irpjNormal + irpjAdicional),
+      csll: csll,
+      totalTributos: _arredondar(irpjNormal + irpjAdicional + csll),
+      baseLegal: 'IN RFB 1.700/2017, Art. 227'
+    };
+  } else {
+    // Receita desconhecida: usar alternativas do Art. 232
+    const resultados = [];
+    const alternativas = LUCRO_ARBITRADO.receitaDesconhecidaAlternativas;
+
+    if (dadosAlternativos.lucroRealUltimo > 0) {
+      resultados.push({ metodo: alternativas[0].formula, base: _arredondar(dadosAlternativos.lucroRealUltimo * 1.5), artigo: alternativas[0].artigo });
+    }
+    if (dadosAlternativos.ativoTotal > 0) {
+      resultados.push({ metodo: alternativas[1].formula, base: _arredondar(dadosAlternativos.ativoTotal * 0.12), artigo: alternativas[1].artigo });
+    }
+    if (dadosAlternativos.capitalSocial > 0) {
+      resultados.push({ metodo: alternativas[2].formula, base: _arredondar(dadosAlternativos.capitalSocial * 0.21), artigo: alternativas[2].artigo });
+    }
+    if (dadosAlternativos.patrimonioLiquido > 0) {
+      resultados.push({ metodo: alternativas[3].formula, base: _arredondar(dadosAlternativos.patrimonioLiquido * 0.15), artigo: alternativas[3].artigo });
+    }
+
+    return {
+      tipo: 'RECEITA_DESCONHECIDA',
+      alternativas: resultados,
+      nota: 'Quando a receita bruta é desconhecida, o lucro arbitrado é determinado pelas alternativas do Art. 232',
+      baseLegal: 'IN RFB 1.700/2017, Art. 232'
+    };
+  }
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SEÇÃO 21: GANHO DE CAPITAL — REGRAS DETALHADAS (Art. 215, §§14-23)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Regras de apuração de ganho de capital no Lucro Presumido.
+ * O ganho integra a base de cálculo SEM passar pelo percentual de presunção.
+ *
+ * Base Legal: IN RFB 1.700/2017, Art. 215, §§14-23.
+ */
+const REGRAS_GANHO_CAPITAL_LP = {
+  baseLegal: 'IN RFB 1.700/2017, Art. 215, §§14-23',
+  formulaGeral: 'ganho = valor_alienacao - valor_contabil_ajustado',
+
+  ajustesValorContabil: [
+    {
+      descricao: 'AVP proporcional pode ser considerado no valor contábil',
+      artigo: '§§15-17',
+      nota: 'AVP que foi excluído da base tributária pode ser adicionado ao custo para fins de ganho de capital'
+    },
+    {
+      descricao: 'Vedado cômputo de encargos de empréstimos capitalizados no custo',
+      artigo: '§18'
+    },
+    {
+      descricao: 'Considerar diferença de critérios contábeis pré e pós 2007/2008 (Lei 11.638)',
+      artigo: '§19'
+    },
+    {
+      descricao: 'Reavaliação só pode integrar o custo se tributada anteriormente',
+      artigo: '§20',
+      nota: 'Se a reavaliação foi apenas diferida (não tributada), não pode ser computada no custo (Art. 52, Lei 9.430/96)'
+    }
+  ],
+
+  intangivelConcessao: {
+    formula: 'ganho = valor_alienacao - (custos_incorridos - amortizacao_proporcional)',
+    artigo: 'Art. 215, §§21-23',
+    nota: 'Aplicável a direitos de exploração (intangível) em concessões de serviço público'
+  },
+
+  aliquotasGanhoCapital: {
+    descricao: 'Ganho de capital integra a base e é tributado pelas alíquotas normais de IRPJ (15% + adicional 10%) e CSLL (9%)',
+    nota: 'NÃO se aplica a tabela progressiva de ganho de capital de PF (15% a 22,5%)'
+  }
+};
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SEÇÃO 22: VARIAÇÃO CAMBIAL (Art. 215, §§27-28)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Regras de variação cambial no Lucro Presumido.
+ * Base Legal: IN RFB 1.700/2017, Art. 215, §§27-28.
+ */
+const VARIACAO_CAMBIAL_LP = {
+  regimePadrao: {
+    descricao: 'Reconhecer variações monetárias na LIQUIDAÇÃO da operação (regime de caixa cambial)',
+    artigo: 'Art. 215, §27',
+    nota: 'É o regime padrão — não precisa fazer opção para utilizá-lo'
+  },
+  regimeOpcional: {
+    descricao: 'Opção por regime de COMPETÊNCIA — reconhecer variações mensalmente',
+    artigo: 'Art. 215, §28',
+    nota: 'Opção aplicável a todo o ano-calendário, irretratável. Manifestada na ECF.'
+  },
+  impacto: 'O regime de caixa (liquidação) é geralmente mais favorável pois DIFERE a tributação de variações cambiais positivas até o momento da liquidação efetiva do contrato.',
+  baseLegal: 'IN RFB 1.700/2017, Art. 215, §§27-28'
+};
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SEÇÃO 23: RENDA VARIÁVEL — ANTECIPAÇÃO MENSAL (Art. 216)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Regras de rendimentos de renda fixa e ganhos de renda variável.
+ * Base Legal: IN RFB 1.700/2017, Art. 216.
+ */
+const RENDA_VARIAVEL_LP = {
+  baseLegal: 'IN RFB 1.700/2017, Art. 216',
+  regra: 'Rendimentos de renda fixa e ganhos líquidos de renda variável são reconhecidos na alienação, resgate ou cessão do título/operação.',
+  antecipacaoMensal: {
+    descricao: 'Nos 2 primeiros meses do trimestre, o IRPJ sobre ganhos líquidos de renda variável é pago EM SEPARADO (como antecipação mensal).',
+    mesDispensado: 'No 3º mês do trimestre: dispensado pagamento em separado.',
+    consolidacao: 'O total trimestral é compensável com o IRPJ trimestral apurado.'
+  }
+};
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SEÇÃO 24: ARRENDAMENTO MERCANTIL — ARRENDADORA (Art. 218)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Regras para arrendadoras com transferência de riscos (não sujeitas à Lei 6.099/74).
+ * Base Legal: IN RFB 1.700/2017, Art. 218 (redação IN RFB 1881/2019).
+ */
+const ARRENDAMENTO_ARRENDADORA_LP = {
+  baseLegal: 'IN RFB 1.700/2017, Art. 218 (redação IN RFB 1881/2019)',
+  regra: 'Computar a contraprestação integral na base de cálculo do LP.',
+  naoDuplicar: [
+    'Receitas financeiras do arrendamento já incluídas na contraprestação (§1º)',
+    'Variações monetárias de contraprestações a receber e juros a apropriar (§2º)'
+  ],
+  excecao: 'Atualizações sobre contraprestações VENCIDAS entram integralmente na base (§3º)'
+};
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SEÇÃO 25: CONCESSÃO DE SERVIÇOS PÚBLICOS (Art. 215, §8º)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Regras específicas para concessionárias de serviço público.
+ * Base Legal: IN RFB 1.700/2017, Art. 215, §8º.
+ */
+const CONCESSAO_SERVICOS_PUBLICOS_LP = {
+  baseLegal: 'IN RFB 1.700/2017, Art. 215, §8º',
+  regraExclusao: 'Excluir da base a receita de construção de infraestrutura quando a contrapartida contábil for um ativo INTANGÍVEL (direito de exploração).',
+  regraInclusao: 'Incluir na base o AVP dos ativos financeiros a receber pela construção.',
+  nota: 'Se a contrapartida for ativo financeiro (recebível da concedente), a receita NÃO é excluída e entra normalmente na base com percentual de presunção.'
+};
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SEÇÃO 26: DEDUÇÕES DA RECEITA BRUTA — INSTITUIÇÕES FINANCEIRAS (Art. 36)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Deduções específicas da receita bruta ANTES de aplicar o percentual de presunção
+ * para instituições financeiras, seguradoras e operadoras de saúde.
+ *
+ * Base Legal: IN RFB 1.700/2017, Art. 36.
+ */
+const DEDUCOES_RECEITA_INSTITUICOES_FINANCEIRAS = {
+  baseLegal: 'IN RFB 1.700/2017, Art. 36',
+  categorias: {
+    financeiras_corretoras_distribuidoras: {
+      deducoes: [
+        'Captação de terceiros (despesas com captação)',
+        'Refinanciamentos, empréstimos e repasses oficiais',
+        'Cessão de créditos',
+        'Operações de câmbio',
+        'Perdas em operações de renda fixa',
+        'Perdas em operações de renda variável'
+      ]
+    },
+    seguros: {
+      deducoes: [
+        'Cosseguros e resseguros cedidos',
+        'Cancelamentos e restituições de prêmios',
+        'Provisões e reservas técnicas constituídas'
+      ]
+    },
+    previdencia_capitalizacao: {
+      deducoes: ['Provisões e reservas técnicas']
+    },
+    operadoras_saude: {
+      deducoes: ['Corresponsabilidades cedidas', 'Provisões técnicas']
+    }
+  }
+};
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SEÇÃO 27: DISTRIBUIÇÃO DE LUCROS ISENTOS — DETALHAMENTO (Art. 238)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Regras detalhadas de distribuição de lucros isentos no Lucro Presumido.
+ * Base Legal: IN RFB 1.700/2017, Art. 238, §§1º a 9º.
+ */
+const DISTRIBUICAO_LUCROS_DETALHADA = [
+  {
+    id: 'DIV_001',
+    regra: 'Lucros e dividendos distribuídos são ISENTOS de IRRF — inclusive para beneficiários no exterior',
+    artigo: 'Art. 238, caput e §1º'
+  },
+  {
+    id: 'DIV_002',
+    regra: 'Limite isento SEM escrituração contábil: base_presunção - IRPJ - CSLL - PIS - COFINS',
+    formula: 'lucro_distribuivel_isento = base_lp - irpj - csll - pis - cofins',
+    artigo: 'Art. 238, §2º, I'
+  },
+  {
+    id: 'DIV_003',
+    regra: 'Acima do limite presumido: isento apenas se escrituração contábil (ECD) demonstrar lucro efetivo maior',
+    artigo: 'Art. 238, §2º, II'
+  },
+  {
+    id: 'DIV_004',
+    regra: 'Excesso ao lucro escriturado: imputado a lucros acumulados ou reservas anteriores, sujeito a IRRF',
+    artigo: 'Art. 238, §3º'
+  },
+  {
+    id: 'DIV_005',
+    regra: 'Sem lucros acumulados suficientes: tributar excesso como rendimento (tabela progressiva ou 15% PF)',
+    artigo: 'Art. 238, §4º',
+    baseLegalComplementar: 'Art. 61, Lei 8.981/95'
+  },
+  {
+    id: 'DIV_006',
+    regra: 'Distribuição do §2º, I (dentro do limite presumido) APÓS encerramento do trimestre: NÃO se aplica a restrição do §3º',
+    artigo: 'Art. 238, §7º'
+  },
+  {
+    id: 'DIV_007',
+    regra: 'Distribuição por conta de período NÃO encerrado (sem balanço): tributável — exceto se dentro do limite do §2º, I',
+    artigo: 'Art. 238, §8º'
+  },
+  {
+    id: 'DIV_008',
+    regra: 'Isenção se aplica a TODAS as espécies de ações (Art. 15, Lei 6.404/76), inclusive as classificadas no passivo',
+    artigo: 'Art. 238, §9º'
+  },
+  {
+    id: 'DIV_009',
+    regra: 'Pró-labore, aluguéis e remuneração por serviços NÃO são distribuição de lucros isentos — tributáveis normalmente',
+    artigo: 'Art. 238, §5º'
+  },
+  {
+    id: 'DIV_010',
+    regra: 'Isenção somente para lucros apurados a partir de janeiro/1996',
+    artigo: 'Art. 238, §6º'
+  }
+];
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SEÇÃO 28: OTIMIZAÇÕES FISCAIS CATALOGADAS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Catálogo de oportunidades de otimização fiscal no Lucro Presumido.
+ * Cada otimização inclui economia estimada, como implementar, risco e base legal.
+ */
+const OTIMIZACOES_FISCAIS_LP = [
+  {
+    id: 'OPT_001',
+    titulo: 'Enquadramento hospitalar (8% IRPJ em vez de 32%)',
+    economia: 'Redução de 75% na base IRPJ',
+    como: 'Sociedade empresária registrada na Junta Comercial + alvará Anvisa + ambiente próprio conforme RDC 50/2002',
+    artigo: 'Art. 33, §1º, II, a',
+    risco: 'BAIXO',
+    simulavel: true
+  },
+  {
+    id: 'OPT_002',
+    titulo: 'Empreitada com TODOS os materiais (8%/12% em vez de 32%/32%)',
+    economia: 'Redução de 75% IRPJ e 62.5% CSLL',
+    como: 'Contrato prevendo expressamente o fornecimento de TODOS os materiais indispensáveis incorporados à obra',
+    artigo: 'Art. 33, §1º, II, d',
+    risco: 'MEDIO',
+    simulavel: true
+  },
+  {
+    id: 'OPT_003',
+    titulo: 'Percentual reduzido 16% para micro prestadoras (até R$ 120k)',
+    economia: 'Redução de 50% na base IRPJ',
+    como: 'Receita bruta anual até R$ 120.000 + exclusivamente serviços das alíneas b,c,d,f,g,j',
+    artigo: 'Art. 215, §10',
+    risco: 'BAIXO',
+    simulavel: true
+  },
+  {
+    id: 'OPT_004',
+    titulo: 'Regime de caixa: diferimento de receitas não recebidas',
+    economia: 'Posterga tributo até recebimento efetivo (ganho financeiro = SELIC sobre imposto diferido)',
+    como: 'Optar pelo regime de caixa + manter Livro Caixa ou escrituração contábil',
+    artigo: 'Art. 223',
+    risco: 'BAIXO',
+    simulavel: true
+  },
+  {
+    id: 'OPT_005',
+    titulo: 'Maximizar distribuição isenta com escrituração contábil (ECD)',
+    economia: 'Distribuir acima do presumido sem IRRF quando lucro contábil efetivo > base presumida',
+    como: 'Manter escrituração contábil completa (ECD) demonstrando lucro real efetivo maior',
+    artigo: 'Art. 238, §2º, II',
+    risco: 'BAIXO',
+    simulavel: true
+  },
+  {
+    id: 'OPT_006',
+    titulo: 'Exclusão de AVJ (Ajuste a Valor Justo) da base do LP',
+    economia: 'Ganhos de AVJ não são tributados no período de registro',
+    como: 'Registrar ganhos conforme Art. 217 e excluir da base',
+    artigo: 'Art. 217',
+    risco: 'BAIXO',
+    simulavel: false
+  },
+  {
+    id: 'OPT_007',
+    titulo: 'Segregação de atividades para otimizar percentuais',
+    economia: 'Aplicar 8% sobre comércio/indústria e 32% somente sobre serviços — CADA atividade com seu percentual',
+    como: 'Art. 215, §2º — percentual correspondente a cada atividade separadamente',
+    artigo: 'Art. 215, §2º',
+    risco: 'BAIXO',
+    simulavel: true
+  },
+  {
+    id: 'OPT_008',
+    titulo: 'Bônus de adimplência fiscal na CSLL',
+    economia: 'Dedução direta de 1% da base de cálculo da CSLL',
+    como: 'Manter-se sem infrações tributárias nos últimos 5 anos (Lei 10.637/2002, Art. 38)',
+    artigo: 'Art. 222, parágrafo único, II',
+    risco: 'BAIXO',
+    simulavel: true
+  },
+  {
+    id: 'OPT_009',
+    titulo: 'Comparativo LP vs Lucro Real antes da opção anual',
+    economia: 'Economia de 30-70% dependendo da margem efetiva da empresa',
+    como: 'Se lucro_efetivo / receita < percentual_presuncao → Lucro Real pode ser mais vantajoso',
+    artigo: 'Art. 214, §2º',
+    risco: 'BAIXO',
+    simulavel: true
+  },
+  {
+    id: 'OPT_010',
+    titulo: 'Variação cambial: regime de liquidação para diferir tributação',
+    economia: 'Diferir variações cambiais positivas não realizadas até a liquidação efetiva do contrato',
+    como: 'Manter o regime padrão (liquidação) — não optar por competência',
+    artigo: 'Art. 215, §§27-28',
+    risco: 'BAIXO',
+    simulavel: false
+  }
+];
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SEÇÃO 29: REGRAS CONDICIONAIS COMPLETAS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Conjunto completo de regras condicionais que afetam o cálculo do LP.
+ * Codificado para uso por motor de regras / validação automática.
+ *
+ * Base Legal: IN RFB 1.700/2017 (multivigente com alterações até IN RFB 1881/2019).
+ */
+const REGRAS_CONDICIONAIS_LP = [
+  {
+    id: 'COND_001',
+    se: 'receita_bruta_anual_anterior > 78.000.000 (ou 6.500.000 × meses se < 12)',
+    entao: 'VEDA opção pelo Lucro Presumido',
+    tipo: 'VEDACAO', prioridade: 1,
+    artigo: 'Art. 214'
+  },
+  {
+    id: 'COND_002',
+    se: 'atividade = hospitalar E sociedade_empresaria = true E alvara_anvisa = true E ambiente_proprio = true',
+    entao: 'IRPJ = 8%; CSLL = 12%',
+    senao: 'IRPJ = 32%; CSLL = 32%',
+    tipo: 'ALTERACAO_PERCENTUAL', prioridade: 2,
+    artigo: 'Art. 33, §1º, II, a / §§3º-4º'
+  },
+  {
+    id: 'COND_003',
+    se: 'sociedade_simples = true E atividade = hospitalar',
+    entao: 'VEDA percentual 8% → usar 32%',
+    tipo: 'VEDACAO', prioridade: 2,
+    artigo: 'Art. 33, §4º, I'
+  },
+  {
+    id: 'COND_004',
+    se: 'ambiente_terceiro = true E atividade = hospitalar',
+    entao: 'VEDA percentual 8% → usar 32%',
+    tipo: 'VEDACAO', prioridade: 2,
+    artigo: 'Art. 33, §4º, II'
+  },
+  {
+    id: 'COND_005',
+    se: 'atividade = medico_ambulatorial_home_care',
+    entao: 'VEDA percentual 8% → usar 32%',
+    tipo: 'VEDACAO', prioridade: 2,
+    artigo: 'Art. 33, §4º, III'
+  },
+  {
+    id: 'COND_006',
+    se: 'empreitada_todos_materiais = true',
+    entao: 'IRPJ 8% / CSLL 12%',
+    senao: 'IRPJ 32% / CSLL 32%',
+    tipo: 'ALTERACAO_PERCENTUAL', prioridade: 2,
+    artigo: 'Art. 33, §1º, II d vs IV d'
+  },
+  {
+    id: 'COND_007',
+    se: 'exclusivamente_servicos_alineas_bcdfgj = true E receita_anual <= 120.000',
+    entao: 'percentual_irpj = 16%',
+    senao: 'percentual_irpj = 32%',
+    tipo: 'REDUCAO', prioridade: 3,
+    artigo: 'Art. 215, §10'
+  },
+  {
+    id: 'COND_008',
+    se: 'usou_16% = true E receita_acumulada > 120.000',
+    entao: 'Diferença do imposto postergado por trimestre — pagar quota única até último dia útil do mês subsequente. Sem acréscimos no prazo.',
+    tipo: 'MAJORACAO', prioridade: 3,
+    artigo: 'Art. 215, §§11-13'
+  },
+  {
+    id: 'COND_009',
+    se: 'locacao_imovel_nao_objeto_social = true',
+    entao: 'Receita de locação ACRESCE à base SEM percentual de presunção',
+    senao: 'Aplica percentual normalmente',
+    tipo: 'ALTERACAO_BASE', prioridade: 3,
+    artigo: 'Art. 215, §3º, I, c'
+  },
+  {
+    id: 'COND_010',
+    se: 'regime_anterior = LUCRO_REAL E regime_atual = LP',
+    entao: 'Adicionar TODOS os saldos de tributação diferida do LALUR à base do 1º trimestre de LP',
+    tipo: 'OBRIGACAO', prioridade: 1,
+    artigo: 'Art. 219'
+  },
+  {
+    id: 'COND_011',
+    se: 'regime_atual = LP E rendimentos_exterior = true',
+    entao: 'MIGRAR OBRIGATORIAMENTE para Lucro Real Trimestral a partir do trimestre da ocorrência',
+    tipo: 'VEDACAO', prioridade: 1,
+    artigo: 'Art. 214, §3º-A',
+    redacaoDadaPor: 'IN RFB 1881/2019'
+  },
+  {
+    id: 'COND_012',
+    se: 'concessao_servico_publico = true E contrapartida = ativo_intangivel',
+    entao: 'Excluir receita de construção da base de cálculo',
+    tipo: 'REDUCAO', prioridade: 3,
+    artigo: 'Art. 215, §8º, I'
+  },
+  {
+    id: 'COND_013',
+    se: 'variacao_cambial = true',
+    entao: 'Regime padrão: reconhecer na liquidação. Opção anual: reconhecer por competência',
+    tipo: 'ALTERACAO_BASE', prioridade: 3,
+    artigo: 'Art. 215, §§27-28'
+  },
+  {
+    id: 'COND_014',
+    se: 'mudanca_caixa_para_competencia = true',
+    entao: 'Reconhecer em dezembro do ano anterior TODAS as receitas auferidas e não recebidas',
+    tipo: 'OBRIGACAO', prioridade: 1,
+    artigo: 'Art. 223-A',
+    redacaoDadaPor: 'IN RFB 1881/2019'
+  },
+  {
+    id: 'COND_015',
+    se: 'regime_csll = CAIXA',
+    entao: 'regime_irpj DEVE ser obrigatoriamente CAIXA também',
+    tipo: 'VEDACAO', prioridade: 1,
+    artigo: 'Art. 224'
+  },
+  {
+    id: 'COND_016',
+    se: 'distribuicao_lucros > (base_lp - IRPJ - CSLL - PIS - COFINS)',
+    entao: 'Excesso isento SOMENTE se escrituração contábil demonstrar lucro efetivo maior. Caso contrário: tributar como rendimento.',
+    tipo: 'OBRIGACAO', prioridade: 2,
+    artigo: 'Art. 238, §§2º-4º'
+  }
+];
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SEÇÃO 30: REGIME DE CAIXA — REGRAS DETALHADAS (Arts. 223-224)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Regras detalhadas do regime de caixa no Lucro Presumido.
+ * Base Legal: IN RFB 1.700/2017, Arts. 215 §9º, 223, 223-A e 224.
+ */
+const REGIME_CAIXA_DETALHADO = [
+  {
+    id: 'CAIXA_001',
+    regra: 'LP pode ser apurado por COMPETÊNCIA ou por CAIXA',
+    requisitos: [
+      'Livro Caixa com registro individual de receitas por nota fiscal/recebimento',
+      'OU escrituração contábil (ECD) com conta específica de recebimentos'
+    ],
+    artigo: 'Art. 215, §9º / Art. 223'
+  },
+  {
+    id: 'CAIXA_002',
+    regra: 'Recebimentos antecipados: receita reconhecida no mês do FATURAMENTO, ENTREGA ou CONCLUSÃO — o que ocorrer primeiro',
+    artigo: 'Art. 223, §2º'
+  },
+  {
+    id: 'CAIXA_003',
+    regra: 'Qualquer valor recebido do comprador (inclusive a título de adiantamento, sinal, etc.) = recebimento do preço, até o limite total do contrato',
+    artigo: 'Art. 223, §3º'
+  },
+  {
+    id: 'CAIXA_004',
+    regra: 'Se receita for reconhecida em período POSTERIOR ao devido: incidência de juros SELIC + multa de mora ou de ofício',
+    artigo: 'Art. 223, §4º'
+  },
+  {
+    id: 'CAIXA_005',
+    regra: 'Mudança de caixa → competência: reconhecer em DEZEMBRO do ano anterior TODAS as receitas auferidas e não recebidas',
+    artigo: 'Art. 223-A',
+    redacaoDadaPor: 'IN RFB 1881/2019'
+  },
+  {
+    id: 'CAIXA_006',
+    regra: 'Mudança obrigatória LP → LR durante o ano: tributar receitas auferidas/não recebidas do período anterior. Diferença sem multa/juros se paga até último dia útil do mês subsequente ao trimestre',
+    artigo: 'Art. 223-A, §§1º-2º',
+    redacaoDadaPor: 'IN RFB 1881/2019'
+  },
+  {
+    id: 'CAIXA_007',
+    regra: 'CSLL pelo resultado presumido em regime de caixa: SÓ é permitido se o IRPJ também adotar regime de caixa',
+    artigo: 'Art. 224'
+  }
+];
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SEÇÃO 31: VEDAÇÕES À OPÇÃO PELO LP — CONSOLIDAÇÃO (Art. 214)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Vedações à opção pelo Lucro Presumido consolidadas (IN RFB 1.700/2017, Art. 214).
+ */
+const VEDACOES_OPCAO_LP = [
+  {
+    id: 'VED_001',
+    impedimento: 'Receita bruta total no ano anterior > R$ 78.000.000,00',
+    condicao: 'SE receita_bruta_anual_anterior > 78.000.000 → VEDA',
+    proporcional: 'SE meses_atividade < 12 → limite = 6.500.000 × meses',
+    artigo: 'Art. 214, caput'
+  },
+  {
+    id: 'VED_002',
+    impedimento: 'PJ obrigada ao Lucro Real (Art. 59 da IN 1700/2017)',
+    condicao: 'SE enquadrada no Art. 59 → VEDA',
+    excecao: 'PJs dos incisos I, III, IV, V do Art. 59 podem optar por LP durante o Refis (§§5º-A/B/C)',
+    artigo: 'Art. 214, caput / §§5º-A a 5º-C',
+    redacaoDadaPor: 'IN RFB 1881/2019'
+  },
+  {
+    id: 'VED_003',
+    impedimento: 'PJ resultante de incorporação/fusão enquadrada no Art. 59',
+    condicao: 'SE (incorporação OU fusão) E resultado enquadrada no Art. 59 → VEDA',
+    excecao: 'Incorporadora já no Refis antes da incorporação (§5º)',
+    artigo: 'Art. 214, §4º'
+  },
+  {
+    id: 'VED_004',
+    impedimento: 'Auferir lucros, rendimentos ou ganhos de capital oriundos do EXTERIOR durante LP',
+    condicao: 'SE regime = LP E rendimentos_exterior = true → MIGRAR para LR Trimestral a partir do trimestre',
+    artigo: 'Art. 214, §3º-A',
+    redacaoDadaPor: 'IN RFB 1881/2019'
+  },
+  {
+    id: 'VED_005',
+    impedimento: 'Opção pelo LP é IRRETRATÁVEL para todo o ano-calendário',
+    condicao: 'Opção se aplica a todo o período de atividade no ano-calendário',
+    excecao: 'Art. 236: trimestres com lucro arbitrado podem conviver com LP nos demais',
+    artigo: 'Art. 214, §1º'
+  }
+];
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SEÇÃO 32: METADADOS E LACUNAS DA NORMA PROCESSADA
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Registro de normas alteradoras e lacunas identificadas.
+ * Usado para auditoria e rastreabilidade do motor.
+ */
+const METADADOS_NORMA = {
+  normaBase: 'IN RFB 1700/2017',
+  dataPublicacao: '2017-03-14',
+  vigenciaInicio: '2017-03-16',
+
+  normasAlteradoras: [
+    { numero: 'IN RFB 1881/2019', data: '2019-04-03', artigosAlterados: ['33 §1º IV h', '33 §7º', '34 §1º IV-V', '214 §3º-A §5º-A §5º-B §5º-C', '215 §3º-A §10 §§30-32', '218', '221', '223-A', '227 §4º IV §4º-A §4º-B §22 §§32-34', '230'] },
+    { numero: 'IN RFB 2161/2023', data: '2023', nota: 'NÃO processada — verificar alterações' },
+    { numero: 'IN RFB 2201/2024', data: '2024', nota: 'NÃO processada — verificar alterações' },
+    { numero: 'IN RFB 2235/2024', data: '2024', nota: 'NÃO processada — verificar alterações' },
+    { numero: 'IN RFB 2281/2025', data: '2025', nota: 'NÃO processada — verificar alterações' },
+    { numero: 'IN RFB 2296/2025', data: '2025', nota: 'NÃO processada — verificar alterações' }
+  ],
+
+  lacunasIdentificadas: [
+    'Art. 29 IN 1700 (alíquota IRPJ 15% + adicional 10%) — referenciado mas não incluído no texto processado',
+    'Art. 30 IN 1700 (alíquotas CSLL: 9%, 15%, 17%, 20% por tipo de PJ) — não incluído',
+    'Art. 26 IN 1700 (definição detalhada de receita bruta) — não incluído',
+    'Art. 59 IN 1700 (lista completa de PJs obrigadas ao Lucro Real) — não incluído',
+    'PIS/COFINS regime cumulativo: exclusões detalhadas para setores específicos',
+    'IRRF sobre aplicações financeiras e serviços — não detalhado por tipo de operação',
+    'JCP — mencionado como acréscimo mas sem regras detalhadas de cálculo/limites no contexto LP',
+    'Alterações das INs 2161/2023, 2201/2024, 2235/2024, 2281/2025, 2296/2025 — NÃO processadas'
+  ],
+
+  normasComplementaresNecessarias: [
+    'Art. 29 IN 1700 (alíquota IRPJ)', 'Art. 30 IN 1700 (alíquota CSLL)', 'Art. 26 IN 1700 (receita bruta)',
+    'Art. 59 IN 1700 (obrigadas ao LR)', 'Art. 119 IN 1700 (mudança LP→LR)', 'Art. 200 IN 1700 (valor contábil ganho capital)',
+    'Arts. 271-276 IN 1700 (bônus adimplência)', 'Arts. 291-296 IN 1700 (adoção inicial Lei 12.973)',
+    'Lei 9.249/1995', 'Lei 9.430/1996', 'Lei 12.973/2014', 'IN RFB 1.312/2012 (preços transferência)',
+    'IN RFB 1925/2020', 'IN RFB 2161/2023', 'IN RFB 2201/2024', 'IN RFB 2235/2024', 'IN RFB 2281/2025', 'IN RFB 2296/2025'
+  ]
+};
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// FIM DAS NOVAS SEÇÕES (17-32)
+
+
 const LucroPresumido = {
   // ── Constantes ──
   LIMITE_RECEITA_BRUTA_ANUAL,
@@ -4631,6 +5721,26 @@ const LucroPresumido = {
   verificarElegibilidade,
   analisarVantagensDesvantagens,
 
+  // ── Seções 17-32: IN RFB 1.700/2017 Detalhamento (v3.5.1) ──
+  ACRESCIMOS_BASE_CALCULO,
+  EXCLUSOES_BASE_CALCULO,
+  PERCENTUAL_REDUZIDO_16PCT,
+  verificarPercentualReduzido16,
+  LUCRO_ARBITRADO,
+  calcularLucroArbitrado,
+  REGRAS_GANHO_CAPITAL_LP,
+  VARIACAO_CAMBIAL_LP,
+  RENDA_VARIAVEL_LP,
+  ARRENDAMENTO_ARRENDADORA_LP,
+  CONCESSAO_SERVICOS_PUBLICOS_LP,
+  DEDUCOES_RECEITA_INSTITUICOES_FINANCEIRAS,
+  DISTRIBUICAO_LUCROS_DETALHADA,
+  OTIMIZACOES_FISCAIS_LP,
+  REGRAS_CONDICIONAIS_LP,
+  REGIME_CAIXA_DETALHADO,
+  VEDACOES_OPCAO_LP,
+  METADADOS_NORMA,
+
   // ── Funções Auxiliares ──
   getTrimestres,
   getVencimentoPISCOFINS,
@@ -4670,7 +5780,7 @@ if (typeof window !== 'undefined') {
 function _executarDemonstracao() {
   console.log('\n');
   console.log('╔══════════════════════════════════════════════════════════════╗');
-  console.log('║   MOTOR DE CÁLCULO FISCAL — LUCRO PRESUMIDO v3.3           ║');
+  console.log('║   MOTOR DE CÁLCULO FISCAL — LUCRO PRESUMIDO v3.5.1         ║');
   console.log('║   AGROGEO BRASIL — Geotecnologia e Consultoria Ambiental   ║');
   console.log('╚══════════════════════════════════════════════════════════════╝');
 
@@ -4872,7 +5982,7 @@ function _executarDemonstracao() {
   cal.picosCaixa.forEach(p => console.log(`    ${p.mes}: R$ ${_formatarMoeda(p.valor)}`));
 
   console.log('\n\n═══════════════════════════════════════════════════════');
-  console.log('  Demonstração concluída. Motor v3.3.0 — Todas as etapas (1-4) prontas.');
+  console.log('  Demonstração concluída. Motor v3.5.1 — Todas as etapas (1-4) + Seções 17-32.');
   console.log('═══════════════════════════════════════════════════════\n');
 }
 
