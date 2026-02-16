@@ -5,8 +5,12 @@
  *
  * AGROGEO BRASIL - Geotecnologia e Consultoria Ambiental
  * Autor: Luis Fernando | Proprietário AGROGEO BRASIL
- * Versão: 3.4.0
+ * Versão: 3.4.1
  * Data: Fevereiro/2026
+ *
+ * Changelog v3.4.1:
+ *   - Validação de entrada em simulacaoRapida() e calcularAnualConsolidado()
+ *   - Disclaimer jurídico aprimorado no rodapé do PDF (referências legais explícitas)
  * Localização: Novo Progresso, Pará (Amazônia Legal - SUDAM)
  *
  * Changelog v3.4.0:
@@ -1446,6 +1450,9 @@ function calcularPISCOFINSMensal(params) {
  * @returns {Object} Consolidação anual completa
  */
 function calcularAnualConsolidado(params) {
+  if (!params || typeof params !== 'object') {
+    throw new Error('calcularAnualConsolidado: params deve ser um objeto.');
+  }
   const {
     trimestres = [],
     meses = [],
@@ -1456,6 +1463,10 @@ function calcularAnualConsolidado(params) {
     lucroContabilEfetivo = null,
     socios = []
   } = params;
+
+  if (!Array.isArray(trimestres) || trimestres.length === 0) {
+    throw new Error('calcularAnualConsolidado: informe ao menos 1 trimestre.');
+  }
 
   // ── Cálculos Trimestrais (IRPJ + CSLL) com LC 224/2025 ──
   const anoCalendario = params.anoCalendario || new Date().getFullYear();
@@ -2540,6 +2551,9 @@ function _calcularQuotas(valorTotal) {
  * @returns {Object} Estimativa rápida
  */
 function simulacaoRapida(receitaBrutaTrimestral, atividadeId = 'servicos_gerais') {
+  if (typeof receitaBrutaTrimestral !== 'number' || receitaBrutaTrimestral <= 0) {
+    throw new Error('simulacaoRapida: receitaBrutaTrimestral deve ser um numero positivo.');
+  }
   const atividadeIRPJ = PERCENTUAIS_PRESUNCAO_IRPJ.find(a => a.id === atividadeId);
   const atividadeCSLL = PERCENTUAIS_PRESUNCAO_CSLL.find(a => a.id === atividadeId);
 
@@ -2822,7 +2836,7 @@ function _pdfRodape(doc) {
     doc.setFontSize(7);
     doc.setTextColor(..._PDF_CORES.cinzaMedio);
     doc.text(`IMPOST. — Inteligencia em Otimizacao Tributaria | ${dataStr} | Pagina ${i} de ${totalPages}`, _PDF_MARGIN.left, yRod);
-    doc.text('Este relatorio e uma estimativa baseada nos dados informados e nao substitui consultoria contabil profissional.', _PDF_MARGIN.left, yRod + 3.5);
+    doc.text('AVISO LEGAL: Estimativa baseada na legislacao vigente (RIR/2018, IN RFB 1.700/2017, LC 224/2025). NAO constitui parecer contabil/juridico. Valide com profissional habilitado.', _PDF_MARGIN.left, yRod + 3.5);
   }
 }
 
