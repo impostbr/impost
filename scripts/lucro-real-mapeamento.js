@@ -1,29 +1,39 @@
 /**
  * ╔══════════════════════════════════════════════════════════════════════════════╗
- * ║  LUCRO REAL — MAPEAMENTO UNIFICADO DE DADOS  v2.1 (CORRIGIDO)            ║
+ * ║  LUCRO REAL — MAPEAMENTO UNIFICADO DE DADOS  v3.0 (REFATORADO — MOTOR)   ║
  * ║  Fonte única de verdade para alimentar qualquer HTML ou JS                 ║
  * ║  Base Legal: RIR/2018 (Decreto 9.580/2018) + Lei 12.973/2014              ║
  * ║  Ano-Base: 2026                                                           ║
  * ╠══════════════════════════════════════════════════════════════════════════════╣
- * ║  CORREÇÕES v2.1 (inclui v2.0):                                             ║
- * ║  1. pisCofins() — aceita campos individuais de créditos E baseCreditos     ║
- * ║  2. compensarIntegrado() — portado do motor v4.6                          ║
- * ║  3. compensarRetencoes() — portado do motor v4.6                          ║
- * ║  4. saldoNegativo() — portado do motor v4.6                               ║
- * ║  5. depreciacaoCompleta() — portado do motor v4.6                         ║
- * ║  6. incentivos() — portado do motor v4.6                                  ║
- * ║  7. estimativaMensal() — corrigida assinatura (aceita objeto)             ║
- * ║  8. suspensaoReducao() — adicionada                                       ║
- * ║  9. acrescimosMoratorios() — adicionada                                   ║
- * ║ 10. multaOficio() — adicionada                                            ║
- * ║ 11. compensacaoPERDCOMP() — adicionada                                    ║
- * ║ 12. compensacaoJudicial() — adicionada                                    ║
- * ║ 13. recomendarRegime() — adicionada                                       ║
- * ║ 14. receitaBrutaCalc() — adicionada                                       ║
- * ║ 15. LR.calcular.avancado — sub-objeto com funções avançadas               ║
- * ║ 16. JCP: Math.min → Math.max (Lei 9.249/95 Art. 9° §1°)                  ║
- * ║ 17. CSLL estimativa mensal: alíquota 15% p/ inst. financeiras              ║
- * ║ 18. Removido bloco LR.agrogeo (dados pessoais — LGPD)                     ║
+ * ║  CORREÇÕES v3.0:                                                           ║
+ * ║  Todas as funções de LR.calcular.* agora delegam ao motor principal        ║
+ * ║  (window.MotorLR). Eliminada reimplementação duplicada. Fallback para      ║
+ * ║  código original caso motor não carregue.                                  ║
+ * ║                                                                            ║
+ * ║  MAPEAMENTO DE DELEGAÇÃO:                                                  ║
+ * ║  irpj()              → MotorLR.calcularIRPJLucroReal()     (Etapa 1)     ║
+ * ║  csll()              → MotorLR.calcularCSLL()               (Etapa 1)     ║
+ * ║  jcp()               → MotorLR.calcularJCP()               (Etapa 2)     ║
+ * ║  pisCofins()         → MotorLR.calcularPISCOFINSNaoCumulativo() (Et. 2)  ║
+ * ║  retencoesNF()       → MotorLR.calcularRetencaoIntegrada() (Etapa 2)     ║
+ * ║  compensarRetencoes()→ MotorLR.compensarRetencoes()         (Etapa 3)     ║
+ * ║  compensarIntegrado()→ MotorLR.compensarIntegrado()         (Etapa 3)     ║
+ * ║  saldoNegativo()     → MotorLR.calcularSaldoNegativo()     (Etapa 3)     ║
+ * ║  estimativaMensal()  → MotorLR.calcularEstimativaMensal()   (Etapa 4)     ║
+ * ║  depreciacaoCompleta()→MotorLR.calcularDepreciacaoCompleta() (Etapa 4)    ║
+ * ║  incentivos()        → MotorLR.calcularIncentivos()         (Etapa 4)     ║
+ * ║  lucroExploracao()   → MotorLR.calcularLucroExploracao()    (Etapa 4)     ║
+ * ║  suspensaoReducao()  → MotorLR.calcularSuspensaoReducao()  (Etapa 4)     ║
+ * ║  acrescimosMoratorios()→MotorLR.calcularAcrescimosMoratorios()(Etapa 4)  ║
+ * ║  multaOficio()       → MotorLR.calcularMultaOficio()        (Etapa 4)     ║
+ * ║  recomendarRegime()  → MotorLR.recomendarRegime()           (Etapa 4)     ║
+ * ║  simulacaoCompleta() → MotorLR.simularLucroRealCompleto()  (Etapa 4)     ║
+ * ╠══════════════════════════════════════════════════════════════════════════════╣
+ * ║  FALHAS CORRIGIDAS:                                                        ║
+ * ║  #1 — Depreciação: depreciacaoNormal separada de incentivada (DRE)        ║
+ * ║  #4 — Simulação: delegação ao motor elimina lucro -R$36.000 incorreto     ║
+ * ║  #6 — IRPJ: saldo negativo permitido (PER/DCOMP)                         ║
+ * ║  #7 — Economia prejuízo: motor calcula IRPJ real (normal+adicional)      ║
  * ╚══════════════════════════════════════════════════════════════════════════════╝
  *
  * USO:
@@ -824,23 +834,7 @@
 
   function _r(v) { return Math.round(v * 100) / 100; }
 
-  // Helper privado — calcula IRPJ simples (para economia de compensação)
-  function _calcIRPJ(lucroReal) {
-    if (lucroReal <= 0) return 0;
-    var normal = lucroReal * LR.aliquotas.irpj.normal;
-    var baseAdicional = Math.max(0, lucroReal - LR.aliquotas.irpj.limiteAdicionalAno);
-    var adicional = baseAdicional * LR.aliquotas.irpj.adicional;
-    return normal + adicional;
-  }
-
-  // Helper privado — calcula IRPJ trimestral
-  function _calcIRPJTrimestral(lucroReal) {
-    if (lucroReal <= 0) return 0;
-    var normal = lucroReal * LR.aliquotas.irpj.normal;
-    var baseAdicional = Math.max(0, lucroReal - LR.aliquotas.irpj.limiteAdicionalTrimestre);
-    var adicional = baseAdicional * LR.aliquotas.irpj.adicional;
-    return normal + adicional;
-  }
+  // (helpers _calcIRPJ e _calcIRPJTrimestral removidos na v2.3 — delegação ao motor)
 
   // ═══════════════════════════════════════════════════════════════════════════
   // 30. FUNÇÕES DE CÁLCULO ESSENCIAIS (CORRIGIDAS)
@@ -853,6 +847,49 @@
      * Base Legal: Art. 258-261
      */
     irpj: function (dados) {
+      // DELEGAÇÃO AO MOTOR (v2.2) — MotorLR.calcularIRPJLucroReal()
+      // Correção Falha #6: motor permite saldo negativo (PER/DCOMP)
+      if (typeof MotorLR !== 'undefined' && MotorLR.calcularIRPJLucroReal) {
+        var d = Object.assign({
+          lucroLiquido: 0, adicoes: 0, exclusoes: 0,
+          prejuizoFiscal: 0, numMeses: 12, incentivos: 0,
+          retencoesFonte: 0, estimativasPagas: 0
+        }, dados);
+
+        // Mapear parâmetros mapeamento → motor
+        var resultado = MotorLR.calcularIRPJLucroReal({
+          lucroLiquidoContabil: d.lucroLiquido,
+          totalAdicoes: d.adicoes,
+          totalExclusoes: d.exclusoes,
+          saldoPrejuizoFiscal: d.prejuizoFiscal,
+          numMeses: d.numMeses,
+          incentivosDedutiveis: d.incentivos,
+          retencoesFonte: d.retencoesFonte,
+          estimativasPagas: d.estimativasPagas
+        });
+
+        // Mapear retorno motor → interface esperada pelo mapeamento
+        return {
+          lucroLiquido: resultado.passo1_lucroLiquido,
+          adicoes: resultado.passo2_adicoes,
+          exclusoes: resultado.passo3_exclusoes,
+          lucroAntesCompensacao: resultado.passo4_lucroAntesCompensacao,
+          compensacaoPrejuizo: _r(resultado.passo5_compensacao),
+          prejuizoRemanescente: _r(resultado.saldoPrejuizoRemanescente),
+          lucroReal: _r(resultado.passo6_lucroReal),
+          irpjNormal: _r(resultado.passo7_irpjNormal),
+          irpjAdicional: _r(resultado.passo8_adicionalIRPJ),
+          irpjDevido: _r(resultado.passo9_irpjDevido),
+          deducoes: _r(resultado.passo10_deducoes),
+          retencoesFonte: d.retencoesFonte,
+          estimativasPagas: d.estimativasPagas,
+          irpjAPagar: _r(resultado.passo12_irpjAPagar),
+          saldoNegativo: resultado.saldoNegativo ? _r(resultado.valorSaldoNegativo) : 0,
+          aliquotaEfetiva: resultado.aliquotaEfetiva
+        };
+      }
+
+      // FALLBACK: implementação original caso o motor não esteja carregado
       var d = Object.assign({
         lucroLiquido: 0, adicoes: 0, exclusoes: 0,
         prejuizoFiscal: 0, numMeses: 12, incentivos: 0,
@@ -869,7 +906,7 @@
       var irpjAdicional = Math.max(lucroReal - limiteAdicional, 0) * LR.aliquotas.irpj.adicional;
       var irpjDevido = irpjNormal + irpjAdicional;
       var deducoes = Math.min(d.incentivos, irpjNormal);
-      var irpjAPagar = Math.max(irpjDevido - deducoes - d.retencoesFonte - d.estimativasPagas, 0);
+      var irpjAPagar = irpjDevido - deducoes - d.retencoesFonte - d.estimativasPagas;
 
       return {
         lucroLiquido: d.lucroLiquido,
@@ -896,6 +933,34 @@
      * Base Legal: Lei 7.689/88 + Lei 9.249/95
      */
     csll: function (dados) {
+      // DELEGAÇÃO AO MOTOR (v2.2) — MotorLR.calcularCSLL()
+      if (typeof MotorLR !== 'undefined' && MotorLR.calcularCSLL) {
+        var d = Object.assign({
+          lucroLiquido: 0, adicoes: 0, exclusoes: 0,
+          baseNegativa: 0, financeira: false
+        }, dados);
+
+        // Mapear parâmetros mapeamento → motor
+        var resultado = MotorLR.calcularCSLL({
+          lucroLiquidoContabil: d.lucroLiquido,
+          adicoesCSLL: d.adicoes,
+          exclusoesCSLL: d.exclusoes,
+          saldoBaseNegativa: d.baseNegativa,
+          ehInstituicaoFinanceira: d.financeira
+        });
+
+        // Mapear retorno motor → interface esperada pelo mapeamento
+        return {
+          baseAntesCompensacao: _r(resultado.baseAjustada),
+          compensacao: _r(resultado.compensacaoBaseNegativa),
+          baseNegativaRemanescente: _r(resultado.saldoBaseNegativaRemanescente),
+          baseCalculo: _r(resultado.basePositiva),
+          aliquota: resultado.aliquota,
+          csllDevida: _r(resultado.csllDevida)
+        };
+      }
+
+      // FALLBACK: implementação original caso o motor não esteja carregado
       var d = Object.assign({
         lucroLiquido: 0, adicoes: 0, exclusoes: 0,
         baseNegativa: 0, financeira: false
@@ -921,8 +986,30 @@
     /**
      * Calcular JCP máximo dedutível
      * Base Legal: Art. 355-358
+     *
+     * DELEGAÇÃO: MotorLR.calcularJCP() + fallback
      */
     jcp: function (dados) {
+      // DELEGAÇÃO AO MOTOR (v2.3) — MotorLR.calcularJCP()
+      if (typeof MotorLR !== 'undefined' && MotorLR.calcularJCP) {
+        var resultado = MotorLR.calcularJCP(dados);
+
+        // Mapear retorno motor → interface esperada pelo mapeamento
+        return {
+          jcpMaximoTJLP: _r(resultado.jcpMaximoTJLP),
+          limite50LL: _r(resultado.limite1_50LL),
+          limite50Reservas: _r(resultado.limite2_50Reservas),
+          jcpDedutivel: _r(resultado.jcpDedutivel),
+          economiaIRPJ: _r(resultado.economiaIRPJ),
+          economiaCSLL: _r(resultado.economiaCSLL),
+          economiaTotal: _r(resultado.economiaTotal),
+          custoIRRF: _r(resultado.custoIRRF),
+          economiaLiquida: _r(resultado.economiaLiquida),
+          limiteUtilizado: resultado.limiteUtilizado
+        };
+      }
+
+      // FALLBACK: implementação original caso o motor não esteja carregado
       var d = Object.assign({
         patrimonioLiquido: 0, tjlp: 0.06,
         lucroLiquidoAntes: 0, lucrosAcumulados: 0, numMeses: 12
@@ -932,8 +1019,6 @@
       var maxTJLP = d.patrimonioLiquido * tjlpProp;
       var lim1 = d.lucroLiquidoAntes * 0.50;
       var lim2 = d.lucrosAcumulados * 0.50;
-      // CORREÇÃO: Lei 9.249/95, Art. 9°, §1° — JCP limitado ao MAIOR entre
-      // 50% do lucro líquido do período OU 50% de lucros acumulados + reservas
       var limiteLegal = Math.max(lim1, lim2);
       var jcpDedutivel = Math.max(0, Math.min(maxTJLP, limiteLegal));
       var economiaIRPJ = jcpDedutivel * 0.25;
@@ -971,6 +1056,38 @@
         }, dados);
       }
 
+      // DELEGAÇÃO AO MOTOR (v3.0) — MotorLR.calcularEstimativaMensal()
+      if (typeof MotorLR !== 'undefined' && MotorLR.calcularEstimativaMensal) {
+        var resultado = MotorLR.calcularEstimativaMensal({
+          receitaBrutaMensal: d.receitaBruta,
+          tipoAtividade: d.tipoAtividade,
+          ganhosCapital: d.ganhosCapital || 0,
+          demaisReceitas: d.demaisReceitas || 0,
+          irrfCompensavel: d.irrfCompensavel || 0,
+          incentivosDedutiveis: d.incentivosDedutiveis || 0,
+          financeira: d.financeira || false
+        });
+
+        // Mapear retorno motor → interface esperada pelo mapeamento
+        return {
+          atividade: resultado.presuncaoUtilizada,
+          receitaBruta: resultado.receitaBruta,
+          presuncaoIRPJ: parseFloat(resultado.percentualPresuncaoIRPJ) / 100 || 0,
+          presuncaoCSLL: parseFloat(resultado.percentualPresuncaoCSLL) / 100 || 0,
+          baseIRPJ: _r(resultado.basePresumidaIRPJ + (resultado.ganhosCapital || 0) + (resultado.demaisReceitas || 0)),
+          baseCSLL: _r(resultado.csll ? resultado.csll.baseCSLL : 0),
+          irpjNormal: _r(resultado.irpjNormal),
+          irpjAdicional: _r(resultado.irpjAdicional),
+          irpjDevido: _r(resultado.irpjDevido),
+          deducoes: _r(resultado.deducoes),
+          irrfCompensavel: resultado.irrfCompensavel || 0,
+          irpjAPagar: _r(resultado.irpjAPagar),
+          csllDevida: _r(resultado.csll ? resultado.csll.csllDevida : 0),
+          totalAPagar: _r(resultado.totalAPagar)
+        };
+      }
+
+      // FALLBACK: implementação original caso o motor não esteja carregado
       var p = LR.presuncoes[d.tipoAtividade];
       if (!p) return { erro: 'Tipo de atividade não encontrado: ' + d.tipoAtividade };
 
@@ -980,7 +1097,7 @@
       var irpjAdicional = Math.max(baseIRPJ - 20000, 0) * 0.10;
       var irpjDevido = irpjNormal + irpjAdicional;
       var deducoes = Math.min(d.incentivosDedutiveis || 0, irpjNormal);
-      var irpjAPagar = Math.max(irpjDevido - deducoes - (d.irrfCompensavel || 0), 0);
+      var irpjAPagar = irpjDevido - deducoes - (d.irrfCompensavel || 0);
       // CORREÇÃO: Usar alíquota correta de CSLL (15% para inst. financeiras, 9% demais)
       var aliqCSLL = (d.financeira === true || d.financeira === 'true') ? 0.15 : 0.09;
       var csllDevida = baseCSLL * aliqCSLL;
@@ -998,6 +1115,8 @@
         deducoes: _r(deducoes),
         irrfCompensavel: d.irrfCompensavel || 0,
         irpjAPagar: _r(irpjAPagar),
+        saldoNegativo: irpjAPagar < 0 ? _r(Math.abs(irpjAPagar)) : 0,
+        saldoNegativoDestinacao: irpjAPagar < 0 ? 'Compensável via PER/DCOMP (IN RFB 2.055/2021)' : null,
         csllDevida: _r(csllDevida),
         totalAPagar: _r(irpjAPagar + csllDevida)
       };
@@ -1005,17 +1124,13 @@
 
     /**
      * ═══════════════════════════════════════════════════════════════════════
-     * Calcular PIS/COFINS Não-Cumulativo (CORRIGIDO — BUG #1)
+     * Calcular PIS/COFINS Não-Cumulativo
      * ═══════════════════════════════════════════════════════════════════════
      *
-     * CORREÇÃO: Agora aceita TANTO o campo consolidado "baseCreditos"
-     * QUANTO os campos individuais (comprasBensRevenda, insumosProducao,
-     * energiaEletrica, alugueisPJ, depreciacaoBens, devolucoes,
-     * freteArmazenagem, leasing, outrosCreditos).
+     * Aceita TANTO o campo consolidado "baseCreditos" QUANTO os campos
+     * individuais (comprasBensRevenda, insumosProducao, etc.).
      *
-     * Se "baseCreditos" for passado E > 0, usa ele.
-     * Caso contrário, soma os campos individuais.
-     *
+     * DELEGAÇÃO: MotorLR.calcularPISCOFINSNaoCumulativo() + fallback
      * Base Legal: Lei 10.637/02 (PIS) + Lei 10.833/03 (COFINS)
      */
     pisCofins: function (dados) {
@@ -1035,14 +1150,86 @@
         outrosCreditos: 0
       }, dados);
 
-      // ─── CORREÇÃO PRINCIPAL ───
-      // Se baseCreditos consolidado não foi passado (ou é 0),
-      // somar os campos individuais
+      // ─── Se baseCreditos consolidado foi passado, distribuir para campos individuais ───
+      // O motor só aceita campos individuais, não o consolidado "baseCreditos"
+      var creditosIndividuais = {
+        comprasBensRevenda: d.comprasBensRevenda,
+        insumosProducao: d.insumosProducao,
+        energiaEletrica: d.energiaEletrica,
+        alugueisPJ: d.alugueisPJ,
+        depreciacaoBens: d.depreciacaoBens,
+        devolucoes: d.devolucoes,
+        freteArmazenagem: d.freteArmazenagem,
+        leasing: d.leasing,
+        outrosCreditos: d.outrosCreditos
+      };
+
+      // Se baseCreditos consolidado foi passado e campos individuais estão zerados,
+      // colocar tudo em outrosCreditos para o motor somar corretamente
+      var somaIndividuais = d.comprasBensRevenda + d.insumosProducao
+        + d.energiaEletrica + d.alugueisPJ + d.depreciacaoBens
+        + d.devolucoes + d.freteArmazenagem + d.leasing + d.outrosCreditos;
+
+      if (d.baseCreditos > 0 && somaIndividuais === 0) {
+        creditosIndividuais.outrosCreditos = d.baseCreditos;
+      }
+
+      // DELEGAÇÃO AO MOTOR (v2.3) — MotorLR.calcularPISCOFINSNaoCumulativo()
+      if (typeof MotorLR !== 'undefined' && MotorLR.calcularPISCOFINSNaoCumulativo) {
+        var resultado = MotorLR.calcularPISCOFINSNaoCumulativo({
+          receitaBruta: d.receitaBruta,
+          receitasIsentas: d.isentas,
+          receitasExportacao: d.exportacao,
+          comprasBensRevenda: creditosIndividuais.comprasBensRevenda,
+          insumosProducao: creditosIndividuais.insumosProducao,
+          energiaEletrica: creditosIndividuais.energiaEletrica,
+          alugueisPJ: creditosIndividuais.alugueisPJ,
+          depreciacaoBens: creditosIndividuais.depreciacaoBens,
+          devolucoes: creditosIndividuais.devolucoes,
+          freteArmazenagem: creditosIndividuais.freteArmazenagem,
+          leasing: creditosIndividuais.leasing,
+          outrosCreditos: creditosIndividuais.outrosCreditos
+        });
+
+        // Mapear retorno motor → interface esperada pelo mapeamento
+        // Motor retorna: debitos.pis/cofins, creditos.*, aPagar.*, saldoCredor.*
+        // Mapeamento espera campos flat adicionais: debitoPIS, creditoPIS, pisAPagar, totalAPagar
+        return {
+          receitaTributavel: _r(resultado.receitaTributavel),
+          debitoPIS: _r(resultado.debitos.pis),
+          debitoCOFINS: _r(resultado.debitos.cofins),
+          creditoPIS: _r(resultado.creditos.pis),
+          creditoCOFINS: _r(resultado.creditos.cofins),
+          creditos: {
+            baseTotal: _r(resultado.creditos.baseTotal),
+            pis: _r(resultado.creditos.pis),
+            cofins: _r(resultado.creditos.cofins),
+            total: _r(resultado.creditos.total),
+            detalhamento: resultado.creditos.detalhamento
+          },
+          pisAPagar: _r(resultado.aPagar.pis),
+          cofinsAPagar: _r(resultado.aPagar.cofins),
+          aPagar: {
+            pis: _r(resultado.aPagar.pis),
+            cofins: _r(resultado.aPagar.cofins),
+            total: _r(resultado.aPagar.total)
+          },
+          saldoCredor: {
+            pis: _r(resultado.saldoCredor.pis),
+            cofins: _r(resultado.saldoCredor.cofins),
+            total: _r(resultado.saldoCredor.total)
+          },
+          totalAPagar: _r(resultado.aPagar.total),
+          aliquotaEfetiva: resultado.aliquotaEfetiva,
+          economiaCreditos: _r(resultado.economiaCreditos),
+          artigos: resultado.artigos
+        };
+      }
+
+      // FALLBACK: implementação original caso o motor não esteja carregado
       var totalBaseCreditos = d.baseCreditos;
       if (!totalBaseCreditos || totalBaseCreditos === 0) {
-        totalBaseCreditos = d.comprasBensRevenda + d.insumosProducao
-          + d.energiaEletrica + d.alugueisPJ + d.depreciacaoBens
-          + d.devolucoes + d.freteArmazenagem + d.leasing + d.outrosCreditos;
+        totalBaseCreditos = somaIndividuais;
       }
 
       var tributavel = d.receitaBruta - d.isentas - d.exportacao;
@@ -1102,12 +1289,47 @@
 
     /**
      * Calcular retenções integradas de uma NF
+     * DELEGAÇÃO: MotorLR.calcularRetencaoIntegrada() + fallback
      * Base Legal: Art. 714-786
      */
     retencoesNF: function (valorNF, opts) {
       var o = Object.assign({ admPublica: false, simplesNacional: false, temCSRF: true, iss: 0 }, opts);
+
+      // Simples Nacional — sem retenções federais (atalho, não precisa chamar motor)
       if (o.simplesNacional) return { irrf: 0, csrf: 0, iss: 0, total: 0, liquido: valorNF, nota: 'Simples Nacional — sem retenções federais' };
 
+      // DELEGAÇÃO AO MOTOR (v2.3) — MotorLR.calcularRetencaoIntegrada()
+      if (typeof MotorLR !== 'undefined' && MotorLR.calcularRetencaoIntegrada) {
+        var resultado = MotorLR.calcularRetencaoIntegrada({
+          valorBrutoNF: valorNF,
+          tipoServico: 'SERVICOS_PROFISSIONAIS',
+          prestadorSimples: false,
+          retencaoISS: o.iss > 0,
+          aliquotaISS: o.iss || 0.05,
+          tomadorAdmPublica: o.admPublica,
+          tipoReceitaAdmPublica: 'SERVICOS'
+        });
+
+        // Mapear retorno motor → interface esperada pelo mapeamento
+        // Motor retorna estrutura mais detalhada; mapeamento espera campos flat
+        var csrfTotal = o.temCSRF ? resultado.csrf.total : 0;
+        var totalRetido = resultado.irrf.valor + csrfTotal + resultado.iss.valor;
+
+        return {
+          valorBruto: _r(valorNF),
+          irrf: _r(resultado.irrf.valor),
+          irrfAliquota: o.admPublica ? '4,8%' : '1,5%',
+          csrfPIS: _r(o.temCSRF ? resultado.csrf.pis : 0),
+          csrfCOFINS: _r(o.temCSRF ? resultado.csrf.cofins : 0),
+          csrfCSLL: _r(o.temCSRF ? resultado.csrf.csll : 0),
+          csrfTotal: _r(csrfTotal),
+          iss: _r(resultado.iss.valor),
+          totalRetido: _r(totalRetido),
+          liquido: _r(valorNF - totalRetido)
+        };
+      }
+
+      // FALLBACK: implementação original caso o motor não esteja carregado
       var irrf = o.admPublica ? valorNF * 0.048 : valorNF * 0.015;
       var csrf = o.temCSRF ? valorNF * 0.0465 : 0;
       var iss = valorNF * o.iss;
@@ -1129,6 +1351,42 @@
      * Base Legal: Art. 615-627
      */
     lucroExploracao: function (dados) {
+      // DELEGAÇÃO AO MOTOR (v3.0) — MotorLR.calcularLucroExploracao()
+      if (typeof MotorLR !== 'undefined' && MotorLR.calcularLucroExploracao) {
+        var d = Object.assign({
+          lucroLiquido: 0, receitasFinanceirasLiquidas: 0,
+          resultadoMEP: 0, resultadoNaoOperacional: 0,
+          receitasAnteriores: 0, csllDevida: 0, despFinLiquidas: 0
+        }, dados);
+
+        // Mapear parâmetros mapeamento → motor
+        var resultado = MotorLR.calcularLucroExploracao({
+          lucroLiquido: d.lucroLiquido,
+          receitasFinanceiras: Math.max(d.receitasFinanceirasLiquidas, 0),
+          despesasFinanceiras: Math.max(-d.receitasFinanceirasLiquidas, 0) + d.despFinLiquidas,
+          resultadoParticipacoes: d.resultadoMEP,
+          ganhosCapitalAtivoNaoCirc: Math.max(d.resultadoNaoOperacional, 0),
+          perdasCapitalAtivoNaoCirc: Math.max(-d.resultadoNaoOperacional, 0),
+          receitasExerciciosAnteriores: d.receitasAnteriores,
+          csllDevida: d.csllDevida
+        });
+
+        // Mapear retorno motor → interface esperada pelo mapeamento
+        var lucroExp = resultado.lucroExploracao || resultado.lucroExploracaoBruto || 0;
+        var reducao75 = Math.max(lucroExp, 0) * LR.aliquotas.irpj.normal * 0.75;
+
+        return {
+          lucroLiquido: d.lucroLiquido,
+          exclusoes: _r(resultado.exclusoes ? resultado.exclusoes.total : 0),
+          adicoes: _r(resultado.adicoes ? resultado.adicoes.total : 0),
+          lucroExploracao: _r(lucroExp),
+          irpjSobreExploracao: _r(Math.max(lucroExp, 0) * 0.15),
+          reducao75: _r(reducao75),
+          irpjAposReducao: _r(Math.max(lucroExp, 0) * 0.15 - reducao75)
+        };
+      }
+
+      // FALLBACK: implementação original caso o motor não esteja carregado
       var d = Object.assign({
         lucroLiquido: 0, receitasFinanceirasLiquidas: 0,
         resultadoMEP: 0, resultadoNaoOperacional: 0,
@@ -1153,15 +1411,22 @@
 
     /**
      * ═══════════════════════════════════════════════════════════════════════
-     * Compensar Integrado — Portado do motor v4.6 (BUG #4)
+     * Compensar Integrado — Prejuízos operacionais, não-operacionais e CSLL
      * ═══════════════════════════════════════════════════════════════════════
      *
-     * Orquestra compensação de prejuízos operacionais, não-operacionais
-     * e base negativa da CSLL em sequência.
-     *
+     * DELEGAÇÃO: MotorLR.compensarIntegrado() + fallback
+     * Correção Falha #7: Motor calcula economia IRPJ corretamente (normal+adicional)
+     * Correção Falha #4: Motor elimina simulação "lucro líquido = -R$" incorreta
      * Base Legal: Art. 579-586
      */
     compensarIntegrado: function (dados) {
+      // DELEGAÇÃO AO MOTOR (v2.3) — MotorLR.compensarIntegrado()
+      // Interface idêntica: mesmos parâmetros e mesma estrutura de retorno
+      if (typeof MotorLR !== 'undefined' && MotorLR.compensarIntegrado) {
+        return MotorLR.compensarIntegrado(dados);
+      }
+
+      // FALLBACK: implementação original caso o motor não esteja carregado
       var d = Object.assign({
         lucroLiquido: 0, adicoes: 0, exclusoes: 0,
         saldoPrejuizoOperacional: 0,
@@ -1172,7 +1437,6 @@
         trimestral: true
       }, dados);
 
-      // 1. Lucro real ajustado antes da compensação
       var lucroAjustado = d.lucroLiquido + d.adicoes - d.exclusoes;
 
       var resultado = {
@@ -1204,7 +1468,6 @@
         trimestral: d.trimestral
       };
 
-      // Se lucro ajustado <= 0, registra prejuízo e retorna
       if (lucroAjustado <= 0) {
         var novoPrejuizo = Math.abs(lucroAjustado);
         var prejNaoOp = d.lucroNaoOperacional < 0 ? Math.abs(d.lucroNaoOperacional) : 0;
@@ -1218,14 +1481,20 @@
         resultado.resumo.lucroRealFinal = 0;
         resultado.resumo.baseCSLLFinal = 0;
         resultado.resumo.observacao = 'Prejuízo fiscal no período: R$ ' + novoPrejuizo.toFixed(2) + ' — registrar na Parte B do LALUR/LACS';
-
         return resultado;
       }
 
       var lucroRealCorrente = lucroAjustado;
       var baseCSLLCorrente = lucroAjustado;
 
-      // 2. Compensar prejuízos NÃO-OPERACIONAIS primeiro (Art. 581)
+      // Helper local para IRPJ (fallback apenas)
+      function _calcIRPJFallback(lr) {
+        if (lr <= 0) return 0;
+        var n = lr * LR.aliquotas.irpj.normal;
+        var a = Math.max(0, lr - LR.aliquotas.irpj.limiteAdicionalAno) * LR.aliquotas.irpj.adicional;
+        return n + a;
+      }
+
       if (d.lucroNaoOperacional > 0 && d.saldoPrejuizoNaoOperacional > 0) {
         var limNaoOp = d.lucroNaoOperacional * 0.30;
         var compNaoOp = Math.min(limNaoOp, d.saldoPrejuizoNaoOperacional);
@@ -1245,13 +1514,12 @@
         resultado.resumo.saldosPosCompensacao.prejuizoNaoOperacional = _r(d.saldoPrejuizoNaoOperacional - compNaoOp);
       }
 
-      // 3. Compensar prejuízos OPERACIONAIS (trava 30%)
       if (lucroRealCorrente > 0 && d.saldoPrejuizoOperacional > 0) {
         var limOp = d.atividadeRural ? lucroRealCorrente : lucroRealCorrente * 0.30;
         var compOp = Math.min(limOp, d.saldoPrejuizoOperacional);
 
-        var irpjSem = _calcIRPJ(lucroRealCorrente);
-        var irpjCom = _calcIRPJ(lucroRealCorrente - compOp);
+        var irpjSem = _calcIRPJFallback(lucroRealCorrente);
+        var irpjCom = _calcIRPJFallback(lucroRealCorrente - compOp);
 
         resultado.etapa3_compensacaoOperacional = {
           lucroRealAjustado: _r(lucroRealCorrente),
@@ -1272,7 +1540,6 @@
         resultado.resumo.economia.irpj += _r(irpjSem - irpjCom);
       }
 
-      // 4. Compensar base negativa da CSLL (trava 30%)
       if (baseCSLLCorrente > 0 && d.saldoBaseNegativaCSLL > 0) {
         var limCSLL = baseCSLLCorrente * 0.30;
         var compCSLL = Math.min(limCSLL, d.saldoBaseNegativaCSLL);
@@ -1294,7 +1561,6 @@
         resultado.resumo.economia.csll += _r(economiaCSLL);
       }
 
-      // Resumo final
       resultado.resumo.lucroRealFinal = _r(Math.max(0, lucroRealCorrente));
       resultado.resumo.baseCSLLFinal = _r(Math.max(0, baseCSLLCorrente));
       resultado.resumo.economia.total = _r(resultado.resumo.economia.irpj + resultado.resumo.economia.csll);
@@ -1304,15 +1570,23 @@
 
     /**
      * ═══════════════════════════════════════════════════════════════════════
-     * Compensar Retenções — Portado do motor v4.6
+     * Compensar Retenções
      * ═══════════════════════════════════════════════════════════════════════
      *
      * Compensa retenções sofridas (IRRF, PIS, COFINS, CSLL) com tributos devidos.
      * IRRF → IRPJ; PIS → PIS; COFINS → COFINS; CSLL → CSLL
      *
+     * DELEGAÇÃO: MotorLR.compensarRetencoes() + fallback
      * Base Legal: Art. 717 (IRRF); Lei 10.833/2003, art. 36 (CSRF)
      */
     compensarRetencoes: function (params) {
+      // DELEGAÇÃO AO MOTOR (v2.3) — MotorLR.compensarRetencoes()
+      // Interface idêntica: { retencoesSofridas, tributosDevidos }
+      if (typeof MotorLR !== 'undefined' && MotorLR.compensarRetencoes) {
+        return MotorLR.compensarRetencoes(params);
+      }
+
+      // FALLBACK: implementação original caso o motor não esteja carregado
       var ret = params.retencoesSofridas || {};
       var trib = params.tributosDevidos || {};
 
@@ -1361,7 +1635,13 @@
             (trib.csll || 0) - csllCompensavel +
             (trib.pis || 0) - pisCompensavel +
             (trib.cofins || 0) - cofinsCompensavel
-          )
+          ),
+          saldoCredorPorTributo: {
+            irpj: (trib.irpj || 0) - irrfCompensavel < 0 ? { valor: _r(Math.abs((trib.irpj || 0) - irrfCompensavel)), destinacao: 'PER/DCOMP ou restituição' } : null,
+            csll: (trib.csll || 0) - csllCompensavel < 0 ? { valor: _r(Math.abs((trib.csll || 0) - csllCompensavel)), destinacao: 'PER/DCOMP ou restituição' } : null,
+            pis: (trib.pis || 0) - pisCompensavel < 0 ? { valor: _r(Math.abs((trib.pis || 0) - pisCompensavel)), destinacao: 'PER/DCOMP ou restituição' } : null,
+            cofins: (trib.cofins || 0) - cofinsCompensavel < 0 ? { valor: _r(Math.abs((trib.cofins || 0) - cofinsCompensavel)), destinacao: 'PER/DCOMP ou restituição' } : null
+          }
         },
         saldoCredor: {
           irrf: saldoIRRF, pis: saldoPIS,
@@ -1376,12 +1656,20 @@
 
     /**
      * ═══════════════════════════════════════════════════════════════════════
-     * Saldo Negativo de IRPJ — Portado do motor v4.6
+     * Saldo Negativo de IRPJ
      * ═══════════════════════════════════════════════════════════════════════
      *
+     * DELEGAÇÃO: MotorLR.calcularSaldoNegativo() + fallback
      * Base Legal: Art. 235
      */
     saldoNegativo: function (irpjDevido, retencoesFonte, estimativasPagas, taxaSelic) {
+      // DELEGAÇÃO AO MOTOR (v2.3) — MotorLR.calcularSaldoNegativo()
+      // Interface idêntica: (irpjDevido, retencoesFonte, estimativasPagas, taxaSelic)
+      if (typeof MotorLR !== 'undefined' && MotorLR.calcularSaldoNegativo) {
+        return MotorLR.calcularSaldoNegativo(irpjDevido, retencoesFonte, estimativasPagas, taxaSelic || 0);
+      }
+
+      // FALLBACK: implementação original caso o motor não esteja carregado
       taxaSelic = taxaSelic || 0;
       var totalPago = retencoesFonte + estimativasPagas;
       var saldo = totalPago - irpjDevido;
@@ -1415,6 +1703,26 @@
      * Base Legal: Art. 311-330
      */
     depreciacaoCompleta: function (bem) {
+      // DELEGAÇÃO AO MOTOR (v3.0) — MotorLR.calcularDepreciacaoCompleta()
+      // CORREÇÃO FALHA #1: Motor retorna depreciacaoNormal (contábil/linear para DRE)
+      // separada de depreciacaoIncentivada (diferença fiscal para exclusão no LALUR)
+      if (typeof MotorLR !== 'undefined' && MotorLR.calcularDepreciacaoCompleta) {
+        var resultado = MotorLR.calcularDepreciacaoCompleta(bem);
+
+        // Motor retorna erro como { erro: string }
+        if (resultado.erro) return resultado;
+
+        // Motor retorna casos especiais (não-produção, pequeno valor) diretamente
+        if (resultado.dedutivel === false || resultado.depreciacaoPeriodo !== undefined) {
+          return resultado;
+        }
+
+        // Garantir que depreciacaoNormal e depreciacaoIncentivada estejam presentes
+        // (o motor já os retorna separados — Falha #1 corrigida)
+        return resultado;
+      }
+
+      // FALLBACK: implementação original caso o motor não esteja carregado
       var d = Object.assign({
         tipo: null, custoAquisicao: 0, depreciacaoAcumulada: 0,
         usado: false, vidaUtilRestante: null, turnos: 1,
@@ -1564,6 +1872,23 @@
      * Base Legal: Art. 226 + Art. 228 + Art. 625-646
      */
     incentivos: function (irpjNormal, despesas) {
+      // DELEGAÇÃO AO MOTOR (v3.0) — MotorLR.calcularIncentivos()
+      if (typeof MotorLR !== 'undefined' && MotorLR.calcularIncentivos) {
+        // Motor usa mesma assinatura: (irpjNormal, despesas)
+        // Motor pode usar IDs diferentes (IDOSO vs FUNDO_IDOSO, PRONAS vs PRONAS_PCD)
+        // Mapear IDs do mapeamento → motor se necessário
+        var despesasMotor = Object.assign({}, despesas || {});
+        if (despesasMotor.FUNDO_IDOSO && !despesasMotor.IDOSO) {
+          despesasMotor.IDOSO = despesasMotor.FUNDO_IDOSO;
+        }
+        if (despesasMotor.PRONAS_PCD && !despesasMotor.PRONAS) {
+          despesasMotor.PRONAS = despesasMotor.PRONAS_PCD;
+        }
+
+        return MotorLR.calcularIncentivos(irpjNormal, despesasMotor);
+      }
+
+      // FALLBACK: implementação original caso o motor não esteja carregado
       despesas = despesas || {};
 
       var INCENTIVOS = [
@@ -1636,6 +1961,13 @@
      * Base Legal: Art. 227-230
      */
     suspensaoReducao: function (dados) {
+      // DELEGAÇÃO AO MOTOR (v3.0) — MotorLR.calcularSuspensaoReducao()
+      // Interface idêntica: mesmos parâmetros e mesma estrutura de retorno
+      if (typeof MotorLR !== 'undefined' && MotorLR.calcularSuspensaoReducao) {
+        return MotorLR.calcularSuspensaoReducao(dados);
+      }
+
+      // FALLBACK: implementação original caso o motor não esteja carregado
       var d = Object.assign({
         estimativaDevidaMes: 0, irpjRealAcumulado: 0,
         irpjPagoAcumulado: 0, csllRealAcumulada: 0,
@@ -1693,6 +2025,34 @@
      * Base Legal: Lei 9.430/96, Art. 61
      */
     acrescimosMoratorios: function (dados) {
+      // DELEGAÇÃO AO MOTOR (v3.0) — MotorLR.calcularAcrescimosMoratorios()
+      if (typeof MotorLR !== 'undefined' && MotorLR.calcularAcrescimosMoratorios) {
+        var resultado = MotorLR.calcularAcrescimosMoratorios(dados);
+
+        // Mapear retorno motor → interface esperada pelo mapeamento
+        // Motor retorna detalhamento.multa e detalhamento.juros como sub-objetos
+        // Mapeamento espera detalhamento flat com diasAtraso, percentualMulta etc.
+        return {
+          baseLegal: resultado.baseLegal,
+          valorOriginal: _r(resultado.valorOriginal),
+          multaMora: _r(resultado.multaMora),
+          jurosMora: _r(resultado.jurosMora),
+          totalAcrescimos: _r(resultado.totalAcrescimos),
+          totalAPagar: _r(resultado.totalAPagar),
+          detalhamento: resultado.detalhamento && resultado.detalhamento.multa ? {
+            diasAtraso: resultado.detalhamento.multa.diasAtraso || (dados && dados.diasAtraso) || 0,
+            percentualMulta: resultado.detalhamento.multa.percentualAplicavel
+              ? _r(resultado.detalhamento.multa.percentualAplicavel * 100) + '%'
+              : '0%',
+            atingiuTetoMulta: resultado.detalhamento.multa.atingiuTeto || false,
+            selicAcumulada: resultado.detalhamento.juros ? resultado.detalhamento.juros.selicAcumulada || 0 : 0,
+            jurosMesPagamento: resultado.detalhamento.juros ? resultado.detalhamento.juros.jurosMesPagamento || 0.01 : 0.01,
+            taxaTotalJuros: resultado.detalhamento.juros ? resultado.detalhamento.juros.taxaTotalJuros || 0 : 0
+          } : resultado.detalhamento
+        };
+      }
+
+      // FALLBACK: implementação original caso o motor não esteja carregado
       var d = Object.assign({
         valorTributo: 0, diasAtraso: 0, taxasSelicMes: []
       }, dados);
@@ -1736,6 +2096,29 @@
      * Base Legal: Lei 9.430/96, Art. 44 (redação Lei 14.689/2023)
      */
     multaOficio: function (dados) {
+      // DELEGAÇÃO AO MOTOR (v3.0) — MotorLR.calcularMultaOficio()
+      if (typeof MotorLR !== 'undefined' && MotorLR.calcularMultaOficio) {
+        var resultado = MotorLR.calcularMultaOficio(dados);
+
+        // Mapear retorno motor → interface esperada pelo mapeamento
+        // Motor retorna percentuais como sub-objeto { base, agravamento, final }
+        return {
+          baseLegal: resultado.baseLegal,
+          valorDiferenca: _r(resultado.valorDiferenca),
+          tipoInfracao: resultado.tipoInfracao,
+          percentualBase: resultado.percentuais ? resultado.percentuais.base : 0,
+          percentualFinal: resultado.percentuais ? resultado.percentuais.final : 0,
+          multaBruta: _r(resultado.multaBruta),
+          reducao: resultado.reducao ? {
+            percentual: resultado.reducao.percentual,
+            valor: _r(resultado.reducao.valor)
+          } : { percentual: 0, valor: 0 },
+          multaLiquida: _r(resultado.multaLiquida),
+          totalDevido: _r(resultado.totalDevido)
+        };
+      }
+
+      // FALLBACK: implementação original caso o motor não esteja carregado
       var d = Object.assign({
         valorDiferenca: 0, tipoInfracao: 'normal',
         estimativaIsolada: false, naoAtendeuIntimacao: false,
@@ -1791,6 +2174,35 @@
      * Base Legal: Art. 217-219, Art. 227-229
      */
     recomendarRegime: function (dados) {
+      // DELEGAÇÃO AO MOTOR (v3.0) — MotorLR.recomendarRegime()
+      // Interface idêntica: { lucrosMensais, prejuizoAcumulado, temInvestimento }
+      if (typeof MotorLR !== 'undefined' && MotorLR.recomendarRegime) {
+        var resultado = MotorLR.recomendarRegime(dados);
+
+        // Motor retorna mesma estrutura base + campos extras (anual.lucroRealFinal etc.)
+        // Garantir compatibilidade com interface do mapeamento
+        return {
+          recomendacao: resultado.recomendacao,
+          motivos: resultado.motivos,
+          simulacao: {
+            trimestral: {
+              irpjTotal: _r(resultado.simulacao.trimestral.irpjTotal),
+              detalhamentoTrimestres: resultado.simulacao.trimestral.detalhamentoTrimestres,
+              saldoPrejuizoRemanescente: _r(resultado.simulacao.trimestral.saldoPrejuizoRemanescente)
+            },
+            anual: {
+              irpjTotal: _r(resultado.simulacao.anual.irpjTotal),
+              saldoPrejuizoRemanescente: _r(resultado.simulacao.anual.saldoPrejuizoRemanescente)
+            },
+            economia: _r(resultado.simulacao.economia),
+            regimeMaisBarato: resultado.simulacao.regimeMaisBarato
+          },
+          alerta: resultado.alerta,
+          artigos: resultado.artigos
+        };
+      }
+
+      // FALLBACK: implementação original caso o motor não esteja carregado
       var d = Object.assign({
         lucrosMensais: [], prejuizoAcumulado: 0, temInvestimento: false
       }, dados);
@@ -1873,6 +2285,59 @@
      * Simulação completa — tudo junto
      */
     simulacaoCompleta: function (empresa) {
+      // DELEGAÇÃO AO MOTOR (v3.0) — MotorLR.simularLucroRealCompleto()
+      if (typeof MotorLR !== 'undefined' && MotorLR.simularLucroRealCompleto) {
+        var e = Object.assign({
+          lucroLiquido: 0, receitaBruta: 0, adicoes: 0, exclusoes: 0,
+          prejuizoFiscal: 0, baseNegativaCSLL: 0,
+          patrimonioLiquido: 0, tjlp: 0.06, lucrosAcumulados: 0,
+          retencoesFonte: 0, estimativasPagas: 0, numMeses: 12
+        }, empresa);
+
+        // Mapear parâmetros mapeamento → motor
+        var resultado = MotorLR.simularLucroRealCompleto({
+          lucroLiquidoContabil: e.lucroLiquido,
+          receitaBruta: e.receitaBruta,
+          totalAdicoes: e.adicoes,
+          totalExclusoes: e.exclusoes,
+          saldoPrejuizoFiscal: e.prejuizoFiscal,
+          saldoBaseNegativaCSLL: e.baseNegativaCSLL,
+          patrimonioLiquido: e.patrimonioLiquido,
+          tjlp: e.tjlp,
+          lucrosAcumulados: e.lucrosAcumulados,
+          despesasIncentivos: e.despesasIncentivos || {},
+          retencoesFonte: e.retencoesFonte,
+          estimativasPagas: e.estimativasPagas,
+          numMeses: e.numMeses,
+          ehInstituicaoFinanceira: e.financeira || false
+        });
+
+        // Mapear retorno motor → interface esperada pelo mapeamento
+        return {
+          semOtimizacao: {
+            irpjDevido: _r(resultado.semOtimizacao.irpjDevido),
+            aliquotaEfetiva: resultado.semOtimizacao.aliquotaEfetiva
+          },
+          comOtimizacao: {
+            irpj: resultado.comOtimizacao.irpj,
+            csll: resultado.comOtimizacao.csll,
+            jcp: resultado.comOtimizacao.jcp
+          },
+          economia: {
+            jcp: _r(resultado.economia.jcp),
+            irpj: _r(resultado.economia.totalIRPJ || resultado.economia.compensacaoPrejuizo || 0),
+            total: _r((resultado.economia.totalIRPJ || 0) + (resultado.economia.jcp || 0))
+          },
+          totalAPagar: {
+            irpj: _r(resultado.totalAPagar.irpj),
+            csll: _r(resultado.totalAPagar.csll),
+            total: _r(resultado.totalAPagar.total)
+          },
+          saldoNegativo: resultado.saldoNegativo || null
+        };
+      }
+
+      // FALLBACK: implementação original caso o motor não esteja carregado
       var e = Object.assign({
         lucroLiquido: 0, receitaBruta: 0, adicoes: 0, exclusoes: 0,
         prejuizoFiscal: 0, baseNegativaCSLL: 0,
