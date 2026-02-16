@@ -397,28 +397,28 @@
 
   LR.darf = {
     // IRPJ
-    irpjMensal:            { codigo: '2362', descricao: 'IRPJ — Estimativa Mensal' },
-    irpjTrimestral:        { codigo: '0220', descricao: 'IRPJ — Apuração Trimestral' },
-    irpjAnualAjuste:       { codigo: '2430', descricao: 'IRPJ — Ajuste Anual' },
+    irpjMensal:            { codigo: '2362', tributo: 'IRPJ', descricao: 'IRPJ — Estimativa Mensal', periodicidade: 'Mensal', prazo: 'Último dia útil do mês subsequente' },
+    irpjTrimestral:        { codigo: '0220', tributo: 'IRPJ', descricao: 'IRPJ — Apuração Trimestral', periodicidade: 'Trimestral', prazo: 'Último dia útil do mês subsequente ao trimestre (em até 3 quotas)' },
+    irpjAnualAjuste:       { codigo: '2430', tributo: 'IRPJ', descricao: 'IRPJ — Ajuste Anual', periodicidade: 'Anual', prazo: 'Último dia útil de março do ano seguinte (em até 3 quotas)' },
     // CSLL
-    csllMensal:            { codigo: '2484', descricao: 'CSLL — Estimativa Mensal' },
-    csllTrimestral:        { codigo: '6012', descricao: 'CSLL — Apuração Trimestral' },
-    csllAnualAjuste:       { codigo: '6773', descricao: 'CSLL — Ajuste Anual' },
+    csllMensal:            { codigo: '2484', tributo: 'CSLL', descricao: 'CSLL — Estimativa Mensal', periodicidade: 'Mensal', prazo: 'Último dia útil do mês subsequente' },
+    csllTrimestral:        { codigo: '6012', tributo: 'CSLL', descricao: 'CSLL — Apuração Trimestral', periodicidade: 'Trimestral', prazo: 'Último dia útil do mês subsequente ao trimestre (em até 3 quotas)' },
+    csllAnualAjuste:       { codigo: '6773', tributo: 'CSLL', descricao: 'CSLL — Ajuste Anual', periodicidade: 'Anual', prazo: 'Último dia útil de março do ano seguinte' },
     // PIS/COFINS
-    pisNaoCumulativo:      { codigo: '6912', descricao: 'PIS — Não-Cumulativo' },
-    cofinsNaoCumulativo:   { codigo: '5856', descricao: 'COFINS — Não-Cumulativo' },
+    pisNaoCumulativo:      { codigo: '6912', tributo: 'PIS', descricao: 'PIS — Não-Cumulativo', periodicidade: 'Mensal', prazo: 'Dia 25 do mês subsequente ao fato gerador' },
+    cofinsNaoCumulativo:   { codigo: '5856', tributo: 'COFINS', descricao: 'COFINS — Não-Cumulativo', periodicidade: 'Mensal', prazo: 'Dia 25 do mês subsequente ao fato gerador' },
     // Retenções
-    irrfServicos:          { codigo: '1708', descricao: 'IRRF — Serviços PJ a PJ (1,5%)' },
-    irrfServicosPF:        { codigo: '0588', descricao: 'IRRF — Rendimentos do Trabalho' },
-    irrfAdmPublica:        { codigo: '1708', descricao: 'IRRF — Adm. Pública' },
-    csrfPis:               { codigo: '5979', descricao: 'PIS Retido — CSRF' },
-    csrfCofins:            { codigo: '5960', descricao: 'COFINS Retido — CSRF' },
-    csrfCsll:              { codigo: '5987', descricao: 'CSLL Retido — CSRF' },
-    csrfUnificado:         { codigo: '5952', descricao: 'CSRF Unificado — Adm. Pública' },
+    irrfServicos:          { codigo: '1708', tributo: 'IRRF', descricao: 'IRRF — Serviços PJ a PJ (1,5%)', periodicidade: 'Por evento', prazo: 'Até o último dia útil do 2º decêndio do mês subsequente' },
+    irrfServicosPF:        { codigo: '0588', tributo: 'IRRF', descricao: 'IRRF — Rendimentos do Trabalho', periodicidade: 'Mensal', prazo: 'Até o último dia útil do 2º decêndio do mês subsequente' },
+    irrfAdmPublica:        { codigo: '1708', tributo: 'IRRF', descricao: 'IRRF — Adm. Pública', periodicidade: 'Por evento', prazo: 'Até o 3º dia útil após o decêndio da retenção' },
+    csrfPis:               { codigo: '5979', tributo: 'PIS Retido', descricao: 'PIS Retido — CSRF', periodicidade: 'Quinzenal', prazo: 'Até o último dia útil da quinzena subsequente' },
+    csrfCofins:            { codigo: '5960', tributo: 'COFINS Retido', descricao: 'COFINS Retido — CSRF', periodicidade: 'Quinzenal', prazo: 'Até o último dia útil da quinzena subsequente' },
+    csrfCsll:              { codigo: '5987', tributo: 'CSLL Retido', descricao: 'CSLL Retido — CSRF', periodicidade: 'Quinzenal', prazo: 'Até o último dia útil da quinzena subsequente' },
+    csrfUnificado:         { codigo: '5952', tributo: 'CSRF', descricao: 'CSRF Unificado — Adm. Pública', periodicidade: 'Por evento', prazo: 'Até o 3º dia útil após o decêndio da retenção' },
     // JCP
-    jcpIrrf:               { codigo: '5706', descricao: 'IRRF — JCP (15%)' },
+    jcpIrrf:               { codigo: '5706', tributo: 'IRRF s/ JCP', descricao: 'IRRF — JCP (15%)', periodicidade: 'Por evento', prazo: 'Até o 3º dia útil após o pagamento ou crédito' },
     // Outros
-    beneficiarioNaoId:     { codigo: '2063', descricao: 'IRRF — Beneficiário Não Identificado (35%)' }
+    beneficiarioNaoId:     { codigo: '2063', tributo: 'IRRF', descricao: 'IRRF — Beneficiário Não Identificado (35%)', periodicidade: 'Por evento', prazo: 'Data do pagamento' }
   };
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -832,7 +832,7 @@
   // HELPER INTERNO — arredondamento 2 casas
   // ═══════════════════════════════════════════════════════════════════════════
 
-  function _r(v) { return Math.round(v * 100) / 100; }
+  function _r(v) { return Math.round((v || 0) * 100) / 100; }
 
   // (helpers _calcIRPJ e _calcIRPJTrimestral removidos na v2.3 — delegação ao motor)
 
