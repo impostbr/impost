@@ -1,9 +1,45 @@
 /**
  * ╔══════════════════════════════════════════════════════════════════════════════╗
- * ║  LUCRO REAL — MAPEAMENTO UNIFICADO DE DADOS  v3.2 (REFATORADO — MOTOR)   ║
+ * ║  LUCRO REAL — MAPEAMENTO UNIFICADO DE DADOS  v3.3 (CORREÇÕES FISCAIS)    ║
  * ║  Fonte única de verdade para alimentar qualquer HTML ou JS                 ║
  * ║  Base Legal: RIR/2018 (Decreto 9.580/2018) + Lei 12.973/2014              ║
  * ║  Ano-Base: 2026                                                           ║
+ * ╠══════════════════════════════════════════════════════════════════════════════╣
+ * ║  CORREÇÕES v3.3 (alinhamento com Motor v5.0 — riscos fiscais):            ║
+ * ║                                                                            ║
+ * ║  [FIX #1] Gratificações a Administradores — tratamento detalhado           ║
+ * ║    - Adicionados subtipos: ADMINISTRADOR_ESTATUTARIO, DIRETOR_EMPREGADO_  ║
+ * ║      CLT, EMPREGADO_GERAL com distinção IRPJ vs CSLL (LALUR vs LACS)     ║
+ * ║    - Ref: Art. 315 RIR/2018, IN RFB 1.700/17 Anexo I item 85             ║
+ * ║                                                                            ║
+ * ║  [FIX #2] Créditos PIS/COFINS — Aluguel PF vs PJ                         ║
+ * ║    - Novo parâmetro alugueisPF (sem crédito) com alerta automático         ║
+ * ║    - Ref: Lei 10.637/2002, Art. 3º, IV                                    ║
+ * ║                                                                            ║
+ * ║  [FIX #3] Taxa TJLP não hardcoded                                         ║
+ * ║    - Removido default de 6% a.a. — TJLP agora é obrigatória               ║
+ * ║    - Validação com mensagem orientadora e referência a taxas recentes      ║
+ * ║    - JCP fallback e simulacaoCompleta retornam erro se TJLP ausente       ║
+ * ║                                                                            ║
+ * ║  [FIX #4] Créditos PIS/COFINS sobre depreciação                           ║
+ * ║    - Novos parâmetros: depreciacaoBensMetodo, custoAquisicaoImobilizado,  ║
+ * ║      mesesUsoImobilizado para cálculo fiscal (1/48 ou 1/60)               ║
+ * ║    - Alertas quando usado método contábil                                  ║
+ * ║    - Ref: Lei 10.637/02, Art. 3º, VI; Lei 14.592/2023                    ║
+ * ║                                                                            ║
+ * ║  [FIX #5] Alíquota efetiva PIS/COFINS — duas métricas claras             ║
+ * ║    - aliquotaEfetiva = líquida (a pagar / receita bruta)                  ║
+ * ║    - aliquotaEfetivaBruta = (débitos / receita bruta)                     ║
+ * ║    - aliquotaEfetivaDescricao explica cada métrica                         ║
+ * ║                                                                            ║
+ * ║  [FIX #6] Carga total — bruta vs líquida                                  ║
+ * ║    - totalAPagar agora contém cargaTotalBruta e cargaTotalLiquida          ║
+ * ║    - PIS/COFINS integrado em simulacaoCompleta                             ║
+ * ║    - dadosPISCOFINS e retencoesPISCOFINS como novos parâmetros            ║
+ * ║                                                                            ║
+ * ║  [FIX #7] PIS/COFINS proporcional nos cenários                            ║
+ * ║    - Cenários pessimista/otimista recalculam PIS/COFINS proporcionalmente ║
+ * ║    - Antes: PIS/COFINS era fixo mesmo com receita variando ±5%           ║
  * ╠══════════════════════════════════════════════════════════════════════════════╣
  * ║  CORREÇÕES v3.2:                                                           ║
  * ║  #1 — ARQUITETURAL: Integração com Estados/EstadosBR (27 UFs dinâmicas)  ║
@@ -94,7 +130,16 @@
       irrfAliquota: 0.15,               // 15% IRRF na fonte
       limiteLucroLiquido: 0.50,          // 50% do lucro líquido
       limiteLucrosAcumulados: 0.50,      // 50% de lucros acumulados + reservas
-      artigoBase: 'Art. 355-358 do RIR/2018'
+      artigoBase: 'Art. 355-358 do RIR/2018',
+      // v3.3 FIX #3: TJLP é obrigatória — referência informativa apenas
+      tjlpNota: 'TJLP deve ser informada pelo usuário. Consultar BACEN para taxa vigente.',
+      tjlpReferencia: {
+        Q1_2025: 0.0797,   // 7,97% a.a.
+        Q2_2025: 0.0850,   // ~8,50% a.a.
+        Q3_Q4_2025: 0.0877, // ~8,77% a.a.
+        Q1_2026: null,      // Consultar BACEN
+        fonteConsulta: 'https://www.gov.br/receitafederal/pt-br/assuntos/orientacao-tributaria/pagamentos-e-parcelamentos/taxa-de-juros-de-longo-prazo-tjlp'
+      }
     },
     compensacaoPrejuizo: {
       trava30: 0.30,                     // Art. 261, III — limite de 30%
@@ -269,7 +314,40 @@
     { id: 16, descricao: 'Multas por infrações fiscais (punitivas)', artigo: 'Art. 311, §5º', tipo: 'D', estrategia: 'Distinguir multas compensatórias (dedutíveis) de punitivas' },
     { id: 17, descricao: 'Provisões não dedutíveis (exceto férias, 13º, PDD)', artigo: 'Art. 340-352', tipo: 'T', estrategia: 'Reverter quando liquidada → exclusão futura' },
     { id: 18, descricao: 'Resultado negativo de equivalência patrimonial (MEP)', artigo: 'Art. 389', tipo: 'T', estrategia: 'Controlado na Parte B; excluir na realização' },
-    { id: 19, descricao: 'Gratificações a administradores', artigo: 'Art. 358, §1º', tipo: 'D', estrategia: 'Converter em pró-labore (dedutível) ou JCP' },
+    {
+      id: 19,
+      descricao: 'Gratificações/participações no resultado a dirigentes/administradores estatutários (indedutíveis p/ IRPJ)',
+      artigo: 'Art. 315 + Art. 527 (Lei 4.506/64, Art. 45, §3º; DL 1.598/77, Art. 58, p.ú.)',
+      tipo: 'D',
+      estrategia: 'Converter em pró-labore (dedutível) ou JCP. ATENÇÃO: (1) Gratificações a empregados em geral são '
+        + 'dedutíveis sem limite (IN 1.700/17, Art. 80). (2) Para CSLL, gratificações a administradores SÃO dedutíveis '
+        + '(IN 1.700/17, Anexo I, item 85 — "não aplicável à CSLL"). (3) Diretores-empregados CLT: tema controvertido '
+        + '— CARF tem decisões favoráveis à dedutibilidade (Ac. 1301003.760); STJ diverge (REsp 1.948.478/SP). '
+        + 'Avaliar risco antes de adicionar ou excluir.',
+      subtipos: {
+        ADMINISTRADOR_ESTATUTARIO: {
+          descricao: 'Dirigente/administrador estatutário (sem vínculo CLT)',
+          dedutivelIRPJ: false,
+          dedutivelCSLL: true,
+          artigo: 'Art. 315 (IRPJ) / IN 1.700/17, Anexo I, item 85 (CSLL)',
+          nota: 'Indedutível no LALUR (Parte A), mas NÃO adicionado no LACS (CSLL)'
+        },
+        DIRETOR_EMPREGADO_CLT: {
+          descricao: 'Diretor com vínculo empregatício CLT e subordinação',
+          dedutivelIRPJ: 'CONTROVERTIDO',
+          dedutivelCSLL: true,
+          artigo: 'CARF Ac. 9101-004.773 / REsp 1.746.268/SP (STJ favorável) / REsp 1.948.478/SP (STJ desfavorável)',
+          nota: 'Risco médio — favorável no CARF, oscilante no STJ. Documentar subordinação CLT.'
+        },
+        EMPREGADO_GERAL: {
+          descricao: 'Gratificações a empregados em geral (não administradores)',
+          dedutivelIRPJ: true,
+          dedutivelCSLL: true,
+          artigo: 'IN RFB 1.700/2017, Art. 80 — dedutível sem limite',
+          nota: 'Dedutível integralmente — não adicionar no LALUR nem no LACS'
+        }
+      }
+    },
     { id: 20, descricao: 'Pagamento sem causa / beneficiário não identificado', artigo: 'Art. 674', tipo: 'D', estrategia: 'SEMPRE identificar beneficiário; tributação 35%' },
     { id: 21, descricao: 'Excesso de JCP acima dos limites legais', artigo: 'Art. 355-358', tipo: 'D', estrategia: 'Calcular JCP dentro dos limites PL × TJLP e 50%' },
     { id: 22, descricao: 'Depreciação contábil acima das taxas fiscais', artigo: 'Art. 311-323', tipo: 'T', estrategia: 'Usar taxas fiscais = contábeis; controlar diferença' },
@@ -1131,9 +1209,29 @@
      * DELEGAÇÃO: MotorLR.calcularJCP() + fallback
      */
     jcp: function (dados) {
-      // DELEGAÇÃO AO MOTOR (v2.3) — MotorLR.calcularJCP()
+      // DELEGAÇÃO AO MOTOR (v3.3) — MotorLR.calcularJCP()
       if (typeof MotorLR !== 'undefined' && MotorLR.calcularJCP) {
         var resultado = MotorLR.calcularJCP(dados);
+
+        // v3.3 FIX #3: Motor retorna erro se TJLP não informada — propagar ao chamador
+        if (resultado.erro) {
+          return {
+            erro: true,
+            mensagem: resultado.mensagem,
+            taxasReferencia: resultado.taxasReferencia || null,
+            artigo: resultado.artigo || 'Art. 355 c/c Lei 9.249/95, Art. 9º',
+            jcpDedutivel: 0,
+            economiaLiquida: 0,
+            jcpMaximoTJLP: 0,
+            limite50LL: 0,
+            limite50Reservas: 0,
+            economiaIRPJ: 0,
+            economiaCSLL: 0,
+            economiaTotal: 0,
+            custoIRRF: 0,
+            limiteUtilizado: 'N/A'
+          };
+        }
 
         // Mapear retorno motor → interface esperada pelo mapeamento
         return {
@@ -1151,10 +1249,38 @@
       }
 
       // FALLBACK: implementação original caso o motor não esteja carregado
+      // v3.3 FIX #3: TJLP NÃO tem default — deve ser informada explicitamente
       var d = Object.assign({
-        patrimonioLiquido: 0, tjlp: 0.06,
+        patrimonioLiquido: 0, tjlp: null,
         lucroLiquidoAntes: 0, lucrosAcumulados: 0, numMeses: 12
       }, dados);
+
+      // v3.3 FIX #3: Se TJLP não informada, retornar erro informativo
+      if (d.tjlp === undefined || d.tjlp === null || d.tjlp === 0) {
+        return {
+          erro: true,
+          mensagem: 'TJLP é OBRIGATÓRIA para cálculo do JCP e não possui valor default. '
+            + 'A TJLP é divulgada trimestralmente pelo BACEN. '
+            + 'Em 2025: Q1=7,97%, Q2≈8,50%, Q3/Q4≈8,77% a.a.',
+          taxasReferencia: {
+            'Q1_2025': '7,97% a.a. (0.0797)',
+            'Q2_2025': '~8,50% a.a.',
+            'Q3_Q4_2025': '~8,77% a.a.',
+            'Q1_2026': 'Consultar BACEN'
+          },
+          artigo: 'Art. 355 c/c Lei 9.249/95, Art. 9º',
+          jcpDedutivel: 0,
+          economiaLiquida: 0,
+          jcpMaximoTJLP: 0,
+          limite50LL: 0,
+          limite50Reservas: 0,
+          economiaIRPJ: 0,
+          economiaCSLL: 0,
+          economiaTotal: 0,
+          custoIRRF: 0,
+          limiteUtilizado: 'N/A'
+        };
+      }
 
       var tjlpProp = d.tjlp * (d.numMeses / 12);
       var maxTJLP = d.patrimonioLiquido * tjlpProp;
@@ -1287,7 +1413,12 @@
         insumosProducao: 0,
         energiaEletrica: 0,
         alugueisPJ: 0,
+        alugueisPF: 0,                          // v3.3 FIX #2: Aluguel PF — NÃO gera crédito (Lei 10.637/02, Art. 3º, IV)
         depreciacaoBens: 0,
+        depreciacaoBensCredito: 0,               // v3.3 FIX #4: Renomeado para distinguir de depreciação contábil
+        depreciacaoBensMetodo: 'CONTABIL',       // v3.3 FIX #4: 'CONTABIL' | 'FISCAL_1_48' | 'FISCAL_1_60'
+        custoAquisicaoImobilizado: 0,            // v3.3 FIX #4: Para cálculo fiscal (1/48 ou 1/60 por mês)
+        mesesUsoImobilizado: 0,                  // v3.3 FIX #4: Meses de uso do imobilizado para crédito fiscal
         devolucoes: 0,
         freteArmazenagem: 0,
         leasing: 0,
@@ -1303,7 +1434,12 @@
         insumosProducao: d.insumosProducao,
         energiaEletrica: d.energiaEletrica,
         alugueisPJ: d.alugueisPJ,
+        alugueisPF: d.alugueisPF,                               // v3.3 FIX #2: Repassar ao motor (sem crédito)
         depreciacaoBens: d.depreciacaoBens,
+        depreciacaoBensCredito: d.depreciacaoBensCredito || d.depreciacaoBens || 0,  // v3.3 FIX #4: Retrocompatibilidade
+        depreciacaoBensMetodo: d.depreciacaoBensMetodo,          // v3.3 FIX #4: Método de cálculo
+        custoAquisicaoImobilizado: d.custoAquisicaoImobilizado,  // v3.3 FIX #4: Custo para método fiscal
+        mesesUsoImobilizado: d.mesesUsoImobilizado,              // v3.3 FIX #4: Meses de uso
         devolucoes: d.devolucoes,
         freteArmazenagem: d.freteArmazenagem,
         leasing: d.leasing,
@@ -1323,7 +1459,7 @@
         creditosIndividuais.outrosCreditos = d.baseCreditos;
       }
 
-      // DELEGAÇÃO AO MOTOR (v2.3) — MotorLR.calcularPISCOFINSNaoCumulativo()
+      // DELEGAÇÃO AO MOTOR (v3.3) — MotorLR.calcularPISCOFINSNaoCumulativo()
       if (typeof MotorLR !== 'undefined' && MotorLR.calcularPISCOFINSNaoCumulativo) {
         var resultado = MotorLR.calcularPISCOFINSNaoCumulativo({
           receitaBruta: d.receitaBruta,
@@ -1333,7 +1469,11 @@
           insumosProducao: creditosIndividuais.insumosProducao,
           energiaEletrica: creditosIndividuais.energiaEletrica,
           alugueisPJ: creditosIndividuais.alugueisPJ,
-          depreciacaoBens: creditosIndividuais.depreciacaoBens,
+          alugueisPF: creditosIndividuais.alugueisPF,                               // v3.3 FIX #2
+          depreciacaoBensCredito: creditosIndividuais.depreciacaoBensCredito,         // v3.3 FIX #4: Campo renomeado
+          depreciacaoBensMetodo: creditosIndividuais.depreciacaoBensMetodo,           // v3.3 FIX #4
+          custoAquisicaoImobilizado: creditosIndividuais.custoAquisicaoImobilizado,   // v3.3 FIX #4
+          mesesUsoImobilizado: creditosIndividuais.mesesUsoImobilizado,               // v3.3 FIX #4
           devolucoes: creditosIndividuais.devolucoes,
           freteArmazenagem: creditosIndividuais.freteArmazenagem,
           leasing: creditosIndividuais.leasing,
@@ -1369,16 +1509,44 @@
             total: _r(resultado.saldoCredor.total)
           },
           totalAPagar: _r(resultado.aPagar.total),
+          // v3.3 FIX #5: Duas métricas de alíquota efetiva com labels claros
           aliquotaEfetiva: resultado.aliquotaEfetiva,
+          aliquotaEfetivaBruta: resultado.aliquotaEfetivaBruta,
+          aliquotaEfetivaDescricao: resultado.aliquotaEfetivaDescricao,
           economiaCreditos: _r(resultado.economiaCreditos),
+          // v3.3 FIX #2 + #4: Alertas do motor (aluguel PF, depreciação, etc.)
+          alertas: resultado.alertas || [],
           artigos: resultado.artigos
         };
       }
 
       // FALLBACK: implementação original caso o motor não esteja carregado
+      var alertasFallback = [];
       var totalBaseCreditos = d.baseCreditos;
       if (!totalBaseCreditos || totalBaseCreditos === 0) {
         totalBaseCreditos = somaIndividuais;
+      }
+
+      // v3.3 FIX #2: Aluguel PF não gera crédito — alertar
+      if (d.alugueisPF > 0) {
+        alertasFallback.push({
+          tipo: 'ALERTA_ALUGUEL_PF',
+          mensagem: 'Aluguel pago a Pessoa Física (R$ ' + d.alugueisPF.toFixed(2) + ') NÃO gera crédito PIS/COFINS. '
+            + 'Apenas aluguéis pagos a Pessoa Jurídica permitem aproveitamento de crédito.',
+          artigo: 'Lei 10.637/2002, Art. 3º, IV',
+          valorSemCredito: d.alugueisPF
+        });
+      }
+
+      // v3.3 FIX #4: Alerta sobre método contábil de depreciação
+      if ((d.depreciacaoBens > 0 || d.depreciacaoBensCredito > 0) && d.depreciacaoBensMetodo === 'CONTABIL') {
+        alertasFallback.push({
+          tipo: 'ALERTA_DEPRECIACAO_CONTABIL',
+          mensagem: 'Crédito de PIS/COFINS sobre depreciação calculado pela taxa contábil. '
+            + 'O crédito fiscal correto segue regras próprias (1/48 do custo de aquisição para bens a partir de jan/2024, ou 1/60 para anteriores).',
+          artigo: 'Lei 10.637/02, Art. 3º, VI',
+          risco: 'Crédito calculado pode divergir do crédito fiscal permitido.'
+        });
       }
 
       var tributavel = d.receitaBruta - d.isentas - d.exportacao;
@@ -1391,6 +1559,10 @@
       var cofinsAPagar = Math.max(debCOFINS - credCOFINS, 0);
       var saldoCredorPIS = Math.max(credPIS - debPIS, 0);
       var saldoCredorCOFINS = Math.max(credCOFINS - debCOFINS, 0);
+
+      // v3.3 FIX #5: Duas métricas de alíquota efetiva
+      var totalBrutoFB = debPIS + debCOFINS;
+      var totalLiquidoFB = pisAPagar + cofinsAPagar;
 
       return {
         receitaTributavel: _r(tributavel),
@@ -1408,7 +1580,9 @@
             insumosProducao: d.insumosProducao,
             energiaEletrica: d.energiaEletrica,
             alugueisPJ: d.alugueisPJ,
+            alugueisPF_semCredito: d.alugueisPF,
             depreciacaoBens: d.depreciacaoBens,
+            depreciacaoMetodoUsado: d.depreciacaoBensMetodo || 'CONTABIL',
             devolucoes: d.devolucoes,
             freteArmazenagem: d.freteArmazenagem,
             leasing: d.leasing,
@@ -1428,10 +1602,20 @@
           total: _r(saldoCredorPIS + saldoCredorCOFINS)
         },
         totalAPagar: _r(pisAPagar + cofinsAPagar),
+        // v3.3 FIX #5: Duas métricas claras
         aliquotaEfetiva: d.receitaBruta > 0
-          ? _r((pisAPagar + cofinsAPagar) / d.receitaBruta * 100) + '%'
+          ? _r(totalLiquidoFB / d.receitaBruta * 100) + '%'
           : '0%',
+        aliquotaEfetivaBruta: d.receitaBruta > 0
+          ? _r(totalBrutoFB / d.receitaBruta * 100) + '%'
+          : '0%',
+        aliquotaEfetivaDescricao: {
+          liquida: 'Alíquota efetiva LÍQUIDA = (PIS+COFINS a pagar) ÷ Receita Bruta — carga real após créditos',
+          bruta: 'Alíquota efetiva BRUTA = (débitos PIS+COFINS) ÷ Receita Bruta — antes dos créditos',
+          nota: 'Use LÍQUIDA para carga tributária real. BRUTA para composição analítica e benchmarking.'
+        },
         economiaCreditos: _r(credPIS + credCOFINS),
+        alertas: alertasFallback,
         artigos: 'Lei 10.637/02, Lei 10.833/03'
       };
     },
@@ -2514,15 +2698,19 @@
 
     /**
      * Simulação completa — tudo junto
+     * v3.3: Integra PIS/COFINS, cenários proporcionais, TJLP obrigatória, carga bruta/líquida
      */
     simulacaoCompleta: function (empresa) {
-      // DELEGAÇÃO AO MOTOR (v3.0) — MotorLR.simularLucroRealCompleto()
+      // DELEGAÇÃO AO MOTOR (v3.3) — MotorLR.simularLucroRealCompleto()
       if (typeof MotorLR !== 'undefined' && MotorLR.simularLucroRealCompleto) {
         var e = Object.assign({
           lucroLiquido: 0, receitaBruta: 0, adicoes: 0, exclusoes: 0,
           prejuizoFiscal: 0, baseNegativaCSLL: 0,
-          patrimonioLiquido: 0, tjlp: 0.06, lucrosAcumulados: 0,
-          retencoesFonte: 0, estimativasPagas: 0, numMeses: 12
+          patrimonioLiquido: 0, tjlp: null, lucrosAcumulados: 0,  // v3.3 FIX #3: TJLP sem default
+          retencoesFonte: 0, estimativasPagas: 0, numMeses: 12,
+          dadosPISCOFINS: null,                                    // v3.3 FIX #6: PIS/COFINS integrado
+          retencoesPISCOFINS: 0,                                   // v3.3 FIX #6: Retenções PIS/COFINS
+          variacaoCenarios: { pessimista: -0.05, otimista: 0.05 }  // v3.3 FIX #7: Variação cenários
         }, empresa);
 
         // Mapear parâmetros mapeamento → motor
@@ -2534,13 +2722,16 @@
           saldoPrejuizoFiscal: e.prejuizoFiscal,
           saldoBaseNegativaCSLL: e.baseNegativaCSLL,
           patrimonioLiquido: e.patrimonioLiquido,
-          tjlp: e.tjlp,
+          tjlp: e.tjlp,                              // v3.3 FIX #3: Sem default — motor valida
           lucrosAcumulados: e.lucrosAcumulados,
           despesasIncentivos: e.despesasIncentivos || {},
           retencoesFonte: e.retencoesFonte,
           estimativasPagas: e.estimativasPagas,
           numMeses: e.numMeses,
-          ehInstituicaoFinanceira: e.financeira || false
+          ehInstituicaoFinanceira: e.financeira || false,
+          dadosPISCOFINS: e.dadosPISCOFINS,           // v3.3 FIX #6: PIS/COFINS integrado
+          retencoesPISCOFINS: e.retencoesPISCOFINS,   // v3.3 FIX #6: Retenções
+          variacaoCenarios: e.variacaoCenarios         // v3.3 FIX #7: Cenários proporcionais
         });
 
         // Mapear retorno motor → interface esperada pelo mapeamento
@@ -2552,18 +2743,31 @@
           comOtimizacao: {
             irpj: resultado.comOtimizacao.irpj,
             csll: resultado.comOtimizacao.csll,
-            jcp: resultado.comOtimizacao.jcp
+            jcp: resultado.comOtimizacao.jcp,
+            pisCofins: resultado.comOtimizacao.pisCofins || null  // v3.3 FIX #6
           },
           economia: {
             jcp: _r(resultado.economia.jcp),
             irpj: _r(resultado.economia.totalIRPJ || resultado.economia.compensacaoPrejuizo || 0),
             total: _r((resultado.economia.totalIRPJ || 0) + (resultado.economia.jcp || 0))
           },
+          // v3.3 FIX #6: Carga total com bruta e líquida separadas
           totalAPagar: {
             irpj: _r(resultado.totalAPagar.irpj),
             csll: _r(resultado.totalAPagar.csll),
-            total: _r(resultado.totalAPagar.total)
+            subtotalIRPJ_CSLL: _r(resultado.totalAPagar.subtotalIRPJ_CSLL),
+            pisCofins: resultado.totalAPagar.pisCofins || null,
+            // v3.3 FIX #6: Labels claros — total legado é a carga líquida
+            total: _r(resultado.totalAPagar.cargaTotalLiquida || (resultado.totalAPagar.irpj + resultado.totalAPagar.csll)),
+            cargaTotalBruta: _r(resultado.totalAPagar.cargaTotalBruta || 0),
+            cargaTotalBrutaDescricao: resultado.totalAPagar.cargaTotalBrutaDescricao || 'IRPJ + CSLL + PIS/COFINS débitos',
+            cargaTotalLiquida: _r(resultado.totalAPagar.cargaTotalLiquida || 0),
+            cargaTotalLiquidaDescricao: resultado.totalAPagar.cargaTotalLiquidaDescricao || 'IRPJ + CSLL + PIS/COFINS a pagar',
+            nota: resultado.totalAPagar.nota || 'A carga LÍQUIDA é o desembolso efetivo. A BRUTA inclui PIS/COFINS antes dos créditos.'
           },
+          // v3.3 FIX #7: Cenários com PIS/COFINS proporcional
+          cenarios: resultado.cenarios || null,
+          cenarioNota: resultado.cenarioNota || 'PIS/COFINS recalculado proporcionalmente à receita em cada cenário.',
           saldoNegativo: resultado.saldoNegativo || null
         };
       }
@@ -2572,12 +2776,15 @@
       var e = Object.assign({
         lucroLiquido: 0, receitaBruta: 0, adicoes: 0, exclusoes: 0,
         prejuizoFiscal: 0, baseNegativaCSLL: 0,
-        patrimonioLiquido: 0, tjlp: 0.06, lucrosAcumulados: 0,
-        retencoesFonte: 0, estimativasPagas: 0, numMeses: 12
+        patrimonioLiquido: 0, tjlp: null, lucrosAcumulados: 0,  // v3.3 FIX #3: Sem default
+        retencoesFonte: 0, estimativasPagas: 0, numMeses: 12,
+        dadosPISCOFINS: null, retencoesPISCOFINS: 0
       }, empresa);
 
       var jcp = LR.calcular.jcp(e);
-      var lucroAjustado = e.lucroLiquido - jcp.jcpDedutivel;
+      var jcpValido = !jcp.erro;
+      var jcpDedutivel = jcpValido ? jcp.jcpDedutivel : 0;
+      var lucroAjustado = e.lucroLiquido - jcpDedutivel;
 
       var irpjSem = LR.calcular.irpj({ lucroLiquido: e.lucroLiquido, adicoes: e.adicoes, exclusoes: e.exclusoes, numMeses: e.numMeses });
       var irpjCom = LR.calcular.irpj({
@@ -2587,14 +2794,99 @@
       });
       var csll = LR.calcular.csll({ lucroLiquido: lucroAjustado, adicoes: e.adicoes, exclusoes: e.exclusoes, baseNegativa: e.baseNegativaCSLL });
 
-      var economiaJCP = jcp.economiaLiquida;
+      var economiaJCP = jcpValido ? jcp.economiaLiquida : 0;
       var economiaIRPJ = irpjSem.irpjDevido - irpjCom.irpjDevido;
+
+      // v3.3 FIX #6: PIS/COFINS integrado no fallback
+      var pisCofins = null;
+      var pisCofinsLiquido = 0;
+      var pisCofinsBruto = 0;
+      if (e.dadosPISCOFINS) {
+        pisCofins = LR.calcular.pisCofins(e.dadosPISCOFINS);
+        pisCofinsBruto = (pisCofins.debitoPIS || 0) + (pisCofins.debitoCOFINS || 0);
+        pisCofinsLiquido = pisCofins.totalAPagar || 0;
+      }
+
+      var cargaIRPJ_CSLL = _r(irpjCom.irpjAPagar + csll.csllDevida);
+      var cargaTotalBruta = _r(cargaIRPJ_CSLL + pisCofinsBruto);
+      var cargaTotalLiquida = _r(cargaIRPJ_CSLL + Math.max(pisCofinsLiquido - e.retencoesPISCOFINS, 0));
+
+      // v3.3 FIX #7: Cenários com PIS/COFINS proporcional no fallback
+      var cenariosFB = {};
+      var variacoes = { base: 0, pessimista: -0.05, otimista: 0.05 };
+      for (var nomeCenFB in variacoes) {
+        if (!variacoes.hasOwnProperty(nomeCenFB)) continue;
+        var varFB = variacoes[nomeCenFB];
+        var fatorFB = 1 + varFB;
+        var receitaCenFB = e.receitaBruta * fatorFB;
+        var lucroCenFB = e.lucroLiquido * fatorFB;
+
+        var pcCenFB = pisCofinsLiquido;
+        var pcCenBrutoFB = pisCofinsBruto;
+        if (e.dadosPISCOFINS && varFB !== 0) {
+          var pcCalc = LR.calcular.pisCofins(Object.assign({}, e.dadosPISCOFINS, { receitaBruta: receitaCenFB }));
+          pcCenFB = pcCalc.totalAPagar || 0;
+          pcCenBrutoFB = (pcCalc.debitoPIS || 0) + (pcCalc.debitoCOFINS || 0);
+        }
+
+        var irpjCenFB, csllCenFB;
+        if (varFB === 0) {
+          irpjCenFB = irpjCom.irpjAPagar;
+          csllCenFB = csll.csllDevida;
+        } else {
+          var irpjCalcFB = LR.calcular.irpj({
+            lucroLiquido: lucroCenFB - jcpDedutivel, adicoes: e.adicoes * fatorFB, exclusoes: e.exclusoes * fatorFB,
+            prejuizoFiscal: e.prejuizoFiscal, numMeses: e.numMeses,
+            retencoesFonte: e.retencoesFonte, estimativasPagas: e.estimativasPagas
+          });
+          var csllCalcFB = LR.calcular.csll({
+            lucroLiquido: lucroCenFB - jcpDedutivel, adicoes: e.adicoes * fatorFB, exclusoes: e.exclusoes * fatorFB,
+            baseNegativa: e.baseNegativaCSLL
+          });
+          irpjCenFB = irpjCalcFB.irpjAPagar;
+          csllCenFB = csllCalcFB.csllDevida;
+        }
+
+        var totalCenBrutoFB = _r(irpjCenFB + csllCenFB + pcCenBrutoFB);
+        var totalCenLiquidoFB = _r(irpjCenFB + csllCenFB + Math.max(pcCenFB - e.retencoesPISCOFINS, 0));
+
+        cenariosFB[nomeCenFB] = {
+          variacao: _r(varFB * 100) + '%',
+          receita: _r(receitaCenFB),
+          irpj: _r(irpjCenFB),
+          csll: _r(csllCenFB),
+          pisCofins: _r(pcCenFB),
+          pisCofinsNota: varFB !== 0 ? 'PIS/COFINS recalculado proporcionalmente' : 'Cenário base',
+          cargaTotalBruta: totalCenBrutoFB,
+          cargaTotalLiquida: totalCenLiquidoFB,
+          cargaEfetiva: receitaCenFB > 0 ? _r(totalCenLiquidoFB / receitaCenFB * 100) + '%' : '0%'
+        };
+      }
 
       return {
         semOtimizacao: { irpjDevido: irpjSem.irpjDevido, aliquotaEfetiva: irpjSem.aliquotaEfetiva },
-        comOtimizacao: { irpj: irpjCom, csll: csll, jcp: jcp },
+        comOtimizacao: { irpj: irpjCom, csll: csll, jcp: jcp, pisCofins: pisCofins },
         economia: { jcp: economiaJCP, irpj: _r(economiaIRPJ), total: _r(economiaIRPJ + economiaJCP) },
-        totalAPagar: { irpj: irpjCom.irpjAPagar, csll: csll.csllDevida, total: _r(irpjCom.irpjAPagar + csll.csllDevida) }
+        totalAPagar: {
+          irpj: irpjCom.irpjAPagar,
+          csll: csll.csllDevida,
+          subtotalIRPJ_CSLL: cargaIRPJ_CSLL,
+          pisCofins: pisCofins ? {
+            bruto: _r(pisCofinsBruto),
+            liquido: _r(pisCofinsLiquido),
+            retencoesFonte: e.retencoesPISCOFINS,
+            aPagar: _r(Math.max(pisCofinsLiquido - e.retencoesPISCOFINS, 0))
+          } : null,
+          total: cargaTotalLiquida,
+          cargaTotalBruta: cargaTotalBruta,
+          cargaTotalBrutaDescricao: 'IRPJ + CSLL + PIS/COFINS débitos (antes de créditos e retenções)',
+          cargaTotalLiquida: cargaTotalLiquida,
+          cargaTotalLiquidaDescricao: 'IRPJ + CSLL + PIS/COFINS a pagar (após créditos e retenções)',
+          nota: 'A carga LÍQUIDA é o desembolso efetivo. A BRUTA inclui PIS/COFINS antes dos créditos.'
+        },
+        cenarios: cenariosFB,
+        cenarioNota: 'PIS/COFINS recalculado proporcionalmente à receita em cada cenário.',
+        saldoNegativo: null
       };
     }
   };
