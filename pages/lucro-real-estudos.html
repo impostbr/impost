@@ -98,7 +98,7 @@
       color: var(--text-secondary);
     }
     .app-header .header-version {
-      margin-left: auto;
+      /* margin-left: auto; — removido v1.1: coexiste com btn-dashboard */
       font-family: var(--font-mono);
       font-size: 0.75rem;
       background: var(--primary);
@@ -1474,6 +1474,7 @@
     <div class="logo">IMPOST<span class="logo-dot">.</span></div>
     <div class="header-sep"></div>
     <span class="header-title">Estudo Tributário — Lucro Real</span>
+    <span class="header-version">v3.2</span>
     <a class="header-btn-dashboard" href="../pages/dashboard.html">← Dashboard</a>
   </header>
 
@@ -1486,15 +1487,25 @@
   </div>
 
   <!-- ═══════════════════════════════════════════════════════════════════════════
-       SCRIPTS — Ordem obrigatória
+       SCRIPTS — Ordem OBRIGATÓRIA (dependências em cascata)
+       
+       1. estados.js       → window.Estados (dados de 27 UFs)
+       2. municipios.js    → API IBGE (depende de estados.js para siglas)
+       3. motor v4.6       → window.MotorLR (cálculos puros, sem dependência)
+       4. mapeamento v3.2  → window.LR (ponte motor↔HTML, lê de Estados via LR.setEstado)
+       5-7. Libs externas  → Chart.js, html2pdf, SheetJS
+       8. estudos.js       → window.LucroRealEstudos (wizard, depende de TODOS acima)
+       9. Script inline    → Ponte HTML↔LR.setEstado + action bar
+       
+       ⚠ NÃO reordenar: mapeamento.js usa estados.js e motor; estudos.js usa todos.
        ═══════════════════════════════════════════════════════════════════════════ -->
-  <!-- 1. Dados de estados -->
+  <!-- 1. Dados de estados (window.Estados / window.EstadosBR) -->
   <script src="../scripts/estados.js"></script>
-  <!-- 2. Municípios via API IBGE -->
+  <!-- 2. Municípios via API IBGE (depende de estados.js) -->
   <script src="../scripts/municipios.js"></script>
-  <!-- 3. Motor fiscal unificado v4.6 (funções avançadas, validações, SUDAM/SUDENE) -->
+  <!-- 3. Motor fiscal unificado v4.6 (cálculos puros, sem dependência) -->
   <script src="../scripts/motor-lucro-real-v4.6-unificado.js"></script>
-  <!-- 4. Mapeamento unificado do Lucro Real (sobrescreve LR com dados consolidados) -->
+  <!-- 4. Mapeamento unificado v3.2 (ponte motor↔HTML, lê de estados.js via LR.setEstado) -->
   <script src="../scripts/lucro-real-mapeamento.js"></script>
   <!-- 5. Chart.js 4.4 CDN -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
@@ -1502,7 +1513,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
   <!-- 7. SheetJS para exportação Excel -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-  <!-- 8. Motor principal do wizard -->
+  <!-- 8. Motor principal do wizard (depende de TODOS acima) -->
   <script src="../scripts/lucro-real-estudos.js"></script>
 
   <!-- ═══════════════════════════════════════════════════════════════════════════
@@ -1515,11 +1526,9 @@
 
     // ═══════════════════════════════════════════════════════════════════════
     //  HELPERS
+    //  NOTA v1.1: _m e _pp removidos — eram cópias de LR.helpers.formatarMoeda()
+    //  e LR.helpers.formatarPercentual(), nunca utilizados neste inline.
     // ═══════════════════════════════════════════════════════════════════════
-    var _m = function (v) {
-      return 'R$\u00a0' + (v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    };
-    var _pp = function (v) { return ((v || 0)).toFixed(2) + '%'; };
 
     function showLoading(msg) {
       var overlay = document.createElement('div');
@@ -1537,7 +1546,7 @@
     //  INJETAR BARRA DE AÇÕES QUANDO RESULTADOS APARECEM
     // ═══════════════════════════════════════════════════════════════════════
 
-    var originalRender = null;
+    // REMOVIDO v1.1: var originalRender = null; — código morto da refatoração v2.0
 
     function injectActionBar() {
       var resContainer = document.getElementById('resultadosContainer');
@@ -1598,6 +1607,103 @@
       document.addEventListener('DOMContentLoaded', injectActionBar);
     } else {
       injectActionBar();
+    }
+  })();
+  </script>
+
+  <!-- 9. Ponte HTML ↔ Mapeamento v3.2: Integração de estado dinâmico -->
+  <script>
+  (function() {
+    'use strict';
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  PONTE: Seleção de estado → LR.setEstado()
+    //
+    //  O wizard (lucro-real-estudos.js) gera o <select> de estado dinamicamente.
+    //  Este bloco observa quando o select é criado e conecta ao LR.setEstado().
+    //  Assim, ISS, SUDAM, SUDENE e todos os dados estaduais ficam dinâmicos.
+    // ═══════════════════════════════════════════════════════════════════════
+
+    /**
+     * IDs possíveis do select de estado no wizard.
+     * O lucro-real-estudos.js pode usar qualquer um desses.
+     * Adicione mais IDs aqui se o wizard mudar no futuro.
+     */
+    var ESTADO_SELECT_IDS = [
+      'campo-estado',
+      'estado',
+      'select-estado',
+      'empresa-estado',
+      'uf'
+    ];
+
+    /**
+     * Tenta encontrar o select de estado no DOM
+     * @returns {HTMLSelectElement|null}
+     */
+    function encontrarSelectEstado() {
+      for (var i = 0; i < ESTADO_SELECT_IDS.length; i++) {
+        var el = document.getElementById(ESTADO_SELECT_IDS[i]);
+        if (el && el.tagName === 'SELECT') return el;
+      }
+      // Fallback: procurar qualquer select com name contendo 'estado' ou 'uf'
+      var selects = document.querySelectorAll('select[name*="estado"], select[name*="uf"], select[data-field="estado"]');
+      return selects.length > 0 ? selects[0] : null;
+    }
+
+    /**
+     * Conecta o select de estado ao LR.setEstado()
+     * @param {HTMLSelectElement} selectEl
+     */
+    function conectarSelectEstado(selectEl) {
+      if (selectEl._lrConectado) return; // Evitar duplicação
+
+      selectEl.addEventListener('change', function() {
+        var sigla = this.value;
+        if (sigla && typeof LR !== 'undefined' && typeof LR.setEstado === 'function') {
+          var ok = LR.setEstado(sigla);
+          console.log('[HTML→LR] Estado definido:', sigla, ok ? '✓' : '✗ (estados.js ausente)');
+        }
+      });
+
+      // Se já tem valor selecionado, carregar imediatamente
+      if (selectEl.value && typeof LR !== 'undefined' && typeof LR.setEstado === 'function') {
+        LR.setEstado(selectEl.value);
+      }
+
+      selectEl._lrConectado = true;
+    }
+
+    /**
+     * Observer: fica escutando o DOM para quando o wizard criar o select
+     */
+    function iniciarObservacao() {
+      // Tentar imediatamente (caso o select já exista)
+      var sel = encontrarSelectEstado();
+      if (sel) {
+        conectarSelectEstado(sel);
+        return;
+      }
+
+      // Observar o wizardContainer para quando o select for criado
+      var wizardContainer = document.getElementById('wizardContainer');
+      if (!wizardContainer) return;
+
+      var observer = new MutationObserver(function() {
+        var sel = encontrarSelectEstado();
+        if (sel && !sel._lrConectado) {
+          conectarSelectEstado(sel);
+        }
+      });
+
+      observer.observe(wizardContainer, { childList: true, subtree: true });
+    }
+
+    // Iniciar quando DOM estiver pronto
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', iniciarObservacao);
+    } else {
+      iniciarObservacao();
     }
   })();
   </script>
