@@ -6379,7 +6379,12 @@
       valoresFormula[4] = r.lalur ? r.lalur.lucroAjustado : 0;
       var compensTotal = 0;
       if (r.compensacao && r.compensacao.resumo && r.compensacao.resumo.compensacaoEfetiva) {
-        compensTotal = (r.compensacao.resumo.compensacaoEfetiva.prejuizoOperacional || 0) + (r.compensacao.resumo.compensacaoEfetiva.baseNegativaCSLL || 0);
+        // CORREÇÃO BUG FÓRMULA MESTRE: Usar apenas a compensação de prejuízo fiscal (IRPJ),
+        // NÃO somar a base negativa de CSLL — são grandezas distintas.
+        // A base negativa CSLL é compensação para cálculo da CSLL (seção 4.2), não do Lucro Real.
+        // Antes: compensTotal = prejuizoOperacional + baseNegativaCSLL (ERRADO: R$200k + R$150k = R$350k)
+        // Agora: compensTotal = apenas prejuizoOperacional (CORRETO: R$200k)
+        compensTotal = (r.compensacao.resumo.compensacaoEfetiva.prejuizoOperacional || 0);
       }
       // Fallback: ler do resultado do IRPJ se a compensação veio zerada
       if (compensTotal === 0 && r.irpj) {
@@ -6713,11 +6718,28 @@
     // ═══════════════════════════════════════════════════════════════════════
     if (LR.pdd && (LR.pdd.criterios || LR.pdd.faixasValor)) {
       var sPDD = '';
+
+      // CORREÇÃO INC-03 (completa): Os artigos do mapeamento externo (LR.pdd) podem
+      // conter "Art. 347-351" (Avaliação de Estoques) em vez de "Art. 340-342" (PDD).
+      // Sanitizar todas as referências de artigo vindas do mapeamento.
+      function _fixPDDArt(artigo) {
+        if (!artigo) return '';
+        return String(artigo)
+          .replace(/Art\.\s*347[\s\-–]+351/gi, 'Art. 340-342')
+          .replace(/\b347\b/g, '340')
+          .replace(/\b348\b/g, '340')
+          .replace(/\b349\b/g, '341')
+          .replace(/\b350\b/g, '341')
+          .replace(/\b351\b/g, '342');
+      }
+
+      var pddArtigoHeader = _fixPDDArt(LR.pdd.artigo) || 'Art. 340-342';
+
       if (LR.pdd.criterios && LR.pdd.criterios.length > 0) {
-        sPDD += '<h4>Critérios para Dedutibilidade <span class="res-artigo">' + (LR.pdd.artigo || 'Art. 340-342') + '</span></h4>';
+        sPDD += '<h4>Critérios para Dedutibilidade <span class="res-artigo">' + pddArtigoHeader + '</span></h4>';
         sPDD += '<table class="res-table"><thead><tr><th>Critério</th><th>Descrição</th><th>Artigo</th></tr></thead><tbody>';
         LR.pdd.criterios.forEach(function (c) {
-          sPDD += '<tr><td><strong>' + (c.id || '') + '</strong></td><td>' + (c.descricao || '') + '</td><td><span class="res-artigo">' + (c.artigo || '') + '</span></td></tr>';
+          sPDD += '<tr><td><strong>' + (c.id || '') + '</strong></td><td>' + (c.descricao || '') + '</td><td><span class="res-artigo">' + _fixPDDArt(c.artigo) + '</span></td></tr>';
         });
         sPDD += '</tbody></table>';
       }
@@ -6731,7 +6753,7 @@
         sPDD += '<table class="res-table"><thead><tr><th>Faixa</th><th>Requisito</th><th>Artigo</th></tr></thead><tbody>';
         LR.pdd.faixasValor.forEach(function (f) {
           var faixaLabel = f.ate ? 'Até ' + _m(f.ate) : (f.acima ? 'Acima de ' + _m(f.acima) : '—');
-          sPDD += '<tr><td><strong>' + faixaLabel + '</strong></td><td>' + (f.descricao || '') + '</td><td><span class="res-artigo">' + (f.artigo || '') + '</span></td></tr>';
+          sPDD += '<tr><td><strong>' + faixaLabel + '</strong></td><td>' + (f.descricao || '') + '</td><td><span class="res-artigo">' + _fixPDDArt(f.artigo) + '</span></td></tr>';
         });
         sPDD += '</tbody></table>';
       }
@@ -8023,7 +8045,8 @@
       vfPdf[4] = r.lalur ? r.lalur.lucroAjustado : 0;
       var compTotPdf = 0;
       if (r.compensacao && r.compensacao.resumo && r.compensacao.resumo.compensacaoEfetiva) {
-        compTotPdf = (r.compensacao.resumo.compensacaoEfetiva.prejuizoOperacional || 0) + (r.compensacao.resumo.compensacaoEfetiva.baseNegativaCSLL || 0);
+        // CORREÇÃO BUG FÓRMULA MESTRE (PDF): Apenas compensação IRPJ, não somar CSLL
+        compTotPdf = (r.compensacao.resumo.compensacaoEfetiva.prejuizoOperacional || 0);
       }
       // Fallback: ler do resultado do IRPJ se a compensação veio zerada
       if (compTotPdf === 0 && r.irpj) {
@@ -8841,7 +8864,8 @@
       vfPdfC[4] = lalur.lucroAjustado || 0;
       var compTotPdfC = 0;
       if (r.compensacao && r.compensacao.resumo && r.compensacao.resumo.compensacaoEfetiva) {
-        compTotPdfC = (r.compensacao.resumo.compensacaoEfetiva.prejuizoOperacional || 0) + (r.compensacao.resumo.compensacaoEfetiva.baseNegativaCSLL || 0);
+        // CORREÇÃO BUG FÓRMULA MESTRE (PDF Completo): Apenas compensação IRPJ, não somar CSLL
+        compTotPdfC = (r.compensacao.resumo.compensacaoEfetiva.prejuizoOperacional || 0);
       }
       // Fallback: ler do resultado do IRPJ se a compensação veio zerada
       if (compTotPdfC === 0 && r.irpj) {
