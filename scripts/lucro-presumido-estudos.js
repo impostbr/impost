@@ -149,6 +149,8 @@
     var aliqISS = params.aliquotaISS != null ? params.aliquotaISS : DEFAULTS.aliquotaISS;
     var aliqRAT = params.aliquotaRAT != null ? params.aliquotaRAT : DEFAULTS.aliquotaRAT;
     var aliqTerceiros = params.aliquotaTerceiros != null ? params.aliquotaTerceiros : DEFAULTS.aliquotaTerceiros;
+    // FIX (Erro 10): Considerar prejuízos fiscais acumulados na comparação com Lucro Real
+    var prejuizosFiscais = params.prejuizosFiscaisAcumulados || 0;
 
     // Proteção contra receita zero
     if (receita <= 0) {
@@ -172,7 +174,11 @@
     var lrVantajosoCount = 0;
 
     for (var m = 1; m <= MARGEM_MAXIMA; m++) {
-      var lucroTributavel = receita * (m / 100);
+      var lucroTributavelBruto = receita * (m / 100);
+      // FIX (Erro 10): Compensar prejuízos fiscais acumulados (até 30% do lucro tributável)
+      // Lei 9.065/1995, Art. 15 — compensação limitada a 30% do lucro líquido ajustado
+      var compensacaoPrejuizo = prejuizosFiscais > 0 ? Math.min(prejuizosFiscais, lucroTributavelBruto * 0.30) : 0;
+      var lucroTributavel = Math.max(0, lucroTributavelBruto - compensacaoPrejuizo);
 
       var irpj = lucroTributavel * LR.IRPJ;
       var adicionalIRPJ = Math.max(0, lucroTributavel - LR.LIMITE_ADICIONAL_ANUAL) * LR.ADICIONAL_IRPJ;
@@ -311,10 +317,16 @@
     var margemReal = receita > 0 ? (receita - despesasOp - folha) / receita : 0;
 
     // ── Dica 1: Margem vs Presunção ──
+    // FIX (Erro 16): Calcular alíquota efetiva considerando adicional de IRPJ quando base > R$ 240.000/ano
+    var basePresumidaAnualEstimada = receita * percentualPresuncao;
+    var aliqEfetivaIRPJCSLL = 0.24; // 15% IRPJ + 9% CSLL (padrão)
+    if (basePresumidaAnualEstimada > 240000) {
+      aliqEfetivaIRPJCSLL = 0.34; // 15% IRPJ + 10% adicional + 9% CSLL
+    }
     if (receita > 0 && (despesasOp > 0 || folha > 0)) {
       if (margemReal > percentualPresuncao) {
         var diferencaBase = receita * (margemReal - percentualPresuncao);
-        var impactoEconomia = _arredondar(diferencaBase * 0.24); // 15% IRPJ + 9% CSLL
+        var impactoEconomia = _arredondar(diferencaBase * aliqEfetivaIRPJCSLL);
         dicas.push({
           titulo: 'Margem real acima da presunção — LP é vantajoso',
           descricao: 'Sua margem real (' + _arredondar(margemReal * 100, 1) + '%) é superior ao percentual de presunção (' + _arredondar(percentualPresuncao * 100, 1) + '%). No Lucro Presumido, você tributa sobre uma base menor que o lucro efetivo. Economia estimada de R$ ' + impactoEconomia.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) + '/ano em IRPJ+CSLL.',
@@ -323,7 +335,7 @@
         });
       } else {
         var diferencaBaseAlerta = receita * (percentualPresuncao - margemReal);
-        var impactoExcesso = _arredondar(diferencaBaseAlerta * 0.24);
+        var impactoExcesso = _arredondar(diferencaBaseAlerta * aliqEfetivaIRPJCSLL);
         dicas.push({
           titulo: 'Margem real abaixo da presunção — Atenção',
           descricao: 'Sua margem real (' + _arredondar(margemReal * 100, 1) + '%) é inferior ao percentual de presunção (' + _arredondar(percentualPresuncao * 100, 1) + '%). No LP, você tributa sobre base maior que o lucro efetivo. Custo extra estimado: R$ ' + impactoExcesso.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) + '/ano. Foque em aumentar margem ou avalie o Lucro Real.',
@@ -520,7 +532,10 @@
     }
 
     impactoTotalBase = _arredondar(impactoTotalBase);
-    var impostoExtraEstimado = _arredondar(impactoTotalBase * 0.24); // 15% IRPJ + 9% CSLL
+    // FIX (Erro 15): Usar 0.34 (15% IRPJ + 10% adicional + 9% CSLL) em vez de 0.24.
+    // Empresas com receita > R$ 5M (caso da LC 224) quase certamente excedem R$ 60.000/trim de base,
+    // portanto o adicional de 10% do IRPJ incide sobre o impacto na base.
+    var impostoExtraEstimado = _arredondar(impactoTotalBase * 0.34); // 15% IRPJ + 10% adicional + 9% CSLL
 
     // Se não houve impacto (todos trimestres sem aplicação), retornar null
     if (impactoTotalBase === 0) {
@@ -862,6 +877,18 @@
    * // ── ECD (para calcularBeneficioECD) ──
    * @param {number} [params.custoAnualECD] - Custo anual do contador pela escrituração completa
    *
+   * // ── Exclusões PIS/COFINS (FIX Erros 13+17) ──
+   * @param {number} [params.receitasExportacao] - Receitas de exportação anuais (excluídas da base PIS/COFINS)
+   * @param {number} [params.receitasIsentas] - Receitas isentas anuais (excluídas da base PIS/COFINS)
+   * @param {number} [params.icmsST] - ICMS-ST anual destacado (excluído da base PIS/COFINS)
+   * @param {number} [params.ipiDestacado] - IPI anual destacado (excluído da base PIS/COFINS)
+   *
+   * // ── Break-Even (FIX Erro 10) ──
+   * @param {number} [params.prejuizosFiscaisAcumulados] - Prejuízos fiscais acumulados para compensação no LR (até 30%)
+   *
+   * // ── Ano-Calendário (FIX Erro 12) ──
+   * @param {number} [params.anoCalendario] - Ano-calendário (default: ano corrente)
+   *
    * @returns {Object} Resultado completo com todas as análises
    */
   function calcularEstudoCompleto(params) {
@@ -915,9 +942,16 @@
     var receitasPorTrim = params.receitasPorTrimestre || null;
     var trimestral = [];
     var trimestresData = [];
+    // FIX (Erro 12): Usar anoCalendario dinâmico em vez de hardcoded 2026
+    var anoCalendario = params.anoCalendario || new Date().getFullYear();
     var acumuladoAte = 0;
     for (var q = 1; q <= 4; q++) {
       var fatorTrim = receitasPorTrim ? (receitasPorTrim[q - 1] || 0) : null;
+      // FIX (Erro 11): Separar lógica de acumulação do cálculo do parâmetro (eliminar side-effect no ternário)
+      if (fatorTrim !== null) {
+        acumuladoAte += fatorTrim;
+      }
+      var receitaAcumuladaCalc = _arredondar(fatorTrim !== null ? acumuladoAte : (receitaBrutaAnual / 4 * q));
       var dadosTri = {
         receitas: receitas.map(function (r) {
           if (fatorTrim !== null) {
@@ -940,8 +974,8 @@
         irrfRetidoFonte: _arredondar(irrfRetido / 4),
         csllRetidaFonte: _arredondar(csllRetida / 4),
         trimestreAtual: q,
-        anoCalendario: 2026,
-        receitaBrutaAcumuladaAnoAte: _arredondar((fatorTrim !== null ? (acumuladoAte += fatorTrim) : (receitaBrutaAnual / 4 * q)))
+        anoCalendario: anoCalendario,
+        receitaBrutaAcumuladaAnoAte: receitaAcumuladaCalc
       };
       trimestresData.push(dadosTri);
       try {
@@ -955,9 +989,20 @@
     var piscofins = [];
     var mesesData = [];
     var receitaMensal = _arredondar(receitaBrutaAnual / 12);
+    // FIX (Erros 13+17): Passar cancelamentos, descontos e exclusões para PIS/COFINS mensal
+    var receitasExportacao = params.receitasExportacao || 0;
+    var receitasIsentas = params.receitasIsentas || 0;
+    var icmsST = params.icmsST || 0;
+    var ipiDestacado = params.ipiDestacado || 0;
     for (var m = 0; m < 12; m++) {
       var dadosMes = {
         receitaBrutaMensal: receitaMensal,
+        vendasCanceladas: _arredondar(cancelamentos / 12),
+        descontosIncondicionais: _arredondar(descontos / 12),
+        receitasExportacao: _arredondar(receitasExportacao / 12),
+        receitasIsentas: _arredondar(receitasIsentas / 12),
+        icmsST: _arredondar(icmsST / 12),
+        ipiDestacado: _arredondar(ipiDestacado / 12),
         pisRetidoFonte: _arredondar(pisRetido / 12),
         cofinsRetidaFonte: _arredondar(cofinsRetida / 12)
       };
@@ -981,7 +1026,7 @@
         aliquotaTerceiros: aliqTerceiros,
         lucroContabilEfetivo: lucroContabil > 0 ? lucroContabil : null,
         socios: socios,
-        anoCalendario: 2026
+        anoCalendario: anoCalendario
       });
     } catch (e) {
       anual = { erro: e.message, receitaBrutaAnual: receitaBrutaAnual, consolidacao: null, distribuicaoLucros: null };
@@ -1110,7 +1155,9 @@
         creditosPISCOFINS: creditos,
         aliquotaISS: aliqISS,
         aliquotaRAT: aliqRAT,
-        aliquotaTerceiros: aliqTerceiros
+        aliquotaTerceiros: aliqTerceiros,
+        // FIX (Erro 10): Repassar prejuízos fiscais para break-even
+        prejuizosFiscaisAcumulados: params.prejuizosFiscaisAcumulados || 0
       });
     } catch (e) {
       resultBreakeven = { erro: e.message, cargaTributariaLP: cargaLP, breakEvenMargem: null, lpSempreVantajoso: false, lrSempreVantajoso: false, margemRealAtual: null, margens: [], alerta: null, recomendacao: '' };
@@ -1158,7 +1205,7 @@
         lc224 = calcularImpactoLC224({
           receitaBrutaAnual: receitaBrutaAnual,
           atividadeId: atividadeId,
-          anoCalendario: 2026
+          anoCalendario: anoCalendario
         });
       } catch (e) {
         lc224 = null;
@@ -1296,7 +1343,7 @@
     _testarEstudo: _testarEstudo,
 
     // Versão
-    VERSION: '2.1.0'
+    VERSION: '2.2.0'  // Atualizado após correções da auditoria (Erros 10-17)
   };
 
   if (typeof module !== 'undefined' && module.exports) {
