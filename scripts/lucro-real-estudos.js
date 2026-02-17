@@ -3860,7 +3860,9 @@
       preOperacionalResult: preOperacionalResult,
       recomendacaoRegime: recomendacaoRegime,
       lucroOperacional: lucroOperacional,
-      receitaLiquida: receitaLiquida
+      receitaLiquida: receitaLiquida,
+      totalAdicoes: totalAdicoes || 0,   // BUG#4 CORRIGIDO: mapeado do LALUR
+      totalExclusoes: totalExclusoes || 0  // BUG#4 CORRIGIDO: mapeado do LALUR
     });
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -3968,7 +3970,7 @@
         // Antes: valor usava irpjAposReducao mas percentual usava irpjAntesReducao (inconsistente).
         irpj: { valor: irpjAntesReducao, percentual: cargaBruta > 0 ? _r(irpjAntesReducao / cargaBruta * 100) : 0 },
         csll: { valor: csllResult.csllDevida, percentual: cargaBruta > 0 ? _r(csllResult.csllDevida / cargaBruta * 100) : 0 },
-        pisCofins: { valor: pisCofinsLiquido, percentual: cargaBruta > 0 ? _r(pisCofinsLiquido / cargaBruta * 100) : 0 },
+        pisCofins: { valor: pisCofinsParaCargaBruta, percentual: cargaBruta > 0 ? _r(pisCofinsParaCargaBruta / cargaBruta * 100) : 0 },  // BUG#1 CORRIGIDO: usa bruto para consistência com IRPJ e CSLL
         iss: { valor: issAnual, percentual: cargaBruta > 0 ? _r(issAnual / cargaBruta * 100) : 0 }
       },
 
@@ -4401,7 +4403,7 @@
             id: inc.id, titulo: inc.nome + " (não utilizado)",
             tipo: "Dedução", complexidade: "Média", risco: "Baixo",
             economiaAnual: potencial,
-            descricao: "O incentivo " + inc.nome + " permite deduzir até " + _m(potencial) + " do IRPJ normal.",
+            descricao: "O incentivo " + inc.nome + " permite deduzir até " + _m(potencial) + " do IRPJ normal. ⚠️ Sujeito ao limite combinado de 4% do IRPJ Normal (Art. 228 RIR/2018) caso outros incentivos sejam utilizados simultaneamente.",
             baseLegal: "Art. 625-646 do RIR/2018",
             acaoRecomendada: "Avaliar adesão ao programa e realizar doações/investimentos dentro do período.",
             prazoImplementacao: "90 dias",
@@ -4410,6 +4412,34 @@
         }
       }
     });
+
+    // ALERTA #5 — Limite combinado de 4% para incentivos fiscais (Art. 228 RIR/2018)
+    (function() {
+      var qtdIncentivosNaoUsados = incentivosNaoUsados.filter(function(inc) {
+        return !(d[inc.campo] === true || d[inc.campo] === 'true');
+      }).length;
+      if (qtdIncentivosNaoUsados >= 2 && ctx.irpjNormalPrevia > 0) {
+        var limiteCombinado = _r(ctx.irpjNormalPrevia * 0.04);
+        ops.push({
+          id: 'INCENTIVOS_LIMITE_COMBINADO',
+          titulo: '⚠️ Atenção — Limite Combinado de Incentivos Fiscais',
+          tipo: 'Alerta',
+          complexidade: 'Baixa',
+          risco: 'Alto',
+          economiaAnual: 0,
+          descricao: 'Os incentivos PAT, Lei Rouanet, FIA, Fundo do Idoso e Lei do Esporte têm limite ' +
+            'COMBINADO de 4% do IRPJ Normal (Art. 228 do RIR/2018). O total máximo aproveitável ' +
+            'para este período é de ' + _m(limiteCombinado) + '. ' +
+            'Não é possível somar os limites individuais de cada incentivo — o teto global é único.',
+          baseLegal: 'Art. 228 do RIR/2018 (Decreto 9.580/2018); IN RFB 1.700/2017',
+          acaoRecomendada: 'Planejar quais incentivos priorizar dentro do teto de ' + _m(limiteCombinado) +
+            ' (4% do IRPJ Normal). Recomenda-se consultar contador para otimizar a combinação.',
+          prazoImplementacao: 'Antes do fechamento do período',
+          detalhes: { limiteCombinado: limiteCombinado, irpjNormal: ctx.irpjNormalPrevia }
+        });
+      }
+    })();
+
 
     // #16 — Lei do Bem (P&D)
     if ((d.investePD === true || d.investePD === "true") && _n(d.valorPD) > 0) {
@@ -4862,18 +4892,26 @@
     // #39 — Simulação Completa Integrada
     if (LR.calcular && LR.calcular.simulacaoCompleta) {
       try {
+        // BUG#4 CORRIGIDO: campos renomeados para o formato esperado pelo mapeamento
         var simCompleta = LR.calcular.simulacaoCompleta({
+          lucroLiquido: ctx.lucroLiquido,
           receitaBruta: ctx.receitaBruta,
-          lucroLiquidoContabil: ctx.lucroLiquido,
+          adicoes: ctx.totalAdicoes || 0,
+          exclusoes: ctx.totalExclusoes || 0,
           patrimonioLiquido: ctx.plVal,
-          saldoPrejuizoFiscal: _n(d.prejuizoFiscal),
-          saldoBaseNegativaCSLL: _n(d.baseNegativaCSLL),
+          prejuizoFiscal: _n(d.prejuizoFiscal),
+          baseNegativaCSLL: _n(d.baseNegativaCSLL),
           lucrosAcumulados: _n(d.lucrosAcumulados) + _n(d.reservasLucros),
           tjlp: (_n(d.tjlp) || 6) / 100,
-          ehInstituicaoFinanceira: ctx.ehFinanceira,
-          despesasIncentivos: ctx.despesasIncentivos || {}
+          financeira: ctx.ehFinanceira,
+          despesasIncentivos: ctx.despesasIncentivos || {},
+          retencoesFonte: ctx.totalIRRF || 0,
+          estimativasPagas: 0,
+          numMeses: 12
         });
-        if (simCompleta && simCompleta.economia && simCompleta.economia.total > 0) {
+        // BUG#4: guarda para evitar exibir número fantasma quando baseline é zero
+        if (simCompleta && simCompleta.economia && simCompleta.economia.total > 0
+            && simCompleta.semOtimizacao && simCompleta.semOtimizacao.irpjDevido > 0) {
           ops.push({
             id: "SIMULACAO_COMPLETA", titulo: "Simulação Integrada — Economia Consolidada",
             tipo: "Dedução", complexidade: "Média", risco: "Baixo",
@@ -5144,7 +5182,9 @@
       ajusteIRPJ: ajusteIRPJ,
       ajusteCSLL: ajusteCSLL,
       ajusteTotal: _r(ajusteIRPJ + ajusteCSLL),
-      saldoACompensar: ajusteIRPJ < 0 ? _r(Math.abs(ajusteIRPJ)) : 0
+      saldoACompensar: ajusteIRPJ < 0 ? _r(Math.abs(ajusteIRPJ)) : 0,
+      saldoACompensarCSLL: ajusteCSLL < 0 ? _r(Math.abs(ajusteCSLL)) : 0,
+      saldoACompensarTotal: _r((ajusteIRPJ < 0 ? Math.abs(ajusteIRPJ) : 0) + (ajusteCSLL < 0 ? Math.abs(ajusteCSLL) : 0))
     };
   }
 
@@ -5961,11 +6001,24 @@
     s5 += '<tbody>';
     s5 += '<tr><td style="color:#E74C3C;">IRPJ</td><td>' + _m(compBaseIRPJ) + '</td><td>' + _pp(compBaseIRPJ > 0 ? _r(comp.irpj.valor / compBaseIRPJ * 100) : 0) + '</td><td>' + _m(comp.irpj.valor) + '</td><td>' + _m(_r(comp.irpj.valor / 12)) + '</td><td>' + _pp(comp.irpj.percentual) + '</td></tr>';
     s5 += '<tr><td style="color:#F39C12;">CSLL</td><td>' + _m(compBaseCSLL) + '</td><td>' + _pp(compBaseCSLL > 0 ? _r(comp.csll.valor / compBaseCSLL * 100) : 0) + '</td><td>' + _m(comp.csll.valor) + '</td><td>' + _m(_r(comp.csll.valor / 12)) + '</td><td>' + _pp(comp.csll.percentual) + '</td></tr>';
-    s5 += '<tr><td style="color:#3498DB;">PIS/COFINS</td><td>' + _m(dre.receitaBruta) + '</td><td>' + (r.pisCofins.aliquotaEfetiva || _pp(_r(comp.pisCofins.valor / (dre.receitaBruta || 1) * 100))) + '</td><td>' + _m(comp.pisCofins.valor) + '</td><td>' + _m(_r(comp.pisCofins.valor / 12)) + '</td><td>' + _pp(comp.pisCofins.percentual) + '</td></tr>';
+    // BUG#2 CORRIGIDO: alíquota calculada sobre valor bruto (mesma base que comp.pisCofins.valor após Bug#1)
+    var pcValorBruto = comp.pisCofins.valor; // bruto após correção Bug#1
+    var pcAliqEfetiva = dre.receitaBruta > 0 ? _pp(_r(pcValorBruto / dre.receitaBruta * 100)) : '0,00%';
+    var pcAliqDisplay = r.pisCofins.aliquotaEfetivaBruta || pcAliqEfetiva;
+    s5 += '<tr><td style="color:#3498DB;">PIS/COFINS</td><td>' + _m(dre.receitaBruta) + '</td><td>' + pcAliqDisplay + '</td><td>' + _m(pcValorBruto) + '</td><td>' + _m(_r(pcValorBruto / 12)) + '</td><td>' + _pp(comp.pisCofins.percentual) + '</td></tr>';
     s5 += '<tr><td style="color:#9B59B6;">ISS</td><td>' + _m(r.iss.receitaServicos) + '</td><td>' + _pp(r.iss.aliquota) + '</td><td>' + _m(comp.iss.valor) + '</td><td>' + _m(_r(comp.iss.valor / 12)) + '</td><td>' + _pp(comp.iss.percentual) + '</td></tr>';
     s5 += '</tbody>';
     s5 += '<tfoot><tr class="res-total"><td><strong>TOTAL</strong></td><td></td><td><strong>' + _pp(res.aliquotaEfetiva) + '</strong></td><td><strong>' + _m(res.cargaBruta) + '</strong></td><td><strong>' + _m(res.cargaBrutaMensal) + '</strong></td><td><strong>100%</strong></td></tr></tfoot>';
     s5 += '</table>';
+    // BUG#1 — notas de valores líquidos (após retenções) para transparência
+    var _pisCofinsLiqS5 = _r(Math.max(pcValorBruto - _n(d.pisRetido) - _n(d.cofinsRetido), 0));
+    var _csllLiqS5 = _r(Math.max(_n(comp.csll.valor) - _n(d.csllRetido), 0));
+    if (_n(d.pisRetido) + _n(d.cofinsRetido) > 0) {
+      s5 += '<p class="res-nota">* PIS/COFINS a pagar líquido (após retenções na fonte de ' + _m(_n(d.pisRetido) + _n(d.cofinsRetido)) + '): <strong>' + _m(_pisCofinsLiqS5) + '</strong></p>';
+    }
+    if (_n(d.csllRetido) > 0) {
+      s5 += '<p class="res-nota">* CSLL a pagar líquida (após CSLL retida ' + _m(_n(d.csllRetido)) + '): <strong>' + _m(_csllLiqS5) + '</strong></p>';
+    }
     html += _secao(5, 'Composição da Carga Tributária', s5);
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -6132,8 +6185,15 @@
         s8 += _linha('CSLL Real Anual (ajuste)', ca.anual.csllRealAnual, '', '');
         s8 += _linha('Ajuste IRPJ (real - estimativas)', ca.anual.ajusteIRPJ, '', ca.anual.ajusteIRPJ < 0 ? 'res-economia' : '');
         s8 += _linha('Ajuste CSLL (real - estimativas)', ca.anual.ajusteCSLL, '', ca.anual.ajusteCSLL < 0 ? 'res-economia' : '');
+        // BUG#3 CORRIGIDO: saldo a compensar separado para IRPJ e CSLL
         if (ca.anual.saldoACompensar > 0) {
-          s8 += _linha('Saldo a Compensar (estimativas excedentes)', ca.anual.saldoACompensar, 'PER/DCOMP', 'res-economia');
+          s8 += _linha('Saldo a Compensar IRPJ (estimativas excedentes)', ca.anual.saldoACompensar, 'PER/DCOMP', 'res-economia');
+        }
+        if (ca.anual.saldoACompensarCSLL > 0) {
+          s8 += _linha('Saldo a Compensar CSLL (estimativas excedentes)', ca.anual.saldoACompensarCSLL, 'PER/DCOMP', 'res-economia');
+        }
+        if (ca.anual.saldoACompensarTotal > 0) {
+          s8 += _linha('= TOTAL a Compensar via PER/DCOMP', ca.anual.saldoACompensarTotal, 'PER/DCOMP', 'res-total res-economia');
         }
         s8 += '</table>';
       }
@@ -6156,6 +6216,20 @@
         }
         s8 += '</div>';
       }
+    }
+    // ALERTA #7 — Impacto de fluxo de caixa no regime anual por estimativa
+    if (ca && ca.anual && (ca.anual.saldoACompensar > 0 || ca.anual.saldoACompensarCSLL > 0)) {
+      var _capitalImob7 = _r((ca.anual.saldoACompensar || 0) + (ca.anual.saldoACompensarCSLL || 0));
+      var _irpjCsllReal7 = _r((ca.anual.irpjRealAnual || 0) + (ca.anual.csllRealAnual || 0));
+      s8 += '<div class="res-recomendacao" style="border-left:4px solid #F39C12;">';
+      s8 += '<h4>⚠️ Impacto de Fluxo de Caixa (Regime Anual)</h4>';
+      s8 += '<p>No regime anual por estimativa, a empresa pagará ' + _m(ca.anual.totalEstimativas) +
+        ' em estimativas mensais, mas o imposto real ajustado é de ' + _m(_irpjCsllReal7) + '.</p>';
+      s8 += '<p>Isso representa <strong>' + _m(_capitalImob7) +
+        ' de capital imobilizado</strong> durante o ano, restituível somente após a entrega da ECF ' +
+        '(geralmente no ano seguinte). Para empresas com necessidade de capital de giro, o regime ' +
+        'trimestral pode ser mais vantajoso do ponto de vista financeiro.</p>';
+      s8 += '</div>';
     }
     html += _secao(8, 'Comparativo: Trimestral vs Anual', s8);
 
