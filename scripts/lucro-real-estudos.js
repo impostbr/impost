@@ -47,6 +47,21 @@
     });
   const _p = (v) => ((v || 0) * 100).toFixed(2) + "%";
   const _n = (v) => parseFloat(v) || 0;
+  /** Formata valor que JÁ É percentual (ex: 25 → "25.00%"). Diferente de _p que multiplica por 100. */
+  function _pp(v) { return (v || 0).toFixed(2) + "%"; }
+
+  /**
+   * MELHORIA #2: Acesso seguro a propriedades aninhadas.
+   * Uso: _safe(sudamResult, 'resumo', 'economiaReducao75')
+   * Em vez de: sudamResult ? (sudamResult.resumo.economiaReducao75 || 0) : 0
+   */
+  function _safe(obj /*, chave1, chave2, ... */) {
+    for (var i = 1; i < arguments.length; i++) {
+      if (obj == null) return 0;
+      obj = obj[arguments[i]];
+    }
+    return (typeof obj === 'number') ? obj : 0;
+  }
 
   /**
    * Formata número como moeda brasileira para exibição em inputs.
@@ -2572,6 +2587,17 @@
     var d = dadosEmpresa;
 
     // ═══════════════════════════════════════════════════════════════════════
+    //  PASSO 0A — Garantir que LR existe (fallback mínimo se mapeamento não carregou)
+    // ═══════════════════════════════════════════════════════════════════════
+    if (!LR) {
+      LR = window.LR || window.LucroRealMap || {};
+    }
+    if (!LR.calcular) LR.calcular = {};
+    if (!LR.validar) LR.validar = {};
+    if (!LR.helpers) LR.helpers = {};
+    if (!LR.simular) LR.simular = {};
+
+    // ═══════════════════════════════════════════════════════════════════════
     //  PASSO 0 — Validar campos obrigatórios
     // ═══════════════════════════════════════════════════════════════════════
     var erros = _validarObrigatorios();
@@ -2584,6 +2610,15 @@
     //  PASSO 1 — Validação cruzada (alertas amarelos, não bloqueiam)
     // ═══════════════════════════════════════════════════════════════════════
     var alertas = _validacaoCruzada();
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  PASSO 1.5 — Normalização dos dados de entrada (MELHORIA #7 + BUG #5)
+    // ═══════════════════════════════════════════════════════════════════════
+    // Unificar campos duplicados e normalizar tipos
+    d.brindes = _n(d.brindes) || _n(d.despesasBrindes);  // BUG #5: dois campos para brindes
+    d.ehFinanceira = d.ehFinanceira === true || d.ehFinanceira === "true";
+    d.temProjetoAprovado = d.temProjetoAprovado === true || d.temProjetoAprovado === "true";
+    d.apuracaoLR = (d.apuracaoLR || "anual").toLowerCase();
 
     // ═══════════════════════════════════════════════════════════════════════
     //  PASSO 2 — Montar DRE (Receita → Lucro Líquido Contábil)
@@ -2689,7 +2724,8 @@
     //  PASSO 3A — Validação de Despesas com Limites Legais
     // ═══════════════════════════════════════════════════════════════════════
     var lucroOperacional = lucroLiquido;
-    var receitaLiquida = receitaBruta;
+    var receitaLiquidaValidacao = receitaBruta;
+    var plVal = _calcPL();
     var validacaoDespesasLimites = { doacoes: null, previdencia: null, royalties: null };
     if (LR.calcular.avancado && LR.calcular.avancado.calcularLimiteDoacoes) {
       try {
@@ -2757,7 +2793,7 @@
     var valorBrindes = _n(d.despesasBrindes) || _n(d.brindes);
     if (valorBrindes > 0) {
       despesasIndedutivelDetalhe.push({ desc: "Brindes", valor: valorBrindes, artigo: "Art. 13, VII Lei 9.249" });
-      totalIndedutivelAuto += valorBrindes;
+      // Não somar a totalIndedutivelAuto — já contabilizado em _calcTotalAdicoes() via d.brindes
     }
     if (_n(d.multasPunitivas) > 0) {
       despesasIndedutivelDetalhe.push({ desc: "Multas punitivas", valor: _n(d.multasPunitivas), artigo: "Art. 311, §5º" });
@@ -2888,23 +2924,51 @@
           superintendencia: isSUDAM ? "SUDAM" : "SUDENE",
           anual: d.apuracaoLR !== "trimestral"
         });
-        if (sudamResult && sudamResult.resumo) {
-          reducaoSUDAM = sudamResult.resumo.economiaReducao75 || 0;
-        }
+        reducaoSUDAM = _safe(sudamResult, 'resumo', 'economiaReducao75');
       } catch (e) { sudamResult = null; }
     }
 
-    var irpjResult = LR.calcular.irpj({
-      lucroLiquido: lucroLiquido,
-      adicoes: totalAdicoes,
-      exclusoes: totalExclusoes,
-      prejuizoFiscal: vedaCompensacao ? 0 : prejuizoFiscal,
-      numMeses: 12,
-      incentivos: totalDeducoesIncentivos,
-      retencoesFonte: totalIRRF,
-      estimativasPagas: estimIRPJPagas,
-      apuracao: d.apuracaoLR === "trimestral" ? "TRIMESTRAL" : "ANUAL"
-    });
+    var irpjResult = null;
+    try {
+      if (LR && LR.calcular && LR.calcular.irpj) {
+        irpjResult = LR.calcular.irpj({
+          lucroLiquido: lucroLiquido,
+          adicoes: totalAdicoes,
+          exclusoes: totalExclusoes,
+          prejuizoFiscal: vedaCompensacao ? 0 : prejuizoFiscal,
+          numMeses: 12,
+          incentivos: totalDeducoesIncentivos,
+          retencoesFonte: totalIRRF,
+          estimativasPagas: estimIRPJPagas,
+          apuracao: d.apuracaoLR === "trimestral" ? "TRIMESTRAL" : "ANUAL"
+        });
+      }
+    } catch (e) {
+      console.warn('[IMPOST] Erro em LR.calcular.irpj:', e.message);
+      irpjResult = null;
+    }
+    // Fallback manual se motor não disponível ou falhou
+    if (!irpjResult) {
+      var _baseIRPJ = Math.max(lucroRealFinal, 0);
+      var _irpjN = _r(_baseIRPJ * 0.15);
+      var _irpjA = _r(Math.max(_baseIRPJ - 240000, 0) * 0.10);
+      var _irpjDev = _r(_irpjN + _irpjA - totalDeducoesIncentivos);
+      irpjResult = {
+        baseCalculo: _baseIRPJ,
+        irpjNormal: _irpjN,
+        irpjAdicional: _irpjA,
+        incentivos: totalDeducoesIncentivos,
+        irpjDevido: Math.max(_irpjDev, 0),
+        irpjAPagar: _r(Math.max(_irpjDev, 0) - totalIRRF - estimIRPJPagas),
+        aliquota: 0.15,
+        aliquotaAdicional: 0.10,
+        limiteAdicional: 240000
+      };
+    }
+    // Garantir propriedades mínimas
+    irpjResult.irpjDevido = irpjResult.irpjDevido || 0;
+    irpjResult.irpjNormal = irpjResult.irpjNormal || 0;
+    irpjResult.irpjAdicional = irpjResult.irpjAdicional || 0;
 
     // Aplicar redução SUDAM/SUDENE sobre o IRPJ
     var irpjAntesReducao = irpjResult.irpjDevido;
@@ -2913,8 +2977,8 @@
     // ═══ CORREÇÃO BUG 1: Na apuração trimestral, usar simulação trimestral (adicional correto) ═══
     var simTrimestral = _simularTrimestral(d, lucroAjustado, prejuizoFiscal, baseNegCSLL, vedaCompensacao, ehFinanceira);
     if (d.apuracaoLR === "trimestral") {
-      irpjResult.irpjAdicional = _r(simTrimestral.trimestres.reduce(function(s, t) { return s + t.irpjAdicional; }, 0));
-      irpjResult.irpjNormal = _r(simTrimestral.trimestres.reduce(function(s, t) { return s + t.irpjNormal; }, 0));
+      irpjResult.irpjAdicional = simTrimestral.totalIRPJAdicional;
+      irpjResult.irpjNormal = simTrimestral.totalIRPJNormal;
       irpjResult.irpjDevido = _r(irpjResult.irpjNormal + irpjResult.irpjAdicional);
       irpjAntesReducao = irpjResult.irpjDevido;
       irpjAposReducao = _r(Math.max(irpjAntesReducao - reducaoSUDAM, 0));
@@ -2946,14 +3010,42 @@
     // ═══════════════════════════════════════════════════════════════════════
     //  PASSO 7 — CSLL → LR.calcular.csll()
     // ═══════════════════════════════════════════════════════════════════════
-    var csllResult = LR.calcular.csll({
-      lucroLiquido: lucroLiquido,
-      adicoes: totalAdicoes,
-      exclusoes: totalExclusoes,
-      baseNegativa: vedaCompensacao ? 0 : baseNegCSLL,
-      financeira: ehFinanceira,
-      tipoAtividade: d.tipoAtividade || ""
-    });
+    var csllResult = null;
+    try {
+      if (LR && LR.calcular && LR.calcular.csll) {
+        csllResult = LR.calcular.csll({
+          lucroLiquido: lucroLiquido,
+          adicoes: totalAdicoes,
+          exclusoes: totalExclusoes,
+          baseNegativa: vedaCompensacao ? 0 : baseNegCSLL,
+          financeira: ehFinanceira,
+          tipoAtividade: d.tipoAtividade || ""
+        });
+      }
+    } catch (e) {
+      console.warn('[IMPOST] Erro em LR.calcular.csll:', e.message);
+      csllResult = null;
+    }
+    // Fallback manual se motor não disponível ou falhou
+    if (!csllResult) {
+      var _aliqCSLL = ehFinanceira ? 0.15 : 0.09;
+      var _baseCSLL = Math.max(lucroRealFinal, 0);
+      var _compBN = 0;
+      if (_baseCSLL > 0 && baseNegCSLL > 0 && !vedaCompensacao) {
+        _compBN = Math.min(_r(_baseCSLL * 0.30), baseNegCSLL);
+      }
+      var _baseCSLLFinal = Math.max(_baseCSLL - _compBN, 0);
+      csllResult = {
+        baseCalculo: _baseCSLLFinal,
+        aliquota: _aliqCSLL,
+        compensacao: _compBN,
+        csllDevida: _r(_baseCSLLFinal * _aliqCSLL),
+        csllAPagar: _r(_baseCSLLFinal * _aliqCSLL - _n(d.csllRetido) - estimCSLLPagas)
+      };
+    }
+    // Garantir propriedades mínimas
+    csllResult.csllDevida = csllResult.csllDevida || 0;
+    csllResult.aliquota = csllResult.aliquota || (ehFinanceira ? 0.15 : 0.09);
 
     // ═══════════════════════════════════════════════════════════════════════
     //  PASSO 7A — Verificação de Omissão de Receita
@@ -2978,26 +3070,58 @@
     var receitasIsentas = _n(d.receitasIsentas) + _n(d.receitaExportacao) + _n(d.receitasMonofasicas);
     var baseCreditos = _calcBaseCreditos();
 
-    var pisCofinsResult = LR.calcular.pisCofins({
-      receitaBruta: receitaBruta,
-      isentas: receitasIsentas,
-      exportacao: 0, // já incluída em isentas acima
-      comprasBensRevenda: _n(d.comprasMercadoriasAnual),
-      energiaEletrica: _n(d.energiaCredito),
-      alugueisPJ: _n(d.alugueisPJCredito),
-      depreciacaoBens: _n(d.depreciacaoBensCredito) + _n(d.depreciacaoEdifCredito),
-      freteArmazenagem: _n(d.freteVendasAnual) + _n(d.armazenagemCredito),
-      leasing: _n(d.leasingCredito),
-      valeTransporteRefeicao: _n(d.valeTranspAlim),
-      devolucoes: _n(d.devolucoesVendas),
-      outrosCreditos: _n(d.outrosCreditosPC) + _n(d.manutencaoMaquinas) + _n(d.creditoEstoqueAbertura)
-    });
+    var pisCofinsResult = null;
+    try {
+      if (LR && LR.calcular && LR.calcular.pisCofins) {
+        pisCofinsResult = LR.calcular.pisCofins({
+          receitaBruta: receitaBruta,
+          isentas: receitasIsentas,
+          exportacao: 0, // já incluída em isentas acima
+          comprasBensRevenda: _n(d.comprasMercadoriasAnual),
+          energiaEletrica: _n(d.energiaCredito),
+          alugueisPJ: _n(d.alugueisPJCredito),
+          depreciacaoBens: _n(d.depreciacaoBensCredito) + _n(d.depreciacaoEdifCredito),
+          freteArmazenagem: _n(d.freteVendasAnual) + _n(d.armazenagemCredito),
+          leasing: _n(d.leasingCredito),
+          valeTransporteRefeicao: _n(d.valeTranspAlim),
+          devolucoes: _n(d.devolucoesVendas),
+          outrosCreditos: _n(d.outrosCreditosPC) + _n(d.manutencaoMaquinas) + _n(d.creditoEstoqueAbertura)
+        });
+      }
+    } catch (e) {
+      console.warn('[IMPOST] Erro em LR.calcular.pisCofins:', e.message);
+      pisCofinsResult = null;
+    }
+    // Fallback manual se motor não disponível ou falhou
+    if (!pisCofinsResult) {
+      var _recTribFB = _r(Math.max(receitaBruta - receitasIsentas, 0));
+      var _debPIS = _r(_recTribFB * 0.0165);
+      var _debCOF = _r(_recTribFB * 0.076);
+      var _credPIS = _r(baseCreditos * 0.0165);
+      var _credCOF = _r(baseCreditos * 0.076);
+      pisCofinsResult = {
+        receitaTributavel: _recTribFB,
+        debitoPIS: _debPIS,
+        debitoCOFINS: _debCOF,
+        creditoPIS: _credPIS,
+        creditoCOFINS: _credCOF,
+        debitos: { pis: _debPIS, cofins: _debCOF },
+        creditos: { pis: _credPIS, cofins: _credCOF },
+        pisAPagar: _r(Math.max(_debPIS - _credPIS, 0)),
+        cofinsAPagar: _r(Math.max(_debCOF - _credCOF, 0)),
+        aPagar: {
+          pis: _r(Math.max(_debPIS - _credPIS, 0)),
+          cofins: _r(Math.max(_debCOF - _credCOF, 0)),
+          total: _r(Math.max(_debPIS - _credPIS, 0) + Math.max(_debCOF - _credCOF, 0))
+        }
+      };
+    }
 
     // Normalizar propriedades flat para evitar crash no render
     // O motor LR pode retornar debitos/creditos como objetos aninhados ou propriedades planas
     if (!pisCofinsResult.debitos) pisCofinsResult.debitos = { pis: 0, cofins: 0 };
     if (!pisCofinsResult.creditos) pisCofinsResult.creditos = { pis: 0, cofins: 0 };
-    if (!pisCofinsResult.aPagar) pisCofinsResult.aPagar = { pis: 0, cofins: 0 };
+    if (!pisCofinsResult.aPagar) pisCofinsResult.aPagar = { pis: 0, cofins: 0, total: 0 };
 
     // Garantir flat props a partir de aninhados (ou vice-versa)
     var _recTrib = pisCofinsResult.receitaTributavel || _r(receitaBruta - receitasIsentas);
@@ -3025,13 +3149,27 @@
     pisCofinsResult.cofinsAPagar   = _cofAP;
     pisCofinsResult.aPagar.pis     = _pisAP;
     pisCofinsResult.aPagar.cofins  = _cofAP;
-    pisCofinsResult.totalAPagar    = _r(_pisAP + _cofAP);
+    pisCofinsResult.aPagar.total   = _r(_pisAP + _cofAP);
+    pisCofinsResult.totalAPagarBruto = _r(_pisAP + _cofAP);
+    pisCofinsResult.totalAPagarAntesRetencoes = _r(_pisAP + _cofAP); // alias mantido
+    pisCofinsResult.pisCofinsRetido = _r(_n(d.pisRetido) + _n(d.cofinsRetido));
+    pisCofinsResult.totalAPagarLiquido = _r(Math.max((_pisAP + _cofAP) - _n(d.pisRetido) - _n(d.cofinsRetido), 0));
+    pisCofinsResult.totalAPagar = pisCofinsResult.totalAPagarLiquido; // ← agora é o valor líquido (retrocompatível)
 
     // Economia com créditos (débitos totais - a pagar = quanto os créditos economizaram)
     var _totalDebitos = _r(pisCofinsResult.debitoPIS + pisCofinsResult.debitoCOFINS);
-    pisCofinsResult.economiaCreditos = pisCofinsResult.economiaCreditos || _r(Math.max(_totalDebitos - pisCofinsResult.totalAPagar, 0));
+    pisCofinsResult.economiaCreditos = pisCofinsResult.economiaCreditos || _r(Math.max(_totalDebitos - pisCofinsResult.totalAPagarBruto, 0));
     pisCofinsResult.receitasIsentas  = pisCofinsResult.receitasIsentas || receitasIsentas;
-    pisCofinsResult.aliquotaEfetiva  = pisCofinsResult.aliquotaEfetiva || (receitaBruta > 0 ? _pp(_r(pisCofinsResult.totalAPagar / receitaBruta * 100)) : '0.00%');
+    // CORREÇÃO BUG #1: _pp() só existe em renderResultados(), não pode ser chamada aqui.
+    // Usar .toFixed(2) + '%' diretamente.
+    pisCofinsResult.aliquotaEfetiva  = pisCofinsResult.aliquotaEfetiva || (receitaBruta > 0 ? (_r(pisCofinsResult.totalAPagarBruto / receitaBruta * 100)).toFixed(2) + '%' : '0.00%');
+
+    // CORREÇÃO BUG #4: Validar consistência entre totalAPagarBruto e aPagar.total
+    if (pisCofinsResult.aPagar && pisCofinsResult.aPagar.total !== undefined) {
+      if (Math.abs(pisCofinsResult.totalAPagarBruto - pisCofinsResult.aPagar.total) > 0.02) {
+        console.warn('[IMPOST PIS/COFINS] Divergência entre totalAPagarBruto (' + pisCofinsResult.totalAPagarBruto + ') e aPagar.total (' + pisCofinsResult.aPagar.total + '). Usando valor recalculado.');
+      }
+    }
 
     // ═══════════════════════════════════════════════════════════════════════
     //  PASSO 9 — ISS mensal
@@ -3088,7 +3226,7 @@
     // ═══════════════════════════════════════════════════════════════════════
     //  PASSO 10 — JCP → LR.calcular.jcp()
     // ═══════════════════════════════════════════════════════════════════════
-    var plVal = _calcPL();
+    // plVal já calculado no PASSO 3A
     var jcpResult = null;
     if (plVal > 0 && lucroLiquido > 0) {
       try {
@@ -3123,11 +3261,11 @@
     if ((isSUDAM || isSUDENE) && LR.calcular.lucroExploracao) {
       try {
         lucroExploracaoResult = LR.calcular.lucroExploracao({
-          lucroLiquidoContabil: lucroLiquido,
-          receitasFinanceirasLiquidas: _n(d.receitasFinanceiras) - _n(d.despesasFinanceiras),
+          lucroLiquido: lucroLiquido,
+          receitasFinanceirasLiquidas: receitaFinanceiras,
           resultadoMEP: _n(d.resultadoMEP),
           resultadoNaoOperacional: _n(d.lucroNaoOperacional),
-          receitasExercicioAnterior: 0,
+          receitasAnteriores: 0,
           csllDevida: csllResult ? csllResult.csllDevida : 0
         });
       } catch(e) {}
@@ -3139,66 +3277,92 @@
     var depreciacaoResult = { bens: [], total: 0, economiaFiscal: 0 };
     var bensParaCalculo = [];
     var bensConfig = [
-      { campo: "valorVeiculos", tipo: "VEICULOS", taxa: 0.20 },
-      { campo: "valorMaquinas", tipo: "MAQUINAS", taxa: 0.10 },
-      { campo: "valorComputadores", tipo: "COMPUTADORES", taxa: 0.20 },
-      { campo: "valorMoveis", tipo: "MOVEIS", taxa: 0.10 },
-      { campo: "valorEdificios", tipo: "EDIFICIOS", taxa: 0.04 },
-      { campo: "valorDrones", tipo: "DRONES", taxa: 0.20 },
-      { campo: "valorTratores", tipo: "TRATORES", taxa: 0.25 },
-      { campo: "valorSoftware", tipo: "SOFTWARE", taxa: 0.20 },
-      { campo: "valorInstalacoes", tipo: "INSTALACOES", taxa: 0.10 },
-      { campo: "valorOutrosBens", tipo: "OUTROS", taxa: 0.10 }
+      // CORREÇÃO BUG #2: Tipos devem ser EXATAMENTE iguais às chaves de DEPRECIACAO_FISCAL.taxasAnuais no motor
+      // Antes: usava maiúsculas (MAQUINAS, COMPUTADORES) e fazia .toLowerCase() — mas isso
+      // quebrava "veiculosPassageiro" → "veiculospassageiro" (sem match no motor).
+      // Agora: chaves já são as corretas do motor, sem necessidade de conversão.
+      { campo: "valorVeiculos", tipo: "veiculosPassageiro", taxa: 0.20 },
+      { campo: "valorMaquinas", tipo: "maquinas", taxa: 0.10 },
+      { campo: "valorComputadores", tipo: "computadores", taxa: 0.20 },
+      { campo: "valorMoveis", tipo: "moveis", taxa: 0.10 },
+      { campo: "valorEdificios", tipo: "edificios", taxa: 0.04 },
+      { campo: "valorDrones", tipo: "drones", taxa: 0.20 },
+      { campo: "valorTratores", tipo: "tratores", taxa: 0.25 },
+      { campo: "valorSoftware", tipo: "software", taxa: 0.20 },
+      { campo: "valorInstalacoes", tipo: "instalacoes", taxa: 0.10 },
+      { campo: "valorOutrosBens", tipo: "outros", taxa: 0.10 } // "outros" não existe no motor — usa fallback manual
     ];
     bensConfig.forEach(function(bc) {
       var valor = _n(d[bc.campo]);
-      // CORREÇÃO FALHA #10: Motor espera tipo em minúsculas e campo custoAquisicao (não 'valor')
-      if (valor > 0) bensParaCalculo.push({ tipo: bc.tipo.toLowerCase(), custoAquisicao: valor, valor: valor, taxa: bc.taxa });
+      // CORREÇÃO BUG #2: Tipos já estão nas chaves corretas do motor — não precisa mais de .toLowerCase()
+      if (valor > 0) bensParaCalculo.push({ tipo: bc.tipo, custoAquisicao: valor, valor: valor, taxa: bc.taxa });
     });
 
+    // MELHORIA #1: Validação centralizada — verificar se tipos existem no motor
+    if (typeof LR !== 'undefined' && LR.DEPRECIACAO_FISCAL && LR.DEPRECIACAO_FISCAL.taxasAnuais) {
+      bensParaCalculo.forEach(function(bp) {
+        if (!LR.DEPRECIACAO_FISCAL.taxasAnuais[bp.tipo] && bp.tipo !== 'outros') {
+          console.warn('[IMPOST DEPRECIACAO] Tipo "' + bp.tipo + '" não existe no motor. Usando fallback com taxa ' + bp.taxa + '.');
+        }
+      });
+    }
+
     if (LR.calcular.depreciacaoCompleta && bensParaCalculo.length > 0) {
-      try {
-        depreciacaoResult = LR.calcular.depreciacaoCompleta({
-          bens: bensParaCalculo,
-          turnos: turnos,
-          bensSmallValue: _n(d.bensSmallValue),
-          valorBensNovos: (isSUDAM || isSUDENE) ? _n(d.valorBensNovos) : 0,
-          ehSUDAM: isSUDAM,
-          ehSUDENE: isSUDENE
-        });
-      } catch(e) {
-        // fallback: manter cálculo manual
-        var depreciacaoDetalhe = [];
-        var totalDepNormal = 0;
-        var totalDepAcelerada = 0;
-        bensParaCalculo.forEach(function (bc) {
-          var depN = _r(bc.valor * bc.taxa);
+      // CORREÇÃO BUG 3: Iterar cada bem individualmente (motor espera um único bem, não array)
+      var depreciacaoDetalhe = [];
+      var totalDepNormal = 0;
+      var totalDepAcelerada = 0;
+      bensParaCalculo.forEach(function (bc) {
+        var resultado = null;
+        try {
+          resultado = LR.calcular.depreciacaoCompleta({
+            tipo: bc.tipo,
+            custoAquisicao: bc.custoAquisicao,
+            turnos: turnos,
+            mesesUso: 12
+          });
+        } catch(e) {
+          resultado = null;
+        }
+        // Se motor retornou erro ou falhou, usar fallback manual para este bem
+        if (!resultado || resultado.erro) {
+          var depN = _r(bc.custoAquisicao * bc.taxa);
           var depA = _r(depN * multTurnos);
           totalDepNormal += depN;
           totalDepAcelerada += depA;
           depreciacaoDetalhe.push({
-            tipo: bc.tipo, valorOriginal: bc.valor, taxa: bc.taxa,
+            tipo: bc.tipo, valorOriginal: bc.custoAquisicao, taxa: bc.taxa,
             depreciaNormal: depN, depreciaAcelerada: depA, turnos: turnos
           });
-        });
-        var depBensNovos = 0;
-        if ((isSUDAM || isSUDENE) && _n(d.valorBensNovos) > 0) {
-          depBensNovos = _n(d.valorBensNovos);
+        } else {
+          // Motor retornou resultado válido
+          var depNM = resultado.depreciacaoNormal || resultado.depreciacaoPeriodo || _r(bc.custoAquisicao * bc.taxa);
+          var depAM = resultado.depreciacaoAcelerada || resultado.depreciacaoIncentivada || _r(depNM * multTurnos);
+          totalDepNormal += depNM;
+          totalDepAcelerada += depAM;
+          depreciacaoDetalhe.push(Object.assign({
+            tipo: bc.tipo, valorOriginal: bc.custoAquisicao, taxa: bc.taxa,
+            depreciaNormal: depNM, depreciaAcelerada: depAM, turnos: turnos
+          }, resultado));
         }
-        var depBensSmall = _n(d.bensSmallValue);
-        var depreciacaoTotal = _r(totalDepAcelerada + depBensNovos + depBensSmall);
-        depreciacaoResult = {
-          bens: depreciacaoDetalhe,
-          depreciaNormal: totalDepNormal,
-          depreciaAcelerada: totalDepAcelerada,
-          depBensNovos: depBensNovos,
-          depBensSmall: depBensSmall,
-          total: depreciacaoTotal,
-          economiaFiscal: _r(depreciacaoTotal * 0.34),
-          turnos: turnos,
-          multiplicador: multTurnos
-        };
+      });
+      var depBensNovos = 0;
+      if ((isSUDAM || isSUDENE) && _n(d.valorBensNovos) > 0) {
+        depBensNovos = _n(d.valorBensNovos);
       }
+      var depBensSmall = _n(d.bensSmallValue);
+      var depreciacaoTotal = _r(totalDepAcelerada + depBensNovos + depBensSmall);
+      depreciacaoResult = {
+        bens: depreciacaoDetalhe,
+        depreciaNormal: totalDepNormal,
+        depreciaAcelerada: totalDepAcelerada,
+        depBensNovos: depBensNovos,
+        depBensSmall: depBensSmall,
+        total: depreciacaoTotal,
+        economiaFiscal: _r(depreciacaoTotal * 0.34),
+        turnos: turnos,
+        multiplicador: multTurnos
+      };
     } else if (bensParaCalculo.length > 0) {
       // fallback sem motor disponível
       var depreciacaoDetalhe2 = [];
@@ -3335,12 +3499,26 @@
         recomendacaoRegime = LR.calcular.recomendarRegime({
           lucroAjustado: lucroAjustado,
           prejuizoFiscal: _n(d.prejuizoFiscal),
+          prejuizoAcumulado: _n(d.prejuizoFiscal),
           baseNegativaCSLL: _n(d.baseNegativaCSLL),
           receitaBruta: receitaBruta,
           sazonalidade: d.preencherMesAMes === true || d.preencherMesAMes === "true",
           mesesReceita: (function() {
             var arr = [];
             for (var m = 1; m <= 12; m++) arr.push(_n(d["receitaMes" + m]));
+            return arr;
+          })(),
+          lucrosMensais: (function() {
+            var arr = [];
+            var temMes = d.preencherMesAMes === true || d.preencherMesAMes === "true";
+            for (var m = 1; m <= 12; m++) {
+              if (temMes && _n(d["receitaMes" + m]) > 0) {
+                var fator = _n(d.receitaBrutaAnual) > 0 ? _n(d["receitaMes" + m]) / _n(d.receitaBrutaAnual) : 1/12;
+                arr.push(_r(lucroAjustado * fator));
+              } else {
+                arr.push(_r(lucroAjustado / 12));
+              }
+            }
             return arr;
           })()
         });
@@ -3350,11 +3528,11 @@
     // ═══════════════════════════════════════════════════════════════════════
     //  PRÉ-CÁLCULO — Totais de economia (necessário para projeção)
     // ═══════════════════════════════════════════════════════════════════════
-    var economiaJCP = jcpResult ? (jcpResult.economiaLiquida || 0) : 0;
-    var economiaPrejuizo = compensacao ? (compensacao.resumo.economia.total || 0) : 0;
+    var economiaJCP = _safe(jcpResult, 'economiaLiquida');
+    var economiaPrejuizo = _safe(compensacao, 'resumo', 'economia', 'total');
     var economiaSUDAM = reducaoSUDAM;
-    var economiaIncentivos = incentivosFiscais ? (incentivosFiscais.economiaTotal || 0) : 0;
-    var economiaDepreciacao = depreciacaoResult.economiaFiscal;
+    var economiaIncentivos = _safe(incentivosFiscais, 'economiaTotal');
+    var economiaDepreciacao = _safe(depreciacaoResult, 'economiaFiscal');
     var economiaPisCofins = pisCofinsResult.economiaCreditos || 0;
     var economiaGratificacao = _n(d.gratificacoesAdm) > 0 ? _r(_n(d.gratificacoesAdm) * 0.34) : 0;
     var economiaCPRBFinal = cprbResult ? cprbResult.economia : 0;
@@ -3363,8 +3541,8 @@
     var totalEconomias = _r(economiaJCP + economiaPrejuizo + economiaSUDAM + economiaIncentivos + economiaDepreciacao + economiaPisCofins + economiaCPRBFinal + totalPDDEcon + economiaGratificacao);
 
     // CORREÇÃO FALHA #3: Carga bruta 100% bruta (IRPJ + CSLL + PIS/COFINS + ISS, todos ANTES de retenções)
-    var pisCofinsLiquido = _r(Math.max(pisCofinsResult.totalAPagar - _n(d.pisRetido) - _n(d.cofinsRetido), 0));
-    var pisCofinsParaCargaBruta = pisCofinsResult.totalAPagar || pisCofinsLiquido;
+    var pisCofinsLiquido = _r(Math.max(pisCofinsResult.totalAPagarBruto - _n(d.pisRetido) - _n(d.cofinsRetido), 0));
+    var pisCofinsParaCargaBruta = pisCofinsResult.totalAPagarBruto || pisCofinsLiquido;
     var cargaBruta = _r(irpjAntesReducao + csllResult.csllDevida + pisCofinsParaCargaBruta + issAnual);
     var cargaOtimizada = _r(Math.max(cargaBruta - totalEconomias, 0));
     var aliquotaEfetiva = receitaBruta > 0 ? _r(cargaBruta / receitaBruta * 100) : 0;
@@ -3522,9 +3700,22 @@
       try {
         var dadosMora = {
           valorPrincipal: _n(d.valorPrincipalMora) || _r(cargaBruta / 12),
+          valorTributo: _n(d.valorPrincipalMora) || _r(cargaBruta / 12),
           dataVencimento: d.dataVencimentoMora || null,
-          dataPagamento: d.dataPagamentoMora || null
+          dataPagamento: d.dataPagamentoMora || null,
+          diasAtraso: _n(d.diasAtrasoMora) || 0,
+          taxasSelicMes: []
         };
+        // Calcular diasAtraso a partir de datas se não fornecido diretamente
+        if (!dadosMora.diasAtraso && dadosMora.dataVencimento && dadosMora.dataPagamento) {
+          try {
+            var _dv = new Date(dadosMora.dataVencimento);
+            var _dp = new Date(dadosMora.dataPagamento);
+            if (!isNaN(_dv.getTime()) && !isNaN(_dp.getTime())) {
+              dadosMora.diasAtraso = Math.max(0, Math.round((_dp - _dv) / 86400000));
+            }
+          } catch(_e) {}
+        }
         if (LR.calcular.acrescimosMoratorios) {
           acrescimosMoratoriosResult = LR.calcular.acrescimosMoratorios(dadosMora);
         }
@@ -3535,8 +3726,11 @@
     if (LR.calcular && LR.calcular.multaOficio) {
       try {
         multaOficioResult = LR.calcular.multaOficio({
+          valorDiferenca: _r(cargaBruta / 12),
           valorTributo: _r(cargaBruta / 12),
+          tipoInfracao: (d.tipoMultaOficio || 'PADRAO') === 'PADRAO' ? 'normal' : (d.tipoMultaOficio || 'normal').toLowerCase(),
           tipo: d.tipoMultaOficio || 'PADRAO',
+          pagamento30Dias: d.pagouMultaEm30Dias === true || d.pagouMultaEm30Dias === "true",
           pagouEm30Dias: d.pagouMultaEm30Dias === true || d.pagouMultaEm30Dias === "true",
           temConformidade: d.temConformidadeLei14689 === true || d.temConformidadeLei14689 === "true",
           temTransacao: d.temTransacaoTributaria === true || d.temTransacaoTributaria === "true"
@@ -3746,7 +3940,10 @@
 
       // Seção 5: Composição da carga
       composicao: {
-        irpj: { valor: irpjAposReducao, percentual: cargaBruta > 0 ? _r(irpjAntesReducao / cargaBruta * 100) : 0 },
+        // CORREÇÃO BUG #3: cargaBruta usa irpjAntesReducao (linha 3385), então composicao.irpj
+        // também deve usar irpjAntesReducao para que a soma dos componentes = cargaBruta.
+        // Antes: valor usava irpjAposReducao mas percentual usava irpjAntesReducao (inconsistente).
+        irpj: { valor: irpjAntesReducao, percentual: cargaBruta > 0 ? _r(irpjAntesReducao / cargaBruta * 100) : 0 },
         csll: { valor: csllResult.csllDevida, percentual: cargaBruta > 0 ? _r(csllResult.csllDevida / cargaBruta * 100) : 0 },
         pisCofins: { valor: pisCofinsLiquido, percentual: cargaBruta > 0 ? _r(pisCofinsLiquido / cargaBruta * 100) : 0 },
         iss: { valor: issAnual, percentual: cargaBruta > 0 ? _r(issAnual / cargaBruta * 100) : 0 }
@@ -3840,6 +4037,16 @@
     //  PASSO 28 — Cache
     // ═══════════════════════════════════════════════════════════════════════
     resultadosCache = resultados;
+
+    // MELHORIA #3: Congelar sub-objetos críticos para detectar mutações posteriores
+    // Em strict mode, qualquer tentativa de mutação gerará TypeError (facilita debug)
+    if (typeof Object.freeze === 'function') {
+      try {
+        Object.freeze(resultados.resumo);
+        Object.freeze(resultados.composicao);
+        Object.freeze(resultados.economia);
+      } catch(e) { /* ignora em browsers antigos */ }
+    }
 
     // ═══════════════════════════════════════════════════════════════════════
     //  PASSO 29 — Salvar localStorage
@@ -4735,6 +4942,9 @@
     var trimestres = [];
     var totalIRPJ = 0;
     var totalCSLL = 0;
+    var totalIRPJNormalExato = 0;
+    var totalIRPJAdicionalExato = 0;
+    var totalCSLLExato = 0;
     var saldoPF = vedaCompensacao ? 0 : prejuizoFiscal;
     var saldoBN = vedaCompensacao ? 0 : baseNegCSLL;
     var aliqCSLL = ehFinanceira ? 0.15 : 0.09;
@@ -4762,8 +4972,10 @@
       var lucroRealTri = Math.max(lucroTri - compTri, 0);
 
       // IRPJ trimestral (adicional sobre R$ 60.000)
-      var irpjN = _r(lucroRealTri * 0.15);
-      var irpjA = _r(Math.max(lucroRealTri - 60000, 0) * 0.10);
+      var irpjN_exato = lucroRealTri * 0.15;
+      var irpjA_exato = Math.max(lucroRealTri - 60000, 0) * 0.10;
+      var irpjN = _r(irpjN_exato);  // arredondado para UI do trimestre
+      var irpjA = _r(irpjA_exato);
       var irpjTri = _r(irpjN + irpjA);
 
       // CSLL trimestral com compensação
@@ -4774,8 +4986,13 @@
         saldoBN = _r(saldoBN - compCSLLTri);
       }
       var baseCSLLTri = Math.max(lucroTri - compCSLLTri, 0);
-      var csllTri = _r(baseCSLLTri * aliqCSLL);
+      var csll_exato = baseCSLLTri * aliqCSLL;
+      var csllTri = _r(csll_exato);
 
+      // Acumular valores EXATOS (arredondamento apenas no retorno final)
+      totalIRPJNormalExato += irpjN_exato;
+      totalIRPJAdicionalExato += irpjA_exato;
+      totalCSLLExato += csll_exato;
       totalIRPJ += irpjTri;
       totalCSLL += csllTri;
 
@@ -4795,9 +5012,11 @@
 
     return {
       trimestres: trimestres,
-      totalIRPJ: _r(totalIRPJ),
-      totalCSLL: _r(totalCSLL),
-      total: _r(totalIRPJ + totalCSLL),
+      totalIRPJ: _r(totalIRPJNormalExato + totalIRPJAdicionalExato),
+      totalIRPJNormal: _r(totalIRPJNormalExato),
+      totalIRPJAdicional: _r(totalIRPJAdicionalExato),
+      totalCSLL: _r(totalCSLLExato),
+      total: _r(totalIRPJNormalExato + totalIRPJAdicionalExato + totalCSLLExato),
       saldoPrejuizoRemanescente: _r(saldoPF),
       saldoBaseNegRemanescente: _r(saldoBN)
     };
@@ -5280,8 +5499,8 @@
       '</div>';
     // Card 2 — Carga bruta
     s2 += '<div class="res-summary-card">' +
-      '<div class="res-card-label">CARGA TRIBUTÁRIA TOTAL</div>' +
-      '<div class="res-card-value">' + _m(res.cargaBruta) + '</div>' +
+      '<div class="res-card-label">TOTAL DE TRIBUTOS DEVIDOS (Bruto)</div>' +
+      '<div class="res-card-value" title="Soma de IRPJ + CSLL + PIS/COFINS + ISS antes de descontar retenções na fonte">' + _m(res.cargaBruta) + '</div>' +
       '<div class="res-card-sub">Mensal: ' + _m(res.cargaBrutaMensal) + '</div>' +
       '</div>';
     // Card 3 — Alíquota efetiva
@@ -5308,10 +5527,10 @@
       '<div class="res-card-value ' + (res.saldoEfetivo < 0 ? 'res-card-economia' : '') + '">' + _m(res.saldoEfetivo) + '</div>' +
       '<div class="res-card-sub">' + (res.saldoEfetivo < 0 ? 'Saldo negativo — PER/DCOMP' : 'Federal — sem ISS de ' + _m(res.issAnual || 0)) + '</div>' +
       '</div>';
-    // Card 7 — Desembolso Total (Federal + ISS)
+    // Card 7 — Total a Pagar (Líquido de Retenções)
     s2 += '<div class="res-summary-card">' +
-      '<div class="res-card-label">DESEMBOLSO TOTAL (FED + ISS)</div>' +
-      '<div class="res-card-value">' + _m(res.desembolsoTotal) + '</div>' +
+      '<div class="res-card-label">TOTAL A PAGAR (Líquido de Retenções)</div>' +
+      '<div class="res-card-value" title="Valor efetivo a desembolsar após compensação de retenções sofridas (IRRF, PIS, COFINS e CSLL retidos)">' + _m(res.desembolsoTotal) + '</div>' +
       '<div class="res-card-sub">Inclui ISS municipal de ' + _m(res.issAnual || 0) + '</div>' +
       '</div>';
     s2 += '</div>';
@@ -5634,7 +5853,7 @@
       var cofinsRetido = _n(d.cofinsRetido);
       if (pisRetido > 0) s4 += _linha('(-) PIS Retido na Fonte', pisRetido, '', 'res-sub');
       if (cofinsRetido > 0) s4 += _linha('(-) COFINS Retido na Fonte', cofinsRetido, '', 'res-sub');
-      var pisCofinsLiquido = _r(Math.max(pc.totalAPagar - pisRetido - cofinsRetido, 0));
+      var pisCofinsLiquido = _r(Math.max(pc.totalAPagarBruto - pisRetido - cofinsRetido, 0));
       s4 += '<tr class="res-total"><td><strong>' + (pisCofinsLiquido >= 0 ? '= PIS/COFINS A PAGAR' : '= SALDO CREDOR PIS/COFINS') + '</strong></td><td class="res-valor"><strong>' + _m(pisCofinsLiquido) + '</strong></td></tr>';
       s4 += '<tr class="res-info-row"><td colspan="2">Alíquota Efetiva: ' + _pp(_r(pisCofinsLiquido / (dre.receitaBruta || 1) * 100)) + ' (nominal: 9,25%)</td></tr>';
     }
@@ -7076,6 +7295,38 @@
     currentStep = 0;
     saveToLS();
     renderWizard();
+
+    // MELHORIA #4: Teste de regressão automático
+    // Após preencher dados de exemplo, rodar cálculo e validar totais esperados
+    setTimeout(function() {
+      try {
+        analisar();
+        var r = resultadosCache;
+        if (!r || !r.resumo) { console.warn('[TESTE REGRESSÃO] Sem resultados após analisar()'); return; }
+        var checks = [
+          // [caminho, valorEsperado, tolerancia]
+          ['resumo.cargaBruta', null, 0.02],           // valor real a definir após baseline
+          ['resumo.economiaTotal', null, 0.02],
+          ['irpj.irpjDevido', null, 0.02]
+        ];
+        checks.forEach(function(chk) {
+          if (chk[1] === null) return; // skip se valor esperado não definido
+          var partes = chk[0].split('.');
+          var atual = r;
+          partes.forEach(function(p) { atual = atual ? atual[p] : null; });
+          if (atual === null || atual === undefined) {
+            console.error('[TESTE REGRESSÃO] Campo ' + chk[0] + ' não encontrado nos resultados');
+          } else if (Math.abs(atual - chk[1]) > chk[2]) {
+            console.error('[TESTE REGRESSÃO] ' + chk[0] + ': esperado ' + chk[1] + ', obtido ' + atual);
+          } else {
+            console.info('[TESTE REGRESSÃO] ✓ ' + chk[0] + ' = ' + atual);
+          }
+        });
+        console.info('[TESTE REGRESSÃO] Para definir baseline, anote: cargaBruta=' + _safe(r, 'resumo', 'cargaBruta') + ', economiaTotal=' + _safe(r, 'resumo', 'economiaTotal') + ', irpjDevido=' + _safe(r, 'irpj', 'irpjDevido'));
+      } catch(e) {
+        console.error('[TESTE REGRESSÃO] Erro ao executar:', e.message);
+      }
+    }, 200);
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -7521,7 +7772,7 @@
     // 6 Cards de resumo (grid 3x2)
     h += grid(3, [
       miniCard('ECONOMIA IDENTIFICADA', _m(res.economiaTotal), COR.accentDark, 'Potencial de economia anual'),
-      miniCard('CARGA TRIBUTÁRIA', _m(res.cargaBruta), COR.danger, _m(res.cargaBrutaMensal) + '/mês'),
+      miniCard('TRIBUTOS DEVIDOS (Bruto)', _m(res.cargaBruta), COR.danger, _m(res.cargaBrutaMensal) + '/mês'),
       miniCard('ALÍQUOTA EFETIVA', _pp(res.aliquotaEfetiva), COR.text),
       miniCard('CARGA OTIMIZADA', _m(res.cargaOtimizada), COR.accentDark, _pp(res.aliquotaOtimizada) + ' efetiva'),
       miniCard('RETENÇÕES A COMPENSAR', _m(res.totalRetencoes), COR.info),
@@ -7974,7 +8225,7 @@
     var pdfCofinsRetido = _n(d.cofinsRetido);
     if (pdfPisRetido > 0) pcRows.push({ cells: ['(-) PIS Retido na Fonte', _m(-pdfPisRetido)] });
     if (pdfCofinsRetido > 0) pcRows.push({ cells: ['(-) COFINS Retido na Fonte', _m(-pdfCofinsRetido)] });
-    var pdfPisCofinsLiq = _r(Math.max(pc.totalAPagar - pdfPisRetido - pdfCofinsRetido, 0));
+    var pdfPisCofinsLiq = _r(Math.max(pc.totalAPagarBruto - pdfPisRetido - pdfCofinsRetido, 0));
     pcRows.push({ cells: ['= PIS/COFINS A PAGAR', _m(pdfPisCofinsLiq)], _total: true });
     if (pc.economiaCreditos > 0) {
       pcRows.push({ cells: ['Economia com Créditos Não-Cumulativos', _m(pc.economiaCreditos)], _eco: true });
@@ -8933,7 +9184,7 @@
     var xlPisRet = _n(d.pisRetido), xlCofRet = _n(d.cofinsRetido);
     if (xlPisRet > 0) aba3.push(['(-) PIS Retido na Fonte', mv(-xlPisRet)]);
     if (xlCofRet > 0) aba3.push(['(-) COFINS Retido na Fonte', mv(-xlCofRet)]);
-    aba3.push(['PIS/COFINS a Pagar', mv(Math.max(pc.totalAPagar - xlPisRet - xlCofRet, 0))]);
+    aba3.push(['PIS/COFINS a Pagar', mv(Math.max(pc.totalAPagarBruto - xlPisRet - xlCofRet, 0))]);
     if (pc.economiaCreditos > 0) aba3.push(['Economia com Créditos', mv(pc.economiaCreditos)]);
     aba3.push([]);
     aba3.push(['ISS']);
