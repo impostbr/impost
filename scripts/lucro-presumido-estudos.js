@@ -9,8 +9,24 @@
  * Arquitetura:
  *   HTML (UI/render) → lucro-presumido-estudos.js (análise) → lucro_presumido.js (motor)
  *
- * Versão: 2.0.0
+ * Versão: 2.4.0
  * Data: Fevereiro/2026
+ *
+ * Changelog:
+ *   v2.4.0 (Fevereiro/2026):
+ *     - NOVO: Propagação completa de benefícios fiscais (ZFM, SUFRAMA, exportação, SUDAM/SUDENE, 16%)
+ *     - NOVO: Dicas contextuais: SUDENE, ZFM, exportação, percentual 16%, regime caixa, ISS misto
+ *     - NOVO: Comparativo SUDAM/SUDENE (LP vs LR com benefício 75%)
+ *     - NOVO: Economia potencial inclui ISS, INSS, ZFM, SUFRAMA, exportação, SUDAM
+ *     - NOVO: Resumo executivo com seção benefícios fiscais
+ *     - MELHORIA: calcularEstudoCompleto() aceita e propaga todos os novos parâmetros
+ *   v2.3.1 (Fevereiro/2026):
+ *     - FIX: _normalizeAliquota() — detecção inteligente de formato (inteiro vs decimal)
+ *     - FIX: DEFAULTS.socios padronizado para usar "participacao" (consistência com motor v3.6.1)
+ *     - FIX: _testarEstudo() usa "participacao" nos sócios de exemplo
+ *     - FIX: Versão do cabeçalho sincronizada com VERSION exportado
+ *   v2.3.0: Bug 8 alerta margem 100%, Melhoria 2 premissas break-even
+ *   v2.0.0: Versão inicial com break-even, dicas, economia, LC 224, resumo executivo
  *
  * Dependência: lucro_presumido.js deve ser carregado ANTES deste arquivo.
  * Expõe: objeto global EstudoLP (window.EstudoLP / globalThis.EstudoLP)
@@ -32,7 +48,7 @@
     aliquotaTerceiros: 0.005,
     creditosPISCOFINS: 0,
     aliquotaSimples: 0.15,
-    socios: [{ nome: 'Sócio Único', percentual: 1.0 }]
+    socios: [{ nome: 'Sócio Único', participacao: 1.0 }]
   };
 
   /** Limite anual para aplicação da LC 224/2025 */
@@ -97,6 +113,36 @@
       }
     }
     return params;
+  }
+
+  /**
+   * Normaliza alíquota para decimal.
+   * Aceita tanto formato inteiro (5 = 5%) quanto decimal (0.05 = 5%).
+   * Regra: se valor > 1, divide por 100; se <= 1, usa como está.
+   * Exceção: aliquotaTerceiros pode ser 0.5 (inteiro) — mas 0.5 < 1 já é tratado como decimal (0.5%).
+   * Para aliquotaTerceiros, o DEFAULTS já é 0.005, e o HTML envia 0.5 (inteiro). Portanto usamos
+   * limiar de 0.1: se > 0.1, é inteiro (divide por 100); se <= 0.1, é decimal.
+   *
+   * @private
+   * @param {number|null|undefined} valor - Alíquota informada
+   * @param {number} fallback - Valor padrão (já em decimal)
+   * @param {string} nome - Nome do campo (para log)
+   * @returns {number} Alíquota em decimal
+   */
+  function _normalizeAliquota(valor, fallback, nome) {
+    if (valor == null || typeof valor !== 'number') return fallback;
+    // Se é claramente um percentual inteiro (ex: 2, 3, 5, 20)
+    if (valor > 1) return valor / 100;
+    // Se está entre 0.1 e 1 (zona ambígua: pode ser 0.5% ou 50%)
+    // Para ISS/RAT, valores entre 0.1 e 1 são inválidos como decimal (10% a 100% de ISS não existe)
+    // Logo, interpretar como inteiro. Ex: 0.5 → 0.5% → 0.005
+    if (valor > 0.1 && nome !== 'aliquotaISS') return valor / 100;
+    if (valor > 0.1 && nome === 'aliquotaISS') {
+      // ISS entre 0.1 e 1: ambíguo. ISS máximo é 5% (0.05), então 0.1+ é inteiro.
+      return valor / 100;
+    }
+    // Se <= 0.1, já é decimal (ex: 0.05 = 5%, 0.03 = 3%, 0.005 = 0.5%)
+    return valor;
   }
 
   /**
@@ -229,6 +275,14 @@
 
     // E. Alerta
     var alerta = null;
+
+    // FIX (Bug 8): Se despesas e folha estão zeradas, alertar o usuário
+    if (receita > 0 && despesasOp === 0 && folha === 0) {
+      alerta = 'ATENÇÃO: Nenhuma despesa operacional ou folha de pagamento foi informada. ' +
+               'A análise assume margem de lucro de 100%, o que raramente reflete a realidade. ' +
+               'Para uma análise precisa, preencha as despesas na aba "Complementar".';
+      margemRealAtual = 100;
+    }
     if (margemRealAtual !== null && breakEvenMargem !== null) {
       var distancia = Math.abs(margemRealAtual - breakEvenMargem);
       if (margemRealAtual < breakEvenMargem) {
@@ -256,6 +310,17 @@
       recomendacao = 'Não foi possível determinar o break-even. Consulte seu contador para análise detalhada.';
     }
 
+    // MELHORIA 2: Premissas transparentes para validação pelo contador
+    var premissas = {
+      descricao: 'Esta análise compara os tributos federais (IRPJ, CSLL, PIS, COFINS) do LP com LR.',
+      pisCofinsLR: 'PIS 1,65% + COFINS 7,6% não-cumulativo',
+      pisCofinsLP: 'PIS 0,65% + COFINS 3,0% cumulativo',
+      issConsiderado: aliqISS > 0 ? 'ISS de ' + (aliqISS * 100).toFixed(1) + '% incluído em ambos' : 'ISS não incluído',
+      creditosPISCOFINS: creditos > 0 ? 'Créditos PIS/COFINS de R$ ' + creditos.toLocaleString('pt-BR') : 'Sem créditos PIS/COFINS informados',
+      prejuizosFiscais: prejuizosFiscais > 0 ? 'Prejuízos fiscais de R$ ' + prejuizosFiscais.toLocaleString('pt-BR') + ' (compensação até 30%)' : 'Sem prejuízos fiscais informados',
+      nota: 'Para análise definitiva, consulte seu contador.'
+    };
+
     return {
       cargaTributariaLP: cargaLP,
       breakEvenMargem: breakEvenMargem,
@@ -265,6 +330,7 @@
       margens: margens,
       alerta: alerta,
       recomendacao: recomendacao,
+      premissas: premissas,
       baseLegal: 'Comparação simplificada LP (base presumida) vs LR (IRPJ 15%+10%, CSLL 9%, PIS 1,65%, COFINS 7,6% não-cumulativo). RIR/2018; Lei 9.249/95, Art. 15; Lei 10.637/2002; Lei 10.833/2003. Para decisão definitiva, consulte seu contador.'
     };
   }
@@ -306,6 +372,12 @@
     var areaAtuacaoSUDAM = !!params.areaAtuacaoSUDAM;
     var numReceitas = params.numReceitas || 1;
     var breakeven = params.breakeven || null;
+    var areaAtuacaoSUDENE = !!params.areaAtuacaoSUDENE;
+    var receitasVendasZFM = params.receitasVendasZFM || 0;
+    var receitasSUFRAMA = params.receitasSUFRAMA || 0;
+    var receitasExportacao = params.receitasExportacao || 0;
+    var exclusivamenteServicosElegiveis = !!params.exclusivamenteServicosElegiveis;
+    var regimeCaixa = !!params.regimeCaixa;
 
     var dicas = [];
 
@@ -315,6 +387,19 @@
 
     // Margem real
     var margemReal = receita > 0 ? (receita - despesasOp - folha) / receita : 0;
+
+    // ── Dica 0: Alerta margem 100% (despesas zeradas) ──
+    // FIX (Bug 8): Alerta também visível na aba Vantagens/Dicas
+    if (receita > 0 && despesasOp === 0 && folha === 0) {
+      dicas.push({
+        titulo: 'Margem de lucro implícita de 100% — Dados incompletos',
+        descricao: 'Nenhuma despesa operacional ou folha de pagamento foi informada. ' +
+                   'Todas as análises assumem margem de lucro de 100%, o que raramente reflete a realidade. ' +
+                   'Para resultados confiáveis, preencha as despesas na aba "Complementar".',
+        tipo: 'alerta',
+        impactoEstimado: null
+      });
+    }
 
     // ── Dica 1: Margem vs Presunção ──
     // FIX (Erro 16): Calcular alíquota efetiva considerando adicional de IRPJ quando base > R$ 240.000/ano
@@ -345,15 +430,32 @@
       }
     }
 
-    // ── Dica 2: Área SUDAM ──
+    // ── Dica 2: Área SUDAM — exclusivo LR + valor ──
     if (areaAtuacaoSUDAM) {
       var irpjEstimadoAnual = receita * percentualPresuncao * 0.15;
       var economiaIRPJ75 = _arredondar(irpjEstimadoAnual * 0.75);
       dicas.push({
-        titulo: 'Incentivo SUDAM/SUDENE — Redução de 75% no IRPJ (Lucro Real)',
-        descricao: 'Empresas em área SUDAM/SUDENE podem obter redução de 75% do IRPJ no Lucro Real (Lei 12.715/2012, Art. 1º). Economia potencial estimada: R$ ' + economiaIRPJ75.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) + '/ano. Avalie se o benefício compensa a complexidade do LR.',
+        titulo: '🏛️ SUDAM — Redução 75% IRPJ (exclusivo Lucro Real)',
+        descricao: 'Empresas em área SUDAM com laudo aprovado: 75% de redução do IRPJ normal no LR (MP 2.199-14/2001). '
+          + 'Economia estimada do IRPJ: R$ ' + economiaIRPJ75.toLocaleString('pt-BR', {minimumFractionDigits:2}) + '/ano. '
+          + 'ATENÇÃO: NÃO se aplica no Lucro Presumido — exige migração para o LR e apuração do "lucro da exploração". '
+          + 'Adicional de 10% NÃO é reduzido. Exige laudo constitutivo e atividade elegível. '
+          + 'Veja o comparativo detalhado LP vs LR na aba Anual.',
         tipo: 'economia',
         impactoEstimado: economiaIRPJ75
+      });
+    }
+
+    // ── Dica 2b: Área SUDENE ──
+    if (areaAtuacaoSUDENE && !areaAtuacaoSUDAM) {
+      var irpjEstSE = receita * percentualPresuncao * 0.15;
+      var econSE = _arredondar(irpjEstSE * 0.75);
+      dicas.push({
+        titulo: '🏛️ SUDENE — Redução 75% IRPJ (exclusivo Lucro Real)',
+        descricao: 'Mesmo benefício da SUDAM para Nordeste. Economia estimada: R$ '
+          + econSE.toLocaleString('pt-BR', {minimumFractionDigits:2}) + '/ano. Exclusivo do LR.',
+        tipo: 'economia',
+        impactoEstimado: econSE
       });
     }
 
@@ -390,7 +492,70 @@
       }
     }
 
-    // ── Dica 6: Adicional IRPJ ──
+    // ── Dica 6: Zona Franca — PIS/COFINS (se ativo) ──
+    var totalZFM = receitasVendasZFM + receitasSUFRAMA;
+    if (totalZFM > 0) {
+      var economiaZFM = _arredondar(totalZFM * 0.0365);
+      dicas.push({
+        titulo: '🏭 Zona Franca / SUFRAMA — Isenção PIS/COFINS aplicada',
+        descricao: 'Receitas ZFM/SUFRAMA: R$ ' + totalZFM.toLocaleString('pt-BR', {minimumFractionDigits:2})
+          + '/ano. Economia PIS/COFINS: R$ ' + economiaZFM.toLocaleString('pt-BR', {minimumFractionDigits:2})
+          + '/ano. JÁ incluída no cálculo. Base: Lei 10.996/2004; Decreto 288/67.',
+        tipo: 'economia',
+        impactoEstimado: economiaZFM
+      });
+    }
+
+    // ── Dica 7: Exportação — imunidade PIS/COFINS ──
+    if (receitasExportacao > 0) {
+      var econExport = _arredondar(receitasExportacao * 0.0365);
+      dicas.push({
+        titulo: '🌎 Exportações — Imunidade PIS/COFINS aplicada',
+        descricao: 'Receitas de exportação: R$ ' + receitasExportacao.toLocaleString('pt-BR', {minimumFractionDigits:2})
+          + '/ano. Economia: R$ ' + econExport.toLocaleString('pt-BR', {minimumFractionDigits:2})
+          + '/ano. Base: CF/88, Art. 149, §2º, I.',
+        tipo: 'economia',
+        impactoEstimado: econExport
+      });
+    }
+
+    // ── Dica 8b: Percentual Reduzido 16% ──
+    if (percentualPresuncao === 0.32 && receita <= 120000 && receita > 0) {
+      var econReduzido = _arredondar(receita * 0.16 * 0.15);
+      dicas.push({
+        titulo: '📉 Percentual Reduzido 16% disponível',
+        descricao: 'Receita ≤ R$ 120.000/ano e serviços gerais (32%). Se prestar EXCLUSIVAMENTE '
+          + 'serviços elegíveis (intermediação, locação, factoring, limpeza, coleta), pode usar 16% no IRPJ. '
+          + 'Economia: R$ ' + econReduzido.toLocaleString('pt-BR', {minimumFractionDigits:2}) + '/ano. '
+          + 'Marque a opção no painel de benefícios. CSLL permanece 32%. Base: IN RFB 1.700/2017, Art. 215, §10.',
+        tipo: 'economia',
+        impactoEstimado: econReduzido
+      });
+    }
+
+    // ── Dica 8c: Regime de Caixa ativo ──
+    if (regimeCaixa) {
+      dicas.push({
+        titulo: '💵 Regime de Caixa ativado',
+        descricao: 'Tributação sobre recebimentos (não faturamento). O diferimento fiscal é proporcional à inadimplência. '
+          + 'Exige Livro Caixa ou escrituração contábil. Base: IN RFB 1.700/2017, Art. 223.',
+        tipo: 'info',
+        impactoEstimado: null
+      });
+    }
+
+    // ── Dica 8d: ISS sobre atividades mistas ──
+    if (numReceitas > 1) {
+      dicas.push({
+        titulo: '⚖️ ISS aplicado apenas sobre serviços',
+        descricao: 'Empresa com atividades mistas: o ISS incide APENAS sobre receitas de serviços (LC 116/2003). '
+          + 'Receitas de comércio/indústria pagam ICMS, não ISS. Esta separação já está no cálculo.',
+        tipo: 'info',
+        impactoEstimado: null
+      });
+    }
+
+    // ── Dica existente 6: Adicional IRPJ ──
     if (receita > 0 && atividade) {
       var basePresumidaAnual = receita * percentualPresuncao;
       if (basePresumidaAnual > 240000) {
@@ -667,6 +832,75 @@
       }
     }
 
+    // ── Economias de benefícios fiscais (já aplicadas) ──
+    if (params.beneficiosDetalhados) {
+      var bd = params.beneficiosDetalhados;
+
+      if (bd.issApenasServicos && bd.issApenasServicos.economiaISS > 0) {
+        fontes.push({
+          fonte: 'ISS apenas sobre serviços',
+          valor: _arredondar(bd.issApenasServicos.economiaISS),
+          tipo: 'economia',
+          descricao: 'ISS não incide sobre comércio/indústria (LC 116/2003).',
+          jaAplicada: true
+        });
+        totalEconomiaAnual += _arredondar(bd.issApenasServicos.economiaISS);
+      }
+      if (bd.inssSeparado && bd.inssSeparado.economiaRAT > 0) {
+        fontes.push({
+          fonte: 'INSS: RAT/Terceiros excluídos do pró-labore',
+          valor: _arredondar(bd.inssSeparado.economiaRAT),
+          tipo: 'economia',
+          descricao: 'Pró-labore: apenas 20% patronal (Lei 8.212/91, Art. 22, III).',
+          jaAplicada: true
+        });
+        totalEconomiaAnual += _arredondar(bd.inssSeparado.economiaRAT);
+      }
+      if (bd.zonFrancaVendas && bd.zonFrancaVendas.economiaPISCOFINS > 0) {
+        fontes.push({
+          fonte: 'Vendas para ZFM — PIS/COFINS',
+          valor: _arredondar(bd.zonFrancaVendas.economiaPISCOFINS),
+          tipo: 'economia',
+          descricao: 'Isenção PIS/COFINS (Lei 10.996/2004, Art. 2º).',
+          jaAplicada: true
+        });
+        totalEconomiaAnual += _arredondar(bd.zonFrancaVendas.economiaPISCOFINS);
+      }
+      if (bd.suframaSediada && bd.suframaSediada.economiaPISCOFINS > 0) {
+        fontes.push({
+          fonte: 'SUFRAMA — PIS/COFINS',
+          valor: _arredondar(bd.suframaSediada.economiaPISCOFINS),
+          tipo: 'economia',
+          descricao: 'Projeto SUFRAMA aprovado (Decreto 288/67).',
+          jaAplicada: true
+        });
+        totalEconomiaAnual += _arredondar(bd.suframaSediada.economiaPISCOFINS);
+      }
+      if (bd.exportacao && bd.exportacao.economiaPISCOFINS > 0) {
+        fontes.push({
+          fonte: 'Exportações — PIS/COFINS',
+          valor: _arredondar(bd.exportacao.economiaPISCOFINS),
+          tipo: 'economia',
+          descricao: 'Imunidade constitucional (CF/88, Art. 149, §2º, I).',
+          jaAplicada: true
+        });
+        totalEconomiaAnual += _arredondar(bd.exportacao.economiaPISCOFINS);
+      }
+    }
+
+    // Comparativo SUDAM/SUDENE (economia potencial no LR, não aplicada)
+    if (params.comparativoSUDAM && params.comparativoSUDAM.aplicavel && params.comparativoSUDAM.economiaEstimada > 0) {
+      fontes.push({
+        fonte: params.comparativoSUDAM.tipo + ' — Economia no Lucro Real',
+        valor: _arredondar(params.comparativoSUDAM.economiaEstimada),
+        tipo: 'economia',
+        descricao: 'Redução 75% IRPJ no LR. Requer migração + laudo aprovado.',
+        jaAplicada: false,
+        requerMigracao: true
+      });
+      totalEconomiaAnual += _arredondar(params.comparativoSUDAM.economiaEstimada);
+    }
+
     totalEconomiaAnual = _arredondar(totalEconomiaAnual);
     totalDiferimento = _arredondar(totalDiferimento);
 
@@ -791,8 +1025,25 @@
         acoesEconomia.push({
           acao: fontesOrdenadas[ae].fonte,
           valor: fontesOrdenadas[ae].valor,
-          tipo: fontesOrdenadas[ae].tipo
+          tipo: fontesOrdenadas[ae].tipo,
+          jaAplicada: fontesOrdenadas[ae].jaAplicada || false
         });
+      }
+    }
+
+    // ── Benefícios fiscais ativos ──
+    var beneficiosResumo = [];
+    if (params.beneficiosDetalhados) {
+      var bd = params.beneficiosDetalhados;
+      if (bd.economiaTotal > 0) {
+        beneficiosResumo.push('Economia total com benefícios aplicados: R$ '
+          + bd.economiaTotal.toLocaleString('pt-BR', {minimumFractionDigits:2}) + '/ano.');
+      }
+      if (bd.sudamSudene && bd.sudamSudene.ativo) {
+        beneficiosResumo.push('⚠️ ' + bd.sudamSudene.tipo
+          + ' detectado — economia de ~R$ '
+          + (params.comparativoSUDAM ? params.comparativoSUDAM.economiaEstimada : 0).toLocaleString('pt-BR', {minimumFractionDigits:2})
+          + '/ano disponível no Lucro Real.');
       }
     }
 
@@ -812,6 +1063,7 @@
       recomendacaoPrincipal: economia.recomendacaoPrincipal,
       top3Dicas: top3,
       acoesEconomia: acoesEconomia,
+      beneficiosFiscais: beneficiosResumo,
       regimeRecomendado: regimeRecomendado,
       dataEstudo: dataFormatada
     };
@@ -903,10 +1155,12 @@
     var folha = params.folhaPagamentoAnual || 0;
     var despesasOp = params.totalDespesasOperacionais || 0;
 
-    // Converter percentuais para decimais
-    var aliqISS = params.aliquotaISS != null ? params.aliquotaISS / 100 : DEFAULTS.aliquotaISS;
-    var aliqRAT = params.aliquotaRAT != null ? params.aliquotaRAT / 100 : DEFAULTS.aliquotaRAT;
-    var aliqTerceiros = params.aliquotaTerceiros != null ? params.aliquotaTerceiros / 100 : DEFAULTS.aliquotaTerceiros;
+    // Converter percentuais para decimais com detecção inteligente:
+    // Se valor > 1, interpreta como percentual inteiro (ex: 5 → 0.05)
+    // Se valor <= 1, interpreta como decimal já convertido (ex: 0.05 → 0.05)
+    var aliqISS = _normalizeAliquota(params.aliquotaISS, DEFAULTS.aliquotaISS, 'aliquotaISS');
+    var aliqRAT = _normalizeAliquota(params.aliquotaRAT, DEFAULTS.aliquotaRAT, 'aliquotaRAT');
+    var aliqTerceiros = _normalizeAliquota(params.aliquotaTerceiros, DEFAULTS.aliquotaTerceiros, 'aliquotaTerceiros');
 
     var creditos = params.creditosPISCOFINS || 0;
     var lucroContabil = params.lucroContabil || 0;
@@ -927,6 +1181,20 @@
     var csllRetida = params.csllRetida || 0;
     var pisRetido = params.pisRetido || 0;
     var cofinsRetida = params.cofinsRetida || 0;
+
+    // ── Novos: Benefícios fiscais estaduais e exclusões ──
+    var receitasVendasZFM = params.receitasVendasZFM || 0;
+    var receitasSUFRAMA = params.receitasSUFRAMA || 0;
+    var receitasExportacao = params.receitasExportacao || 0;
+    var receitasIsentas = params.receitasIsentas || 0;
+    var icmsST = params.icmsST || 0;
+    var ipiDestacado = params.ipiDestacado || 0;
+    var exclusivamenteServicosElegiveis = !!params.exclusivamenteServicosElegiveis;
+    var regimeCaixa = !!params.regimeCaixa;
+    var inadimplencia = params.inadimplencia || 0;
+    var areaAtuacaoSUDAM = !!params.areaAtuacaoSUDAM;
+    var areaAtuacaoSUDENE = !!params.areaAtuacaoSUDENE;
+    var beneficiosAtivos = params.beneficiosAtivos || {};
 
     // ── 1. Simulação rápida ──
     var simulacao = null;
@@ -975,7 +1243,8 @@
         csllRetidaFonte: _arredondar(csllRetida / 4),
         trimestreAtual: q,
         anoCalendario: anoCalendario,
-        receitaBrutaAcumuladaAnoAte: receitaAcumuladaCalc
+        receitaBrutaAcumuladaAnoAte: receitaAcumuladaCalc,
+        exclusivamenteServicosElegiveis: exclusivamenteServicosElegiveis
       };
       trimestresData.push(dadosTri);
       try {
@@ -990,19 +1259,21 @@
     var mesesData = [];
     var receitaMensal = _arredondar(receitaBrutaAnual / 12);
     // FIX (Erros 13+17): Passar cancelamentos, descontos e exclusões para PIS/COFINS mensal
-    var receitasExportacao = params.receitasExportacao || 0;
-    var receitasIsentas = params.receitasIsentas || 0;
-    var icmsST = params.icmsST || 0;
-    var ipiDestacado = params.ipiDestacado || 0;
+    var receitasExportacaoAnual = params.receitasExportacao || 0;
+    var receitasIsentasAnual = params.receitasIsentas || 0;
+    var icmsSTAnual = params.icmsST || 0;
+    var ipiDestacadoAnual = params.ipiDestacado || 0;
+    // Incluir ZFM/SUFRAMA como receitas isentas de PIS/COFINS
+    var receitasIsentasComZFM = receitasIsentasAnual + receitasVendasZFM + receitasSUFRAMA;
     for (var m = 0; m < 12; m++) {
       var dadosMes = {
         receitaBrutaMensal: receitaMensal,
         vendasCanceladas: _arredondar(cancelamentos / 12),
         descontosIncondicionais: _arredondar(descontos / 12),
-        receitasExportacao: _arredondar(receitasExportacao / 12),
-        receitasIsentas: _arredondar(receitasIsentas / 12),
-        icmsST: _arredondar(icmsST / 12),
-        ipiDestacado: _arredondar(ipiDestacado / 12),
+        receitasExportacao: _arredondar(receitasExportacaoAnual / 12),
+        receitasIsentas: _arredondar(receitasIsentasComZFM / 12),
+        icmsST: _arredondar(icmsSTAnual / 12),
+        ipiDestacado: _arredondar(ipiDestacadoAnual / 12),
         pisRetidoFonte: _arredondar(pisRetido / 12),
         cofinsRetidaFonte: _arredondar(cofinsRetida / 12)
       };
@@ -1020,13 +1291,24 @@
       anual = LucroPresumido.calcularAnualConsolidado({
         trimestres: trimestresData,
         meses: mesesData,
+        receitas: receitas,                              // ← NOVO: para ISS
         aliquotaISS: aliqISS,
         folhaPagamentoAnual: folha,
         aliquotaRAT: aliqRAT,
         aliquotaTerceiros: aliqTerceiros,
         lucroContabilEfetivo: lucroContabil > 0 ? lucroContabil : null,
         socios: socios,
-        anoCalendario: anoCalendario
+        anoCalendario: anoCalendario,
+        beneficiosAtivos: beneficiosAtivos,              // ← NOVO
+        receitasVendasZFM: receitasVendasZFM,            // ← NOVO
+        receitasSUFRAMA: receitasSUFRAMA,                // ← NOVO
+        receitasExportacao: receitasExportacaoAnual,      // ← NOVO
+        receitasIsenta: receitasIsentasAnual,             // ← NOVO
+        icmsST: icmsSTAnual,                             // ← NOVO
+        ipiDestacado: ipiDestacadoAnual,                 // ← NOVO
+        exclusivamenteServicosElegiveis: exclusivamenteServicosElegiveis,  // ← NOVO
+        regimeCaixa: regimeCaixa,                        // ← NOVO
+        inadimplencia: inadimplencia                     // ← NOVO
       });
     } catch (e) {
       anual = { erro: e.message, receitaBrutaAnual: receitaBrutaAnual, consolidacao: null, distribuicaoLucros: null };
@@ -1130,6 +1412,25 @@
       }
     }
 
+    // ── 4E. Comparativo SUDAM/SUDENE ──
+    var resultSUDAM = null;
+    if ((areaAtuacaoSUDAM || areaAtuacaoSUDENE) && anual && anual.detalhamentoTrimestral) {
+      try {
+        var irpjNormalAnual = anual.detalhamentoTrimestral.reduce(function(s,t) { return s + (t.irpjNormal || 0); }, 0);
+        var irpjAdicionalAnual = anual.detalhamentoTrimestral.reduce(function(s,t) { return s + (t.irpjAdicional || 0); }, 0);
+        resultSUDAM = LucroPresumido.calcularEconomiaLRComSUDAM({
+          irpjNormalAnualLP: irpjNormalAnual,
+          irpjAdicionalAnualLP: irpjAdicionalAnual,
+          csllAnualLP: anual.tributos ? anual.tributos.csll.anual : 0,
+          receitaBrutaAnual: receitaBrutaAnual,
+          despesasOperacionaisAnuais: despesasOp,
+          folhaPagamentoAnual: folha,
+          temBeneficioSUDAM: areaAtuacaoSUDAM,
+          temBeneficioSUDENE: areaAtuacaoSUDENE
+        });
+      } catch (e) { resultSUDAM = { erro: e.message }; }
+    }
+
     // ── 5. Vantagens/Desvantagens ──
     var vantagens = null;
     try {
@@ -1141,6 +1442,13 @@
       });
     } catch (e) {
       vantagens = { erro: e.message };
+    }
+
+    // FIX (Bug 8): Injetar alerta de margem 100% no resultado de vantagens
+    if (vantagens && !vantagens.erro && despesasOp === 0 && folha === 0 && receitaBrutaAnual > 0) {
+      vantagens.alertaMargem100 = 'ATENÇÃO: Nenhuma despesa operacional ou folha de pagamento foi informada. ' +
+        'A análise de vantagens/desvantagens assume margem de lucro de 100%, o que raramente reflete a realidade. ' +
+        'Para uma análise precisa, preencha as despesas na aba "Complementar".';
     }
 
     // ── 6. Break-Even LP vs Lucro Real ──
@@ -1176,7 +1484,13 @@
         temEquipamentos: !!params.temEquipamentos,
         temPD: !!params.temPD,
         receitaSazonal: !!params.receitaSazonal,
-        areaAtuacaoSUDAM: !!params.areaAtuacaoSUDAM,
+        areaAtuacaoSUDAM: areaAtuacaoSUDAM,
+        areaAtuacaoSUDENE: areaAtuacaoSUDENE,             // ← NOVO
+        receitasVendasZFM: receitasVendasZFM,              // ← NOVO
+        receitasSUFRAMA: receitasSUFRAMA,                  // ← NOVO
+        receitasExportacao: receitasExportacaoAnual,        // ← NOVO
+        exclusivamenteServicosElegiveis: exclusivamenteServicosElegiveis, // ← NOVO
+        regimeCaixa: regimeCaixa,                          // ← NOVO
         numReceitas: receitas.length,
         breakeven: resultBreakeven
       });
@@ -1192,7 +1506,9 @@
         ecd: resultECD,
         caixaComp: resultCaixa,
         breakeven: resultBreakeven,
-        dicas: resultDicas
+        dicas: resultDicas,
+        beneficiosDetalhados: anual ? anual.beneficiosAplicados : null,  // ← NOVO
+        comparativoSUDAM: resultSUDAM                                    // ← NOVO
       });
     } catch (e) {
       economiaPotencial = { totalEconomiaAnual: 0, totalDiferimento: 0, fontes: [], recomendacaoPrincipal: '', nivelOportunidade: 'baixo' };
@@ -1222,7 +1538,9 @@
         dicas: resultDicas,
         razaoSocial: params.razaoSocial || '',
         cnpj: params.cnpj || '',
-        atividadeId: atividadeId
+        atividadeId: atividadeId,
+        beneficiosDetalhados: anual ? anual.beneficiosAplicados : null,  // ← NOVO
+        comparativoSUDAM: resultSUDAM                                    // ← NOVO
       });
     } catch (e) {
       resumoExecutivo = { erro: e.message };
@@ -1246,6 +1564,8 @@
       economiaPotencial: economiaPotencial,
       lc224: lc224,
       resumoExecutivo: resumoExecutivo,
+      comparativoSUDAM: resultSUDAM,
+      beneficiosDetalhados: anual ? anual.beneficiosAplicados : null,
       timestamp: new Date().toISOString()
     };
   }
@@ -1279,14 +1599,25 @@
       temPD: false,
       receitaSazonal: false,
       areaAtuacaoSUDAM: true,
+      areaAtuacaoSUDENE: false,
+      receitasVendasZFM: 100000,
+      receitasSUFRAMA: 0,
+      receitasExportacao: 0,
+      receitasIsentas: 0,
+      icmsST: 0,
+      ipiDestacado: 0,
+      exclusivamenteServicosElegiveis: false,
+      regimeCaixa: false,
+      inadimplencia: 0,
+      beneficiosAtivos: { sudam: true },
       devolucoes: 0, cancelamentos: 0, descontos: 0,
       ganhosCapital: 0, rendFinanceiros: 0, jcpRecebido: 0,
       multasContratuais: 0, recFinDiversas: 0,
       valoresRecuperados: 0, demaisReceitas: 0,
       irrfRetido: 0, csllRetida: 0, pisRetido: 0, cofinsRetida: 0,
       socios: [
-        { nome: 'Luis Fernando', percentual: 0.65 },
-        { nome: 'Elton Oderdenge', percentual: 0.35 }
+        { nome: 'Luis Fernando', participacao: 0.65 },
+        { nome: 'Elton Oderdenge', participacao: 0.35 }
       ],
       elegivelSimples: false,
 
@@ -1320,6 +1651,9 @@
     console.log('Ações Economia:', resultado.resumoExecutivo.acoesEconomia || []);
     console.log('Regime Recomendado:', resultado.resumoExecutivo.regimeRecomendado);
     console.log('LC 224:', resultado.lc224 ? 'Aplicável' : 'N/A');
+    console.log('Comparativo SUDAM:', resultado.comparativoSUDAM ? (resultado.comparativoSUDAM.aplicavel ? 'Aplicável' : 'Não aplicável') : 'N/A');
+    console.log('Benefícios Detalhados:', resultado.beneficiosDetalhados ? 'Sim' : 'N/A');
+    console.log('Benefícios Resumo:', resultado.resumoExecutivo.beneficiosFiscais || []);
     console.log('═══ FIM TESTE ═══');
     return resultado;
   }
@@ -1343,7 +1677,7 @@
     _testarEstudo: _testarEstudo,
 
     // Versão
-    VERSION: '2.2.0'  // Atualizado após correções da auditoria (Erros 10-17)
+    VERSION: '2.4.0'  // v2.4.0: benefícios fiscais completos, dicas ZFM/SUDENE/16%, comparativo SUDAM
   };
 
   if (typeof module !== 'undefined' && module.exports) {
