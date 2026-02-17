@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Estudo Lucro Presumido v3.3.1 | IMPOST.</title>
+<title>Estudo Lucro Presumido v3.7.1 | IMPOST.</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
@@ -1707,7 +1707,7 @@ function renderAnual(d) {
         cofinsRetidaFonte: (d.cofinsRetida || 0) / 12
       });
     }
-    const socios = d.socios.length ? d.socios : [{ nome: 'Socio Unico', percentual: 1 }];
+    const socios = d.socios.length ? d.socios : [{ nome: 'Socio Unico', participacao: 1 }];
     const anual = LucroPresumido.calcularAnualConsolidado({
       trimestres,
       meses,
@@ -1894,6 +1894,9 @@ function renderDistribuicao(d) {
       html += `<tr><td>${s.nome}</td><td class="right mono">${s.percentualFormatado}</td><td class="right mono" style="color:var(--success);font-weight:700">${formatMoney(s.valorIsento)}</td><td style="font-size:11px;color:var(--text3)">${s.observacao}</td></tr>`;
     });
     html += '</tbody></table>';
+  }
+  if (dist.alertaDistribuicao) {
+    html += `<div class="info-box warn" style="margin-top:16px"><strong>⚠ ATENÇÃO — Distribuição baseada em presunção:</strong><br>${dist.alertaDistribuicao}</div>`;
   }
   html += `<div class="info-box info" style="margin-top:16px"><strong>Base legal:</strong> ${dist.baseLegal}<br><br><strong>Base presumida:</strong> Lucro distribuivel isento = Base presumida IRPJ - IRPJ - CSLL devidos (Art. 725 RIR/2018). PIS e COFINS nao entram neste calculo.<br><strong>Base contabil:</strong> Se a empresa possui escrituracao contabil completa (ECD), pode distribuir o lucro contabil efetivo (se maior que o presumido) com isencao de IR. Excedente sem escrituracao e tributado.</div>`;
   $('tabDistribuicao').innerHTML = html;
@@ -2155,7 +2158,7 @@ function recalcProLabore() {
         <td class="right mono">${formatMoney(c.irpfMensal)}</td>
         <td class="right mono" style="color:var(--success)">${formatMoney(c.liquidoMensal)}</td>
         <td class="right mono" style="color:var(--danger)">${formatMoney(c.tributosAnuais)}</td>
-        <td class="right mono">${(c.eficiencia * 100).toFixed(1)}%</td>
+        <td class="right mono">${c.eficienciaFormatada || '—'}</td>
       </tr>`;
     });
     html += '</tbody></table></div>';
