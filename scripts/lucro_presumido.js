@@ -1050,13 +1050,13 @@ function _getUltimoDiaUtil(ano, mes) {
  * @returns {Date}
  */
 function getVencimentoPISCOFINS(ano, mes) {
-  const mesVencimento = mes; // mês seguinte (0-indexed = mes)
   const anoVencimento = mes === 12 ? ano + 1 : ano;
   const mesIdx = mes === 12 ? 0 : mes;
   let data = new Date(anoVencimento, mesIdx, 25);
-  const diaSemana = data.getDay();
-  if (diaSemana === 0) data.setDate(data.getDate() - 2);
-  else if (diaSemana === 6) data.setDate(data.getDate() - 1);
+  // FIX (Erros 1+2): Usar loop para garantir dia útil (verifica fim de semana E feriados nacionais fixos)
+  while (data.getDay() === 0 || data.getDay() === 6 || _isFeriadoFixo(data)) {
+    data.setDate(data.getDate() - 1);
+  }
   return data;
 }
 
@@ -1256,10 +1256,11 @@ function calcularLucroPresumidoTrimestral(params) {
     basePresumidaIRPJ += baseIRPJAtividade;
     basePresumidaCSLL += baseCSLLAtividade;
 
-    const percentualEfetivoIRPJ = (lc224IRPJ && lc224IRPJ.lc224Aplicavel)
+    // FIX (Erro 7): Guard contra divisão por zero quando receitaLiquidaAtividade = 0
+    const percentualEfetivoIRPJ = (lc224IRPJ && lc224IRPJ.lc224Aplicavel && receitaLiquidaAtividade > 0)
       ? (baseIRPJAtividade / receitaLiquidaAtividade)
       : atividadeIRPJ.percentual;
-    const percentualEfetivoCSLL = (lc224CSLL && lc224CSLL.lc224Aplicavel)
+    const percentualEfetivoCSLL = (lc224CSLL && lc224CSLL.lc224Aplicavel && receitaLiquidaAtividade > 0)
       ? (baseCSLLAtividade / receitaLiquidaAtividade)
       : atividadeCSLL.percentual;
 
@@ -1350,9 +1351,12 @@ function calcularLucroPresumidoTrimestral(params) {
   const quotasCSLL = _calcularQuotas(csllDevida);
 
   // ── Passo 9: Distribuição de Lucros Isentos ──
+  // FIX (Erro 3): Usar basePresumidaIRPJ (sem adições obrigatórias) em vez de baseCalculoIRPJ.
+  // Art. 725 RIR/2018: lucro isento = base presumida − IRPJ − CSLL.
+  // Adições obrigatórias (Art. 595 RIR/2018) são tributadas integralmente e NÃO geram lucro distribuível isento.
   // NOTA: Este valor considera apenas IRPJ+CSLL (trimestral).
   // Para cálculo completo incluindo PIS/COFINS, use calcularAnualConsolidado().
-  const lucroDistribuidoPresumido = _arredondar(Math.max(0, baseCalculoIRPJ - totalImpostos));
+  const lucroDistribuidoPresumido = _arredondar(Math.max(0, basePresumidaIRPJ - totalImpostos));
 
   return {
     // Resumo
@@ -1586,7 +1590,8 @@ function calcularAnualConsolidado(params) {
     // Calcular receita bruta deste trimestre para acumular
     const receitaTrimestre = (t.receitas || []).reduce((sum, r) => sum + (r.valor || 0), 0)
       - (t.devolucoes || 0) - (t.cancelamentos || 0) - (t.descontosIncondicionais || 0);
-    receitaAcumulada += receitaTrimestre;
+    // FIX (Erro 8): Garantir que receita acumulada não fique negativa (deduções > receita)
+    receitaAcumulada += Math.max(0, receitaTrimestre);
 
     const resultado = calcularLucroPresumidoTrimestral({
       ...t,
@@ -1632,11 +1637,18 @@ function calcularAnualConsolidado(params) {
     : 0;
 
   // ── Distribuição de Lucros Isentos ──
-  // Art. 725 RIR/2018: lucro isento = base presumida − IRPJ − CSLL (PIS/COFINS NÃO entram)
-  // tributosDistribuicao = somente IRPJ + CSLL
-  const basePresumidaAnual = resultadosTrimestres.reduce((s, t) => s + t.baseCalculoIRPJ, 0);
+  // FIX (Erros 4+6): Usar basePresumidaIRPJ (sem adições obrigatórias) para base de distribuição.
+  // Art. 725 RIR/2018: lucro isento = base presumida − IRPJ − CSLL.
+  // NOTA: Há divergência interpretativa sobre incluir PIS/COFINS:
+  //   - Art. 725 RIR/2018: menciona apenas IRPJ e CSLL.
+  //   - IN RFB 1.700/2017, Art. 238: menciona "impostos e contribuições" (pode incluir PIS/COFINS).
+  //   - Posição adotada: Art. 725 RIR/2018 (somente IRPJ + CSLL), por ser norma hierárquica superior.
+  //   - Para posição conservadora, use incluirPISCOFINSNaDistribuicao = true.
+  const basePresumidaAnual = resultadosTrimestres.reduce((s, t) => s + t.basePresumidaIRPJ, 0);
   const tributosDistribuicao = _arredondar(totalIRPJ + totalCSLL);
+  const tributosDistribuicaoConservador = _arredondar(totalIRPJ + totalCSLL + totalPIS + totalCOFINS);
   const lucroDistribuivelPresumido = _arredondar(Math.max(0, basePresumidaAnual - tributosDistribuicao));
+  const lucroDistribuivelConservador = _arredondar(Math.max(0, basePresumidaAnual - tributosDistribuicaoConservador));
 
   let lucroDistribuivelContabil = null;
   if (lucroContabilEfetivo !== null) {
@@ -1695,12 +1707,15 @@ function calcularAnualConsolidado(params) {
       basePresumidaAnual: _arredondar(basePresumidaAnual),
       lucroContabilEfetivo,
       tributosDescontados: tributosDistribuicao,
+      tributosDescontadosConservador: tributosDistribuicaoConservador,
       lucroDistribuivelPresumido,
+      lucroDistribuivelConservador,
       lucroDistribuivelContabil,
       lucroDistribuivelFinal: lucroDistribuivel,
       tipoBase: lucroDistribuivelContabil !== null ? 'Contábil (escrituração completa)' : 'Presumido',
       porSocio: distribuicaoPorSocio,
-      baseLegal: 'IN RFB 1.700/2017, Art. 238; RIR/2018, Art. 725 — Lucros distribuídos com isenção: base presumida diminuída de IRPJ e CSLL devidos.'
+      baseLegal: 'IN RFB 1.700/2017, Art. 238; RIR/2018, Art. 725 — Lucros distribuídos com isenção: base presumida diminuída de IRPJ e CSLL devidos.',
+      notaDivergencia: 'Há divergência interpretativa: Art. 725 RIR/2018 menciona IRPJ+CSLL; IN RFB 1.700/2017, Art. 238 menciona todos os impostos e contribuições. O campo lucroDistribuivelConservador desconta também PIS/COFINS.'
     },
 
     // LC 224/2025 — Resumo anual do impacto
@@ -2206,7 +2221,7 @@ const REQUISITOS_HOSPITALAR_8PCT = {
 const REGULAMENTACAO_IN_RFB = {
   distribuicaoLucros: {
     artigo: 'IN RFB 1.700/2017, Art. 238 (atual IN RFB 2.058/2021)',
-    regra: 'Lucros isentos = base presumida MENOS todos os impostos e contribuições (IRPJ + CSLL + PIS + COFINS)',
+    regra: 'Lucros isentos = base presumida MENOS IRPJ e CSLL devidos (Art. 725 RIR/2018). NOTA: IN RFB 1.700/2017, Art. 238 menciona "impostos e contribuições", o que pode incluir PIS/COFINS. Implementação adota posição do Art. 725 RIR/2018 (somente IRPJ+CSLL). Campo lucroDistribuivelConservador disponibiliza cálculo alternativo.',
     escrituracaoContabil: 'Se PJ mantiver escrituração contábil completa (ECD), pode distribuir lucro contábil efetivo se maior que a presunção fiscal',
     baseLegalECD: 'IN RFB 1.700/2017, Art. 238, parágrafo único'
   },
@@ -5764,8 +5779,15 @@ if (typeof globalThis !== 'undefined') {
 }
 
 // Expor exportPDF globalmente para chamada direta pelo HTML
+// FIX (Erro 9): Verificar se App existe antes de chamar exportPDF, com mensagem de erro amigável
 if (typeof window !== 'undefined') {
-  window.exportPDF = function() { exportPDF(typeof App !== 'undefined' ? App : null); };
+  window.exportPDF = function() {
+    if (typeof App === 'undefined' || App === null) {
+      alert('Erro: Nenhum cálculo foi realizado ainda. Execute a simulação antes de exportar o PDF.');
+      return;
+    }
+    exportPDF(App);
+  };
 }
 
 
