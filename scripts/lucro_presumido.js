@@ -5,8 +5,23 @@
  *
  * AGROGEO BRASIL - Geotecnologia e Consultoria Ambiental
  * Autor: Luis Fernando | Proprietário AGROGEO BRASIL
- * Versão: 3.7.0
+ * Versão: 3.7.1
  * Data: Fevereiro/2026
+ *
+ * Changelog v3.7.1:
+ *   - BUG 1 FIX: Coluna "Eficiência" na tabela Pró-Labore exibia "NaN%" —
+ *     Adicionados campos eficienciaFormatada ("2.8x") e eficienciaDescricao prontos para renderização.
+ *     O campo retornoPorRealTributo é um RATIO (não porcentagem). A UI deve usar eficienciaFormatada.
+ *   - BUG 2 FIX: Pró-labore "Atual" não batia com valor digitado —
+ *     O valor exato do proLaboreAtual agora é inserido como cenário forçado na grade de simulação.
+ *     Não há mais arredondamento para o step mais próximo (R$ 250).
+ *   - BUG 3 FIX: IRPF do Pró-Labore R$ 5.121 mostrava R$ 43,33 (deveria ser ~R$ 0) —
+ *     Fórmula do redutor Lei 15.270/2025 corrigida: coeficiente incide sobre o EXCEDENTE acima de
+ *     R$ 5.000 (limiteIsencaoTotal), não sobre o rendimento bruto total.
+ *     Fórmula correta: valorReducao - coeficienteReducao × (proLabore - limiteIsencaoTotal)
+ *   - DIVERGÊNCIA 1 FIX: Lucro Distribuível Isento usando base presumida —
+ *     Adicionado campo alertaDistribuicao explícito no objeto distribuicaoLucros quando não há ECD,
+ *     alertando que distribuir acima do lucro contábil real pode gerar tributação do sócio.
  *
  * Changelog v3.7.0:
  *   - FIX CRÍTICO (A): INSS Patronal — Separar folha CLT de pró-labore para RAT/Terceiros (Lei 8.212/91)
@@ -417,13 +432,17 @@ function calcularIRPFProLabore2026(proLabore, inssDescontado, numeroDependentes)
   irCalculado = Math.max(0, irCalculado);
 
   // Passo 3: Redutor adicional (Lei 15.270/2025)
+  // BUG 3 FIX: O coeficiente de reducao incide sobre o EXCEDENTE acima do limite
+  // de isencao (R$ 5.000), nao sobre o rendimento bruto total.
+  // Formula corrigida: valorReducao - coeficienteReducao * (proLabore - limiteIsencaoTotal)
+  // Isso garante que rendimentos logo acima de R$ 5.000 tenham IRPF proximo de zero.
   // ATENÇÃO: O redutor usa o RENDIMENTO BRUTO (proLabore), não a base de cálculo
   let redutorAdicional = 0;
   if (proLabore <= REDUTOR_IRPF_2026.limiteIsencaoTotal) {
     redutorAdicional = irCalculado; // Zera o IR
   } else if (proLabore <= REDUTOR_IRPF_2026.limiteReducaoParcial) {
     redutorAdicional = Math.max(0,
-      REDUTOR_IRPF_2026.valorReducao - (REDUTOR_IRPF_2026.coeficienteReducao * proLabore)
+      REDUTOR_IRPF_2026.valorReducao - (REDUTOR_IRPF_2026.coeficienteReducao * (proLabore - REDUTOR_IRPF_2026.limiteIsencaoTotal))
     );
     redutorAdicional = Math.min(redutorAdicional, irCalculado);
   }
@@ -1976,7 +1995,11 @@ function calcularAnualConsolidado(params) {
       tipoBase: lucroDistribuivelContabil !== null ? 'Contábil (escrituração completa)' : 'Presumido',
       porSocio: distribuicaoPorSocio,
       baseLegal: 'IN RFB 1.700/2017, Art. 238; RIR/2018, Art. 725 — Lucros distribuídos com isenção: base presumida diminuída de IRPJ e CSLL devidos.',
-      notaDivergencia: 'Há divergência interpretativa: Art. 725 RIR/2018 menciona IRPJ+CSLL; IN RFB 1.700/2017, Art. 238 menciona todos os impostos e contribuições. O campo lucroDistribuivelConservador desconta também PIS/COFINS.'
+      notaDivergencia: 'Há divergência interpretativa: Art. 725 RIR/2018 menciona IRPJ+CSLL; IN RFB 1.700/2017, Art. 238 menciona todos os impostos e contribuições. O campo lucroDistribuivelConservador desconta também PIS/COFINS.',
+      // DIVERGÊNCIA 1 FIX: Alerta explícito sobre risco de distribuição acima do lucro contábil
+      alertaDistribuicao: lucroDistribuivelContabil === null
+        ? 'ATENÇÃO: O lucro distribuível isento foi calculado com base na presunção fiscal (IN SRF 93/97, Art. 48), pois não há escrituração contábil completa (ECD). Se o lucro contábil real da empresa for INFERIOR à base presumida, distribuir o valor total pode configurar distribuição acima do lucro efetivo, com risco de tributação do excedente como rendimento tributável do sócio (IRPF). Recomenda-se manter escrituração contábil para comprovar o lucro real.'
+        : null
     },
 
     // LC 224/2025 — Resumo anual do impacto
@@ -4467,9 +4490,21 @@ function simularProLaboreOtimo(socio, lucroDistribuivelIsento, opcoes = {}) {
   const STEP = 250;
   const dependentes = socio.dependentesIRPF || 0;
 
+  // ── BUG 2 FIX: Montar grade incluindo o valor exato digitado pelo usuário ──
+  // Garante que o proLaboreAtual aparece na grade sem arredondamento
+  const valoresGrade = new Set();
   for (let pl = MIN; pl <= MAX; pl += STEP) {
-    // Ajustar primeiro valor para ser exatamente o SM
-    const proLabore = (pl === MIN) ? MIN : pl;
+    valoresGrade.add(pl === MIN ? MIN : pl);
+  }
+  // Inserir valor exato do usuário (se informado e dentro dos limites)
+  const plAtualExato = socio.proLaboreAtual;
+  if (plAtualExato && plAtualExato >= MIN && plAtualExato <= MAX) {
+    valoresGrade.add(plAtualExato);
+  }
+  // Ordenar a grade
+  const gradeOrdenada = [...valoresGrade].sort((a, b) => a - b);
+
+  for (const proLabore of gradeOrdenada) {
 
     // === CUSTOS PARA A EMPRESA ===
     const inssPatronal = calcularINSSPatronal(proLabore);
@@ -4506,6 +4541,13 @@ function simularProLaboreOtimo(socio, lucroDistribuivelIsento, opcoes = {}) {
       retornoPorRealTributo: tributosAnuais > 0
         ? _arredondar(liquidoSocioAnual / tributosAnuais, 1)
         : 0,
+      // ── BUG 1 FIX: Campo formatado pronto para renderização (evita NaN%) ──
+      // O campo é um RATIO (R$ líquidos por R$ 1 de tributo), NÃO uma porcentagem.
+      // Use este campo diretamente na UI em vez de tentar converter para %.
+      eficienciaFormatada: tributosAnuais > 0
+        ? _arredondar(liquidoSocioAnual / tributosAnuais, 1).toFixed(1) + 'x'
+        : '∞',
+      eficienciaDescricao: 'R$ líquidos por R$ 1 pago em tributos',
       retornoPorRealTributoDescricao: 'Reais liquidos gerados para o socio a cada R$ 1 pago em tributos (INSS + IRPF)'
     });
   }
@@ -4515,7 +4557,8 @@ function simularProLaboreOtimo(socio, lucroDistribuivelIsento, opcoes = {}) {
   const otimo = cenariosOrdenados[0];
 
   // Cenário atual para comparação
-  const atual = cenarios.find(c => c.proLaboreMensal === socio.proLaboreAtual)
+  // BUG 2 FIX: O valor exato do usuário agora está na grade, então find() vai achar exato
+  const atual = cenarios.find(c => c.proLaboreMensal === (socio.proLaboreAtual || MIN))
     || _encontrarCenarioMaisProximo(cenarios, socio.proLaboreAtual || MIN);
 
   const economiaAnual = _arredondar((atual.tributosAnuais || 0) - (otimo.tributosAnuais || 0));
