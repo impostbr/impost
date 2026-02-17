@@ -2868,7 +2868,7 @@ function compensarIntegrado(dados) {
     resultado.etapa3_compensacaoOperacional = compOp;
 
     lucroRealCorrente = compOp.lucroRealAposCompensacao;
-    baseCSLLCorrente -= compOp.compensacaoEfetiva;
+    // baseCSLLCorrente -= compOp.compensacaoEfetiva; // REMOVIDO: prejuízo fiscal operacional (Art. 580-581 RIR/2018) é exclusivo do IRPJ; CSLL usa base negativa própria (Lei 9.065/1995, art. 16)
     resultado.resumo.totalCompensado += compOp.compensacaoEfetiva;
     resultado.resumo.saldosPosCompensacao.prejuizoOperacional = compOp.saldoPrejuizoRemanescente;
     resultado.resumo.economia.irpj += compOp.economia.irpj;
