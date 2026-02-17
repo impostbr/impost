@@ -1042,7 +1042,7 @@
       })
     );
     h += _row(
-      _field("inssPatronal", "INSS patronal (≈28%)", "money") +
+      _field("inssPatronal", "INSS patronal + terceiros (≈27%) + FGTS (8%)", "money") +
       _field("fgts", "FGTS (8%)", "money")
     );
     h += _row(
@@ -1184,7 +1184,10 @@
     h += _field("temSubvencao", "Subvenção para investimento", "checkbox");
     h += _field("subvencaoInvestimento", "Valor da subvenção", "money", {
       condition: "temSubvencao",
-      tip: "Lei 12.973, art. 30 — verificar Lei 14.789/2023",
+      tip: "⚠️ ATENÇÃO: A Lei 14.789/2023 revogou o art. 30 da Lei 12.973/2014. " +
+           "Subvenções (ex: ICMS) passam a ser tributadas por IRPJ/CSLL/PIS/COFINS, " +
+           "salvo adesão ao REIS (Regime Especial de Inclusão de Subvenção). " +
+           "Consulte contador para verificar elegibilidade ao REIS.",
     });
 
     h += _field("temDepAcelIncentivada", "Depreciação acelerada incentivada", "checkbox");
@@ -2701,7 +2704,7 @@
     if (_n(d.dividendosRecebidos) > 0) exclusoesDetalhe.push({ desc: "Dividendos recebidos de PJ brasileira", valor: _n(d.dividendosRecebidos), artigo: "Art. 261, II + Lei 9.249, art. 10" });
     if (_n(d.mepPositivo) > 0) exclusoesDetalhe.push({ desc: "Resultado positivo MEP", valor: _n(d.mepPositivo), artigo: "Art. 389" });
     if (_n(d.reversaoProvisoes) > 0) exclusoesDetalhe.push({ desc: "Reversão de provisões antes adicionadas", valor: _n(d.reversaoProvisoes), artigo: "Art. 261, §ú, V" });
-    if (_n(d.subvencaoInvestimento) > 0) exclusoesDetalhe.push({ desc: "Subvenção para investimento", valor: _n(d.subvencaoInvestimento), artigo: "Lei 12.973, art. 30" });
+    if (_n(d.subvencaoInvestimento) > 0) exclusoesDetalhe.push({ desc: "Subvenção para investimento (⚠ verificar REIS — Lei 14.789/2023)", valor: _n(d.subvencaoInvestimento), artigo: "Lei 14.789/2023 (revogou art. 30, Lei 12.973)" });
     if (_n(d.depAceleradaIncentivadaExclusao) > 0) exclusoesDetalhe.push({ desc: "Depreciação acelerada incentivada", valor: _n(d.depAceleradaIncentivadaExclusao), artigo: "Art. 324-329" });
     if (_n(d.outrasExclusoes) > 0) exclusoesDetalhe.push({ desc: "Outras exclusões", valor: _n(d.outrasExclusoes), artigo: "—" });
 
@@ -2801,10 +2804,15 @@
     }
     if (_n(d.provisoesContingencias) > 0) {
       despesasIndedutivelDetalhe.push({ desc: "Provisões para contingências", valor: _n(d.provisoesContingencias), artigo: "Art. 340" });
+      // CORREÇÃO BUG-01: também adicionar ao adicoesDetalhe para que a tabela LALUR Parte A
+      // liste o item e o total confira com a soma dos itens exibidos
+      adicoesDetalhe.push({ desc: "Provisões para contingências (indedutível)", valor: _n(d.provisoesContingencias), artigo: "Art. 340, RIR/2018", tipo: "T" });
       totalIndedutivelAuto += _n(d.provisoesContingencias);
     }
     if (_n(d.provisoesGarantias) > 0) {
       despesasIndedutivelDetalhe.push({ desc: "Provisões para garantia de produtos", valor: _n(d.provisoesGarantias), artigo: "Art. 340" });
+      // CORREÇÃO BUG-01: idem — espelhar no adicoesDetalhe
+      adicoesDetalhe.push({ desc: "Provisões para garantia de produtos (indedutível)", valor: _n(d.provisoesGarantias), artigo: "Art. 340, RIR/2018", tipo: "T" });
       totalIndedutivelAuto += _n(d.provisoesGarantias);
     }
     if (_n(d.gratificacoesAdm) > 0) {
@@ -3540,6 +3548,21 @@
     // CORREÇÃO FALHA #2: Incluir economiaGratificacao diretamente na soma total
     var totalEconomias = _r(economiaJCP + economiaPrejuizo + economiaSUDAM + economiaIncentivos + economiaDepreciacao + economiaPisCofins + economiaCPRBFinal + totalPDDEcon + economiaGratificacao);
 
+    // ── CORREÇÃO BUG-02: Garantir que totalEconomias nunca seja 0 quando há economias individuais ──
+    // Se totalEconomias resultou em 0 mas há economias individuais calculadas, recalcular diretamente
+    if (totalEconomias === 0) {
+      var _ecoCheck = [economiaJCP, economiaPrejuizo, economiaSUDAM, economiaIncentivos,
+                       economiaDepreciacao, economiaPisCofins, economiaCPRBFinal, totalPDDEcon, economiaGratificacao];
+      var _ecoSum = 0;
+      for (var _ei = 0; _ei < _ecoCheck.length; _ei++) {
+        _ecoSum += (_ecoCheck[_ei] || 0);
+      }
+      if (_ecoSum > 0) {
+        totalEconomias = _r(_ecoSum);
+        console.warn('[IMPOST] BUG-02 safety: totalEconomias recalculado de 0 para ' + totalEconomias);
+      }
+    }
+
     // CORREÇÃO FALHA #3: Carga bruta 100% bruta (IRPJ + CSLL + PIS/COFINS + ISS, todos ANTES de retenções)
     var pisCofinsLiquido = _r(Math.max(pisCofinsResult.totalAPagarBruto - _n(d.pisRetido) - _n(d.cofinsRetido), 0));
     var pisCofinsParaCargaBruta = pisCofinsResult.totalAPagarBruto || pisCofinsLiquido;
@@ -4032,6 +4055,24 @@
       compensacaoPERDCOMP: compensacaoPERDCOMPResult,
       compensacaoJudicial: compensacaoJudicialResult
     };
+
+    // ── CORREÇÃO BUG-02 (parte 2): Revalidar resumo.economiaTotal a partir do objeto economia ──
+    // Garante que o KPI "Economia Total Identificada" sempre reflete a soma real dos componentes
+    var _ecoObj = resultados.economia;
+    var _ecoResum = _r(
+      (_ecoObj.jcp || 0) + (_ecoObj.prejuizo || 0) + (_ecoObj.sudam || 0) +
+      (_ecoObj.incentivos || 0) + (_ecoObj.depreciacao || 0) + (_ecoObj.pisCofinsCreditos || 0) +
+      (_ecoObj.cprb || 0) + (_ecoObj.pddFiscal || 0) + (_ecoObj.gratificacao || 0)
+    );
+    if (_ecoResum > 0 && (resultados.resumo.economiaTotal || 0) === 0) {
+      resultados.resumo.economiaTotal = _ecoResum;
+      resultados.economia.total = _ecoResum;
+      console.warn('[IMPOST] BUG-02 safety (passo 2): resumo.economiaTotal corrigido para ' + _ecoResum);
+    } else if (_ecoResum > 0 && Math.abs(resultados.resumo.economiaTotal - _ecoResum) > 1) {
+      // Se divergência > R$1, usar o recalculado (mais confiável)
+      resultados.resumo.economiaTotal = _ecoResum;
+      resultados.economia.total = _ecoResum;
+    }
 
     // ═══════════════════════════════════════════════════════════════════════
     //  PASSO 28 — Cache
@@ -4547,8 +4588,8 @@
         id: "PDD_PROATIVA", titulo: "Revisão de PDD — Provisão para Devedores Duvidosos",
         tipo: "Dedução", complexidade: "Média", risco: "Baixo",
         economiaAnual: 0,
-        descricao: "Nenhuma PDD fiscal informada. Empresas com receita acima de R$ 500 mil geralmente têm créditos vencidos enquadráveis como PDD fiscal (Art. 347-351). Recomenda-se revisão dos recebíveis.",
-        baseLegal: "Art. 347-351 do RIR/2018",
+        descricao: "Nenhuma PDD fiscal informada. Empresas com receita acima de R$ 500 mil geralmente têm créditos vencidos enquadráveis como PDD fiscal (Art. 340-342). Recomenda-se revisão dos recebíveis.",
+        baseLegal: "Art. 340-342 do RIR/2018",
         acaoRecomendada: "Levantar todos os créditos vencidos há mais de 6 meses. Identificar devedores em falência/recuperação judicial. Documentar providências de cobrança.",
         prazoImplementacao: "30 dias",
         detalhes: {}
@@ -4882,7 +4923,7 @@
             tipo: "Dedução", complexidade: "Média", risco: "Baixo",
             economiaAnual: pddDetalhada.economiaAdicional,
             descricao: "Validação por faixas de valor (< R$ 15k, R$ 15k-100k, > R$ 100k) identificou economia adicional de " + _m(pddDetalhada.economiaAdicional) + ". " + (pddDetalhada.alertas ? pddDetalhada.alertas.join("; ") : ""),
-            baseLegal: "Art. 347-351 do RIR/2018 (Decreto 9.580/2018)",
+            baseLegal: "Art. 340-342 do RIR/2018 (Decreto 9.580/2018)",
             acaoRecomendada: "Classificar créditos por faixa de valor e verificar requisitos específicos de cada faixa para maximizar PDD dedutível.",
             prazoImplementacao: "30 dias",
             detalhes: pddDetalhada
@@ -5599,6 +5640,16 @@
     }
     s3 += '<tr class="res-total res-destaque"><td><strong>= LUCRO REAL</strong></td><td class="res-valor"><strong>' + _m(r.lucroRealFinal) + '</strong></td></tr>';
     s3 += '</table>';
+    // CORREÇÃO RJ-04: Nota sobre distinção de prejuízos operacionais vs não-operacionais
+    if (r.compensacao && r.compensacao.resumo && r.compensacao.resumo.totalCompensado > 0) {
+      s3 += '<div class="res-alerta res-alerta-info" style="margin-top:8px;"><span class="res-alerta-icon">&#x1F535;</span>' +
+        '<strong>Nota sobre compensação de prejuízos:</strong> ' +
+        'A trava de 30% foi aplicada corretamente. Contudo, observe que prejuízos <em>não-operacionais</em> ' +
+        'só podem ser compensados com lucros não-operacionais futuros (Art. 511, RIR/2018). ' +
+        'Este estudo trata o saldo de prejuízo informado como uma massa única. ' +
+        'Se houver parcela de prejuízo não-operacional, a compensação efetiva pode ser menor. ' +
+        'Consulte a ECF para segregação.</div>';
+    }
     s3 += '</div>';
     html += _secao(3, 'Demonstração do Resultado e Apuração do Lucro Real', s3);
 
@@ -6185,6 +6236,12 @@
     // JCP não aproveitado
     if (r.jcpDetalhado && r.jcpDetalhado.economiaLiquida > 0 && r.economia.jcp > 0) {
       s11 += '<div class="res-alerta res-alerta-economia"><span class="res-alerta-icon">&#x1F7E2;</span><strong>JCP DISPONÍVEL:</strong> Economia líquida de ' + _m(r.jcpDetalhado.economiaLiquida) + '/ano com distribuição de Juros sobre Capital Próprio.</div>';
+      // CORREÇÃO RJ-01: Alerta sobre Lei 14.789/2023 que alterou o cálculo do JCP
+      s11 += '<div class="res-alerta res-alerta-warn"><span class="res-alerta-icon">&#x26A0;&#xFE0F;</span><strong>ATENÇÃO — Lei 14.789/2023 (vigente desde 01/01/2024):</strong> ' +
+        'O novo §8º do art. 9º da Lei 9.249/95 passou a excluir da base patrimonial do JCP diversos itens ' +
+        '(lucros do período, reservas de incentivos, AAP, AVP, entre outros). ' +
+        'O valor de JCP apresentado utiliza cálculo simplificado (PL × TJLP) e pode estar superestimado. ' +
+        '<strong>Recomenda-se validação com contador para aplicar as exclusões do §8º antes de distribuir JCP.</strong></div>';
     }
 
     // SUDAM/SUDENE potencial
@@ -6195,8 +6252,13 @@
       s11 += '<div class="res-alerta res-alerta-economia"><span class="res-alerta-icon">&#x1F7E2;</span><strong>POTENCIAL ' + nomeSup + ':</strong> Empresa em área ' + nomeSup + ' sem projeto aprovado. Redução de até 75% do IRPJ é possível.</div>';
     }
 
-    // Reforma Tributária
-    s11 += '<div class="res-alerta res-alerta-info"><span class="res-alerta-icon">&#x1F535;</span><strong>REFORMA TRIBUTÁRIA (LC 214/2025):</strong> A partir de 2026 inicia-se a transição para CBS/IBS em substituição ao PIS/COFINS e ISS. O regime do Lucro Real permanece para IRPJ e CSLL. Acompanhe as regulamentações para ajustar o planejamento tributário.</div>';
+    // Reforma Tributária — CORREÇÃO RJ-03: Disclaimer mais explícito para 2026
+    s11 += '<div class="res-alerta res-alerta-warn"><span class="res-alerta-icon">&#x26A0;&#xFE0F;</span><strong>REFORMA TRIBUTÁRIA — ANO-BASE 2026 (LC 214/2025):</strong> ' +
+      'Em 2026 inicia-se a fase de teste da CBS (0,9%) e IBS (0,1%) com crédito proporcional de PIS/COFINS vigente. ' +
+      'Os cálculos de PIS/COFINS neste estudo utilizam a sistemática anterior (Leis 10.637/02 e 10.833/03). ' +
+      '<strong>O impacto da CBS/IBS teste não está refletido nos valores apresentados.</strong> ' +
+      'Consulte regulamentação vigente para ajustar o planejamento tributário. ' +
+      'O regime do Lucro Real permanece aplicável para IRPJ e CSLL.</div>';
 
     s11 += '</div>';
     html += _secao(11, 'Alertas e Compliance', s11);
@@ -6652,7 +6714,7 @@
     if (LR.pdd && (LR.pdd.criterios || LR.pdd.faixasValor)) {
       var sPDD = '';
       if (LR.pdd.criterios && LR.pdd.criterios.length > 0) {
-        sPDD += '<h4>Critérios para Dedutibilidade <span class="res-artigo">' + (LR.pdd.artigo || 'Art. 347-351') + '</span></h4>';
+        sPDD += '<h4>Critérios para Dedutibilidade <span class="res-artigo">' + (LR.pdd.artigo || 'Art. 340-342') + '</span></h4>';
         sPDD += '<table class="res-table"><thead><tr><th>Critério</th><th>Descrição</th><th>Artigo</th></tr></thead><tbody>';
         LR.pdd.criterios.forEach(function (c) {
           sPDD += '<tr><td><strong>' + (c.id || '') + '</strong></td><td>' + (c.descricao || '') + '</td><td><span class="res-artigo">' + (c.artigo || '') + '</span></td></tr>';
@@ -6661,6 +6723,11 @@
       }
       if (LR.pdd.faixasValor && LR.pdd.faixasValor.length > 0) {
         sPDD += '<h4 style="margin-top:12px;">Faixas de Valor — Requisitos por Faixa</h4>';
+        // CORREÇÃO INC-01: Nota sobre o limite padrão correto
+        sPDD += '<div class="res-alerta res-alerta-info" style="margin-bottom:8px;font-size:0.85em;"><span class="res-alerta-icon">&#x1F535;</span>' +
+          '<strong>Referência padrão (IN SRF 93/97 + jurisprudência CARF):</strong> ' +
+          'Créditos até R$ 15.000 por devedor dispensam procedimento judicial — basta protesto extrajudicial. ' +
+          'Acima de R$ 15.000: necessário ação judicial ou declaração de insolvência.</div>';
         sPDD += '<table class="res-table"><thead><tr><th>Faixa</th><th>Requisito</th><th>Artigo</th></tr></thead><tbody>';
         LR.pdd.faixasValor.forEach(function (f) {
           var faixaLabel = f.ate ? 'Até ' + _m(f.ate) : (f.acima ? 'Acima de ' + _m(f.acima) : '—');
@@ -6672,6 +6739,9 @@
         sPDD += '<div class="res-alerta res-alerta-warn" style="margin-top:8px;"><span class="res-alerta-icon">&#x26A0;&#xFE0F;</span><strong>Vedações:</strong> ' + LR.pdd.vedacoes.join('; ') + '</div>';
       }
       html += _secao('Q', 'PDD Fiscal — Critérios e Faixas de Valor', sPDD);
+      // CORREÇÃO INC-01: Nota sobre o limite correto de R$ 15.000 (IN SRF 93/97)
+      // Os faixasValor do mapeamento externo podem usar limites diferentes (R$5.000/R$30.000)
+      // mas o limite correto conforme IN SRF 93/97 e jurisprudência CARF é R$ 15.000
     }
 
     // ═══════════════════════════════════════════════════════════════════════
