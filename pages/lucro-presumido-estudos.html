@@ -822,6 +822,9 @@ function debounce(fn, ms) {
   return function(...args) { clearTimeout(t); t = setTimeout(() => fn.apply(this, args), ms); };
 }
 
+/** Formata percentual sem decimais desnecessários: 8% fica "8%", 1.6% fica "1,6%", 38.4% fica "38,4%" */
+function fmtPct(v) { const p = v * 100; return (p % 1 === 0 ? p.toFixed(0) : p.toFixed(1).replace('.', ',')) + '%'; }
+
 function $(id) { return document.getElementById(id); }
 function $$(sel) { return document.querySelectorAll(sel); }
 
@@ -951,6 +954,17 @@ function selectCnae(codigo, descricao, categoria) {
       if (ativ.atividadeId === 'locacao_cessao') {
         infoHtml += `<div class="info-box warn" style="margin-top:6px"><strong>⚠ Divergência interpretativa — CSLL 32% (abordagem conservadora)</strong><br>A presunção de CSLL a 32% para locação de bens móveis é a abordagem mais conservadora. A interpretação majoritária da RFB e da jurisprudência entende que locação de bens móveis <strong>não é prestação de serviços</strong>, cabendo CSLL a 12% (regra geral). Há soluções de consulta divergentes (SC COSIT 7/2021 aplica 32%). <strong>Consulte seu advogado tributarista</strong> para avaliar a posição mais adequada.</div>`;
       }
+      // Alerta CNAE-específico do motor (ex: CNAE 62.01-5 software 16% vs 32%)
+      if (ativ.alertaCNAE) {
+        const codigoNorm = codigo.replace(/[.\-\/\s]/g, '');
+        Object.entries(ativ.alertaCNAE).forEach(function(entry) {
+          var cnaeKey = entry[0], msg = entry[1];
+          var keyNorm = cnaeKey.replace(/[.\-\/\s]/g, '');
+          if (codigoNorm.startsWith(keyNorm)) {
+            infoHtml += `<div class="info-box warn" style="margin-top:6px"><strong>⚠ ATENÇÃO — CNAE ${cnaeKey}:</strong><br>${msg}</div>`;
+          }
+        });
+      }
       $('cnaeInfo').innerHTML = infoHtml;
     } else {
       $('atividadeId').value = 'servicos_gerais';
@@ -995,19 +1009,70 @@ function addCnaeSecundario() {
 // ─────────────────────────────────────────────────────────────────────────
 function populateEstados() {
   const sel = $('estado');
-  UFS.forEach(uf => {
-    const opt = document.createElement('option');
-    opt.value = uf;
-    const estado = getEstadoData(uf);
-    opt.textContent = estado ? `${uf} - ${estado.nome}` : uf;
-    sel.appendChild(opt);
-  });
+
+  // Preferir UF_REGISTRY (leve, sem carregar dados completos de cada estado)
+  var api = (typeof Estados !== 'undefined' && Estados.UF_REGISTRY) ? Estados
+          : (typeof EstadosBR !== 'undefined' && EstadosBR.UF_REGISTRY) ? EstadosBR
+          : null;
+
+  if (api && api.UF_REGISTRY) {
+    Object.keys(api.UF_REGISTRY).sort().forEach(uf => {
+      const opt = document.createElement('option');
+      opt.value = uf;
+      opt.textContent = `${uf} - ${api.UF_REGISTRY[uf].nome}`;
+      sel.appendChild(opt);
+    });
+  } else {
+    // Fallback: array estático UFS
+    UFS.forEach(uf => {
+      const opt = document.createElement('option');
+      opt.value = uf;
+      const estado = getEstadoData(uf);
+      opt.textContent = estado ? `${uf} - ${estado.nome}` : uf;
+      sel.appendChild(opt);
+    });
+  }
 }
 
 function getEstadoData(uf) {
+  if (!uf) return null;
+
+  // API de métodos (estados.js v1.0+)
+  var api = (typeof Estados !== 'undefined' && typeof Estados.getEstado === 'function') ? Estados
+          : (typeof EstadosBR !== 'undefined' && typeof EstadosBR.getEstado === 'function') ? EstadosBR
+          : null;
+
+  if (api) {
+    var completo = api.getEstadoCompleto(uf);
+    if (!completo) return null;
+
+    var icmsNorm = api.getICMSNormalizado(uf);
+    var incNorm  = api.getIncentivosNormalizado(uf);
+
+    return {
+      nome: completo.nome,
+      sigla: completo.sigla,
+      regiao: completo.regiao,
+      icms: {
+        padrao: icmsNorm ? icmsNorm.aliquota_padrao : null,
+        padrao_percentual: icmsNorm ? icmsNorm.aliquota_padrao_percentual : 'N/D',
+        fecop: icmsNorm ? icmsNorm.fecop : null,
+        efetiva: icmsNorm ? icmsNorm.aliquota_efetiva : null
+      },
+      beneficios: {
+        tem_sudam:    incNorm && incNorm.sudam       ? !!incNorm.sudam.ativo       : false,
+        tem_sudene:   incNorm && incNorm.sudene      ? !!incNorm.sudene.ativo      : false,
+        tem_sudeco:   incNorm && incNorm.sudeco       ? !!incNorm.sudeco.ativo      : false,
+        zona_franca:  incNorm && incNorm.zona_franca ? !!(incNorm.zona_franca.ativo || incNorm.zona_franca.existe) : false,
+        suframa:      incNorm && incNorm.suframa      ? !!incNorm.suframa.ativo     : false
+      },
+      _raw: completo.dados
+    };
+  }
+
+  // Fallback: dicionário legado
   if (typeof ESTADOS !== 'undefined' && ESTADOS[uf]) return ESTADOS[uf];
-  if (typeof Estados !== 'undefined' && Estados[uf]) return Estados[uf];
-  if (typeof EstadosBR !== 'undefined' && EstadosBR[uf]) return EstadosBR[uf];
+
   return null;
 }
 
@@ -1036,12 +1101,23 @@ async function onEstadoChange() {
   // Load municipalities
   munSel.innerHTML = '<option value="">Carregando municipios...</option>';
   munSel.disabled = true;
+  // Adapter: MunicipiosIBGE espera estadosRef[uf] (dicionário), não API de métodos
+  var _estadoRef = null;
+  var _api = (typeof Estados !== 'undefined' && typeof Estados.getEstado === 'function') ? Estados
+           : (typeof EstadosBR !== 'undefined' && typeof EstadosBR.getEstado === 'function') ? EstadosBR
+           : null;
+  if (_api) {
+    _estadoRef = {};
+    _estadoRef[uf] = _api.getEstado(uf);
+  } else if (typeof ESTADOS !== 'undefined') {
+    _estadoRef = ESTADOS;
+  }
   try {
-    const municipios = await MunicipiosIBGE.buscarMunicipios(uf, typeof ESTADOS !== 'undefined' ? ESTADOS : null);
+    const municipios = await MunicipiosIBGE.buscarMunicipios(uf, _estadoRef);
     MunicipiosIBGE.renderizarSelect(munSel, municipios);
   } catch(e) {
     try {
-      const fallback = MunicipiosIBGE.fallbackEstadosJS(uf, typeof ESTADOS !== 'undefined' ? ESTADOS : null);
+      const fallback = MunicipiosIBGE.fallbackEstadosJS(uf, _estadoRef);
       if (fallback.length) {
         MunicipiosIBGE.renderizarSelect(munSel, fallback);
       } else {
@@ -1084,26 +1160,31 @@ function checkElegibilidade() {
       isSCP: $('impSCP').checked
     });
     const div = $('elegibilidadeResult');
+    const alertas = result.alertas || [];
     if (result.elegivel) {
       let html = '<div class="info-box success"><strong>ELEGIVEL ao Lucro Presumido</strong>';
       html += `<br>Limite aplicavel: ${formatMoney(result.limiteAplicavel)}`;
-      if (result.alertas.length) {
+      if (alertas.length) {
         html += '<br><br>';
-        result.alertas.forEach(a => { html += `<div style="margin-top:4px"><span class="badge badge-warn">${a.tipo}</span> ${a.mensagem}</div>`; });
+        alertas.forEach(a => { html += `<div style="margin-top:4px"><span class="badge badge-warn">${a.tipo}</span> ${a.mensagem}</div>`; });
       }
       html += '</div>';
       div.innerHTML = html;
       $('sbElegibilidade').innerHTML = '<span class="badge badge-success">Elegivel</span>';
     } else {
       let html = '<div class="info-box danger"><strong>NAO ELEGIVEL ao Lucro Presumido</strong><br><br>';
-      result.impedimentos.forEach(imp => {
+      (result.impedimentos || []).forEach(imp => {
         html += `<div style="margin-top:6px"><strong>${imp.descricao}</strong><br><span style="opacity:.7">${imp.baseLegal}</span></div>`;
       });
+      if (alertas.length) {
+        html += '<br>';
+        alertas.forEach(a => { html += `<div style="margin-top:4px"><span class="badge badge-warn">${a.tipo}</span> ${a.mensagem}</div>`; });
+      }
       html += '</div>';
       div.innerHTML = html;
       $('sbElegibilidade').innerHTML = '<span class="badge badge-danger">Inelegivel</span>';
     }
-    if (result.alertas.length && result.elegivel) {
+    if (alertas.length && result.elegivel) {
       $('sbElegibilidade').innerHTML = '<span class="badge badge-warn">Elegivel (alertas)</span>';
     }
   } catch(e) {
@@ -1126,7 +1207,7 @@ function setModoFinanceiro(modo) {
 
 function buildActivitySelect(selectedId) {
   const atividades = LucroPresumido.getAtividadesDisponiveis();
-  return atividades.map(a => `<option value="${a.id}" ${a.id === selectedId ? 'selected' : ''}>${a.descricao} (IRPJ ${(a.percentualIRPJ * 100).toFixed(0)}% / CSLL ${(a.percentualCSLL * 100).toFixed(0)}%)</option>`).join('');
+  return atividades.map(a => `<option value="${a.id}" ${a.id === selectedId ? 'selected' : ''}>${a.descricao} (IRPJ ${fmtPct(a.percentualIRPJ)} / CSLL ${fmtPct(a.percentualCSLL)})</option>`).join('');
 }
 
 function addLinhaReceita(tableBodyId, defaultAtivId) {
@@ -1140,7 +1221,7 @@ function addLinhaReceita(tableBodyId, defaultAtivId) {
   const ativCSLL = atividades.find(a => a.id === atividadeId);
   const tr = document.createElement('tr');
   tr.id = 'recRow' + id;
-  tr.innerHTML = `<td><select class="fm-input rec-ativ" id="recAtiv${id}" onchange="updateReceitaRow(${id})" style="font-size:12px">${buildActivitySelect(atividadeId)}</select></td><td class="mono" id="recIRPJ${id}">${ativIRPJ ? (ativIRPJ.percentualIRPJ * 100).toFixed(0) + '%' : '32%'}</td><td class="mono" id="recCSLL${id}">${ativCSLL ? (ativCSLL.percentualCSLL * 100).toFixed(0) + '%' : '32%'}</td><td><input class="fm-input money" id="recValor${id}" placeholder="0,00" oninput="maskMoney(this);triggerAutoSave()"></td><td><button class="btn-rm" onclick="document.getElementById('recRow${id}').remove()">&times;</button></td>`;
+  tr.innerHTML = `<td><select class="fm-input rec-ativ" id="recAtiv${id}" onchange="updateReceitaRow(${id})" style="font-size:12px">${buildActivitySelect(atividadeId)}</select></td><td class="mono" id="recIRPJ${id}">${ativIRPJ ? fmtPct(ativIRPJ.percentualIRPJ) : '32%'}</td><td class="mono" id="recCSLL${id}">${ativCSLL ? fmtPct(ativCSLL.percentualCSLL) : '32%'}</td><td><input class="fm-input money" id="recValor${id}" placeholder="0,00" oninput="maskMoney(this);triggerAutoSave()"></td><td><button class="btn-rm" onclick="document.getElementById('recRow${id}').remove()">&times;</button></td>`;
   tbody.appendChild(tr);
 }
 
@@ -1150,8 +1231,8 @@ function updateReceitaRow(id) {
   const atividades = LucroPresumido.getAtividadesDisponiveis();
   const ativ = atividades.find(a => a.id === sel.value);
   if (ativ) {
-    $('recIRPJ' + id).textContent = (ativ.percentualIRPJ * 100).toFixed(0) + '%';
-    $('recCSLL' + id).textContent = (ativ.percentualCSLL * 100).toFixed(0) + '%';
+    $('recIRPJ' + id).textContent = fmtPct(ativ.percentualIRPJ);
+    $('recCSLL' + id).textContent = fmtPct(ativ.percentualCSLL);
   }
 }
 
@@ -1286,9 +1367,11 @@ function gatherFormData() {
       d.socios.push({ nome: nome.value, percentual: (parseFloat(pct.value) || 0) / 100 });
     }
   });
-  // Estado/SUDAM
+  // Estado/SUDAM/SUDENE/ZFM
   const estadoData = getEstadoData(d.estado);
   d.areaAtuacaoSUDAM = estadoData && estadoData.beneficios && estadoData.beneficios.tem_sudam ? true : false;
+  d.areaAtuacaoSUDENE = estadoData && estadoData.beneficios && estadoData.beneficios.tem_sudene ? true : false;
+  d.zonaFranca = estadoData && estadoData.beneficios && estadoData.beneficios.zona_franca ? true : false;
   // Elegibilidade Simples: verifica receita, porte E impedimentos legais
   const temImpedimentoSimples = $('impInstFinanceira').checked || $('impFactoring').checked || $('impExterior').checked;
   d.elegivelSimples = d.receitaBrutaAnual <= 4800000 && d.porte !== 'DEMAIS' && !temImpedimentoSimples;
@@ -1954,6 +2037,12 @@ function renderDicas(d) {
     }
     if (d.areaAtuacaoSUDAM) {
       tips.push({ title: 'Você Está em Área SUDAM', desc: 'Empresas em area SUDAM podem obter reducao de 75% no IRPJ optando pelo Lucro Real.' });
+    }
+    if (d.areaAtuacaoSUDENE) {
+      tips.push({ title: 'Você Está em Área SUDENE', desc: 'Empresas em area SUDENE podem obter reducao de 75% no IRPJ optando pelo Lucro Real, similar ao beneficio SUDAM.' });
+    }
+    if (d.zonaFranca) {
+      tips.push({ title: 'Zona Franca de Manaus', desc: 'Empresas na ZFM possuem beneficios fiscais especificos em ICMS, IPI e PIS/COFINS. Avalie o impacto no planejamento tributario.' });
     }
     tips.push({ title: 'Regime de Caixa', desc: 'No LP voce pode optar pelo regime de caixa para reconhecimento de receitas.' });
     if (d.receitas.length > 1) {
@@ -3071,8 +3160,12 @@ function exportExcel() {
     csv += `Empresa;${d.razaoSocial || ''}\n`;
     csv += `CNPJ;${d.cnpj || ''}\n`;
     csv += `CNAE;${d.cnaePrincipal || ''}\n`;
-    csv += `Estado;${d.estado || ''}\n`;
+    const _csvEstado = getEstadoData(d.estado);
+    csv += `Estado;${d.estado || ''}${_csvEstado ? ' - ' + _csvEstado.nome : ''}\n`;
     csv += `Municipio;${d.municipio || ''}\n`;
+    csv += `Area SUDAM;${d.areaAtuacaoSUDAM ? 'Sim' : 'Nao'}\n`;
+    csv += `Area SUDENE;${d.areaAtuacaoSUDENE ? 'Sim' : 'Nao'}\n`;
+    csv += `Zona Franca;${d.zonaFranca ? 'Sim' : 'Nao'}\n`;
     csv += `Receita Bruta Informada;${d.receitaBrutaAnual || 0}\n`;
     const anualCSV = App.results.anual;
     csv += `Receita Líquida (Base);${anualCSV ? anualCSV.receitaBrutaAnual : (d.receitaBrutaAnual || 0)}\n`;
