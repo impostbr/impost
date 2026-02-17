@@ -2618,6 +2618,8 @@
     var lucroBruto = _r(receitaLiquida - custosTotais);
     var lucroLiquido = _r(lucroBruto - despesasTotais - depNormalDRE + receitaFinanceiras);
     var margemLucro = receitaBruta > 0 ? _r(lucroLiquido / receitaBruta * 100) : 0;
+    // CORREÇÃO FALHA #6: Margem precisa (sem arredondamento) para uso em cenários
+    var margemLucroPrecisa = receitaBruta > 0 ? (lucroLiquido / receitaBruta) : 0;
 
     var dre = {
       receitaBruta: receitaBruta,
@@ -2636,7 +2638,8 @@
       depreciacao: depNormalDRE,
       lucroBruto: lucroBruto,
       lucroLiquido: lucroLiquido,
-      margemLucro: margemLucro
+      margemLucro: margemLucro,
+      margemLucroPrecisa: margemLucroPrecisa
     };
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -2750,9 +2753,11 @@
     // ═══════════════════════════════════════════════════════════════════════
     var despesasIndedutivelDetalhe = [];
     var totalIndedutivelAuto = 0;
-    if (_n(d.despesasBrindes) > 0) {
-      despesasIndedutivelDetalhe.push({ desc: "Brindes", valor: _n(d.despesasBrindes), artigo: "Art. 13, VII Lei 9.249" });
-      totalIndedutivelAuto += _n(d.despesasBrindes);
+    // CORREÇÃO FALHA #5: Unificar campos d.despesasBrindes e d.brindes (LALUR usa d.brindes, UI usa d.despesasBrindes)
+    var valorBrindes = _n(d.despesasBrindes) || _n(d.brindes);
+    if (valorBrindes > 0) {
+      despesasIndedutivelDetalhe.push({ desc: "Brindes", valor: valorBrindes, artigo: "Art. 13, VII Lei 9.249" });
+      totalIndedutivelAuto += valorBrindes;
     }
     if (_n(d.multasPunitivas) > 0) {
       despesasIndedutivelDetalhe.push({ desc: "Multas punitivas", valor: _n(d.multasPunitivas), artigo: "Art. 311, §5º" });
@@ -3147,7 +3152,8 @@
     ];
     bensConfig.forEach(function(bc) {
       var valor = _n(d[bc.campo]);
-      if (valor > 0) bensParaCalculo.push({ tipo: bc.tipo, valor: valor, taxa: bc.taxa });
+      // CORREÇÃO FALHA #10: Motor espera tipo em minúsculas e campo custoAquisicao (não 'valor')
+      if (valor > 0) bensParaCalculo.push({ tipo: bc.tipo.toLowerCase(), custoAquisicao: valor, valor: valor, taxa: bc.taxa });
     });
 
     if (LR.calcular.depreciacaoCompleta && bensParaCalculo.length > 0) {
@@ -3353,12 +3359,13 @@
     var economiaGratificacao = _n(d.gratificacoesAdm) > 0 ? _r(_n(d.gratificacoesAdm) * 0.34) : 0;
     var economiaCPRBFinal = cprbResult ? cprbResult.economia : 0;
     var totalPDDEcon = _r((_n(d.perdasCreditos6Meses) + _n(d.perdasCreditosJudicial) + _n(d.perdasCreditosFalencia)) * 0.34);
-    var totalEconomias = _r(economiaJCP + economiaPrejuizo + economiaSUDAM + economiaIncentivos + economiaDepreciacao + economiaPisCofins + economiaCPRBFinal + totalPDDEcon);
-    if (_n(d.gratificacoesAdm) > 0) totalEconomias += economiaGratificacao;
+    // CORREÇÃO FALHA #2: Incluir economiaGratificacao diretamente na soma total
+    var totalEconomias = _r(economiaJCP + economiaPrejuizo + economiaSUDAM + economiaIncentivos + economiaDepreciacao + economiaPisCofins + economiaCPRBFinal + totalPDDEcon + economiaGratificacao);
 
-    // Carga tributária bruta e otimizada (PIS/COFINS líquido de retenções)
+    // CORREÇÃO FALHA #3: Carga bruta 100% bruta (IRPJ + CSLL + PIS/COFINS + ISS, todos ANTES de retenções)
     var pisCofinsLiquido = _r(Math.max(pisCofinsResult.totalAPagar - _n(d.pisRetido) - _n(d.cofinsRetido), 0));
-    var cargaBruta = _r(irpjAntesReducao + csllResult.csllDevida + pisCofinsLiquido + issAnual);
+    var pisCofinsParaCargaBruta = pisCofinsResult.totalAPagar || pisCofinsLiquido;
+    var cargaBruta = _r(irpjAntesReducao + csllResult.csllDevida + pisCofinsParaCargaBruta + issAnual);
     var cargaOtimizada = _r(Math.max(cargaBruta - totalEconomias, 0));
     var aliquotaEfetiva = receitaBruta > 0 ? _r(cargaBruta / receitaBruta * 100) : 0;
     var aliquotaOtimizada = receitaBruta > 0 ? _r(cargaOtimizada / receitaBruta * 100) : 0;
@@ -4990,6 +4997,9 @@
 
     var recomendacao = "";
     var forma = "";
+    // CORREÇÃO FALHA #8: Filtro de materialidade — diferenças < R$ 100 são insignificantes
+    var MATERIALIDADE = 100;
+    var diferencaAbsoluta = Math.abs(totalTri - totalAnual);
     if (sazonal || temPrejuizoTri) {
       forma = "anual";
       recomendacao = "Apuração ANUAL recomendada. ";
@@ -4998,6 +5008,9 @@
       if (simSuspensao && simSuspensao.mesesSuspensos > 0) {
         recomendacao += "Com suspensão/redução, economia adicional de " + _m(simSuspensao.economiaTotalSuspensao) + " evitando estimativas desnecessárias.";
       }
+    } else if (diferencaAbsoluta < MATERIALIDADE) {
+      forma = "ambas";
+      recomendacao = "Não há diferença significativa entre as formas de apuração (diferença de apenas " + _m(diferencaAbsoluta) + "). Ambas são viáveis — considere a simplicidade operacional.";
     } else if (totalTri < totalAnual) {
       forma = "trimestral";
       recomendacao = "Apuração TRIMESTRAL é mais vantajosa neste caso (economia de " + _m(totalAnual - totalTri) + " vs. estimativa). Lucro estável favorece simplicidade.";
@@ -5030,7 +5043,8 @@
     var bn = vedaCompensacao ? 0 : (baseNegCSLL || 0);
 
     for (var c = 0; c < 3; c++) {
-      var margemAjustada = (dre.margemLucro / 100) + fatores[c];
+      // CORREÇÃO FALHA #6: Usar margem precisa (sem arredondamento) em vez de margemLucro/100
+      var margemAjustada = (dre.margemLucroPrecisa !== undefined ? dre.margemLucroPrecisa : (dre.margemLucro / 100)) + fatores[c];
       var lucroC = _r(rb * margemAjustada);
       var lucroAjC = _r(lucroC + lalur.totalAdicoes - lalur.totalExclusoes);
 
@@ -5077,7 +5091,9 @@
     var baseCreditos = _calcBaseCreditos();
     var debitos = _r(tributavel * 0.0925);
     var creditos = _r(baseCreditos * 0.0925);
-    return _r(Math.max(debitos - creditos, 0));
+    // CORREÇÃO FALHA #7: Descontar retenções de PIS/COFINS (consistente com cálculo principal)
+    var retencoesPisCofins = _n(d.pisRetido) + _n(d.cofinsRetido);
+    return _r(Math.max(debitos - creditos - retencoesPisCofins, 0));
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -5092,9 +5108,9 @@
     var cofinsAnual = pisCofinsResult.cofinsAPagar || (pisCofinsResult.aPagar ? pisCofinsResult.aPagar.cofins : 0);
     var totalFluxo = 0;
 
-    // ═══ CORREÇÃO: Deduzir retenções na fonte do fluxo ═══
-    var retIRRFMes = _r((_n(d.irrfRetidoPrivado) + _n(d.irrfRetidoPublico)) / 12);
-    var retCSLLMes = _r(_n(d.csllRetido) / 12);
+    // ═══ CORREÇÃO FALHA #4: Deduzir retenções proporcionalmente à apuração ═══
+    var totalIRRFAnual = _n(d.irrfRetidoPrivado) + _n(d.irrfRetidoPublico);
+    var totalCSLLRetAnual = _n(d.csllRetido);
     var retPISMes = _r(_n(d.pisRetido) / 12);
     var retCOFINSMes = _r(_n(d.cofinsRetido) / 12);
 
@@ -5113,6 +5129,9 @@
       // IRPJ/CSLL dependem da apuração
       var irpjMes = 0;
       var csllMes = 0;
+      // CORREÇÃO: Retenções de IRRF e CSLL proporcionais ao período de apuração
+      var retIRRFMes = 0;
+      var retCSLLMes = 0;
       if (apuracao === "trimestral") {
         // Concentrado nos meses 3, 6, 9, 12
         if (m % 3 === 0) {
@@ -5124,11 +5143,17 @@
             irpjMes = _r(irpjAnual / 4);
             csllMes = _r(csllAnual / 4);
           }
+          // Retenções concentradas nos meses de pagamento (1/4 cada trimestre)
+          retIRRFMes = _r(totalIRRFAnual / 4);
+          retCSLLMes = _r(totalCSLLRetAnual / 4);
         }
+        // Em meses não-trimestrais, retIRRFMes e retCSLLMes ficam 0
       } else {
         // Estimativa mensal
         irpjMes = _r(irpjAnual / 12);
         csllMes = _r(csllAnual / 12);
+        retIRRFMes = _r(totalIRRFAnual / 12);
+        retCSLLMes = _r(totalCSLLRetAnual / 12);
       }
 
       var irpjEfetivo = Math.max(_r(irpjMes - (irpjMes > 0 ? retIRRFMes : 0)), 0);
@@ -5519,9 +5544,10 @@
     s4 += '<div class="res-detail-card">';
     s4 += '<h3>4.1 — IRPJ <span class="res-artigo">Art. 225 do RIR/2018</span></h3>';
     s4 += '<table class="res-table">';
-    // CORREÇÃO BUG 4: Exibir base pós-compensação (Lucro Real efetivo)
+    // CORREÇÃO FALHA #1: Exibir lucroAjustado (ANTES compensação), não lucroRealFinal (APÓS)
+    var lucroAjustadoDisplay = (r.lalur && r.lalur.lucroAjustado !== undefined) ? r.lalur.lucroAjustado : r.lucroRealFinal;
     var baseIRPJDisplay = (r.irpj && r.irpj.lucroReal !== undefined) ? r.irpj.lucroReal : r.lucroRealFinal;
-    s4 += _linha('Lucro Ajustado (antes compensação)', r.lucroRealFinal, '', '');
+    s4 += _linha('Lucro Ajustado (antes compensação)', lucroAjustadoDisplay, '', '');
     if (r.irpj && r.irpj.compensacaoPrejuizo > 0) {
       s4 += _linha('(-) Compensação de Prejuízo Fiscal (30%)', r.irpj.compensacaoPrejuizo, 'Art. 580-586', 'res-sub res-economia');
     } else if (r.compensacao && r.compensacao.resumo && r.compensacao.resumo.totalCompensado > 0) {
@@ -5529,7 +5555,8 @@
     }
     s4 += _linha('= Lucro Real (base de cálculo IRPJ)', baseIRPJDisplay, '', 'res-subtotal');
     if (r.irpj) {
-      s4 += _linha('IRPJ Normal (15%)', r.irpj.irpjNormal || _r(r.lucroRealFinal * 0.15), 'Art. 225', '');
+      // CORREÇÃO FALHA #9: Usar baseIRPJDisplay (base de cálculo correta) no fallback, evitando centavo de arredondamento
+      s4 += _linha('IRPJ Normal (15%)', r.irpj.irpjNormal || _r(baseIRPJDisplay * 0.15), 'Art. 225', '');
       s4 += _linha('Adicional (10% sobre excedente R$ 240.000)', r.irpj.adicional || r.irpj.irpjAdicional || 0, 'Art. 228', '');
       s4 += _linha('= IRPJ Bruto', r.irpjAntesReducao, '', 'res-subtotal');
       if (r.irpj.deducaoIncentivos > 0 || (r.incentivosFiscais && r.incentivosFiscais.totalDeducaoFinal > 0)) {
@@ -5854,7 +5881,7 @@
         s8 += '<div class="res-recomendacao" style="border-left:4px solid ' + recBg + ';">';
         s8 += '<h4>Recomendação</h4>';
         s8 += '<p>' + ca.recomendacao.justificativa + '</p>';
-        if (ca.recomendacao.diferenca > 0) {
+        if (ca.recomendacao.diferenca > 0 && ca.recomendacao.diferenca >= 100) {
           s8 += '<p><strong>Diferença: ' + _m(ca.recomendacao.diferenca) + '</strong></p>';
         }
         s8 += '</div>';
