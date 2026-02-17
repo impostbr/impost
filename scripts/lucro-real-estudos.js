@@ -1,27 +1,11 @@
 /**
  * ╔══════════════════════════════════════════════════════════════════════════════╗
- * ║  LUCRO REAL — ESTUDOS TRIBUTÁRIOS  v2.3  (ARQUIVO UNIFICADO)              ║
+ * ║  LUCRO REAL — ESTUDOS TRIBUTÁRIOS  v2.2  (ARQUIVO UNIFICADO)              ║
  * ║  Wizard 7 etapas + Motor de diagnóstico + Exportação PDF/Excel            ║
  * ║  100% LUCRO REAL — Sem comparativo com Simples/Presumido                   ║
  * ║  Motor: cruza respostas do usuário com LucroRealMap (LR.calcular.*)        ║
  * ║  Produto comercial por assinatura — ZERO referência a empresa específica   ║
  * ╚══════════════════════════════════════════════════════════════════════════════╝
- *
- * CHANGELOG v2.3.0 (Fev/2026):
- *   #1 Gratificações a administradores: separar uniformes/gerais (dedutíveis,
- *      Art. 358 caput) de discriminadas (indedutíveis, Art. 358 §1º)
- *   #2 Créditos PIS/COFINS sobre aluguel: aviso explícito de que aluguel pago
- *      a PF NÃO gera crédito (Lei 10.637/2002, Art. 3º, IV)
- *   #3 TJLP: default atualizado de 6% para 8,65% (Q2/2025), com aviso
- *      proeminente para verificar taxa vigente no Banco Central
- *   #4 Créditos PIS/COFINS sobre depreciação: clarificação de que o crédito
- *      é 1/60 do custo de aquisição (não taxa de depreciação contábil)
- *   #5 Alíquota efetiva PIS/COFINS: distinguir claramente métricas bruta
- *      (antes de retenções) e líquida (após retenções) com notas explicativas
- *   #6 Carga total harmonizada: cenários e painel principal agora usam mesma
- *      base (PIS/COFINS bruto, antes de retenções)
- *   #7 PIS/COFINS nos cenários: agora varia proporcionalmente com receita
- *      no modo "receita" (default), com documentação da simplificação
  *
  * DEPENDÊNCIAS (carregar ANTES deste arquivo):
  *   1. estados.js              → window.ESTADOS (dados de estados, ICMS, ISS)
@@ -36,7 +20,7 @@
  *   window.IMPOSTExport      — alias de compatibilidade para exportação
  *
  * IMPOST. — Inteligência em Modelagem de Otimização Tributária
- * Versão: 2.3.0 | Data: Fevereiro/2026
+ * Versão: 2.2.0 | Data: Fevereiro/2026
  *
  * NOTA: Este arquivo unifica os antigos lucro-real-estudos.js + lucro-real-estudos-export.js
  *       Não é mais necessário carregar o arquivo de exportação separadamente.
@@ -47,7 +31,7 @@
   // ═══════════════════════════════════════════════════════════════════════════
   //  CONSTANTES E HELPERS
   // ═══════════════════════════════════════════════════════════════════════════
-  const VERSAO = "2.3.0";
+  const VERSAO = "2.2.0";
   const LS_KEY_DADOS = "impost_lr_dados";
   const LS_KEY_STEP = "impost_lr_step";
   const LS_KEY_RESULTADOS = "impost_lr_resultados";
@@ -1058,7 +1042,7 @@
       })
     );
     h += _row(
-      _field("inssPatronal", "INSS patronal (≈28%)", "money") +
+      _field("inssPatronal", "INSS patronal + terceiros (≈27%) + FGTS (8%)", "money") +
       _field("fgts", "FGTS (8%)", "money")
     );
     h += _row(
@@ -1126,23 +1110,12 @@
       tip: "Indedutível (Art. 260, §ú, IV). Use PAT para funcionários.",
     });
 
-    h += _field("temGratificacaoAdm", "Gratificações a administradores/diretores", "checkbox");
-    h += '<div data-condition="temGratificacaoAdm" style="display:none">';
-    h += _infoBox(
-      '<strong>⚠️ Atenção ao Art. 358 do RIR/2018:</strong> Gratificações pagas com <strong>uniformidade e generalidade</strong> a todos os empregados e dirigentes são <strong>DEDUTÍVEIS</strong> (Art. 358, caput). ' +
-      'Somente as gratificações pagas de forma <strong>discriminada</strong> (apenas a diretores/administradores específicos, sem extensão aos demais) são <strong>INDEDUTÍVEIS</strong> (Art. 358, §1º). ' +
-      'Informe separadamente abaixo para cálculo correto.',
-      "wz-info-warning"
-    );
-    h += _field("gratificacoesAdmUniformes", "Gratificações uniformes/gerais (pagas a todos)", "money", {
-      tip: "DEDUTÍVEIS — Art. 358, caput, RIR/2018. Pagas com uniformidade e generalidade a todos os empregados e dirigentes. NÃO geram adição ao LALUR.",
-      extra: '<div class="wz-badge wz-badge-green">✅ Dedutível — não gera adição ao LALUR</div>',
+    h += _field("temGratificacaoAdm", "Gratificações a administradores", "checkbox");
+    h += _field("gratificacoesAdm", "Valor das gratificações", "money", {
+      condition: "temGratificacaoAdm",
+      tip: "Indedutível (Art. 358, §1º). Estratégia: converter em pró-labore (dedutível).",
+      extra: '<div class="wz-badge wz-badge-green" data-condition="temGratificacaoAdm" style="display:none">💡 Converter para pró-labore economiza <span id="econGratif"></span></div>',
     });
-    h += _field("gratificacoesAdm", "Gratificações discriminadas (apenas diretores/admin.)", "money", {
-      tip: "INDEDUTÍVEIS — Art. 358, §1º, RIR/2018. Pagas exclusivamente a administradores, sem extensão uniforme aos demais. Estratégia: converter em pró-labore (dedutível).",
-      extra: '<div class="wz-badge wz-badge-red">⛔ Indedutível — adição obrigatória ao LALUR. 💡 Converter para pró-labore economiza <span id="econGratif"></span></div>',
-    });
-    h += '</div>';
 
     h += _field("temDoacoesFora", "Doações fora dos limites legais", "checkbox");
     h += _field("doacoesIrregulares", "Valor das doações irregulares", "money", {
@@ -1211,7 +1184,10 @@
     h += _field("temSubvencao", "Subvenção para investimento", "checkbox");
     h += _field("subvencaoInvestimento", "Valor da subvenção", "money", {
       condition: "temSubvencao",
-      tip: "Lei 12.973, art. 30 — verificar Lei 14.789/2023",
+      tip: "⚠️ ATENÇÃO: A Lei 14.789/2023 revogou o art. 30 da Lei 12.973/2014. " +
+           "Subvenções (ex: ICMS) passam a ser tributadas por IRPJ/CSLL/PIS/COFINS, " +
+           "salvo adesão ao REIS (Regime Especial de Inclusão de Subvenção). " +
+           "Consulte contador para verificar elegibilidade ao REIS.",
     });
 
     h += _field("temDepAcelIncentivada", "Depreciação acelerada incentivada", "checkbox");
@@ -1340,16 +1316,9 @@
       );
     }
     h += _field("tjlp", "TJLP anual vigente (%)", "percent", {
-      default: "8.65",
-      tip: "Taxa de Juros de Longo Prazo — fixada trimestralmente pelo CMN e divulgada pelo Banco Central. Consultar: bcb.gov.br. TJLP Q1/2025: 7,97% | Q2/2025: 8,65%. Acumulado 12 meses jan/2026: ~8,77%. ATENÇÃO: Não confundir TJLP (usada para JCP) com TLP (usada para financiamentos BNDES desde 2018).",
+      default: "6",
+      tip: "Taxa de Juros de Longo Prazo. Consultar Banco Central para valor vigente.",
     });
-    h += _infoBox(
-      '<strong>⚠️ TJLP — VERIFIQUE A TAXA VIGENTE:</strong> A TJLP varia trimestralmente. Em 2025, os valores conhecidos foram: ' +
-      'Q1: <strong>7,97%</strong> a.a. | Q2: <strong>8,65%</strong> a.a. (acumulado 12 meses jan/2026: ~8,77%). ' +
-      'O default carregado aqui pode estar desatualizado. <strong>Consulte o Banco Central</strong> (bcb.gov.br) para o trimestre correto antes de calcular o JCP. ' +
-      'Usar taxa incorreta pode superestimar ou subestimar significativamente o JCP dedutível.',
-      "wz-info-warning"
-    );
     h += _autoCalcBox("calcJCP");
 
     // ── Prejuízos Fiscais ──
@@ -1596,32 +1565,20 @@
       })
     );
     h += _row(
-      _field("alugueisPJCredito", "Aluguéis pagos a Pessoa Jurídica", "money", {
-        tip: "Art. 3º, IV, Leis 10.637/2002 e 10.833/2003 — Somente aluguéis pagos a PESSOA JURÍDICA geram crédito de PIS/COFINS. Aluguel pago a pessoa física NÃO gera crédito.",
+      _field("alugueisPJCredito", "Aluguéis pagos a PJ", "money", {
+        tip: "Art. 3º, IV",
       }) +
       _field("leasingCredito", "Contraprestação de leasing", "money", {
         tip: "Art. 3º, V — Arrendamento mercantil operacional",
       })
     );
-    h += _infoBox(
-      '<strong>⚠️ ALUGUEL PF × PJ (Lei 10.637/2002, Art. 3º, IV):</strong> Crédito de PIS/COFINS sobre aluguéis é permitido <strong>SOMENTE</strong> quando pago a <strong>pessoa jurídica</strong>. ' +
-      'Aluguel pago a pessoa física <strong>NÃO</strong> gera crédito e, se incluído indevidamente, pode acarretar autuação fiscal. ' +
-      'Certifique-se de informar acima apenas o valor de aluguéis pagos a PJ.',
-      "wz-info-warning"
-    );
     h += _row(
-      _field("depreciacaoBensCredito", "Depreciação de máquinas na produção (crédito 1/60 avos)", "money", {
-        tip: "Art. 3º, VI, Leis 10.637/2002 e 10.833/2003 — O crédito é calculado à razão de 1/60 por mês sobre o CUSTO DE AQUISIÇÃO de máquinas e equipamentos utilizados na produção. NÃO usar a depreciação contábil; informar aqui o valor mensal do crédito (= custo aquisição ÷ 60 × 12 meses) ou o custo total de aquisição dos bens elegíveis.",
+      _field("depreciacaoBensCredito", "Depreciação de máquinas na produção", "money", {
+        tip: "Art. 3º, VI",
       }) +
-      _field("depreciacaoEdifCredito", "Depreciação de edificações (crédito)", "money", {
-        tip: "Art. 3º, VII — Depreciação de edificações e benfeitorias em imóveis de terceiros usados na atividade. Mesma regra: 1/60 avos do custo de aquisição por mês.",
+      _field("depreciacaoEdifCredito", "Depreciação de edificações", "money", {
+        tip: "Art. 3º, VII",
       })
-    );
-    h += _infoBox(
-      '<strong>📋 CRÉDITO SOBRE ATIVO IMOBILIZADO (Art. 3º, VI e VII):</strong> O crédito de PIS/COFINS sobre bens do ativo imobilizado é calculado à razão de <strong>1/60 por mês</strong> sobre o <strong>custo de aquisição</strong> — e NÃO pela taxa de depreciação contábil. ' +
-      'Informe acima o valor anual do crédito (custo de aquisição ÷ 60 × 12) ou o custo total dos bens elegíveis. ' +
-      'Usar a depreciação contábil pode gerar crédito DIFERENTE do permitido pela legislação.',
-      "wz-info-default"
     );
     h += _row(
       _field("freteVendasAnual", "Fretes sobre vendas", "money", {
@@ -2277,7 +2234,7 @@
             reservasLucros: _n(d.reservasLucros),
             lucrosAcumulados: _n(d.lucrosAcumulados) + _n(d.reservasLucros),
             prejuizosAcumulados: _n(d.prejuizosContabeis),
-            tjlp: (_n(d.tjlp) || 8.65) / 100,
+            tjlp: (_n(d.tjlp) || 6) / 100,
             lucroLiquidoAntes: llVal,
             numMeses: 12,
           });
@@ -2747,7 +2704,7 @@
     if (_n(d.dividendosRecebidos) > 0) exclusoesDetalhe.push({ desc: "Dividendos recebidos de PJ brasileira", valor: _n(d.dividendosRecebidos), artigo: "Art. 261, II + Lei 9.249, art. 10" });
     if (_n(d.mepPositivo) > 0) exclusoesDetalhe.push({ desc: "Resultado positivo MEP", valor: _n(d.mepPositivo), artigo: "Art. 389" });
     if (_n(d.reversaoProvisoes) > 0) exclusoesDetalhe.push({ desc: "Reversão de provisões antes adicionadas", valor: _n(d.reversaoProvisoes), artigo: "Art. 261, §ú, V" });
-    if (_n(d.subvencaoInvestimento) > 0) exclusoesDetalhe.push({ desc: "Subvenção para investimento", valor: _n(d.subvencaoInvestimento), artigo: "Lei 12.973, art. 30" });
+    if (_n(d.subvencaoInvestimento) > 0) exclusoesDetalhe.push({ desc: "Subvenção para investimento (⚠ verificar REIS — Lei 14.789/2023)", valor: _n(d.subvencaoInvestimento), artigo: "Lei 14.789/2023 (revogou art. 30, Lei 12.973)" });
     if (_n(d.depAceleradaIncentivadaExclusao) > 0) exclusoesDetalhe.push({ desc: "Depreciação acelerada incentivada", valor: _n(d.depAceleradaIncentivadaExclusao), artigo: "Art. 324-329" });
     if (_n(d.outrasExclusoes) > 0) exclusoesDetalhe.push({ desc: "Outras exclusões", valor: _n(d.outrasExclusoes), artigo: "—" });
 
@@ -2847,10 +2804,15 @@
     }
     if (_n(d.provisoesContingencias) > 0) {
       despesasIndedutivelDetalhe.push({ desc: "Provisões para contingências", valor: _n(d.provisoesContingencias), artigo: "Art. 340" });
+      // CORREÇÃO BUG-01: também adicionar ao adicoesDetalhe para que a tabela LALUR Parte A
+      // liste o item e o total confira com a soma dos itens exibidos
+      adicoesDetalhe.push({ desc: "Provisões para contingências (indedutível)", valor: _n(d.provisoesContingencias), artigo: "Art. 340, RIR/2018", tipo: "T" });
       totalIndedutivelAuto += _n(d.provisoesContingencias);
     }
     if (_n(d.provisoesGarantias) > 0) {
       despesasIndedutivelDetalhe.push({ desc: "Provisões para garantia de produtos", valor: _n(d.provisoesGarantias), artigo: "Art. 340" });
+      // CORREÇÃO BUG-01: idem — espelhar no adicoesDetalhe
+      adicoesDetalhe.push({ desc: "Provisões para garantia de produtos (indedutível)", valor: _n(d.provisoesGarantias), artigo: "Art. 340, RIR/2018", tipo: "T" });
       totalIndedutivelAuto += _n(d.provisoesGarantias);
     }
     if (_n(d.gratificacoesAdm) > 0) {
@@ -3283,7 +3245,7 @@
           reservasLucros: _n(d.reservasLucros),
           lucrosAcumulados: _n(d.lucrosAcumulados) + _n(d.reservasLucros),
           prejuizosAcumulados: _n(d.prejuizosContabeis),
-          tjlp: (_n(d.tjlp) || 8.65) / 100,
+          tjlp: (_n(d.tjlp) || 6) / 100,
           lucroLiquidoAntes: lucroLiquido,
           numMeses: 12
         });
@@ -3585,6 +3547,21 @@
     var totalPDDEcon = _r((_n(d.perdasCreditos6Meses) + _n(d.perdasCreditosJudicial) + _n(d.perdasCreditosFalencia)) * 0.34);
     // CORREÇÃO FALHA #2: Incluir economiaGratificacao diretamente na soma total
     var totalEconomias = _r(economiaJCP + economiaPrejuizo + economiaSUDAM + economiaIncentivos + economiaDepreciacao + economiaPisCofins + economiaCPRBFinal + totalPDDEcon + economiaGratificacao);
+
+    // ── CORREÇÃO BUG-02: Garantir que totalEconomias nunca seja 0 quando há economias individuais ──
+    // Se totalEconomias resultou em 0 mas há economias individuais calculadas, recalcular diretamente
+    if (totalEconomias === 0) {
+      var _ecoCheck = [economiaJCP, economiaPrejuizo, economiaSUDAM, economiaIncentivos,
+                       economiaDepreciacao, economiaPisCofins, economiaCPRBFinal, totalPDDEcon, economiaGratificacao];
+      var _ecoSum = 0;
+      for (var _ei = 0; _ei < _ecoCheck.length; _ei++) {
+        _ecoSum += (_ecoCheck[_ei] || 0);
+      }
+      if (_ecoSum > 0) {
+        totalEconomias = _r(_ecoSum);
+        console.warn('[IMPOST] BUG-02 safety: totalEconomias recalculado de 0 para ' + totalEconomias);
+      }
+    }
 
     // CORREÇÃO FALHA #3: Carga bruta 100% bruta (IRPJ + CSLL + PIS/COFINS + ISS, todos ANTES de retenções)
     var pisCofinsLiquido = _r(Math.max(pisCofinsResult.totalAPagarBruto - _n(d.pisRetido) - _n(d.cofinsRetido), 0));
@@ -4079,6 +4056,24 @@
       compensacaoJudicial: compensacaoJudicialResult
     };
 
+    // ── CORREÇÃO BUG-02 (parte 2): Revalidar resumo.economiaTotal a partir do objeto economia ──
+    // Garante que o KPI "Economia Total Identificada" sempre reflete a soma real dos componentes
+    var _ecoObj = resultados.economia;
+    var _ecoResum = _r(
+      (_ecoObj.jcp || 0) + (_ecoObj.prejuizo || 0) + (_ecoObj.sudam || 0) +
+      (_ecoObj.incentivos || 0) + (_ecoObj.depreciacao || 0) + (_ecoObj.pisCofinsCreditos || 0) +
+      (_ecoObj.cprb || 0) + (_ecoObj.pddFiscal || 0) + (_ecoObj.gratificacao || 0)
+    );
+    if (_ecoResum > 0 && (resultados.resumo.economiaTotal || 0) === 0) {
+      resultados.resumo.economiaTotal = _ecoResum;
+      resultados.economia.total = _ecoResum;
+      console.warn('[IMPOST] BUG-02 safety (passo 2): resumo.economiaTotal corrigido para ' + _ecoResum);
+    } else if (_ecoResum > 0 && Math.abs(resultados.resumo.economiaTotal - _ecoResum) > 1) {
+      // Se divergência > R$1, usar o recalculado (mais confiável)
+      resultados.resumo.economiaTotal = _ecoResum;
+      resultados.economia.total = _ecoResum;
+    }
+
     // ═══════════════════════════════════════════════════════════════════════
     //  PASSO 28 — Cache
     // ═══════════════════════════════════════════════════════════════════════
@@ -4172,13 +4167,6 @@
     }
     if (plVal > 0 && ll > 0 && !(_n(d.tjlp) > 0)) {
       alertas.push({ tipo: "economia", msg: "Há economia de JCP não aproveitada — informe a TJLP" });
-    }
-    // CORREÇÃO #3: Alerta quando TJLP usa default (pode estar desatualizada)
-    if (plVal > 0 && ll > 0 && _n(d.tjlp) > 0) {
-      var tjlpUsada = _n(d.tjlp);
-      if (tjlpUsada === 8.65 || tjlpUsada === 6) {
-        alertas.push({ tipo: "aviso", msg: "⚠️ A TJLP utilizada (" + tjlpUsada + "% a.a.) pode estar desatualizada. A TJLP é fixada trimestralmente pelo CMN — verifique o valor vigente no Banco Central (bcb.gov.br) para garantir cálculo correto do JCP." });
-      }
     }
     if (totalRet > 0) {
       // IRPJ+CSLL estimados simplificados para comparação
@@ -4438,16 +4426,16 @@
       });
     }
 
-    // #17 — Converter gratificação discriminada em pró-labore
+    // #17 — Converter gratificação em pró-labore
     if ((d.temGratificacaoAdm === true || d.temGratificacaoAdm === "true") && _n(d.gratificacoesAdm) > 0) {
       var econGrat = _r(_n(d.gratificacoesAdm) * 0.34);
       ops.push({
-        id: "CONVERTER_GRATIFICACAO", titulo: "Converter Gratificação Discriminada de Administradores em Pró-labore",
+        id: "CONVERTER_GRATIFICACAO", titulo: "Converter Gratificação de Administradores em Pró-labore",
         tipo: "Dedução", complexidade: "Baixa", risco: "Baixo",
         economiaAnual: econGrat,
-        descricao: "Gratificação discriminada de " + _m(_n(d.gratificacoesAdm)) + " é indedutível (Art. 358, §1º — paga apenas a diretores/admin. específicos). Convertendo em pró-labore, economia de " + _m(econGrat) + " (passa a ser dedutível). Nota: se a gratificação puder ser estendida com uniformidade e generalidade a todos os empregados e dirigentes, torna-se dedutível diretamente (Art. 358, caput).",
-        baseLegal: "Art. 358, caput e §1º do RIR/2018",
-        acaoRecomendada: "Opção 1: Alterar contrato social e formalizar pró-labore mensal com folha de pagamento. Opção 2: Estender a gratificação com uniformidade e generalidade a todos os empregados/dirigentes (torna dedutível diretamente).",
+        descricao: "Gratificação de " + _m(_n(d.gratificacoesAdm)) + " é indedutível. Convertendo em pró-labore, economia de " + _m(econGrat) + " (passa a ser dedutível).",
+        baseLegal: "Art. 358, §1º do RIR/2018",
+        acaoRecomendada: "Alterar contrato social. Formalizar pró-labore mensal com folha de pagamento.",
         prazoImplementacao: "30 dias",
         detalhes: {}
       });
@@ -4600,8 +4588,8 @@
         id: "PDD_PROATIVA", titulo: "Revisão de PDD — Provisão para Devedores Duvidosos",
         tipo: "Dedução", complexidade: "Média", risco: "Baixo",
         economiaAnual: 0,
-        descricao: "Nenhuma PDD fiscal informada. Empresas com receita acima de R$ 500 mil geralmente têm créditos vencidos enquadráveis como PDD fiscal (Art. 347-351). Recomenda-se revisão dos recebíveis.",
-        baseLegal: "Art. 347-351 do RIR/2018",
+        descricao: "Nenhuma PDD fiscal informada. Empresas com receita acima de R$ 500 mil geralmente têm créditos vencidos enquadráveis como PDD fiscal (Art. 340-342). Recomenda-se revisão dos recebíveis.",
+        baseLegal: "Art. 340-342 do RIR/2018",
         acaoRecomendada: "Levantar todos os créditos vencidos há mais de 6 meses. Identificar devedores em falência/recuperação judicial. Documentar providências de cobrança.",
         prazoImplementacao: "30 dias",
         detalhes: {}
@@ -4881,7 +4869,7 @@
           saldoPrejuizoFiscal: _n(d.prejuizoFiscal),
           saldoBaseNegativaCSLL: _n(d.baseNegativaCSLL),
           lucrosAcumulados: _n(d.lucrosAcumulados) + _n(d.reservasLucros),
-          tjlp: (_n(d.tjlp) || 8.65) / 100,
+          tjlp: (_n(d.tjlp) || 6) / 100,
           ehInstituicaoFinanceira: ctx.ehFinanceira,
           despesasIncentivos: ctx.despesasIncentivos || {}
         });
@@ -4935,7 +4923,7 @@
             tipo: "Dedução", complexidade: "Média", risco: "Baixo",
             economiaAnual: pddDetalhada.economiaAdicional,
             descricao: "Validação por faixas de valor (< R$ 15k, R$ 15k-100k, > R$ 100k) identificou economia adicional de " + _m(pddDetalhada.economiaAdicional) + ". " + (pddDetalhada.alertas ? pddDetalhada.alertas.join("; ") : ""),
-            baseLegal: "Art. 347-351 do RIR/2018 (Decreto 9.580/2018)",
+            baseLegal: "Art. 340-342 do RIR/2018 (Decreto 9.580/2018)",
             acaoRecomendada: "Classificar créditos por faixa de valor e verificar requisitos específicos de cada faixa para maximizar PDD dedutível.",
             prazoImplementacao: "30 dias",
             detalhes: pddDetalhada
@@ -5314,28 +5302,10 @@
     var pf = vedaCompensacao ? 0 : (prejuizoFiscal || 0);
     var bn = vedaCompensacao ? 0 : (baseNegCSLL || 0);
 
-    // CORREÇÃO #7: Determinar se cenários variam MARGEM (default) ou RECEITA
-    // Quando variam margem: PIS/COFINS permanece fixo (correto: PIS/COFINS incide sobre receita, não lucro)
-    // Quando variam receita: PIS/COFINS varia proporcionalmente (mais realista para flutuações de faturamento)
-    var modoCenario = d.modoCenario || "receita"; // default: receita (mais intuitivo)
-
     for (var c = 0; c < 3; c++) {
-      var lucroC, rbCenario, margemExibir;
-
-      if (modoCenario === "margem") {
-        // Modo margem: receita fixa, margem varia → PIS/COFINS FIXO (correto)
-        rbCenario = rb;
-        var margemAjustada = (dre.margemLucroPrecisa !== undefined ? dre.margemLucroPrecisa : (dre.margemLucro / 100)) + fatores[c];
-        lucroC = _r(rb * margemAjustada);
-        margemExibir = _r(margemAjustada * 100);
-      } else {
-        // Modo receita (default): receita varia ±%, margem mantida → PIS/COFINS VARIA
-        rbCenario = _r(rb * (1 + fatores[c]));
-        var margemBase = dre.margemLucroPrecisa !== undefined ? dre.margemLucroPrecisa : (dre.margemLucro / 100);
-        lucroC = _r(rbCenario * margemBase);
-        margemExibir = _r(margemBase * 100);
-      }
-
+      // CORREÇÃO FALHA #6: Usar margem precisa (sem arredondamento) em vez de margemLucro/100
+      var margemAjustada = (dre.margemLucroPrecisa !== undefined ? dre.margemLucroPrecisa : (dre.margemLucro / 100)) + fatores[c];
+      var lucroC = _r(rb * margemAjustada);
       var lucroAjC = _r(lucroC + lalur.totalAdicoes - lalur.totalExclusoes);
 
       // Compensação de prejuízo fiscal (30%) — mesmo critério do cálculo principal
@@ -5356,25 +5326,20 @@
       var baseCSLLC = Math.max(lucroAjC - compBN, 0);
       var csllC = _r(baseCSLLC * aliqCSLL);
 
-      // CORREÇÃO #7: PIS/COFINS calculado sobre rbCenario (varia no modo receita, fixo no modo margem)
-      var pcC = _r(pisCofinsSimplificado(rbCenario, d));
-      var recServ = _n(d.receitaServicos) || rb;
-      var fatorReceita = rb > 0 ? (rbCenario / rb) : 1;
-      var issC = _r(recServ * fatorReceita * (_n(d.issAliquota) || 5) / 100);
+      var pcC = _r(pisCofinsSimplificado(rb, d));
+      var issC = _r((_n(d.receitaServicos) || rb) * (_n(d.issAliquota) || 5) / 100);
       var totalC = _r(irpjC + csllC + pcC + issC);
-      var aliqC = rbCenario > 0 ? _r(totalC / rbCenario * 100) : 0;
+      var aliqC = rb > 0 ? _r(totalC / rb * 100) : 0;
 
       cenarios.push({
         nome: nomes[c],
-        margem: margemExibir,
-        receita: rbCenario,
+        margem: _r(margemAjustada * 100),
         lucro: lucroC,
         irpjCSLL: _r(irpjC + csllC),
         pisCofins: pcC,
         iss: issC,
         cargaTotal: totalC,
-        aliquotaEfetiva: aliqC,
-        modoCenario: modoCenario
+        aliquotaEfetiva: aliqC
       });
     }
     return cenarios;
@@ -5386,10 +5351,9 @@
     var baseCreditos = _calcBaseCreditos();
     var debitos = _r(tributavel * 0.0925);
     var creditos = _r(baseCreditos * 0.0925);
-    // CORREÇÃO #6: Retornar valor BRUTO (débitos - créditos) SEM descontar retenções,
-    // para consistência com cargaBruta do cálculo principal (que usa totalAPagarBruto).
-    // Retenções são antecipações e não reduzem a carga tributária total, apenas o desembolso.
-    return _r(Math.max(debitos - creditos, 0));
+    // CORREÇÃO FALHA #7: Descontar retenções de PIS/COFINS (consistente com cálculo principal)
+    var retencoesPisCofins = _n(d.pisRetido) + _n(d.cofinsRetido);
+    return _r(Math.max(debitos - creditos - retencoesPisCofins, 0));
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -5676,6 +5640,16 @@
     }
     s3 += '<tr class="res-total res-destaque"><td><strong>= LUCRO REAL</strong></td><td class="res-valor"><strong>' + _m(r.lucroRealFinal) + '</strong></td></tr>';
     s3 += '</table>';
+    // CORREÇÃO RJ-04: Nota sobre distinção de prejuízos operacionais vs não-operacionais
+    if (r.compensacao && r.compensacao.resumo && r.compensacao.resumo.totalCompensado > 0) {
+      s3 += '<div class="res-alerta res-alerta-info" style="margin-top:8px;"><span class="res-alerta-icon">&#x1F535;</span>' +
+        '<strong>Nota sobre compensação de prejuízos:</strong> ' +
+        'A trava de 30% foi aplicada corretamente. Contudo, observe que prejuízos <em>não-operacionais</em> ' +
+        'só podem ser compensados com lucros não-operacionais futuros (Art. 511, RIR/2018). ' +
+        'Este estudo trata o saldo de prejuízo informado como uma massa única. ' +
+        'Se houver parcela de prejuízo não-operacional, a compensação efetiva pode ser menor. ' +
+        'Consulte a ECF para segregação.</div>';
+    }
     s3 += '</div>';
     html += _secao(3, 'Demonstração do Resultado e Apuração do Lucro Real', s3);
 
@@ -5932,11 +5906,7 @@
       if (cofinsRetido > 0) s4 += _linha('(-) COFINS Retido na Fonte', cofinsRetido, '', 'res-sub');
       var pisCofinsLiquido = _r(Math.max(pc.totalAPagarBruto - pisRetido - cofinsRetido, 0));
       s4 += '<tr class="res-total"><td><strong>' + (pisCofinsLiquido >= 0 ? '= PIS/COFINS A PAGAR' : '= SALDO CREDOR PIS/COFINS') + '</strong></td><td class="res-valor"><strong>' + _m(pisCofinsLiquido) + '</strong></td></tr>';
-      s4 += '<tr class="res-info-row"><td colspan="2">Alíquota Efetiva <strong>líquida</strong> (após retenções): ' + _pp(_r(pisCofinsLiquido / (dre.receitaBruta || 1) * 100)) + ' (nominal: 9,25%)</td></tr>';
-      if (pisRetido > 0 || cofinsRetido > 0) {
-        s4 += '<tr class="res-info-row"><td colspan="2"><em>Alíquota Efetiva bruta (antes das retenções de ' + _m(_r(pisRetido + cofinsRetido)) + '): ' + _pp(_r(pc.totalAPagarBruto / (dre.receitaBruta || 1) * 100)) + '</em></td></tr>';
-        s4 += '<tr class="res-info-row"><td colspan="2"><small>💡 A alíquota <strong>bruta</strong> reflete o custo tributário real do PIS/COFINS. A <strong>líquida</strong> é o valor efetivamente desembolsado após descontar retenções na fonte, que são antecipações já pagas.</small></td></tr>';
-      }
+      s4 += '<tr class="res-info-row"><td colspan="2">Alíquota Efetiva: ' + _pp(_r(pisCofinsLiquido / (dre.receitaBruta || 1) * 100)) + ' (nominal: 9,25%)</td></tr>';
     }
     s4 += '</table></div>';
 
@@ -5991,12 +5961,11 @@
     s5 += '<tbody>';
     s5 += '<tr><td style="color:#E74C3C;">IRPJ</td><td>' + _m(compBaseIRPJ) + '</td><td>' + _pp(compBaseIRPJ > 0 ? _r(comp.irpj.valor / compBaseIRPJ * 100) : 0) + '</td><td>' + _m(comp.irpj.valor) + '</td><td>' + _m(_r(comp.irpj.valor / 12)) + '</td><td>' + _pp(comp.irpj.percentual) + '</td></tr>';
     s5 += '<tr><td style="color:#F39C12;">CSLL</td><td>' + _m(compBaseCSLL) + '</td><td>' + _pp(compBaseCSLL > 0 ? _r(comp.csll.valor / compBaseCSLL * 100) : 0) + '</td><td>' + _m(comp.csll.valor) + '</td><td>' + _m(_r(comp.csll.valor / 12)) + '</td><td>' + _pp(comp.csll.percentual) + '</td></tr>';
-    s5 += '<tr><td style="color:#3498DB;">PIS/COFINS</td><td>' + _m(dre.receitaBruta) + '</td><td>' + (r.pisCofins.aliquotaEfetiva || _pp(_r(comp.pisCofins.valor / (dre.receitaBruta || 1) * 100))) + ' <small>(bruta¹)</small></td><td>' + _m(comp.pisCofins.valor) + '</td><td>' + _m(_r(comp.pisCofins.valor / 12)) + '</td><td>' + _pp(comp.pisCofins.percentual) + '</td></tr>';
+    s5 += '<tr><td style="color:#3498DB;">PIS/COFINS</td><td>' + _m(dre.receitaBruta) + '</td><td>' + (r.pisCofins.aliquotaEfetiva || _pp(_r(comp.pisCofins.valor / (dre.receitaBruta || 1) * 100))) + '</td><td>' + _m(comp.pisCofins.valor) + '</td><td>' + _m(_r(comp.pisCofins.valor / 12)) + '</td><td>' + _pp(comp.pisCofins.percentual) + '</td></tr>';
     s5 += '<tr><td style="color:#9B59B6;">ISS</td><td>' + _m(r.iss.receitaServicos) + '</td><td>' + _pp(r.iss.aliquota) + '</td><td>' + _m(comp.iss.valor) + '</td><td>' + _m(_r(comp.iss.valor / 12)) + '</td><td>' + _pp(comp.iss.percentual) + '</td></tr>';
     s5 += '</tbody>';
     s5 += '<tfoot><tr class="res-total"><td><strong>TOTAL</strong></td><td></td><td><strong>' + _pp(res.aliquotaEfetiva) + '</strong></td><td><strong>' + _m(res.cargaBruta) + '</strong></td><td><strong>' + _m(res.cargaBrutaMensal) + '</strong></td><td><strong>100%</strong></td></tr></tfoot>';
     s5 += '</table>';
-    s5 += '<div class="res-info-box" style="margin-top:8px;font-size:12px;color:#8b95a5;"><strong>¹ Nota sobre alíquotas PIS/COFINS:</strong> A alíquota efetiva "bruta" na tabela acima é calculada sobre a receita bruta e reflete o custo tributário ANTES de descontar retenções na fonte. A alíquota "líquida" (seção 4.3) desconta as retenções de PIS/COFINS retidas na fonte por clientes. Ambas são métricas válidas para análises diferentes: a bruta para custo tributário total, a líquida para fluxo de caixa efetivo.</div>';
     html += _secao(5, 'Composição da Carga Tributária', s5);
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -6201,7 +6170,6 @@
         s9 += '<tr class="' + cls + '"><td><strong>' + c.nome + '</strong></td><td>' + _pp(c.margem) + '</td><td>' + _m(c.lucro) + '</td><td>' + _m(c.irpjCSLL) + '</td><td>' + _m(c.pisCofins) + '</td><td>' + _m(c.iss) + '</td><td><strong>' + _m(c.cargaTotal) + '</strong></td><td>' + _pp(c.aliquotaEfetiva) + '</td></tr>';
       });
       s9 += '</tbody></table>';
-      s9 += '<div class="res-info-box" style="margin-top:8px;font-size:12px;color:#8b95a5;"><strong>Nota:</strong> A carga total nos cenários utiliza PIS/COFINS <strong>bruto</strong> (após créditos, antes de retenções na fonte), consistente com o Painel Resumo. Retenções de PIS/COFINS são antecipações do tributo já devido e não alteram a carga tributária total — apenas o fluxo de caixa.</div>';
       s9 += '<div class="res-chart-container"><canvas id="chartCenarios" width="600" height="300"></canvas></div>';
     } else {
       s9 += '<p class="res-info-msg">Cenários de sensibilidade não foram habilitados. Ative na Etapa 6 para visualizar.</p>';
@@ -6268,6 +6236,12 @@
     // JCP não aproveitado
     if (r.jcpDetalhado && r.jcpDetalhado.economiaLiquida > 0 && r.economia.jcp > 0) {
       s11 += '<div class="res-alerta res-alerta-economia"><span class="res-alerta-icon">&#x1F7E2;</span><strong>JCP DISPONÍVEL:</strong> Economia líquida de ' + _m(r.jcpDetalhado.economiaLiquida) + '/ano com distribuição de Juros sobre Capital Próprio.</div>';
+      // CORREÇÃO RJ-01: Alerta sobre Lei 14.789/2023 que alterou o cálculo do JCP
+      s11 += '<div class="res-alerta res-alerta-warn"><span class="res-alerta-icon">&#x26A0;&#xFE0F;</span><strong>ATENÇÃO — Lei 14.789/2023 (vigente desde 01/01/2024):</strong> ' +
+        'O novo §8º do art. 9º da Lei 9.249/95 passou a excluir da base patrimonial do JCP diversos itens ' +
+        '(lucros do período, reservas de incentivos, AAP, AVP, entre outros). ' +
+        'O valor de JCP apresentado utiliza cálculo simplificado (PL × TJLP) e pode estar superestimado. ' +
+        '<strong>Recomenda-se validação com contador para aplicar as exclusões do §8º antes de distribuir JCP.</strong></div>';
     }
 
     // SUDAM/SUDENE potencial
@@ -6278,8 +6252,13 @@
       s11 += '<div class="res-alerta res-alerta-economia"><span class="res-alerta-icon">&#x1F7E2;</span><strong>POTENCIAL ' + nomeSup + ':</strong> Empresa em área ' + nomeSup + ' sem projeto aprovado. Redução de até 75% do IRPJ é possível.</div>';
     }
 
-    // Reforma Tributária
-    s11 += '<div class="res-alerta res-alerta-info"><span class="res-alerta-icon">&#x1F535;</span><strong>REFORMA TRIBUTÁRIA (LC 214/2025):</strong> A partir de 2026 inicia-se a transição para CBS/IBS em substituição ao PIS/COFINS e ISS. O regime do Lucro Real permanece para IRPJ e CSLL. Acompanhe as regulamentações para ajustar o planejamento tributário.</div>';
+    // Reforma Tributária — CORREÇÃO RJ-03: Disclaimer mais explícito para 2026
+    s11 += '<div class="res-alerta res-alerta-warn"><span class="res-alerta-icon">&#x26A0;&#xFE0F;</span><strong>REFORMA TRIBUTÁRIA — ANO-BASE 2026 (LC 214/2025):</strong> ' +
+      'Em 2026 inicia-se a fase de teste da CBS (0,9%) e IBS (0,1%) com crédito proporcional de PIS/COFINS vigente. ' +
+      'Os cálculos de PIS/COFINS neste estudo utilizam a sistemática anterior (Leis 10.637/02 e 10.833/03). ' +
+      '<strong>O impacto da CBS/IBS teste não está refletido nos valores apresentados.</strong> ' +
+      'Consulte regulamentação vigente para ajustar o planejamento tributário. ' +
+      'O regime do Lucro Real permanece aplicável para IRPJ e CSLL.</div>';
 
     s11 += '</div>';
     html += _secao(11, 'Alertas e Compliance', s11);
@@ -6400,7 +6379,12 @@
       valoresFormula[4] = r.lalur ? r.lalur.lucroAjustado : 0;
       var compensTotal = 0;
       if (r.compensacao && r.compensacao.resumo && r.compensacao.resumo.compensacaoEfetiva) {
-        compensTotal = (r.compensacao.resumo.compensacaoEfetiva.prejuizoOperacional || 0) + (r.compensacao.resumo.compensacaoEfetiva.baseNegativaCSLL || 0);
+        // CORREÇÃO BUG FÓRMULA MESTRE: Usar apenas a compensação de prejuízo fiscal (IRPJ),
+        // NÃO somar a base negativa de CSLL — são grandezas distintas.
+        // A base negativa CSLL é compensação para cálculo da CSLL (seção 4.2), não do Lucro Real.
+        // Antes: compensTotal = prejuizoOperacional + baseNegativaCSLL (ERRADO: R$200k + R$150k = R$350k)
+        // Agora: compensTotal = apenas prejuizoOperacional (CORRETO: R$200k)
+        compensTotal = (r.compensacao.resumo.compensacaoEfetiva.prejuizoOperacional || 0);
       }
       // Fallback: ler do resultado do IRPJ se a compensação veio zerada
       if (compensTotal === 0 && r.irpj) {
@@ -6734,20 +6718,42 @@
     // ═══════════════════════════════════════════════════════════════════════
     if (LR.pdd && (LR.pdd.criterios || LR.pdd.faixasValor)) {
       var sPDD = '';
+
+      // CORREÇÃO INC-03 (completa): Os artigos do mapeamento externo (LR.pdd) podem
+      // conter "Art. 347-351" (Avaliação de Estoques) em vez de "Art. 340-342" (PDD).
+      // Sanitizar todas as referências de artigo vindas do mapeamento.
+      function _fixPDDArt(artigo) {
+        if (!artigo) return '';
+        return String(artigo)
+          .replace(/Art\.\s*347[\s\-–]+351/gi, 'Art. 340-342')
+          .replace(/\b347\b/g, '340')
+          .replace(/\b348\b/g, '340')
+          .replace(/\b349\b/g, '341')
+          .replace(/\b350\b/g, '341')
+          .replace(/\b351\b/g, '342');
+      }
+
+      var pddArtigoHeader = _fixPDDArt(LR.pdd.artigo) || 'Art. 340-342';
+
       if (LR.pdd.criterios && LR.pdd.criterios.length > 0) {
-        sPDD += '<h4>Critérios para Dedutibilidade <span class="res-artigo">' + (LR.pdd.artigo || 'Art. 347-351') + '</span></h4>';
+        sPDD += '<h4>Critérios para Dedutibilidade <span class="res-artigo">' + pddArtigoHeader + '</span></h4>';
         sPDD += '<table class="res-table"><thead><tr><th>Critério</th><th>Descrição</th><th>Artigo</th></tr></thead><tbody>';
         LR.pdd.criterios.forEach(function (c) {
-          sPDD += '<tr><td><strong>' + (c.id || '') + '</strong></td><td>' + (c.descricao || '') + '</td><td><span class="res-artigo">' + (c.artigo || '') + '</span></td></tr>';
+          sPDD += '<tr><td><strong>' + (c.id || '') + '</strong></td><td>' + (c.descricao || '') + '</td><td><span class="res-artigo">' + _fixPDDArt(c.artigo) + '</span></td></tr>';
         });
         sPDD += '</tbody></table>';
       }
       if (LR.pdd.faixasValor && LR.pdd.faixasValor.length > 0) {
         sPDD += '<h4 style="margin-top:12px;">Faixas de Valor — Requisitos por Faixa</h4>';
+        // CORREÇÃO INC-01: Nota sobre o limite padrão correto
+        sPDD += '<div class="res-alerta res-alerta-info" style="margin-bottom:8px;font-size:0.85em;"><span class="res-alerta-icon">&#x1F535;</span>' +
+          '<strong>Referência padrão (IN SRF 93/97 + jurisprudência CARF):</strong> ' +
+          'Créditos até R$ 15.000 por devedor dispensam procedimento judicial — basta protesto extrajudicial. ' +
+          'Acima de R$ 15.000: necessário ação judicial ou declaração de insolvência.</div>';
         sPDD += '<table class="res-table"><thead><tr><th>Faixa</th><th>Requisito</th><th>Artigo</th></tr></thead><tbody>';
         LR.pdd.faixasValor.forEach(function (f) {
           var faixaLabel = f.ate ? 'Até ' + _m(f.ate) : (f.acima ? 'Acima de ' + _m(f.acima) : '—');
-          sPDD += '<tr><td><strong>' + faixaLabel + '</strong></td><td>' + (f.descricao || '') + '</td><td><span class="res-artigo">' + (f.artigo || '') + '</span></td></tr>';
+          sPDD += '<tr><td><strong>' + faixaLabel + '</strong></td><td>' + (f.descricao || '') + '</td><td><span class="res-artigo">' + _fixPDDArt(f.artigo) + '</span></td></tr>';
         });
         sPDD += '</tbody></table>';
       }
@@ -6755,6 +6761,9 @@
         sPDD += '<div class="res-alerta res-alerta-warn" style="margin-top:8px;"><span class="res-alerta-icon">&#x26A0;&#xFE0F;</span><strong>Vedações:</strong> ' + LR.pdd.vedacoes.join('; ') + '</div>';
       }
       html += _secao('Q', 'PDD Fiscal — Critérios e Faixas de Valor', sPDD);
+      // CORREÇÃO INC-01: Nota sobre o limite correto de R$ 15.000 (IN SRF 93/97)
+      // Os faixasValor do mapeamento externo podem usar limites diferentes (R$5.000/R$30.000)
+      // mas o limite correto conforme IN SRF 93/97 e jurisprudência CARF é R$ 15.000
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -7350,7 +7359,7 @@
       capitalSocial: 300000,
       lucrosAcumulados: 300000,
       detalharPL: true,
-      tjlp: 8.65,
+      tjlp: 6,
       prejuizoFiscal: 200000,
       baseNegativaCSLL: 150000,
       irrfRetidoPublico: 21600,
@@ -8036,7 +8045,8 @@
       vfPdf[4] = r.lalur ? r.lalur.lucroAjustado : 0;
       var compTotPdf = 0;
       if (r.compensacao && r.compensacao.resumo && r.compensacao.resumo.compensacaoEfetiva) {
-        compTotPdf = (r.compensacao.resumo.compensacaoEfetiva.prejuizoOperacional || 0) + (r.compensacao.resumo.compensacaoEfetiva.baseNegativaCSLL || 0);
+        // CORREÇÃO BUG FÓRMULA MESTRE (PDF): Apenas compensação IRPJ, não somar CSLL
+        compTotPdf = (r.compensacao.resumo.compensacaoEfetiva.prejuizoOperacional || 0);
       }
       // Fallback: ler do resultado do IRPJ se a compensação veio zerada
       if (compTotPdf === 0 && r.irpj) {
@@ -8854,7 +8864,8 @@
       vfPdfC[4] = lalur.lucroAjustado || 0;
       var compTotPdfC = 0;
       if (r.compensacao && r.compensacao.resumo && r.compensacao.resumo.compensacaoEfetiva) {
-        compTotPdfC = (r.compensacao.resumo.compensacaoEfetiva.prejuizoOperacional || 0) + (r.compensacao.resumo.compensacaoEfetiva.baseNegativaCSLL || 0);
+        // CORREÇÃO BUG FÓRMULA MESTRE (PDF Completo): Apenas compensação IRPJ, não somar CSLL
+        compTotPdfC = (r.compensacao.resumo.compensacaoEfetiva.prejuizoOperacional || 0);
       }
       // Fallback: ler do resultado do IRPJ se a compensação veio zerada
       if (compTotPdfC === 0 && r.irpj) {
