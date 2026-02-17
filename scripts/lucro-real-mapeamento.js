@@ -1,9 +1,17 @@
 /**
  * ╔══════════════════════════════════════════════════════════════════════════════╗
- * ║  LUCRO REAL — MAPEAMENTO UNIFICADO DE DADOS  v3.0 (REFATORADO — MOTOR)   ║
+ * ║  LUCRO REAL — MAPEAMENTO UNIFICADO DE DADOS  v3.2 (REFATORADO — MOTOR)   ║
  * ║  Fonte única de verdade para alimentar qualquer HTML ou JS                 ║
  * ║  Base Legal: RIR/2018 (Decreto 9.580/2018) + Lei 12.973/2014              ║
  * ║  Ano-Base: 2026                                                           ║
+ * ╠══════════════════════════════════════════════════════════════════════════════╣
+ * ║  CORREÇÕES v3.2:                                                           ║
+ * ║  #1 — ARQUITETURAL: Integração com Estados/EstadosBR (27 UFs dinâmicas)  ║
+ * ║       LR.setEstado(), LR.getEstado(), LR.ehSUDAM(), LR.ehSUDENE()       ║
+ * ║       ISS dinâmico via LR.getAliquotaISS(), helpers delegam a estados.js ║
+ * ║  #2 — CRÍTICA: lucroExploracao() operador || com zero falsy corrigido     ║
+ * ║  #3 — MÉDIA: compensarIntegrado() resumo.compensacaoEfetiva no motor     ║
+ * ║  #4 — BAIXA: estimativaMensal() campos saldoNegativo na delegação        ║
  * ╠══════════════════════════════════════════════════════════════════════════════╣
  * ║  CORREÇÕES v3.0:                                                           ║
  * ║  Todas as funções de LR.calcular.* agora delegam ao motor principal        ║
@@ -492,6 +500,17 @@
     estados: ['AC', 'AP', 'AM', 'MA', 'MT', 'PA', 'RO', 'RR', 'TO'],
     descricao: 'Amazônia Legal',
     exemploMunicipio: { estado: 'PA', ibge: '1505031', elegivel: true },
+    getExemploMunicipio: function() {
+      var uf = LR._estadoAtual;
+      if (uf && LR.sudam.estados.indexOf(uf) >= 0) {
+        var dados = LR.getSecaoEstado('dados_gerais');
+        if (dados && dados.municipios_principais && dados.municipios_principais.length > 0) {
+          var m = dados.municipios_principais[0];
+          return { estado: uf, nome: m.nome, ibge: m.codigo_ibge, elegivel: true };
+        }
+      }
+      return { estado: uf || 'N/D', elegivel: LR.ehSUDAM(uf) };
+    },
     reducao75: {
       percentual: 0.75,
       prazo: 10,
@@ -593,8 +612,8 @@
 
   LR.provisoes = {
     dedutiveis: [
-      { id: 'FERIAS', descricao: '13º salário + encargos', artigo: 'Art. 342' },
-      { id: '13_SALARIO', descricao: 'Férias + 1/3 + encargos', artigo: 'Art. 342' },
+      { id: 'FERIAS', descricao: 'Férias + 1/3 + encargos', artigo: 'Art. 342' },
+      { id: '13_SALARIO', descricao: '13º salário + encargos', artigo: 'Art. 342' },
       { id: 'PDD', descricao: 'PDD — Provisão para Devedores Duvidosos (critérios Art. 347)', artigo: 'Art. 347-351' }
     ],
     naoDedutiveis: [
@@ -833,6 +852,128 @@
   // ═══════════════════════════════════════════════════════════════════════════
 
   function _r(v) { return Math.round((v || 0) * 100) / 100; }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // INTEGRAÇÃO COM ESTADOS — Dados dinâmicos por UF (v3.2)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /**
+   * Estado atualmente selecionado pelo assinante.
+   * Quando o HTML muda o <select>, chamar LR.setEstado('SP') para atualizar.
+   */
+  LR._estadoAtual = null;
+  LR._dadosEstadoAtual = null;
+
+  /**
+   * Define o estado ativo e carrega seus dados de estados.js
+   * @param {string} sigla - Ex: 'SP', 'RJ', 'PA', 'MT'
+   * @returns {boolean} true se carregou com sucesso
+   */
+  LR.setEstado = function(sigla) {
+    if (!sigla) return false;
+
+    var Estados = window.Estados || window.EstadosBR;
+    if (!Estados || typeof Estados.getEstado !== 'function') {
+      console.warn('[LR] estados.js não carregado — dados estaduais indisponíveis');
+      LR._estadoAtual = sigla.toUpperCase();
+      LR._dadosEstadoAtual = null;
+      return false;
+    }
+
+    var dados = Estados.getEstado(sigla);
+    if (!dados) {
+      console.warn('[LR] Estado não encontrado:', sigla);
+      return false;
+    }
+
+    LR._estadoAtual = sigla.toUpperCase();
+    LR._dadosEstadoAtual = dados;
+    return true;
+  };
+
+  /**
+   * Retorna o estado atualmente selecionado
+   * @returns {string|null}
+   */
+  LR.getEstado = function() {
+    return LR._estadoAtual;
+  };
+
+  /**
+   * Retorna dados de uma seção do estado atual
+   * @param {string} secao - 'icms', 'iss', 'ipva', 'incentivos', etc.
+   * @returns {object|null}
+   */
+  LR.getSecaoEstado = function(secao) {
+    return LR._dadosEstadoAtual ? (LR._dadosEstadoAtual[secao] || null) : null;
+  };
+
+  /**
+   * Retorna a alíquota de ISS do estado/município atual
+   * Fonte primária: estados.js iss.aliquota_geral
+   * Fallback: 0.05 (máximo federal LC 116/2003)
+   * @returns {number} Alíquota ISS (ex: 0.05 para 5%)
+   */
+  LR.getAliquotaISS = function() {
+    // 1) Tentar seção ISS do estado carregado via setEstado()
+    var iss = LR.getSecaoEstado('iss');
+    if (iss && typeof iss.aliquota_geral === 'number') return iss.aliquota_geral;
+
+    // 2) Tentar diretamente via API de estados.js (caso setEstado não foi chamado)
+    if (LR._estadoAtual) {
+      var Estados = window.Estados || window.EstadosBR;
+      if (Estados && typeof Estados.getISS === 'function') {
+        var issApi = Estados.getISS(LR._estadoAtual);
+        if (issApi && typeof issApi.aliquota_geral === 'number') return issApi.aliquota_geral;
+      }
+    }
+
+    // 3) Fallback federal máximo LC 116/2003
+    return 0.05;
+  };
+
+  /**
+   * Verifica se um estado é SUDAM (Amazônia Legal)
+   * Fonte primária: estados.js incentivos.sudam.ativo
+   * Fallback: lista hardcoded (compatibilidade)
+   * @param {string} [uf] - Opcional, se não passar usa o estado atual
+   * @returns {boolean}
+   */
+  LR.ehSUDAM = function(uf) {
+    var sigla = (uf || LR._estadoAtual || '').toUpperCase();
+    if (!sigla) return false;
+
+    // Tentar ler de estados.js primeiro (fonte confiável)
+    var Estados = window.Estados || window.EstadosBR;
+    if (Estados && typeof Estados.getIncentivos === 'function') {
+      var inc = Estados.getIncentivos(sigla);
+      if (inc && inc.sudam) return inc.sudam.ativo === true;
+    }
+
+    // Fallback: lista hardcoded
+    return LR.sudam.estados.indexOf(sigla) >= 0;
+  };
+
+  /**
+   * Verifica se um estado é SUDENE (Nordeste + parciais)
+   * Fonte primária: estados.js incentivos.sudene.ativo
+   * Fallback: lista hardcoded (compatibilidade)
+   * @param {string} [uf] - Opcional, se não passar usa o estado atual
+   * @returns {boolean}
+   */
+  LR.ehSUDENE = function(uf) {
+    var sigla = (uf || LR._estadoAtual || '').toUpperCase();
+    if (!sigla) return false;
+
+    var Estados = window.Estados || window.EstadosBR;
+    if (Estados && typeof Estados.getIncentivos === 'function') {
+      var inc = Estados.getIncentivos(sigla);
+      if (inc && inc.sudene) return inc.sudene.ativo === true;
+    }
+
+    // Fallback: lista hardcoded
+    return LR.sudene.estados.indexOf(sigla) >= 0;
+  };
 
   // (helpers _calcIRPJ e _calcIRPJTrimestral removidos na v2.3 — delegação ao motor)
 
@@ -1083,7 +1224,10 @@
           irrfCompensavel: resultado.irrfCompensavel || 0,
           irpjAPagar: _r(resultado.irpjAPagar),
           csllDevida: _r(resultado.csll ? resultado.csll.csllDevida : 0),
-          totalAPagar: _r(resultado.totalAPagar)
+          totalAPagar: _r(resultado.totalAPagar),
+          // v3.2: Campos para consistência com fallback
+          saldoNegativo: 0,
+          saldoNegativoDestinacao: null
         };
       }
 
@@ -1147,7 +1291,9 @@
         devolucoes: 0,
         freteArmazenagem: 0,
         leasing: 0,
-        outrosCreditos: 0
+        outrosCreditos: 0,
+        // CORREÇÃO BUG #8: Campo valeTransporteRefeicao agora é aceito e repassado ao motor
+        valeTransporteRefeicao: 0
       }, dados);
 
       // ─── Se baseCreditos consolidado foi passado, distribuir para campos individuais ───
@@ -1161,14 +1307,17 @@
         devolucoes: d.devolucoes,
         freteArmazenagem: d.freteArmazenagem,
         leasing: d.leasing,
-        outrosCreditos: d.outrosCreditos
+        // CORREÇÃO BUG #8: valeTransporteRefeicao somado em outrosCreditos (motor não tem campo separado)
+        outrosCreditos: d.outrosCreditos + (d.valeTransporteRefeicao || 0)
       };
 
       // Se baseCreditos consolidado foi passado e campos individuais estão zerados,
       // colocar tudo em outrosCreditos para o motor somar corretamente
+      // CORREÇÃO BUG #8: inclui valeTransporteRefeicao na verificação
       var somaIndividuais = d.comprasBensRevenda + d.insumosProducao
         + d.energiaEletrica + d.alugueisPJ + d.depreciacaoBens
-        + d.devolucoes + d.freteArmazenagem + d.leasing + d.outrosCreditos;
+        + d.devolucoes + d.freteArmazenagem + d.leasing + d.outrosCreditos
+        + (d.valeTransporteRefeicao || 0);
 
       if (d.baseCreditos > 0 && somaIndividuais === 0) {
         creditosIndividuais.outrosCreditos = d.baseCreditos;
@@ -1305,7 +1454,7 @@
           tipoServico: 'SERVICOS_PROFISSIONAIS',
           prestadorSimples: false,
           retencaoISS: o.iss > 0,
-          aliquotaISS: o.iss || 0.05,
+          aliquotaISS: o.iss || LR.getAliquotaISS(),
           tomadorAdmPublica: o.admPublica,
           tipoReceitaAdmPublica: 'SERVICOS'
         });
@@ -1372,7 +1521,10 @@
         });
 
         // Mapear retorno motor → interface esperada pelo mapeamento
-        var lucroExp = resultado.lucroExploracao || resultado.lucroExploracaoBruto || 0;
+        // v3.2 FIX: null-safe — 0 é falsy em JS, usar != null em vez de ||
+        var lucroExp = (resultado.lucroExploracao != null)
+          ? resultado.lucroExploracao
+          : (resultado.lucroExploracaoBruto != null ? resultado.lucroExploracaoBruto : 0);
         var reducao75 = Math.max(lucroExp, 0) * LR.aliquotas.irpj.normal * 0.75;
 
         return {
@@ -1423,7 +1575,24 @@
       // DELEGAÇÃO AO MOTOR (v2.3) — MotorLR.compensarIntegrado()
       // Interface idêntica: mesmos parâmetros e mesma estrutura de retorno
       if (typeof MotorLR !== 'undefined' && MotorLR.compensarIntegrado) {
-        return MotorLR.compensarIntegrado(dados);
+        var resultado = MotorLR.compensarIntegrado(dados);
+
+        // v3.2: Consolidar compensacaoEfetiva no resumo (downstream acessa este campo)
+        if (resultado && resultado.resumo && !resultado.resumo.compensacaoEfetiva) {
+          resultado.resumo.compensacaoEfetiva = {
+            prejuizoOperacional: resultado.etapa3_compensacaoOperacional
+              ? (resultado.etapa3_compensacaoOperacional.compensacaoEfetiva || 0)
+              : 0,
+            prejuizoNaoOperacional: resultado.etapa2_compensacaoNaoOperacional
+              ? (resultado.etapa2_compensacaoNaoOperacional.compensacaoEfetiva || 0)
+              : 0,
+            baseNegativaCSLL: resultado.etapa4_compensacaoCSLL
+              ? (resultado.etapa4_compensacaoCSLL.compensacaoEfetiva || 0)
+              : 0
+          };
+        }
+
+        return resultado;
       }
 
       // FALLBACK: implementação original caso o motor não esteja carregado
@@ -1534,7 +1703,7 @@
         };
 
         lucroRealCorrente -= compOp;
-        baseCSLLCorrente -= compOp;
+        // baseCSLLCorrente -= compOp; // REMOVIDO: prejuízo fiscal operacional (Art. 580-581 RIR/2018) é exclusivo do IRPJ; CSLL usa base negativa própria (Lei 9.065/1995, art. 16)
         resultado.resumo.totalCompensado += compOp;
         resultado.resumo.saldosPosCompensacao.prejuizoOperacional = _r(d.saldoPrejuizoOperacional - compOp);
         resultado.resumo.economia.irpj += _r(irpjSem - irpjCom);
@@ -1564,6 +1733,20 @@
       resultado.resumo.lucroRealFinal = _r(Math.max(0, lucroRealCorrente));
       resultado.resumo.baseCSLLFinal = _r(Math.max(0, baseCSLLCorrente));
       resultado.resumo.economia.total = _r(resultado.resumo.economia.irpj + resultado.resumo.economia.csll);
+
+      // CORREÇÃO v3.1: Adicionar compensacaoEfetiva ao resumo para estudos.js
+      // estudos.js acessa r.compensacao.resumo.compensacaoEfetiva.prejuizoOperacional
+      resultado.resumo.compensacaoEfetiva = {
+        prejuizoOperacional: resultado.etapa3_compensacaoOperacional
+          ? (resultado.etapa3_compensacaoOperacional.compensacaoEfetiva || 0)
+          : 0,
+        prejuizoNaoOperacional: resultado.etapa2_compensacaoNaoOperacional
+          ? (resultado.etapa2_compensacaoNaoOperacional.compensacaoEfetiva || 0)
+          : 0,
+        baseNegativaCSLL: resultado.etapa4_compensacaoCSLL
+          ? (resultado.etapa4_compensacaoCSLL.compensacaoEfetiva || 0)
+          : 0
+      };
 
       return resultado;
     },
@@ -1663,15 +1846,24 @@
      * Base Legal: Art. 235
      */
     saldoNegativo: function (irpjDevido, retencoesFonte, estimativasPagas, taxaSelic) {
+      // CORREÇÃO v3.1: Aceitar TANTO objeto QUANTO parâmetros posicionais
+      // estudos.js chama com { irpjDevido, retencoesFonte, estimativasPagas }
+      if (typeof irpjDevido === 'object' && irpjDevido !== null) {
+        var _obj = irpjDevido;
+        irpjDevido = _obj.irpjDevido || 0;
+        retencoesFonte = _obj.retencoesFonte || 0;
+        estimativasPagas = _obj.estimativasPagas || 0;
+        taxaSelic = _obj.taxaSelic || 0;
+      }
+
       // DELEGAÇÃO AO MOTOR (v2.3) — MotorLR.calcularSaldoNegativo()
-      // Interface idêntica: (irpjDevido, retencoesFonte, estimativasPagas, taxaSelic)
       if (typeof MotorLR !== 'undefined' && MotorLR.calcularSaldoNegativo) {
         return MotorLR.calcularSaldoNegativo(irpjDevido, retencoesFonte, estimativasPagas, taxaSelic || 0);
       }
 
       // FALLBACK: implementação original caso o motor não esteja carregado
       taxaSelic = taxaSelic || 0;
-      var totalPago = retencoesFonte + estimativasPagas;
+      var totalPago = (retencoesFonte || 0) + (estimativasPagas || 0);
       var saldo = totalPago - irpjDevido;
 
       if (saldo <= 0) {
@@ -1680,6 +1872,7 @@
 
       return {
         temSaldoNegativo: true,
+        saldoNegativo: _r(saldo),
         valorOriginal: _r(saldo),
         atualizacaoSelic: _r(saldo * taxaSelic),
         valorAtualizado: _r(saldo * (1 + taxaSelic)),
@@ -2057,6 +2250,19 @@
         valorTributo: 0, diasAtraso: 0, taxasSelicMes: []
       }, dados);
 
+      // CORREÇÃO v3.1: Aceitar campos alternativos vindos de estudos.js
+      if (!d.valorTributo && d.valorPrincipal) d.valorTributo = d.valorPrincipal;
+      // Calcular diasAtraso a partir de datas se fornecidas
+      if (!d.diasAtraso && d.dataVencimento && d.dataPagamento) {
+        try {
+          var dv = new Date(d.dataVencimento);
+          var dp = new Date(d.dataPagamento);
+          if (!isNaN(dv.getTime()) && !isNaN(dp.getTime())) {
+            d.diasAtraso = Math.max(0, Math.round((dp - dv) / 86400000));
+          }
+        } catch(_e) {}
+      }
+
       // Multa de mora: 0,33% por dia, teto 20%
       var percentualBruto = d.diasAtraso * 0.0033;
       var percentualAplicavel = Math.min(percentualBruto, 0.20);
@@ -2124,6 +2330,13 @@
         estimativaIsolada: false, naoAtendeuIntimacao: false,
         pagamento30Dias: false, pagamentoAntesRecurso: false
       }, dados);
+
+      // CORREÇÃO v3.1: Aceitar campos alternativos vindos de estudos.js
+      if (!d.valorDiferenca && d.valorTributo) d.valorDiferenca = d.valorTributo;
+      if (d.tipo && !dados.tipoInfracao) {
+        d.tipoInfracao = d.tipo === 'PADRAO' ? 'normal' : (d.tipo || 'normal').toLowerCase();
+      }
+      if (d.pagouEm30Dias === true && !dados.pagamento30Dias) d.pagamento30Dias = true;
 
       if (d.valorDiferenca <= 0) {
         return { baseLegal: 'Lei 9.430/1996, art. 44', valorDiferenca: 0, multaOficio: 0 };
@@ -2206,6 +2419,24 @@
       var d = Object.assign({
         lucrosMensais: [], prejuizoAcumulado: 0, temInvestimento: false
       }, dados);
+
+      // CORREÇÃO v3.1: Aceitar campos alternativos vindos de estudos.js
+      // estudos.js passa: { lucroAjustado, prejuizoFiscal, mesesReceita, ... }
+      if ((!d.lucrosMensais || d.lucrosMensais.length === 0) && d.mesesReceita && d.mesesReceita.length > 0) {
+        d.lucrosMensais = d.mesesReceita;
+      }
+      if (d.prejuizoFiscal !== undefined && !d.prejuizoAcumulado) {
+        d.prejuizoAcumulado = d.prejuizoFiscal || 0;
+      }
+      // Se lucrosMensais ainda vazio, distribuir lucroAjustado uniformemente
+      if ((!d.lucrosMensais || d.lucrosMensais.length === 0) && d.lucroAjustado) {
+        d.lucrosMensais = [];
+        for (var _mi = 0; _mi < 12; _mi++) d.lucrosMensais.push(d.lucroAjustado / 12);
+      }
+      // Garantir 12 meses
+      if (!d.lucrosMensais || d.lucrosMensais.length === 0) {
+        d.lucrosMensais = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+      }
 
       var lucroTotal = d.lucrosMensais.reduce(function (a, b) { return a + b; }, 0);
       var temPrejuizoEmAlgunsMeses = d.lucrosMensais.some(function (l) { return l < 0; });
@@ -2413,10 +2644,10 @@
       return LR.darf[id] || null;
     },
     ehSUDAM: function (uf) {
-      return LR.sudam.estados.indexOf(uf.toUpperCase()) >= 0;
+      return LR.ehSUDAM(uf);  // v3.2: delega a função que lê de estados.js
     },
     ehSUDENE: function (uf) {
-      return LR.sudene.estados.indexOf(uf.toUpperCase()) >= 0;
+      return LR.ehSUDENE(uf);  // v3.2: delega a função que lê de estados.js
     },
     verificarObrigatoriedade: function (dados) {
       var motivos = [];
