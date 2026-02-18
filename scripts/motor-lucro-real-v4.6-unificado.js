@@ -7,6 +7,19 @@
  *
  * CHANGELOG v5.0 (correções fiscais e de interface):
  *
+ * --- v5.2 (correções de bugs relatados) ---
+ *
+ * [FIX BUG #1] CRÍTICO: Cálculo de JCP zerava compensação de prejuízo indevidamente
+ *   - Adicionado cenário intermediário (irpjSemJCPComCompensacao / csllSemJCP) em simularLucroReal
+ *   - economia.jcp agora é calculado como diferença incremental real ao adicionar JCP,
+ *     mantendo a trava de 30% ativa e recalculada sobre o lucro ajustado após dedução do JCP
+ *   - Antes: economia.jcp = jcpDedutivel × 34% − IRRF (taxa fixa, ignorava interação com compensação)
+ *   - Agora: economia.jcp = (IRPJ+CSLL sem JCP, com comp) − (IRPJ+CSLL com JCP, com comp) − IRRF
+ *
+ * [FIX BUG #6] Inconsistência .economia vs .economiaEstimada/.economiaAnual em gerarMapaEconomia
+ *   - Todos os objetos de oportunidade agora expõem .economia e .economiaAnual como aliases
+ *     de .economiaEstimada, evitando undefined silencioso em funções de exportação
+ *
  * --- v5.1 (LC 224/2025 e teto global de incentivos) ---
  *
  * [FIX #8] IRRF sobre JCP atualizado para 17,5% (LC 224/2025, vigente 01/01/2026)
@@ -2192,7 +2205,7 @@ function simularLucroRealCompleto(empresa) {
   // 2. Lucro líquido ajustado pelo JCP (JCP é dedutível como despesa financeira)
   const lucroAjustadoJCP = lucroLiquidoContabil - jcpDedutivel;
 
-  // 3. Calcular IRPJ SEM otimização
+  // 3. Calcular IRPJ SEM otimização (baseline puro)
   const irpjSemOtimizacao = calcularIRPJLucroReal({
     lucroLiquidoContabil,
     totalAdicoes,
@@ -2204,7 +2217,7 @@ function simularLucroRealCompleto(empresa) {
     estimativasPagas,
   });
 
-  // 4. Calcular IRPJ COM otimização completa
+  // 4. Calcular IRPJ COM otimização completa (JCP + compensação + incentivos)
   const irpjNormalParaIncentivos = Math.max(
     (lucroAjustadoJCP + totalAdicoes - totalExclusoes) * 0.70 * CONSTANTES.IRPJ_ALIQUOTA_NORMAL,
     0
@@ -2222,7 +2235,37 @@ function simularLucroRealCompleto(empresa) {
     estimativasPagas,
   });
 
-  // 5. CSLL
+  // 4b. [FIX BUG #1] Cenário intermediário: COM compensação/incentivos, SEM JCP
+  //     Necessário para calcular a economia REAL do JCP, pois a trava de 30%
+  //     sobre o lucro ajustado muda quando o JCP reduz a base.
+  //     Sem este cenário, a economia do JCP era calculada com taxa fixa de 34%,
+  //     ignorando a interação com a compensação de prejuízos.
+  const irpjNormalParaIncentivosSemJCP = Math.max(
+    (lucroLiquidoContabil + totalAdicoes - totalExclusoes) * 0.70 * CONSTANTES.IRPJ_ALIQUOTA_NORMAL,
+    0
+  );
+  const incentivosSemJCP = calcularIncentivos(irpjNormalParaIncentivosSemJCP, despesasIncentivos);
+
+  const irpjSemJCPComCompensacao = calcularIRPJLucroReal({
+    lucroLiquidoContabil,     // SEM dedução do JCP
+    totalAdicoes,
+    totalExclusoes,
+    saldoPrejuizoFiscal,      // COM compensação de prejuízo (recalcula trava de 30%)
+    numMeses,
+    incentivosDedutiveis: incentivosSemJCP.totalDeducaoFinal,
+    retencoesFonte,
+    estimativasPagas,
+  });
+
+  const csllSemJCP = calcularCSLL({
+    lucroLiquidoContabil,     // SEM dedução do JCP
+    adicoesCSLL: totalAdicoes,
+    exclusoesCSLL: totalExclusoes,
+    saldoBaseNegativa: saldoBaseNegativaCSLL,  // COM compensação de base negativa
+    ehInstituicaoFinanceira,
+  });
+
+  // 5. CSLL (com JCP)
   const csll = calcularCSLL({
     lucroLiquidoContabil: lucroAjustadoJCP,
     adicoesCSLL: totalAdicoes,
@@ -2243,7 +2286,22 @@ function simularLucroRealCompleto(empresa) {
 
   // 6. Economia total
   const economiaTotalIRPJ = irpjSemOtimizacao.passo9_irpjDevido - irpjComOtimizacao.passo9_irpjDevido;
-  const economiaJCP = jcpValido ? jcp.economiaLiquida : 0;
+
+  // [FIX BUG #1] Economia REAL do JCP = diferença incremental ao adicionar JCP
+  //   sobre o cenário que já tem compensação + incentivos.
+  //   IRPJ: (devido sem JCP, com comp) - (devido com JCP, com comp)
+  //   CSLL: (devida sem JCP, com comp) - (devida com JCP, com comp)
+  //   Líquida: economia IRPJ+CSLL - custo IRRF do JCP
+  const economiaJCP_IRPJ = jcpValido
+    ? (irpjSemJCPComCompensacao.passo9_irpjDevido - irpjComOtimizacao.passo9_irpjDevido)
+    : 0;
+  const economiaJCP_CSLL = jcpValido
+    ? (csllSemJCP.csllDevida - csll.csllDevida)
+    : 0;
+  const custoIRRF_JCP = jcpValido ? jcp.custoIRRF : 0;
+  const economiaJCP = jcpValido
+    ? (economiaJCP_IRPJ + economiaJCP_CSLL - custoIRRF_JCP)
+    : 0;
 
   // v5.0: Carga total com labels claros (Fix #6)
   const irpjAPagar = Math.max(irpjComOtimizacao.passo12_irpjAPagar, 0);
@@ -2524,6 +2582,14 @@ function gerarMapaEconomia(empresa) {
   // Ordenar por complexidade (Baixa primeiro)
   const ordemComplexidade = { 'Baixa': 1, 'Média': 2, 'Alta': 3 };
   estrategias.sort((a, b) => ordemComplexidade[a.complexidade] - ordemComplexidade[b.complexidade]);
+
+  // [FIX BUG #6] Normalizar campos de economia — garantir que .economia e .economiaAnual
+  //   existam como aliases de .economiaEstimada para evitar undefined silencioso
+  //   em funções de exportação (Excel/PDF/JSON) que possam acessar qualquer campo.
+  estrategias.forEach(e => {
+    e.economia = e.economiaEstimada;
+    e.economiaAnual = e.economiaEstimada;
+  });
 
   return estrategias;
 }
