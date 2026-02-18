@@ -1,9 +1,19 @@
 /**
  * ╔══════════════════════════════════════════════════════════════════════════════╗
- * ║  LUCRO REAL — MAPEAMENTO UNIFICADO DE DADOS  v3.3 (CORREÇÕES FISCAIS)    ║
+ * ║  LUCRO REAL — MAPEAMENTO UNIFICADO DE DADOS  v3.4 (CORREÇÕES ECONOMIA JCP) ║
  * ║  Fonte única de verdade para alimentar qualquer HTML ou JS                 ║
  * ║  Base Legal: RIR/2018 (Decreto 9.580/2018) + Lei 12.973/2014              ║
  * ║  Ano-Base: 2026                                                           ║
+ * ╠══════════════════════════════════════════════════════════════════════════════╣
+ * ║  CORREÇÕES v3.4 (alinhamento economia JCP):                               ║
+ * ║                                                                            ║
+ * ║  [FIX BUG 1 — CRÍTICO] Economia JCP zerava compensação de prejuízo       ║
+ * ║    - simulacaoCompleta fallback: irpjSem não passava prejuizoFiscal,      ║
+ * ║      zerando compensação no cenário base. Economia JCP usava flat-rate    ║
+ * ║      (jcp.economiaLiquida) sem recalcular trava 30% sobre base reduzida. ║
+ * ║    - Agora: 3 cenários isolam efeitos (RAW / SEM JCP+COM comp / COM JCP) ║
+ * ║    - Ref: Art. 580 RIR/2018 — trava 30% sobre lucro ajustado             ║
+ * ║                                                                            ║
  * ╠══════════════════════════════════════════════════════════════════════════════╣
  * ║  CORREÇÕES v3.3 (alinhamento com Motor v5.0 — riscos fiscais):            ║
  * ║                                                                            ║
@@ -2825,7 +2835,26 @@
       var jcpDedutivel = jcpValido ? jcp.jcpDedutivel : 0;
       var lucroAjustado = e.lucroLiquido - jcpDedutivel;
 
-      var irpjSem = LR.calcular.irpj({ lucroLiquido: e.lucroLiquido, adicoes: e.adicoes, exclusoes: e.exclusoes, numMeses: e.numMeses });
+      // ── v3.4 FIX BUG 1 (CRÍTICO): Economia JCP com compensação de prejuízo ativa ──
+      // Antes: irpjSem não passava prejuizoFiscal, zerando a compensação no cenário
+      // base, e economiaJCP usava flat-rate (jcp.economiaLiquida) ignorando trava 30%.
+      // Agora: 3 cenários isolam cada efeito corretamente.
+
+      // (A) Cenário RAW — sem nenhuma otimização (para exibição em semOtimizacao)
+      var irpjRaw = LR.calcular.irpj({ lucroLiquido: e.lucroLiquido, adicoes: e.adicoes, exclusoes: e.exclusoes, numMeses: e.numMeses });
+
+      // (B) Cenário SEM JCP, COM compensação de prejuízo (baseline para isolar economia JCP)
+      var irpjSemJCP = LR.calcular.irpj({
+        lucroLiquido: e.lucroLiquido, adicoes: e.adicoes, exclusoes: e.exclusoes,
+        prejuizoFiscal: e.prejuizoFiscal, numMeses: e.numMeses,
+        retencoesFonte: e.retencoesFonte, estimativasPagas: e.estimativasPagas
+      });
+      var csllSemJCP = LR.calcular.csll({
+        lucroLiquido: e.lucroLiquido, adicoes: e.adicoes, exclusoes: e.exclusoes,
+        baseNegativa: e.baseNegativaCSLL
+      });
+
+      // (C) Cenário COM JCP, COM compensação recalculada (trava 30% sobre base reduzida)
       var irpjCom = LR.calcular.irpj({
         lucroLiquido: lucroAjustado, adicoes: e.adicoes, exclusoes: e.exclusoes,
         prejuizoFiscal: e.prejuizoFiscal, numMeses: e.numMeses,
@@ -2833,12 +2862,18 @@
       });
       var csll = LR.calcular.csll({ lucroLiquido: lucroAjustado, adicoes: e.adicoes, exclusoes: e.exclusoes, baseNegativa: e.baseNegativaCSLL });
 
-      // v3.3 FIX E2#1: Calcular economia CSLL (comparando cenário sem vs com base negativa)
-      var csllSem = LR.calcular.csll({ lucroLiquido: lucroAjustado, adicoes: e.adicoes, exclusoes: e.exclusoes, baseNegativa: 0 });
-      var economiaCSLL = _r(csllSem.csllDevida - csll.csllDevida);
+      // Economia JCP isolada: (B) - (C) - custo IRRF
+      var custoIRRFJCP = jcpValido ? jcp.custoIRRF : 0;
+      var economiaJCP = jcpValido
+        ? _r((irpjSemJCP.irpjDevido - irpjCom.irpjDevido) + (csllSemJCP.csllDevida - csll.csllDevida) - custoIRRFJCP)
+        : 0;
 
-      var economiaJCP = jcpValido ? jcp.economiaLiquida : 0;
-      var economiaIRPJ = irpjSem.irpjDevido - irpjCom.irpjDevido;
+      // Economia compensação IRPJ isolada: (A) - (B)
+      var economiaIRPJ = _r(irpjRaw.irpjDevido - irpjSemJCP.irpjDevido);
+
+      // Economia compensação CSLL isolada: CSLL sem compensação - CSLL com compensação (sobre base sem JCP)
+      var csllSemComp = LR.calcular.csll({ lucroLiquido: e.lucroLiquido, adicoes: e.adicoes, exclusoes: e.exclusoes, baseNegativa: 0 });
+      var economiaCSLL = _r(csllSemComp.csllDevida - csllSemJCP.csllDevida);
 
       // v3.3 FIX #6: PIS/COFINS integrado no fallback
       var pisCofins = null;
@@ -2912,7 +2947,7 @@
         : (pisCofinsBruto - pisCofinsLiquido)) : 0;
 
       return {
-        semOtimizacao: { irpjDevido: irpjSem.irpjDevido, aliquotaEfetiva: irpjSem.aliquotaEfetiva },
+        semOtimizacao: { irpjDevido: irpjRaw.irpjDevido, aliquotaEfetiva: irpjRaw.aliquotaEfetiva },
         comOtimizacao: { irpj: irpjCom, csll: csll, jcp: jcp, pisCofins: pisCofins },
         economia: { jcp: economiaJCP, irpj: _r(economiaIRPJ), csll: economiaCSLL, pisCofins: _r(economiaPisCofins), total: _r(economiaIRPJ + economiaJCP + economiaCSLL + economiaPisCofins) },
         totalAPagar: {
