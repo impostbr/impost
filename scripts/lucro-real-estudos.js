@@ -1,6 +1,6 @@
 /**
  * ╔══════════════════════════════════════════════════════════════════════════════╗
- * ║  LUCRO REAL — ESTUDOS TRIBUTÁRIOS  v2.3  (ARQUIVO UNIFICADO)              ║
+ * ║  LUCRO REAL — ESTUDOS TRIBUTÁRIOS  v3.4  (ARQUIVO UNIFICADO)              ║
  * ║  Wizard 7 etapas + Motor de diagnóstico + Exportação PDF/Excel            ║
  * ║  100% LUCRO REAL — Sem comparativo com Simples/Presumido                   ║
  * ║  Motor: cruza respostas do usuário com LucroRealMap (LR.calcular.*)        ║
@@ -20,10 +20,29 @@
  *   window.IMPOSTExport      — alias de compatibilidade para exportação
  *
  * IMPOST. — Inteligência em Modelagem de Otimização Tributária
- * Versão: 2.3.0 | Data: Fevereiro/2026
+ * Versão: 3.4.0 | Data: Fevereiro/2026
  *
  * NOTA: Este arquivo unifica os antigos lucro-real-estudos.js + lucro-real-estudos-export.js
  *       Não é mais necessário carregar o arquivo de exportação separadamente.
+ *
+ * CHANGELOG v3.4.0 (Fevereiro/2026):
+ *   FIX — IRRF JCP default fallback corrigido de 15% para 17,5% (LC 224/2025)
+ *   FIX — Subcapitalização: juros indedutíveis usam IRPJ marginal (_irpj incremental)
+ *         em vez de taxa fixa 25% — correto para lucros abaixo do limiar adicional
+ *   FIX — Alerta de retenções usa _irpj() incremental em vez de 0.25 fixo
+ *
+ * CHANGELOG v3.2.0 (Fevereiro/2026):
+ *   BUG #1 (CRÍTICO) — Cálculo JCP agora mantém compensação de prejuízo ativa, recalculando
+ *              trava de 30% sobre novo lucro ajustado após dedução do JCP. Economia JCP corrigida.
+ *   BUG #2 (MÉDIO) — VERSAO unificada em 3.2.0. Badge no header sincronizado via JS no init().
+ *   BUG #3 (MÉDIO) — Totais do Fluxo de Caixa Mensal usam valores anuais exatos em vez da
+ *              soma de parcelas arredondadas. Elimina divergência de R$ 0,01.
+ *   BUG #4 (MÉDIO) — Seção 5 agora inclui nota explicativa distinguindo alíquota efetiva por
+ *              tributo (sobre base específica) vs alíquota efetiva global (sobre receita bruta).
+ *   BUG #5 (BAIXO) — PDD Fiscal na oportunidade #22 usa alíquotas efetivas (consistente com
+ *              pddFiscalInfo). Alíquotas passadas via ctx para cálculo uniforme.
+ *   BUG #6 (BAIXO) — Todas as oportunidades agora têm campo .economia como alias de
+ *              .economiaAnual, evitando undefined em funções de exportação.
  *
  * CHANGELOG v2.3.0 (Fevereiro/2026):
  *   FALHA #1 — Cards SIMULACAO_COMPLETA e MAPA_ECONOMIA marcados como consolidação (_isConsolidada)
@@ -45,7 +64,7 @@
   // ═══════════════════════════════════════════════════════════════════════════
   //  CONSTANTES E HELPERS
   // ═══════════════════════════════════════════════════════════════════════════
-  const VERSAO = "2.4.0"; // v2.4.0: Correções críticas #1-#9 (compensação dupla, CSLL, SUDAM, JCP, exportações)
+  const VERSAO = "3.4.0";
   const LS_KEY_DADOS = "impost_lr_dados";
   const LS_KEY_STEP = "impost_lr_step";
   const LS_KEY_RESULTADOS = "impost_lr_resultados";
@@ -63,6 +82,7 @@
   const _n = (v) => parseFloat(v) || 0;
   /** Formata valor que JÁ É percentual (ex: 25 → "25.00%"). Diferente de _p que multiplica por 100. */
   function _pp(v) { return (v || 0).toFixed(2) + "%"; }
+  function _irpj(lr) { return lr <= 0 ? 0 : lr * 0.15 + Math.max(0, lr - 240000) * 0.10; }
 
   /**
    * MELHORIA #2: Acesso seguro a propriedades aninhadas.
@@ -1319,7 +1339,7 @@
     // ── JCP ──
     h += _sectionTitle("Juros sobre Capital Próprio (JCP)");
     h += _infoBox(
-      'O JCP permite DEDUZIR até PL × TJLP da base do IRPJ+CSLL. Para cada R$ 1,00 de JCP pago, a empresa economiza até R$ 0,19 líquido (34% de IRPJ+CSLL economizados − 15% de IRRF retido na distribuição). <strong>É a ferramenta de planejamento tributário mais poderosa do Lucro Real.</strong>',
+      'O JCP permite DEDUZIR até PL × TJLP da base do IRPJ+CSLL. Para cada R$ 1,00 de JCP pago, a empresa economiza até R$ 0,165 líquido (34% de IRPJ+CSLL economizados − 17,5% de IRRF retido na distribuição — LC 224/2025). <strong>É a ferramenta de planejamento tributário mais poderosa do Lucro Real.</strong>',
       "wz-info-success"
     );
     // Aviso se só PL total preenchido (sem detalhamento)
@@ -2263,7 +2283,7 @@
             '<strong>JCP dedutível: ' + _m(jcpRes.jcpDedutivel) + '</strong><br>' +
             'Economia IRPJ (25%): ' + _m(jcpRes.economiaIRPJ) + '<br>' +
             'Economia CSLL (9%): ' + _m(jcpRes.economiaCSLL) + '<br>' +
-            '(-) Custo IRRF (15%): ' + _m(jcpRes.custoIRRF) + '<br>' +
+            '(-) Custo IRRF (17,5%): ' + _m(jcpRes.custoIRRF) + '<br>' +
             '<span style="color:#2ECC71"><strong>✅ ECONOMIA LÍQUIDA: ' + _m(jcpRes.economiaLiquida) + ' /ano</strong></span>';
         } catch (e) {
           calcJCP.innerHTML = '<em>Erro ao calcular JCP: ' + e.message + '</em>';
@@ -2283,7 +2303,7 @@
         var maxComp = Math.max(lucroAj, 0) * 0.30;
         var compIRPJ = Math.min(maxComp, pfIRPJ, Math.max(lucroAj, 0));
         var compCSLL = Math.min(maxComp, bnCSLL, Math.max(lucroAj, 0));
-        var economiaIRPJ = compIRPJ * 0.25;
+        var economiaIRPJ = _r(_irpj(lucroAj) - _irpj(lucroAj - compIRPJ));
         var economiaCSLL = compCSLL * 0.09;
         var periodosIRPJ = maxComp > 0 ? Math.ceil(pfIRPJ / maxComp) : "∞";
         calcPrej.innerHTML =
@@ -3039,9 +3059,11 @@
         });
       } catch(e) {}
     }
-    // Se subcapitalização excedeu, somar juros indedutíveis como adição ao IRPJ
+    // Se subcapitalização excedeu, somar IRPJ marginal dos juros indedutíveis
     if (subcapResult && subcapResult.excedeu === true && subcapResult.jurosIndedutiveis > 0) {
-      irpjAposReducao = _r(irpjAposReducao + _r(subcapResult.jurosIndedutiveis * 0.25));
+      var _baseSubcap = Math.max(lucroRealFinal, 0);
+      var _irpjMarginal = _irpj(_baseSubcap + subcapResult.jurosIndedutiveis) - _irpj(_baseSubcap);
+      irpjAposReducao = _r(irpjAposReducao + _irpjMarginal);
     }
 
     // ═══ CORREÇÃO BUG 3: Gravar irpjAPagar corrigido (pós-SUDAM/subcap) no objeto ═══
@@ -3346,19 +3368,28 @@
 
     // ═══ CORREÇÃO ERRO MÉDIO #5: Recalcular IRPJ e CSLL com dedução do JCP ═══
     // O JCP é dedutível da base do IRPJ e da CSLL. Recalcular com a dedução aplicada.
+    // ═══ FIX BUG #1 (CRÍTICO): Manter compensação de prejuízo ativa no cenário COM JCP ═══
+    // Antes: compensação era zerada (prejuizoFiscal: 0, baseNegativa: 0) → economia JCP errada.
+    // Agora: recalcula a trava de 30% sobre o novo lucro ajustado APÓS dedução do JCP.
     var jcpDedutivel = _safe(jcpResult, 'jcpDedutivel') || _safe(jcpResult, 'valorDedutivel') || 0;
     var irpjComJCP = irpjResult; // referência original (será sobrescrita se JCP > 0)
     var csllComJCP = csllResult;
     if (jcpDedutivel > 0) {
-      // Recalcular IRPJ com JCP deduzido da base
-      var _lucroRealComJCP = Math.max(lucroRealFinal - jcpDedutivel, 0);
+      // ── IRPJ COM JCP: Recalcular compensação sobre lucroAjustado - JCP ──
+      var _lucroAjustadoComJCP_IRPJ = Math.max(lucroAjustado - jcpDedutivel, 0);
+      // Recalcular trava de 30% sobre novo lucro ajustado
+      var _compPrejComJCP = 0;
+      if (!vedaCompensacao && prejuizoFiscal > 0 && _lucroAjustadoComJCP_IRPJ > 0) {
+        _compPrejComJCP = Math.min(_lucroAjustadoComJCP_IRPJ * 0.30, prejuizoFiscal);
+      }
+      var _lucroRealComJCP = Math.max(_lucroAjustadoComJCP_IRPJ - _compPrejComJCP, 0);
       try {
         if (LR && LR.calcular && LR.calcular.irpj) {
           irpjComJCP = LR.calcular.irpj({
             lucroLiquido: _lucroRealComJCP,
             adicoes: 0,
             exclusoes: 0,
-            prejuizoFiscal: 0,
+            prejuizoFiscal: 0, // já compensado manualmente acima
             numMeses: 12,
             incentivos: totalDeducoesIncentivos,
             retencoesFonte: totalIRRF,
@@ -3369,15 +3400,20 @@
       } catch (e) { irpjComJCP = irpjResult; }
       if (!irpjComJCP) irpjComJCP = irpjResult;
 
-      // Recalcular CSLL com JCP deduzido da base
-      var _baseCSLLComJCP = Math.max(baseCSLLFinal - jcpDedutivel, 0);
+      // ── CSLL COM JCP: Recalcular compensação de base negativa sobre base - JCP ──
+      var _lucroAjustadoComJCP_CSLL = Math.max(lucroAjustado - jcpDedutivel, 0);
+      var _compBNComJCP = 0;
+      if (!vedaCompensacao && baseNegCSLL > 0 && _lucroAjustadoComJCP_CSLL > 0) {
+        _compBNComJCP = Math.min(_lucroAjustadoComJCP_CSLL * 0.30, baseNegCSLL);
+      }
+      var _baseCSLLComJCP = Math.max(_lucroAjustadoComJCP_CSLL - _compBNComJCP, 0);
       try {
         if (LR && LR.calcular && LR.calcular.csll) {
           csllComJCP = LR.calcular.csll({
             lucroLiquido: _baseCSLLComJCP,
             adicoes: 0,
             exclusoes: 0,
-            baseNegativa: 0,
+            baseNegativa: 0, // já compensado manualmente acima
             financeira: ehFinanceira,
             tipoAtividade: d.tipoAtividade || ""
           });
@@ -3388,8 +3424,10 @@
       // Gravar nos resultados para referência
       irpjResult.irpjSemJCP = irpjResult.irpjDevido;
       irpjResult.irpjComJCP = irpjComJCP.irpjDevido || irpjResult.irpjDevido;
+      irpjResult.compensacaoPrejComJCP = _compPrejComJCP;
       csllResult.csllSemJCP = csllResult.csllDevida;
       csllResult.csllComJCP = csllComJCP.csllDevida || csllResult.csllDevida;
+      csllResult.compensacaoBNComJCP = _compBNComJCP;
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -4033,7 +4071,10 @@
       lucroOperacional: lucroOperacional,
       receitaLiquida: receitaLiquida,
       totalAdicoes: totalAdicoes || 0,   // BUG#4 CORRIGIDO: mapeado do LALUR
-      totalExclusoes: totalExclusoes || 0  // BUG#4 CORRIGIDO: mapeado do LALUR
+      totalExclusoes: totalExclusoes || 0,  // BUG#4 CORRIGIDO: mapeado do LALUR
+      // ═══ FIX BUG #5: Passar alíquotas efetivas para cálculo consistente de PDD ═══
+      aliqEfetIRPJ: _aliqEfetIRPJ,
+      aliqEfetCSLL: _aliqEfetCSLL
     });
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -4155,7 +4196,8 @@
         gratificacao: economiaGratificacao,
         cprb: economiaCPRBFinal,
         pddFiscal: totalPDDEcon,
-        pddFiscalInfo: totalPDDInfo, // valor apenas informativo (já incluso via exclusões LALUR)
+        // ═══ FIX BUG #5: pddFiscalInfo = impacto fiscal com alíquotas efetivas (pode diferir de oportunidade que usa mesmas alíquotas agora) ═══
+        pddFiscalInfo: totalPDDInfo, // valor informativo: perdas × (alíqEfetIRPJ + alíqEfetCSLL). Já incluso via exclusões LALUR.
         total: totalEconomias,
         // ═══ CORREÇÃO #8: Separar economias realizadas vs oportunidade ═══
         realizadas: economiasRealizadas,
@@ -4353,9 +4395,10 @@
       alertas.push({ tipo: "economia", msg: "Há economia de JCP não aproveitada — informe a TJLP" });
     }
     if (totalRet > 0) {
-      // IRPJ+CSLL estimados simplificados para comparação
-      var irpjEst = _r(Math.max(_calcLucroAjustado(), 0) * 0.25);
-      var csllEst = _r(Math.max(_calcLucroAjustado(), 0) * 0.09);
+      // IRPJ+CSLL estimados para comparação (IRPJ marginal correto)
+      var _laEst = Math.max(_calcLucroAjustado(), 0);
+      var irpjEst = _irpj(_laEst);
+      var csllEst = _r(_laEst * 0.09);
       if (totalRet > irpjEst + csllEst && irpjEst + csllEst > 0) {
         alertas.push({ tipo: "info", msg: "Retenções excedem imposto estimado — pode gerar saldo negativo (PER/DCOMP)" });
       }
@@ -4408,7 +4451,7 @@
         id: "JCP", titulo: "Juros sobre Capital Próprio",
         tipo: "Dedução", complexidade: "Baixa", risco: "Baixo",
         economiaAnual: ctx.jcpResult.economiaLiquida,
-        descricao: "JCP dedutível de " + _m(ctx.jcpResult.jcpDedutivel) + " gera economia líquida de " + _m(ctx.jcpResult.economiaLiquida) + "/ano (34% de economia - 15% IRRF).",
+        descricao: "JCP dedutível de " + _m(ctx.jcpResult.jcpDedutivel) + " gera economia líquida de " + _m(ctx.jcpResult.economiaLiquida) + "/ano (34% de economia - 17,5% IRRF — LC 224/2025).",
         baseLegal: "Art. 355-358 do RIR/2018",
         acaoRecomendada: "Deliberar distribuição de JCP aos sócios. Formalizar via ata e pagar IRRF (DARF 5706).",
         prazoImplementacao: "Imediato",
@@ -4730,14 +4773,20 @@
     }
 
     // #22 — PDD Fiscal
+    // ═══ FIX BUG #5: Usar alíquotas efetivas (consistente com pddFiscalInfo) em vez de 34% fixo ═══
     var totalPDDOp = _n(d.perdasCreditos6Meses) + _n(d.perdasCreditosJudicial) + _n(d.perdasCreditosFalencia);
     if (totalPDDOp > 0) {
-      var econPDDOp = _r(totalPDDOp * 0.34);
+      // Usar alíquotas efetivas do contexto (se disponíveis), senão fallback 34%
+      var _aliqIRPJCtx = ctx.aliqEfetIRPJ || 0.15;
+      var _aliqCSLLCtx = ctx.aliqEfetCSLL || 0.09;
+      var econPDDOp = _r(totalPDDOp * (_aliqIRPJCtx + _aliqCSLLCtx));
+      var aliqPDDUsada = _r((_aliqIRPJCtx + _aliqCSLLCtx) * 100);
       ops.push({
         id: "PDD_FISCAL", titulo: "PDD Fiscal — Perdas no Recebimento de Créditos",
         tipo: "Exclusão", complexidade: "Baixa", risco: "Baixo",
         economiaAnual: econPDDOp,
-        descricao: "Perdas totais de " + _m(totalPDDOp) + " podem ser excluídas do lucro real, gerando economia de " + _m(econPDDOp) + " (25% IRPJ + 9% CSLL).",
+        economia: econPDDOp, // alias para compatibilidade (FIX BUG #6)
+        descricao: "Perdas totais de " + _m(totalPDDOp) + " podem ser excluídas do lucro real, gerando economia de " + _m(econPDDOp) + " (" + _pp(aliqPDDUsada) + " alíquota efetiva IRPJ+CSLL).",
         baseLegal: "Art. 340-342 do RIR/2018 (Decreto 9.580/2018)",
         acaoRecomendada: "Manter documentação comprobatória: protestos, ajuizamento de ações, sentença de falência. Controlar na Parte A do LALUR.",
         prazoImplementacao: "Imediato",
@@ -5207,7 +5256,16 @@
 
     // Ordenar por economia anual descrescente e atribuir ranking
     ops.sort(function (a, b) { return b.economiaAnual - a.economiaAnual; });
-    ops.forEach(function (op, i) { op.ranking = i + 1; });
+    // ═══ FIX BUG #6: Garantir que todas as oportunidades tenham .economia como alias de .economiaAnual ═══
+    ops.forEach(function (op, i) {
+      op.ranking = i + 1;
+      // Sincronizar campos para evitar undefined em exportações que usem .economia
+      if (op.economiaAnual !== undefined && op.economia === undefined) {
+        op.economia = op.economiaAnual;
+      } else if (op.economia !== undefined && op.economiaAnual === undefined) {
+        op.economiaAnual = op.economia;
+      }
+    });
 
     return ops;
   }
@@ -5675,11 +5733,17 @@
       });
     }
 
+    // ═══ FIX BUG #3: Usar valores anuais exatos nos totais em vez da soma de parcelas arredondadas ═══
     return {
       meses: meses,
       totalAnual: _r(totalFluxo),
       apuracao: apuracao,
-      mediaMensal: _r(totalFluxo / 12)
+      mediaMensal: _r(totalFluxo / 12),
+      // Totais anuais exatos (para evitar diferença de centavos ao somar meses arredondados)
+      irpjAnualExato: _r(irpjAnual),
+      csllAnualExato: _r(csllAnual),
+      pisAnualExato: _r(pisAnual),
+      cofinsAnualExato: _r(cofinsAnual)
     };
   }
 
@@ -6218,6 +6282,8 @@
     s5 += '</tbody>';
     s5 += '<tfoot><tr class="res-total"><td><strong>TOTAL</strong></td><td></td><td><strong>' + _pp(res.aliquotaEfetiva) + '</strong></td><td><strong>' + _m(res.cargaBruta) + '</strong></td><td><strong>' + _m(res.cargaBrutaMensal) + '</strong></td><td><strong>100%</strong></td></tr></tfoot>';
     s5 += '</table>';
+    // ═══ FIX BUG #4: Nota explicativa sobre bases de cálculo das alíquotas efetivas ═══
+    s5 += '<p class="res-nota">* <strong>Nota sobre alíquotas efetivas:</strong> Na tabela acima, a alíquota efetiva de cada tributo é calculada sobre sua respectiva base de cálculo (Lucro Real para IRPJ/CSLL, Receita Bruta para PIS/COFINS, Receita de Serviços para ISS). A <strong>Alíquota Efetiva Global</strong> no rodapé (' + _pp(res.aliquotaEfetiva) + ') é calculada sobre a <strong>Receita Bruta Total</strong> (' + _m(dre.receitaBruta) + ').</p>';
     // FALHA #2 nota: esclarecer que PIS/COFINS exibe alíquota líquida (após créditos e retenções)
     s5 += '<p class="res-nota">* A alíquota efetiva de PIS/COFINS exibida é <strong>líquida</strong> (após créditos e retenções). Alíquota bruta (antes de créditos): <strong>' + (r.pisCofins.aliquotaEfetivaBruta || '—') + '</strong></p>';
     // BUG#1 — notas de valores líquidos (após retenções) para transparência
@@ -6485,7 +6551,14 @@
         totIRPJ += m.irpj; totCSLL += m.csll; totPIS += m.pis; totCOF += m.cofins; totISS += m.iss; totTot += m.total;
         s10 += '<tr><td>' + mesesNome[m.mes - 1] + '</td><td>' + _m(m.irpj) + '</td><td>' + _m(m.csll) + '</td><td>' + _m(m.pis) + '</td><td>' + _m(m.cofins) + '</td><td>' + _m(m.iss) + '</td><td><strong>' + _m(m.total) + '</strong></td></tr>';
       });
-      s10 += '<tr class="res-total"><td><strong>TOTAL</strong></td><td><strong>' + _m(_r(totIRPJ)) + '</strong></td><td><strong>' + _m(_r(totCSLL)) + '</strong></td><td><strong>' + _m(_r(totPIS)) + '</strong></td><td><strong>' + _m(_r(totCOF)) + '</strong></td><td><strong>' + _m(_r(totISS)) + '</strong></td><td><strong>' + _m(_r(totTot)) + '</strong></td></tr>';
+      // ═══ FIX BUG #3: Usar totais anuais exatos para evitar divergência de centavos ═══
+      var totIRPJExato = fc.irpjAnualExato !== undefined ? fc.irpjAnualExato : _r(totIRPJ);
+      var totCSLLExato = fc.csllAnualExato !== undefined ? fc.csllAnualExato : _r(totCSLL);
+      var totPISExato = fc.pisAnualExato !== undefined ? fc.pisAnualExato : _r(totPIS);
+      var totCOFExato = fc.cofinsAnualExato !== undefined ? fc.cofinsAnualExato : _r(totCOF);
+      var totISSExato = _r(totISS);
+      var totTotExato = _r(totIRPJExato + totCSLLExato + totPISExato + totCOFExato + totISSExato);
+      s10 += '<tr class="res-total"><td><strong>TOTAL</strong></td><td><strong>' + _m(totIRPJExato) + '</strong></td><td><strong>' + _m(totCSLLExato) + '</strong></td><td><strong>' + _m(totPISExato) + '</strong></td><td><strong>' + _m(totCOFExato) + '</strong></td><td><strong>' + _m(totISSExato) + '</strong></td><td><strong>' + _m(totTotExato) + '</strong></td></tr>';
       s10 += '</tbody></table></div>';
       s10 += '<div class="res-chart-container"><canvas id="chartFluxoMensal" width="700" height="350"></canvas></div>';
     }
@@ -6880,7 +6953,7 @@
       sAliq += '</table></div>';
       sAliq += '<div class="res-detail-card"><h3>JCP e Compensação</h3>';
       sAliq += '<table class="res-table">';
-      sAliq += '<tr><td>IRRF sobre JCP <span class="res-artigo">' + (aliqJCP.artigoBase || '') + '</span></td><td class="res-valor">' + _p(aliqJCP.irrfAliquota || 0.15) + '</td></tr>';
+      sAliq += '<tr><td>IRRF sobre JCP <span class="res-artigo">' + (aliqJCP.artigoBase || '') + '</span></td><td class="res-valor">' + _p(aliqJCP.irrfAliquota || 0.175) + '</td></tr>';
       sAliq += '<tr><td>Trava compensação <span class="res-artigo">' + (aliqComp.artigoBase || '') + '</span></td><td class="res-valor">' + _p(aliqComp.trava30 || 0.30) + '</td></tr>';
       sAliq += '</table></div>';
       sAliq += '</div>';
@@ -7810,6 +7883,10 @@
     // 7. Renderizar wizard
     renderWizard();
 
+    // ═══ FIX BUG #2: Sincronizar badge de versão no header com VERSAO do JS ═══
+    var _vBadge = document.getElementById('versionBadge') || document.querySelector('.header-version');
+    if (_vBadge) _vBadge.textContent = 'v' + VERSAO;
+
     console.log(
       "[" + CONFIG.nomeProduto + " LucroRealEstudos] v" + VERSAO + " inicializado. " +
       "LR: ✓ | ESTADOS: ✓ | MunicipiosIBGE: ✓"
@@ -8292,7 +8369,13 @@
       fc.meses.forEach(function (m, i) {
         fcRows.push({ cells: [MESES[i] || m.mes, _m(m.irpj), _m(m.csll), _m(m.pis), _m(m.cofins), _m(m.iss), _m(m.total)] });
       });
-      fcRows.push({ cells: ['TOTAL ANUAL', _m(fc.meses.reduce(function (s, m) { return s + (m.irpj || 0); }, 0)), _m(fc.meses.reduce(function (s, m) { return s + (m.csll || 0); }, 0)), _m(fc.meses.reduce(function (s, m) { return s + (m.pis || 0); }, 0)), _m(fc.meses.reduce(function (s, m) { return s + (m.cofins || 0); }, 0)), _m(fc.meses.reduce(function (s, m) { return s + (m.iss || 0); }, 0)), _m(fc.totalAnual || 0)], _total: true });
+      // ═══ FIX BUG #3: Usar valores anuais exatos nos totais do PDF ═══
+      var _fcTotIRPJ = fc.irpjAnualExato !== undefined ? fc.irpjAnualExato : fc.meses.reduce(function (s, m) { return s + (m.irpj || 0); }, 0);
+      var _fcTotCSLL = fc.csllAnualExato !== undefined ? fc.csllAnualExato : fc.meses.reduce(function (s, m) { return s + (m.csll || 0); }, 0);
+      var _fcTotPIS = fc.pisAnualExato !== undefined ? fc.pisAnualExato : fc.meses.reduce(function (s, m) { return s + (m.pis || 0); }, 0);
+      var _fcTotCOF = fc.cofinsAnualExato !== undefined ? fc.cofinsAnualExato : fc.meses.reduce(function (s, m) { return s + (m.cofins || 0); }, 0);
+      var _fcTotISS = fc.meses.reduce(function (s, m) { return s + (m.iss || 0); }, 0);
+      fcRows.push({ cells: ['TOTAL ANUAL', _m(_r(_fcTotIRPJ)), _m(_r(_fcTotCSLL)), _m(_r(_fcTotPIS)), _m(_r(_fcTotCOF)), _m(_r(_fcTotISS)), _m(fc.totalAnual || 0)], _total: true });
       if (fc.mediaMensal) {
         fcRows.push({ cells: ['MÉDIA MENSAL', '', '', '', '', '', _m(fc.mediaMensal)], _subtotal: true });
       }
@@ -8848,7 +8931,13 @@
       fc.meses.forEach(function (m, i) {
         fcRows2.push({ cells: [MESES[i] || m.mes, _m(m.irpj), _m(m.csll), _m(m.pis), _m(m.cofins), _m(m.iss), _m(m.total)] });
       });
-      fcRows2.push({ cells: ['TOTAL ANUAL', _m(fc.meses.reduce(function (s, m) { return s + (m.irpj || 0); }, 0)), _m(fc.meses.reduce(function (s, m) { return s + (m.csll || 0); }, 0)), _m(fc.meses.reduce(function (s, m) { return s + (m.pis || 0); }, 0)), _m(fc.meses.reduce(function (s, m) { return s + (m.cofins || 0); }, 0)), _m(fc.meses.reduce(function (s, m) { return s + (m.iss || 0); }, 0)), _m(fc.totalAnual || 0)], _total: true });
+      // ═══ FIX BUG #3: Usar valores anuais exatos nos totais do PDF completo ═══
+      var _fcPdf2IRPJ = fc.irpjAnualExato !== undefined ? fc.irpjAnualExato : fc.meses.reduce(function (s, m) { return s + (m.irpj || 0); }, 0);
+      var _fcPdf2CSLL = fc.csllAnualExato !== undefined ? fc.csllAnualExato : fc.meses.reduce(function (s, m) { return s + (m.csll || 0); }, 0);
+      var _fcPdf2PIS = fc.pisAnualExato !== undefined ? fc.pisAnualExato : fc.meses.reduce(function (s, m) { return s + (m.pis || 0); }, 0);
+      var _fcPdf2COF = fc.cofinsAnualExato !== undefined ? fc.cofinsAnualExato : fc.meses.reduce(function (s, m) { return s + (m.cofins || 0); }, 0);
+      var _fcPdf2ISS = fc.meses.reduce(function (s, m) { return s + (m.iss || 0); }, 0);
+      fcRows2.push({ cells: ['TOTAL ANUAL', _m(_r(_fcPdf2IRPJ)), _m(_r(_fcPdf2CSLL)), _m(_r(_fcPdf2PIS)), _m(_r(_fcPdf2COF)), _m(_r(_fcPdf2ISS)), _m(fc.totalAnual || 0)], _total: true });
       if (fc.mediaMensal) {
         fcRows2.push({ cells: ['Média Mensal', '', '', '', '', '', _m(fc.mediaMensal)], _subtotal: true });
       }
@@ -8944,8 +9033,8 @@
       h += '<div style="font-weight:700;font-size:10px;margin:10px 0 4px;">13.1 — Juros sobre Capital Próprio (JCP)</div>';
       h += tabelaHTML(['Item', 'Valor'], [
         { cells: ['JCP Dedutível (PL × TJLP)', _m(r.jcpDetalhado.jcpDedutivel)] },
-        { cells: ['IRRF sobre JCP (15%)', _m(r.jcpDetalhado.irpjJCP || r.jcpDetalhado.irrfJCP)] },
-        { cells: ['Economia Líquida (34% - 15%)', _m(r.jcpDetalhado.economiaLiquida)], _eco: true },
+        { cells: ['IRRF sobre JCP (17,5%)', _m(r.jcpDetalhado.irpjJCP || r.jcpDetalhado.irrfJCP)] },
+        { cells: ['Economia Líquida (34% - 17,5%)', _m(r.jcpDetalhado.economiaLiquida)], _eco: true },
         { cells: ['Limite (Lucro Líquido)', _m(r.jcpDetalhado.limiteLucro)] }
       ]);
     }
@@ -9261,7 +9350,7 @@
       aliqRowsPdf.push({ cells: ['CSLL Financeiras', _pp((aCSLL.financeiras || 0.15) * 100), 'Lei 13.169/2015'] });
       aliqRowsPdf.push({ cells: ['PIS NC', _pp((aPC.pisNaoCumulativo || 0.0165) * 100), 'Lei 10.637/02'] });
       aliqRowsPdf.push({ cells: ['COFINS NC', _pp((aPC.cofinsNaoCumulativo || 0.076) * 100), 'Lei 10.833/03'] });
-      aliqRowsPdf.push({ cells: ['JCP IRRF', '15,00%', 'Art. 355-358'] });
+      aliqRowsPdf.push({ cells: ['JCP IRRF', '17,50%', 'Art. 355-358 + LC 224/2025'] });
       aliqRowsPdf.push({ cells: ['Trava Compensação', '30,00%', 'Art. 580-590'] });
       h += tabelaHTML(['Tributo', 'Alíquota', 'Base Legal'], aliqRowsPdf, { noAlignRight: true });
     }
@@ -9624,13 +9713,19 @@
       fc.meses.forEach(function (m, i) {
         aba5.push([MESES[i] || m.mes, mv(m.irpj), mv(m.csll), mv(m.pis), mv(m.cofins), mv(m.iss), mv(m.total)]);
       });
+      // ═══ FIX BUG #3: Usar valores anuais exatos nos totais do Excel ═══
+      var _fcXlsIRPJ = fc.irpjAnualExato !== undefined ? fc.irpjAnualExato : fc.meses.reduce(function (s, m) { return s + (m.irpj || 0); }, 0);
+      var _fcXlsCSLL = fc.csllAnualExato !== undefined ? fc.csllAnualExato : fc.meses.reduce(function (s, m) { return s + (m.csll || 0); }, 0);
+      var _fcXlsPIS = fc.pisAnualExato !== undefined ? fc.pisAnualExato : fc.meses.reduce(function (s, m) { return s + (m.pis || 0); }, 0);
+      var _fcXlsCOF = fc.cofinsAnualExato !== undefined ? fc.cofinsAnualExato : fc.meses.reduce(function (s, m) { return s + (m.cofins || 0); }, 0);
+      var _fcXlsISS = fc.meses.reduce(function (s, m) { return s + (m.iss || 0); }, 0);
       aba5.push([
         'TOTAL ANUAL',
-        mv(fc.meses.reduce(function (s, m) { return s + (m.irpj || 0); }, 0)),
-        mv(fc.meses.reduce(function (s, m) { return s + (m.csll || 0); }, 0)),
-        mv(fc.meses.reduce(function (s, m) { return s + (m.pis || 0); }, 0)),
-        mv(fc.meses.reduce(function (s, m) { return s + (m.cofins || 0); }, 0)),
-        mv(fc.meses.reduce(function (s, m) { return s + (m.iss || 0); }, 0)),
+        mv(_r(_fcXlsIRPJ)),
+        mv(_r(_fcXlsCSLL)),
+        mv(_r(_fcXlsPIS)),
+        mv(_r(_fcXlsCOF)),
+        mv(_r(_fcXlsISS)),
         mv(fc.totalAnual || 0)
       ]);
       if (fc.mediaMensal) {
@@ -9849,7 +9944,7 @@
       aba12.push(['CSLL Financeiras', pv(aC.financeiras || 0.15), 'Lei 13.169/2015']);
       aba12.push(['PIS NC', pv(aP.pisNaoCumulativo || 0.0165), 'Lei 10.637/02']);
       aba12.push(['COFINS NC', pv(aP.cofinsNaoCumulativo || 0.076), 'Lei 10.833/03']);
-      aba12.push(['JCP IRRF', 15.00, 'Art. 355-358']);
+      aba12.push(['JCP IRRF', 17.50, 'Art. 355-358 + LC 224/2025']);
       aba12.push(['Trava Compensação', 30.00, 'Art. 580-590']);
       addSheet('Alíquotas', aba12, [25, 15, 30]);
     }
