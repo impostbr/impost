@@ -99,6 +99,11 @@
 
   const LR = {};
 
+  // v3.3 FIX E2#5: Flag de modo fallback — indica quando motor fiscal não está carregado
+  // Se true, cálculos podem ter divergências com o motor fiscal completo
+  LR._modoFallback = false;
+  LR._fallbackUsado = []; // Rastreia quais funções rodaram em fallback
+
   // ═══════════════════════════════════════════════════════════════════════════
   // 1. ALÍQUOTAS E CONSTANTES GLOBAIS
   // ═══════════════════════════════════════════════════════════════════════════
@@ -929,7 +934,14 @@
   // HELPER INTERNO — arredondamento 2 casas
   // ═══════════════════════════════════════════════════════════════════════════
 
-  function _r(v) { return Math.round((v || 0) * 100) / 100; }
+  function _r(v) {
+    var n = Number(v);
+    if (isNaN(n)) {
+      console.warn('[IMPOST][_r] NaN detectado:', v);
+      return 0;
+    }
+    return Math.round(n * 100) / 100;
+  }
 
   // ═══════════════════════════════════════════════════════════════════════════
   // INTEGRAÇÃO COM ESTADOS — Dados dinâmicos por UF (v3.2)
@@ -1283,7 +1295,11 @@
       }
 
       var tjlpProp = d.tjlp * (d.numMeses / 12);
-      var maxTJLP = d.patrimonioLiquido * tjlpProp;
+      // v3.3 FIX BUG MÉDIO 2: PL para JCP deve excluir LL do exercício corrente
+      // Ref: IN RFB 1.700/2017, art. 75 — base PL = PL - LL do período
+      var plParaJCP = _r(d.patrimonioLiquido - (d.lucroLiquidoAntes || 0));
+      if (plParaJCP < 0) plParaJCP = 0; // PL base não pode ser negativo
+      var maxTJLP = plParaJCP * tjlpProp;
       var lim1 = d.lucroLiquidoAntes * 0.50;
       var lim2 = d.lucrosAcumulados * 0.50;
       var limiteLegal = Math.max(lim1, lim2);
@@ -1521,6 +1537,9 @@
       }
 
       // FALLBACK: implementação original caso o motor não esteja carregado
+      // v3.3 FIX E2#5: Indicar modo fallback
+      LR._modoFallback = true;
+      if (LR._fallbackUsado.indexOf('pisCofins') === -1) LR._fallbackUsado.push('pisCofins');
       var alertasFallback = [];
       var totalBaseCreditos = d.baseCreditos;
       if (!totalBaseCreditos || totalBaseCreditos === 0) {
@@ -1780,6 +1799,10 @@
       }
 
       // FALLBACK: implementação original caso o motor não esteja carregado
+      // v3.3 FIX E2#3: Adicionado 'financeira' para alíquota CSLL correta (9% geral / 15% financeiras)
+      // v3.3 FIX E2#5: Indicar modo fallback
+      LR._modoFallback = true;
+      if (LR._fallbackUsado.indexOf('compensarIntegrado') === -1) LR._fallbackUsado.push('compensarIntegrado');
       var d = Object.assign({
         lucroLiquido: 0, adicoes: 0, exclusoes: 0,
         saldoPrejuizoOperacional: 0,
@@ -1787,7 +1810,8 @@
         saldoBaseNegativaCSLL: 0,
         lucroNaoOperacional: 0,
         atividadeRural: false,
-        trimestral: true
+        trimestral: true,
+        financeira: false
       }, dados);
 
       var lucroAjustado = d.lucroLiquido + d.adicoes - d.exclusoes;
@@ -1896,7 +1920,9 @@
       if (baseCSLLCorrente > 0 && d.saldoBaseNegativaCSLL > 0) {
         var limCSLL = baseCSLLCorrente * 0.30;
         var compCSLL = Math.min(limCSLL, d.saldoBaseNegativaCSLL);
-        var economiaCSLL = compCSLL * 0.09;
+        // v3.3 FIX E2#3: Alíquota CSLL dinâmica — 15% para financeiras (Lei 13.169/2015), 9% geral
+        var aliqCSLLComp = (d.financeira === true || d.financeira === 'true') ? 0.15 : 0.09;
+        var economiaCSLL = compCSLL * aliqCSLLComp;
 
         resultado.etapa4_compensacaoCSLL = {
           baseCalculoCSLL: _r(baseCSLLCorrente),
@@ -1916,7 +1942,15 @@
 
       resultado.resumo.lucroRealFinal = _r(Math.max(0, lucroRealCorrente));
       resultado.resumo.baseCSLLFinal = _r(Math.max(0, baseCSLLCorrente));
-      resultado.resumo.economia.total = _r(resultado.resumo.economia.irpj + resultado.resumo.economia.csll);
+      resultado.resumo.economia.total = (function() {
+        var _ecoPisCofins = resultado.resumo.economia.pisCofins
+          || resultado.resumo.economia.creditosPisCofins || 0;
+        return _r(
+          resultado.resumo.economia.irpj +
+          resultado.resumo.economia.csll +
+          _ecoPisCofins
+        );
+      })();
 
       // CORREÇÃO v3.1: Adicionar compensacaoEfetiva ao resumo para estudos.js
       // estudos.js acessa r.compensacao.resumo.compensacaoEfetiva.prejuizoOperacional
@@ -2749,7 +2783,9 @@
           economia: {
             jcp: _r(resultado.economia.jcp),
             irpj: _r(resultado.economia.totalIRPJ || resultado.economia.compensacaoPrejuizo || 0),
-            total: _r((resultado.economia.totalIRPJ || 0) + (resultado.economia.jcp || 0))
+            // v3.3 FIX E2#1: Incluir economia CSLL também na delegação ao motor
+            csll: _r(resultado.economia.csll || resultado.economia.totalCSLL || 0),
+            total: _r((resultado.economia.totalIRPJ || 0) + (resultado.economia.jcp || 0) + (resultado.economia.csll || resultado.economia.totalCSLL || 0) + (resultado.economia.pisCofins || resultado.economia.creditosPisCofins || 0))
           },
           // v3.3 FIX #6: Carga total com bruta e líquida separadas
           totalAPagar: {
@@ -2773,6 +2809,9 @@
       }
 
       // FALLBACK: implementação original caso o motor não esteja carregado
+      // v3.3 FIX E2#5: Indicar modo fallback
+      LR._modoFallback = true;
+      if (LR._fallbackUsado.indexOf('simulacaoCompleta') === -1) LR._fallbackUsado.push('simulacaoCompleta');
       var e = Object.assign({
         lucroLiquido: 0, receitaBruta: 0, adicoes: 0, exclusoes: 0,
         prejuizoFiscal: 0, baseNegativaCSLL: 0,
@@ -2793,6 +2832,10 @@
         retencoesFonte: e.retencoesFonte, estimativasPagas: e.estimativasPagas
       });
       var csll = LR.calcular.csll({ lucroLiquido: lucroAjustado, adicoes: e.adicoes, exclusoes: e.exclusoes, baseNegativa: e.baseNegativaCSLL });
+
+      // v3.3 FIX E2#1: Calcular economia CSLL (comparando cenário sem vs com base negativa)
+      var csllSem = LR.calcular.csll({ lucroLiquido: lucroAjustado, adicoes: e.adicoes, exclusoes: e.exclusoes, baseNegativa: 0 });
+      var economiaCSLL = _r(csllSem.csllDevida - csll.csllDevida);
 
       var economiaJCP = jcpValido ? jcp.economiaLiquida : 0;
       var economiaIRPJ = irpjSem.irpjDevido - irpjCom.irpjDevido;
@@ -2863,10 +2906,15 @@
         };
       }
 
+      // v3.3 FIX BUG CRÍTICO 2: Economia PIS/COFINS (créditos não-cumulativos) incluída no total
+      var economiaPisCofins = pisCofins ? _r((pisCofins.totalCreditos || 0) + (pisCofins.creditoPIS || 0) + (pisCofins.creditoCOFINS || 0) > 0
+        ? (pisCofins.totalCreditos || ((pisCofins.creditoPIS || 0) + (pisCofins.creditoCOFINS || 0)))
+        : (pisCofinsBruto - pisCofinsLiquido)) : 0;
+
       return {
         semOtimizacao: { irpjDevido: irpjSem.irpjDevido, aliquotaEfetiva: irpjSem.aliquotaEfetiva },
         comOtimizacao: { irpj: irpjCom, csll: csll, jcp: jcp, pisCofins: pisCofins },
-        economia: { jcp: economiaJCP, irpj: _r(economiaIRPJ), total: _r(economiaIRPJ + economiaJCP) },
+        economia: { jcp: economiaJCP, irpj: _r(economiaIRPJ), csll: economiaCSLL, pisCofins: _r(economiaPisCofins), total: _r(economiaIRPJ + economiaJCP + economiaCSLL + economiaPisCofins) },
         totalAPagar: {
           irpj: irpjCom.irpjAPagar,
           csll: csll.csllDevida,
@@ -2896,6 +2944,19 @@
   // ═══════════════════════════════════════════════════════════════════════════
 
   LR.helpers = {
+    // v3.3 FIX E2#5: Verificar se sistema está em modo fallback
+    isFallback: function () {
+      return LR._modoFallback === true;
+    },
+    getFallbackInfo: function () {
+      if (!LR._modoFallback) return null;
+      return {
+        modoFallback: true,
+        funcoesAfetadas: LR._fallbackUsado,
+        aviso: 'Cálculos executados em modo simplificado — resultados podem divergir do motor fiscal completo.',
+        motivo: 'Motor fiscal (motor-lucro-real-v4.6-unificado.js) não carregado ou indisponível.'
+      };
+    },
     formatarMoeda: function (v) {
       return 'R$ ' + (v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     },
