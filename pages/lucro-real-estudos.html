@@ -1500,13 +1500,15 @@
        ⚠ NÃO reordenar: mapeamento.js usa estados.js e motor; estudos.js usa todos.
        ═══════════════════════════════════════════════════════════════════════════ -->
   <!-- 1. Dados de estados (window.Estados / window.EstadosBR) -->
-  <script src="../scripts/estados.js"></script>
+  <!-- v3.3 FIX E3#2: onerror handler para dependências -->
+  <script src="../scripts/estados.js" onerror="console.warn('[IMPOST] estados.js não carregado — ISS/SUDAM/SUDENE usarão dados estáticos do mapeamento'); window._depFalha = (window._depFalha||[]); window._depFalha.push('estados.js');"></script>
   <!-- 2. Municípios via API IBGE (depende de estados.js) -->
-  <script src="../scripts/municipios.js"></script>
+  <script src="../scripts/municipios.js" onerror="console.warn('[IMPOST] municipios.js não carregado — municípios indisponíveis'); window._depFalha = (window._depFalha||[]); window._depFalha.push('municipios.js');"></script>
   <!-- 3. Motor fiscal unificado v4.6 (cálculos puros, sem dependência) -->
-  <script src="../scripts/motor-lucro-real-v4.6-unificado.js"></script>
+  <!-- v3.3 FIX E3#1: onerror handler para motor fiscal — ativa fallback silencioso -->
+  <script src="../scripts/motor-lucro-real-v4.6-unificado.js" onerror="console.error('[IMPOST] Motor fiscal não carregado — todos os cálculos usarão fallback simplificado'); window._motorFiscalFalhou = true; window._depFalha = (window._depFalha||[]); window._depFalha.push('motor-lucro-real-v4.6-unificado.js');"></script>
   <!-- 4. Mapeamento unificado v3.2 (ponte motor↔HTML, lê de estados.js via LR.setEstado) -->
-  <script src="../scripts/lucro-real-mapeamento.js"></script>
+  <script src="../scripts/lucro-real-mapeamento.js" onerror="console.error('[IMPOST] Mapeamento não carregado — sistema não funcional'); window._depFalha = (window._depFalha||[]); window._depFalha.push('lucro-real-mapeamento.js');"></script>
   <!-- 5. Chart.js 4.4 CDN -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
   <!-- 6. html2pdf.js para exportação PDF -->
@@ -1514,7 +1516,7 @@
   <!-- 7. SheetJS para exportação Excel -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <!-- 8. Motor principal do wizard (depende de TODOS acima) -->
-  <script src="../scripts/lucro-real-estudos.js"></script>
+  <script src="../scripts/lucro-real-estudos.js" onerror="console.error('[IMPOST] estudos.js não carregado — wizard não funcional'); window._depFalha = (window._depFalha||[]); window._depFalha.push('lucro-real-estudos.js');"></script>
 
   <!-- ═══════════════════════════════════════════════════════════════════════════
        BARRA DE AÇÕES — Injeção via MutationObserver
@@ -1585,13 +1587,13 @@
       bar.className = 'action-bar';
       bar.innerHTML =
         '<span class="action-label">AÇÕES</span>' +
-        '<button class="ab-btn" onclick="LucroRealEstudos.voltarWizard()" title="Voltar ao formulário">← Editar Dados</button>' +
-        '<button class="ab-btn ab-btn-primary" onclick="LucroRealEstudos.pdfSimplificado()" title="PDF resumido para o empresário">📄 Relatório Simplificado</button>' +
-        '<button class="ab-btn ab-btn-primary" onclick="LucroRealEstudos.pdfCompleto()" title="PDF técnico completo para o contador">📋 Relatório Completo</button>' +
-        '<button class="ab-btn ab-btn-success" onclick="LucroRealEstudos.exportarExcel()" title="Planilha com 14 abas">📊 Exportar Excel</button>' +
+        '<button class="ab-btn" onclick="typeof LucroRealEstudos!==\'undefined\'&&LucroRealEstudos.voltarWizard()" title="Voltar ao formulário">← Editar Dados</button>' +
+        '<button class="ab-btn ab-btn-primary" onclick="typeof LucroRealEstudos!==\'undefined\'&&LucroRealEstudos.pdfSimplificado()" title="PDF resumido para o empresário">📄 Relatório Simplificado</button>' +
+        '<button class="ab-btn ab-btn-primary" onclick="typeof LucroRealEstudos!==\'undefined\'&&LucroRealEstudos.pdfCompleto()" title="PDF técnico completo para o contador">📋 Relatório Completo</button>' +
+        '<button class="ab-btn ab-btn-success" onclick="typeof LucroRealEstudos!==\'undefined\'&&LucroRealEstudos.exportarExcel()" title="Planilha com 14 abas">📊 Exportar Excel</button>' +
         '<span class="ab-spacer"></span>' +
-        '<button class="ab-btn" onclick="LucroRealEstudos.exportarJSON()" title="Dados brutos em JSON">💾 JSON</button>' +
-        '<button class="ab-btn" onclick="LucroRealEstudos.novoEstudo()" title="Limpar e iniciar novo">🔄 Novo Estudo</button>';
+        '<button class="ab-btn" onclick="typeof LucroRealEstudos!==\'undefined\'&&LucroRealEstudos.exportarJSON()" title="Dados brutos em JSON">💾 JSON</button>' +
+        '<button class="ab-btn" onclick="typeof LucroRealEstudos!==\'undefined\'&&LucroRealEstudos.novoEstudo()" title="Limpar e iniciar novo">🔄 Novo Estudo</button>';
       container.insertBefore(bar, container.firstChild);
     }
 
@@ -1704,6 +1706,46 @@
       document.addEventListener('DOMContentLoaded', iniciarObservacao);
     } else {
       iniciarObservacao();
+    }
+  })();
+  </script>
+
+  <!-- v3.3 FIX E2#5 + E3#1: Banner de aviso quando motor fiscal não carregou -->
+  <script>
+  (function() {
+    'use strict';
+    function verificarDependencias() {
+      var falhas = window._depFalha || [];
+      var motorFalhou = window._motorFiscalFalhou || (typeof MotorLR === 'undefined');
+      
+      if (falhas.length > 0 || motorFalhou) {
+        var banner = document.createElement('div');
+        banner.id = 'fallbackBanner';
+        banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;padding:10px 20px;'
+          + 'background:#FEF3CD;border-bottom:2px solid #F0AD4E;color:#856404;font-size:14px;'
+          + 'font-family:DM Sans,sans-serif;display:flex;align-items:center;justify-content:space-between;';
+        
+        var msg = '⚠ Modo simplificado ativo';
+        if (motorFalhou) {
+          msg += ' — motor fiscal não carregado. Resultados podem divergir do cálculo fiscal completo.';
+        }
+        if (falhas.length > 0) {
+          msg += ' Dependências ausentes: ' + falhas.join(', ') + '.';
+        }
+        
+        banner.innerHTML = '<span>' + msg + '</span>'
+          + '<button onclick="this.parentElement.remove()" style="background:none;border:1px solid #856404;'
+          + 'border-radius:4px;padding:2px 8px;cursor:pointer;color:#856404;font-size:12px;">✕ Fechar</button>';
+        
+        document.body.insertBefore(banner, document.body.firstChild);
+      }
+    }
+    
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', verificarDependencias);
+    } else {
+      // Atraso mínimo para scripts async terminarem
+      setTimeout(verificarDependencias, 100);
     }
   })();
   </script>
