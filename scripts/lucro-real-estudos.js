@@ -74,7 +74,7 @@
       if (obj == null) return 0;
       obj = obj[arguments[i]];
     }
-    return (typeof obj === 'number') ? obj : 0;
+    return (typeof obj === 'number') ? obj : (typeof obj === 'string' ? parseFloat(obj) || 0 : 0);
   }
 
   /**
@@ -2635,7 +2635,7 @@
     //  PASSO 1.5 — Normalização dos dados de entrada (MELHORIA #7 + BUG #5)
     // ═══════════════════════════════════════════════════════════════════════
     // Unificar campos duplicados e normalizar tipos
-    d.brindes = _n(d.brindes) || _n(d.despesasBrindes);  // BUG #5: dois campos para brindes
+    d.brindes = _n(d.brindes) + _n(d.despesasBrindes);  // CORRIGIDO: soma ambos campos (antes usava || que ignorava um)
     d.ehFinanceira = d.ehFinanceira === true || d.ehFinanceira === "true";
     d.temProjetoAprovado = d.temProjetoAprovado === true || d.temProjetoAprovado === "true";
     d.apuracaoLR = (d.apuracaoLR || "anual").toLowerCase();
@@ -2819,18 +2819,26 @@
       despesasIndedutivelDetalhe.push({ desc: "Multas punitivas", valor: _n(d.multasPunitivas), artigo: "Art. 311, §5º" });
       // Não somar — já incluído em _calcTotalAdicoes()
     }
-    if (_n(d.provisoesContingencias) > 0) {
-      despesasIndedutivelDetalhe.push({ desc: "Provisões para contingências", valor: _n(d.provisoesContingencias), artigo: "Art. 340" });
-      // CORREÇÃO BUG-01: também adicionar ao adicoesDetalhe para que a tabela LALUR Parte A
-      // liste o item e o total confira com a soma dos itens exibidos
-      adicoesDetalhe.push({ desc: "Provisões para contingências (indedutível)", valor: _n(d.provisoesContingencias), artigo: "Art. 340, RIR/2018", tipo: "T" });
-      totalIndedutivelAuto += _n(d.provisoesContingencias);
+    // ═══ CORREÇÃO BUG CRÍTICO 4: Deduplicar provisões contingências/garantias ═══
+    var _provIndedTotal = _n(d.provisoesIndedutiveis);
+    var _provCont = _n(d.provisoesContingencias);
+    var _provGar = _n(d.provisoesGarantias);
+    if (_provIndedTotal > 0 && (_provCont + _provGar) > 0) {
+      if (_provCont + _provGar <= _provIndedTotal) {
+        _provCont = 0;
+        _provGar = 0;
+        console.info('[IMPOST] Provisões contingências/garantias já em provisoesIndedutiveis — deduplicando');
+      }
     }
-    if (_n(d.provisoesGarantias) > 0) {
-      despesasIndedutivelDetalhe.push({ desc: "Provisões para garantia de produtos", valor: _n(d.provisoesGarantias), artigo: "Art. 340" });
-      // CORREÇÃO BUG-01: idem — espelhar no adicoesDetalhe
-      adicoesDetalhe.push({ desc: "Provisões para garantia de produtos (indedutível)", valor: _n(d.provisoesGarantias), artigo: "Art. 340, RIR/2018", tipo: "T" });
-      totalIndedutivelAuto += _n(d.provisoesGarantias);
+    if (_provCont > 0) {
+      despesasIndedutivelDetalhe.push({ desc: "Provisões para contingências", valor: _provCont, artigo: "Art. 340" });
+      adicoesDetalhe.push({ desc: "Provisões para contingências (indedutível)", valor: _provCont, artigo: "Art. 340, RIR/2018", tipo: "T" });
+      totalIndedutivelAuto += _provCont;
+    }
+    if (_provGar > 0) {
+      despesasIndedutivelDetalhe.push({ desc: "Provisões para garantia de produtos", valor: _provGar, artigo: "Art. 340" });
+      adicoesDetalhe.push({ desc: "Provisões para garantia de produtos (indedutível)", valor: _provGar, artigo: "Art. 340, RIR/2018", tipo: "T" });
+      totalIndedutivelAuto += _provGar;
     }
     if (_n(d.gratificacoesAdm) > 0) {
       despesasIndedutivelDetalhe.push({ desc: "Gratificações a administradores", valor: _n(d.gratificacoesAdm), artigo: "Art. 358, §1º" });
@@ -3000,6 +3008,8 @@
     irpjResult.irpjNormal = irpjResult.irpjNormal || 0;
     irpjResult.irpjAdicional = irpjResult.irpjAdicional || 0;
 
+    // ═══ CORREÇÃO BUG CRÍTICO 2: irpjBruto = IRPJ antes de incentivos (cargaBruta verdadeiramente bruta) ═══
+    var irpjBruto = _r((irpjResult.irpjNormal || 0) + (irpjResult.irpjAdicional || 0));
     // Aplicar redução SUDAM/SUDENE sobre o IRPJ
     var irpjAntesReducao = irpjResult.irpjDevido;
     var irpjAposReducao = _r(Math.max(irpjAntesReducao - reducaoSUDAM, 0));
@@ -3080,6 +3090,12 @@
     // Garantir propriedades mínimas
     csllResult.csllDevida = csllResult.csllDevida || 0;
     csllResult.aliquota = csllResult.aliquota || (ehFinanceira ? 0.15 : 0.09);
+    // ═══ CORREÇÃO BUG CRÍTICO 3: Garantir csllAPagar descontando estimativas ═══
+    if (csllResult.csllAPagar === undefined || csllResult.csllAPagar === null) {
+      csllResult.csllAPagar = _r(Math.max(
+        csllResult.csllDevida - _n(d.csllRetido) - estimCSLLPagas, 0
+      ));
+    }
 
     // ═══ CORREÇÃO ERRO CRÍTICO #4: Recalcular SUDAM com csllDevida correta do motor CSLL ═══
     // O SUDAM foi calculado no PASSO 6 com csllDevida manual. Agora que temos csllResult,
@@ -3239,6 +3255,10 @@
     //  PASSO 9 — ISS mensal
     // ═══════════════════════════════════════════════════════════════════════
     var issAliquota = _n(d.issAliquota) || 5;
+    // ═══ CORREÇÃO BUG MÉDIO 1: Normalizar alíquota decimal → percentual ═══
+    if (issAliquota > 0 && issAliquota < 1) {
+      issAliquota = _r(issAliquota * 100); // converter 0.05 → 5
+    }
     var ehSUP = d.ehSUP === true || d.ehSUP === "true";
     var issAnual, issMensal, issModalidade;
     if (ehSUP) {
@@ -3300,8 +3320,9 @@
     if (!_tjlpInformada || _tjlpInformada === 0) {
       _tjlpInformada = 7.97; // Taxa Q1/2025 como fallback
       _tjlpUsarDefault = true;
+      console.warn('[IMPOST] TJLP default 7.97% (Q1/2025) usada — verificar se atualizada para o exercício vigente');
     }
-    if (plParaJCP > 0 && lucroLiquido > 0) {
+    if (plParaJCP > 0 && (lucroLiquido > 0 || lucroRealFinal > 0)) {
       try {
         jcpResult = LR.calcular.jcp({
           patrimonioLiquido: plParaJCP,
@@ -3661,9 +3682,18 @@
     var economiaIncentivos = _safe(incentivosFiscais, 'economiaTotal');
     var economiaDepreciacao = _safe(depreciacaoResult, 'economiaFiscal');
     var economiaPisCofins = pisCofinsResult.economiaCreditos || 0;
-    var economiaGratificacao = _n(d.gratificacoesAdm) > 0 ? _r(_n(d.gratificacoesAdm) * 0.34) : 0;
+    // ═══ CORREÇÃO BUG CRÍTICO 5: Usar alíquota efetiva (não fixa 34%) ═══
+    var _aliqEfetIRPJ = lucroRealFinal > 0
+      ? Math.min((irpjResult.irpjDevido || 0) / lucroRealFinal, 0.25)
+      : 0.15;
+    var _aliqEfetCSLL = csllResult.aliquota || 0.09;
+    var economiaGratificacao = _n(d.gratificacoesAdm) > 0
+      ? _r(_n(d.gratificacoesAdm) * (_aliqEfetIRPJ + _aliqEfetCSLL))
+      : 0;
     var economiaCPRBFinal = cprbResult ? cprbResult.economia : 0;
-    var totalPDDEcon = _r((_n(d.perdasCreditos6Meses) + _n(d.perdasCreditosJudicial) + _n(d.perdasCreditosFalencia)) * 0.34);
+    // ═══ CORREÇÃO BUG CRÍTICO 1: PDD já reduz IRPJ/CSLL via exclusões LALUR — não contar 2x ═══
+    var totalPDDEcon = 0; // Valor zerado para eliminar dupla contagem
+    var totalPDDInfo = _r((_n(d.perdasCreditos6Meses) + _n(d.perdasCreditosJudicial) + _n(d.perdasCreditosFalencia)) * (_aliqEfetIRPJ + _aliqEfetCSLL)); // apenas para exibição
 
     // ═══ CORREÇÃO ERRO BAIXO #8: Separar economias REALIZADAS vs OPORTUNIDADE ═══
     // Economias realizadas: já refletidas nos cálculos efetivos
@@ -3691,7 +3721,7 @@
     // CORREÇÃO FALHA #3: Carga bruta 100% bruta (IRPJ + CSLL + PIS/COFINS + ISS, todos ANTES de retenções)
     var pisCofinsLiquido = _r(Math.max(pisCofinsResult.totalAPagarBruto - _n(d.pisRetido) - _n(d.cofinsRetido), 0));
     var pisCofinsParaCargaBruta = pisCofinsResult.totalAPagarBruto || pisCofinsLiquido;
-    var cargaBruta = _r(irpjAntesReducao + csllResult.csllDevida + pisCofinsParaCargaBruta + issAnual);
+    var cargaBruta = _r(irpjBruto + csllResult.csllDevida + pisCofinsParaCargaBruta + issAnual);
     var cargaOtimizada = _r(Math.max(cargaBruta - totalEconomias, 0));
     var aliquotaEfetiva = receitaBruta > 0 ? _r(cargaBruta / receitaBruta * 100) : 0;
     var aliquotaOtimizada = receitaBruta > 0 ? _r(cargaOtimizada / receitaBruta * 100) : 0;
@@ -3739,6 +3769,8 @@
         } catch (e) { projecao = null; }
       }
       // Projeção de carga tributária com crescimento
+      // ═══ CORREÇÃO BUG MÉDIO 3: JCP depende do PL, não escala com receita ═══
+      var econSemJCP = _r(totalEconomias - economiaJCP);
       var projecaoCarga = [];
       var receitaProj = receitaBruta;
       var econAcum = 0;
@@ -3746,7 +3778,7 @@
         if (aP > 0) receitaProj = _r(receitaProj * (1 + taxa));
         var fator = receitaProj / (receitaBruta || 1);
         var cargaAno = _r((irpjAposReducao + csllResult.csllDevida + pisCofinsLiquido + issAnual) * fator);
-        var econAno = _r(totalEconomias * fator);
+        var econAno = _r(econSemJCP * fator + economiaJCP);
         econAcum += econAno;
         projecaoCarga.push({
           ano: aP + 1,
@@ -4095,6 +4127,7 @@
 
       // Seção 4: Tributos detalhados
       irpj: irpjResult,
+      irpjBruto: irpjBruto,
       irpjAntesReducao: irpjAntesReducao,
       irpjAposReducao: irpjAposReducao,
       reducaoSUDAM: reducaoSUDAM,
@@ -4104,10 +4137,8 @@
 
       // Seção 5: Composição da carga
       composicao: {
-        // CORREÇÃO BUG #3: cargaBruta usa irpjAntesReducao (linha 3385), então composicao.irpj
-        // também deve usar irpjAntesReducao para que a soma dos componentes = cargaBruta.
-        // Antes: valor usava irpjAposReducao mas percentual usava irpjAntesReducao (inconsistente).
-        irpj: { valor: irpjAntesReducao, percentual: cargaBruta > 0 ? _r(irpjAntesReducao / cargaBruta * 100) : 0 },
+        // CORREÇÃO BUG CRÍTICO 2: cargaBruta usa irpjBruto, composicao.irpj também
+        irpj: { valor: irpjBruto, percentual: cargaBruta > 0 ? _r(irpjBruto / cargaBruta * 100) : 0 },
         csll: { valor: csllResult.csllDevida, percentual: cargaBruta > 0 ? _r(csllResult.csllDevida / cargaBruta * 100) : 0 },
         pisCofins: { valor: pisCofinsParaCargaBruta, percentual: cargaBruta > 0 ? _r(pisCofinsParaCargaBruta / cargaBruta * 100) : 0 },  // BUG#1 CORRIGIDO: usa bruto para consistência com IRPJ e CSLL
         iss: { valor: issAnual, percentual: cargaBruta > 0 ? _r(issAnual / cargaBruta * 100) : 0 }
@@ -4124,6 +4155,7 @@
         gratificacao: economiaGratificacao,
         cprb: economiaCPRBFinal,
         pddFiscal: totalPDDEcon,
+        pddFiscalInfo: totalPDDInfo, // valor apenas informativo (já incluso via exclusões LALUR)
         total: totalEconomias,
         // ═══ CORREÇÃO #8: Separar economias realizadas vs oportunidade ═══
         realizadas: economiasRealizadas,
