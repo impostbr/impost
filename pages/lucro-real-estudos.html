@@ -927,8 +927,8 @@
     .res-tag-tipo-t { font-size: 0.68rem; padding: 0.15rem 0.4rem; border-radius: 4px; background: var(--warning-light); color: var(--warning); font-weight: 600; }
     .res-tag-tipo-c { font-size: 0.68rem; padding: 0.15rem 0.4rem; border-radius: 4px; background: var(--info-light); color: var(--info); font-weight: 600; }
 
-    .res-table-dre, .res-table-lalur { }
-    .res-dre, .res-lalur { }
+    /* .res-table-dre, .res-table-lalur — reservado para estilos futuros */
+    /* .res-dre, .res-lalur — reservado para estilos futuros */
 
     .res-info-msg {
       font-size: 0.88rem;
@@ -991,7 +991,7 @@
     /* ═══════════════════════════════════════════════════════════════════════════
        RESULTADOS — MAPA DE ECONOMIA (Antes × Depois)
        ═══════════════════════════════════════════════════════════════════════════ */
-    .res-mapa-economia { }
+    /* .res-mapa-economia — reservado para estilos futuros */
     .res-mapa-row {
       display: flex;
       align-items: center;
@@ -1046,7 +1046,7 @@
     /* ═══════════════════════════════════════════════════════════════════════════
        RESULTADOS — OPORTUNIDADES
        ═══════════════════════════════════════════════════════════════════════════ */
-    .res-oportunidades { }
+    /* .res-oportunidades — reservado para estilos futuros */
     .res-oport-card {
       background: var(--card-bg);
       border: 1px solid var(--border);
@@ -1106,9 +1106,9 @@
       border-radius: 20px;
       color: #fff;
     }
-    .res-tag-tipo { }
-    .res-tag-compl { }
-    .res-tag-risco { }
+    /* .res-tag-tipo — reservado */
+    /* .res-tag-compl — reservado */
+    /* .res-tag-risco — reservado */
     .res-oport-body {
       padding: 0.8rem 1.2rem 1rem;
       font-size: 0.85rem;
@@ -1132,7 +1132,7 @@
     /* ═══════════════════════════════════════════════════════════════════════════
        RESULTADOS — ALERTAS
        ═══════════════════════════════════════════════════════════════════════════ */
-    .res-alertas { }
+    /* .res-alertas — reservado para estilos futuros */
     .res-alerta {
       display: flex;
       align-items: flex-start;
@@ -1153,7 +1153,7 @@
     /* ═══════════════════════════════════════════════════════════════════════════
        RESULTADOS — CENÁRIOS
        ═══════════════════════════════════════════════════════════════════════════ */
-    .res-cenarios { }
+    /* .res-cenarios — reservado para estilos futuros */
     .res-cenario-base td { font-weight: 700; }
     .res-cenario-pessimista td { color: var(--danger); }
     .res-cenario-otimista td { color: var(--accent-dark); }
@@ -1181,8 +1181,8 @@
     /* ═══════════════════════════════════════════════════════════════════════════
        RESULTADOS — OBRIGAÇÕES
        ═══════════════════════════════════════════════════════════════════════════ */
-    .res-obrigacoes { }
-    .res-darf-table { }
+    /* .res-obrigacoes — reservado para estilos futuros */
+    /* .res-darf-table — reservado para estilos futuros */
 
     /* ═══════════════════════════════════════════════════════════════════════════
        RESULTADOS — TIMELINE
@@ -1509,12 +1509,15 @@
   <script src="../scripts/motor-lucro-real-v4.6-unificado.js" onerror="console.error('[IMPOST] Motor fiscal não carregado — todos os cálculos usarão fallback simplificado'); window._motorFiscalFalhou = true; window._depFalha = (window._depFalha||[]); window._depFalha.push('motor-lucro-real-v4.6-unificado.js');"></script>
   <!-- 4. Mapeamento unificado v3.2 (ponte motor↔HTML, lê de estados.js via LR.setEstado) -->
   <script src="../scripts/lucro-real-mapeamento.js" onerror="console.error('[IMPOST] Mapeamento não carregado — sistema não funcional'); window._depFalha = (window._depFalha||[]); window._depFalha.push('lucro-real-mapeamento.js');"></script>
-  <!-- 5. Chart.js 4.4 CDN -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+  <!-- 5. Chart.js 4.4 CDN com fallback -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"
+    onerror="this.onerror=null;this.src='https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.7/chart.umd.min.js';console.warn('[IMPOST] Chart.js CDN primário falhou, tentando fallback');"></script>
   <!-- 6. html2pdf.js para exportação PDF -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"
+    onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js';console.warn('[IMPOST] html2pdf CDN primário falhou, tentando fallback');window._depFalha=(window._depFalha||[]);window._depFalha.push('html2pdf.js');"></script>
   <!-- 7. SheetJS para exportação Excel -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"
+    onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';console.warn('[IMPOST] SheetJS CDN primário falhou, tentando fallback');window._depFalha=(window._depFalha||[]);window._depFalha.push('xlsx.js');"></script>
   <!-- 8. Motor principal do wizard (depende de TODOS acima) -->
   <script src="../scripts/lucro-real-estudos.js" onerror="console.error('[IMPOST] estudos.js não carregado — wizard não funcional'); window._depFalha = (window._depFalha||[]); window._depFalha.push('lucro-real-estudos.js');"></script>
 
@@ -1673,6 +1676,36 @@
         LR.setEstado(selectEl.value);
       }
 
+      // v3.3 FIX BUG MÉDIO 1: Observar mudanças no select para capturar preenchimento via JS
+      // Quando o wizard restaura dados do localStorage, select.value é definido via JS
+      // sem disparar evento 'change'. Este observer detecta options sendo adicionadas
+      // ou atributos mudando e sincroniza o estado.
+      var selectObserver = new MutationObserver(function() {
+        if (selectEl.value && typeof LR !== 'undefined' && typeof LR.setEstado === 'function') {
+          var estadoAtual = (typeof LR._estadoAtual !== 'undefined') ? LR._estadoAtual : '';
+          if (estadoAtual !== selectEl.value) {
+            LR.setEstado(selectEl.value);
+            console.log('[HTML→LR] Estado sincronizado via observer:', selectEl.value);
+          }
+        }
+      });
+      selectObserver.observe(selectEl, { childList: true, attributes: true, subtree: true });
+
+      // Fallback: polling por 5 segundos para capturar preenchimento tardio via JS
+      var _checkCount = 0;
+      var _checkInterval = setInterval(function() {
+        _checkCount++;
+        if (selectEl.value && typeof LR !== 'undefined' && typeof LR.setEstado === 'function') {
+          var estadoAtual = (typeof LR._estadoAtual !== 'undefined') ? LR._estadoAtual : '';
+          if (estadoAtual !== selectEl.value) {
+            LR.setEstado(selectEl.value);
+            console.log('[HTML→LR] Estado sincronizado via polling:', selectEl.value);
+          }
+          clearInterval(_checkInterval);
+        }
+        if (_checkCount > 10) clearInterval(_checkInterval);
+      }, 500);
+
       selectEl._lrConectado = true;
     }
 
@@ -1695,6 +1728,15 @@
         var sel = encontrarSelectEstado();
         if (sel && !sel._lrConectado) {
           conectarSelectEstado(sel);
+        }
+        // v3.3 FIX BUG MÉDIO 1: Verificar se select já conectado teve valor definido via JS
+        if (sel && sel._lrConectado && sel.value) {
+          if (typeof LR !== 'undefined' && typeof LR.setEstado === 'function') {
+            var estadoAtual = (typeof LR._estadoAtual !== 'undefined') ? LR._estadoAtual : '';
+            if (estadoAtual !== sel.value) {
+              LR.setEstado(sel.value);
+            }
+          }
         }
       });
 
