@@ -1,0 +1,1826 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IMPOST. — Estudo Tributário Simples Nacional</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+/* ═══════════════════════════════════════════════════
+   IMPOST. — Design System
+   ═══════════════════════════════════════════════════ */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --pri:#1a56db;--pri-dk:#1e40af;--pri-lt:#dbeafe;--pri-bg:#eff6ff;
+  --accent:#f59e0b;--accent-lt:#fef3c7;
+  --ok:#059669;--ok-lt:#d1fae5;
+  --danger:#dc2626;--danger-lt:#fee2e2;
+  --warn:#d97706;--warn-lt:#fef9c3;
+  --bg:#f8fafc;--card:#ffffff;
+  --txt:#1e293b;--txt2:#64748b;--txt3:#94a3b8;
+  --brd:#e2e8f0;--brd2:#cbd5e1;
+  --radius:16px;--radius-sm:10px;--radius-xs:6px;
+  --shadow:0 1px 3px rgba(0,0,0,.06),0 4px 16px rgba(0,0,0,.04);
+  --shadow-lg:0 4px 24px rgba(0,0,0,.08);
+  --font:'Inter',system-ui,-apple-system,sans-serif;
+  --mono:'JetBrains Mono','Fira Code',ui-monospace,monospace;
+}
+html{scroll-behavior:smooth}
+body{font-family:var(--font);background:var(--bg);color:var(--txt);line-height:1.6;-webkit-font-smoothing:antialiased}
+input,select,textarea,button{font-family:inherit;font-size:inherit}
+
+/* ─── Header ─── */
+.site-header{background:#fff;border-bottom:1px solid var(--brd);padding:16px 0;position:sticky;top:0;z-index:100;backdrop-filter:blur(12px);background:rgba(255,255,255,.92)}
+.header-inner{max-width:1100px;margin:0 auto;padding:0 24px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px}
+.logo{font-size:26px;font-weight:800;color:var(--pri-dk);letter-spacing:-1px}
+.logo span{color:var(--accent)}
+.tagline{font-size:12px;color:var(--txt2);font-style:italic;max-width:340px;line-height:1.4}
+.badge-sn{display:inline-flex;align-items:center;gap:6px;background:var(--pri-lt);color:var(--pri);font-size:12px;font-weight:600;padding:5px 14px;border-radius:20px}
+
+/* ─── Progress Bar ─── */
+.progress-bar{max-width:1100px;margin:0 auto;padding:24px 24px 0}
+.progress-steps{display:flex;gap:4px;position:relative}
+.progress-step{flex:1;text-align:center;position:relative}
+.progress-step .step-num{width:36px;height:36px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;border:2px solid var(--brd);color:var(--txt3);background:#fff;position:relative;z-index:2;transition:.3s}
+.progress-step .step-label{display:block;font-size:11px;color:var(--txt3);margin-top:6px;font-weight:500;transition:.3s}
+.progress-step.active .step-num{background:var(--pri);border-color:var(--pri);color:#fff;box-shadow:0 0 0 4px var(--pri-lt)}
+.progress-step.active .step-label{color:var(--pri);font-weight:600}
+.progress-step.done .step-num{background:var(--ok);border-color:var(--ok);color:#fff}
+.progress-step.done .step-label{color:var(--ok)}
+.progress-line{position:absolute;top:18px;left:0;right:0;height:3px;background:var(--brd);z-index:1}
+.progress-line-fill{height:100%;background:var(--pri);border-radius:2px;transition:width .4s ease}
+
+/* ─── Container ─── */
+.container{max-width:1100px;margin:0 auto;padding:24px}
+
+/* ─── Card / Wizard ─── */
+.wizard-card{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden}
+.step-panel{display:none;padding:32px;animation:fadeIn .35s ease}
+.step-panel.active{display:block}
+@keyframes fadeIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+.step-header{margin-bottom:28px}
+.step-header h2{font-size:22px;font-weight:700;color:var(--txt);margin-bottom:4px}
+.step-header p{font-size:14px;color:var(--txt2)}
+
+/* ─── Form Fields ─── */
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px}
+.form-row.col-1{grid-template-columns:1fr}
+.form-row.col-3{grid-template-columns:1fr 1fr 1fr}
+.form-group{display:flex;flex-direction:column}
+.form-group label{font-size:13px;font-weight:600;color:var(--txt);margin-bottom:6px;display:flex;align-items:center;gap:6px}
+.form-group label .req{color:var(--danger);font-size:11px}
+.form-group input,.form-group select,.form-group textarea{padding:10px 14px;border:1.5px solid var(--brd);border-radius:var(--radius-xs);font-size:15px;color:var(--txt);background:#fff;transition:.2s;outline:none;width:100%}
+.form-group input:focus,.form-group select:focus{border-color:var(--pri);box-shadow:0 0 0 3px var(--pri-lt)}
+.form-group input.error,.form-group select.error{border-color:var(--danger);box-shadow:0 0 0 3px var(--danger-lt)}
+.form-group input.valid{border-color:var(--ok)}
+.form-group .hint{font-size:12px;color:var(--txt3);margin-top:4px}
+.form-group .error-msg{font-size:12px;color:var(--danger);margin-top:4px;display:none}
+.form-group .error-msg.show{display:block}
+.form-group .money-input{font-family:var(--mono);font-weight:600}
+
+/* ─── Tooltips ─── */
+.tooltip-icon{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;background:var(--brd);color:var(--txt2);font-size:11px;font-weight:700;cursor:help;position:relative}
+.tooltip-icon:hover::after{content:attr(data-tip);position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);background:var(--txt);color:#fff;font-size:12px;font-weight:400;padding:8px 12px;border-radius:6px;white-space:nowrap;max-width:300px;white-space:normal;z-index:50;box-shadow:var(--shadow-lg);line-height:1.4}
+
+/* ─── Toggle ─── */
+.toggle-wrap{display:flex;align-items:center;gap:10px;margin-bottom:20px}
+.toggle{position:relative;width:44px;height:24px;background:var(--brd2);border-radius:12px;cursor:pointer;transition:.2s;flex-shrink:0}
+.toggle.on{background:var(--pri)}
+.toggle::after{content:'';position:absolute;top:3px;left:3px;width:18px;height:18px;background:#fff;border-radius:50%;transition:.2s;box-shadow:0 1px 3px rgba(0,0,0,.15)}
+.toggle.on::after{left:23px}
+.toggle-label{font-size:14px;color:var(--txt);font-weight:500}
+
+/* ─── Info Cards (inline) ─── */
+.info-card{background:var(--pri-bg);border:1px solid var(--pri-lt);border-radius:var(--radius-sm);padding:16px;margin:16px 0}
+.info-card.warn{background:var(--warn-lt);border-color:#fcd34d}
+.info-card.danger{background:var(--danger-lt);border-color:#fca5a5}
+.info-card.success{background:var(--ok-lt);border-color:#6ee7b7}
+.info-card .ic-title{font-size:14px;font-weight:700;margin-bottom:4px}
+.info-card .ic-text{font-size:13px;color:var(--txt2);line-height:1.5}
+
+/* ─── CNAE Autocomplete ─── */
+.cnae-search{position:relative}
+.cnae-results{position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid var(--brd);border-radius:0 0 var(--radius-xs) var(--radius-xs);max-height:260px;overflow-y:auto;z-index:30;box-shadow:var(--shadow-lg);display:none}
+.cnae-results.open{display:block}
+.cnae-item{padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--brd);font-size:13px;transition:.15s}
+.cnae-item:hover{background:var(--pri-bg)}
+.cnae-item .cnae-code{font-family:var(--mono);font-weight:600;color:var(--pri);font-size:13px}
+.cnae-item .cnae-desc{color:var(--txt2);margin-left:8px}
+.cnae-item .cnae-badges{margin-top:4px;display:flex;gap:6px;flex-wrap:wrap}
+.cnae-badge{font-size:10px;padding:2px 8px;border-radius:10px;font-weight:600;text-transform:uppercase}
+.cnae-badge.anexo{background:var(--pri-lt);color:var(--pri)}
+.cnae-badge.fatorr{background:var(--warn-lt);color:var(--warn)}
+.cnae-badge.vedado{background:var(--danger-lt);color:var(--danger)}
+.cnae-badge.mono{background:var(--ok-lt);color:var(--ok)}
+.cnae-selected{background:var(--pri-bg);border:1px solid var(--pri-lt);border-radius:var(--radius-sm);padding:14px;margin-top:10px}
+.cnae-selected .cs-title{font-weight:700;font-size:14px;color:var(--pri);margin-bottom:8px;font-family:var(--mono)}
+.cnae-selected .cs-desc{font-size:13px;color:var(--txt2)}
+
+/* ─── Socios List ─── */
+.socios-list{display:flex;flex-direction:column;gap:12px;margin-bottom:16px}
+.socio-card{background:var(--bg);border:1px solid var(--brd);border-radius:var(--radius-sm);padding:16px}
+.socio-card .socio-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+.socio-card .socio-title{font-weight:600;font-size:14px}
+.btn-remove{background:none;border:none;color:var(--danger);cursor:pointer;font-size:18px;padding:4px 8px;border-radius:4px}
+.btn-remove:hover{background:var(--danger-lt)}
+
+/* ─── Buttons ─── */
+.wizard-footer{display:flex;justify-content:space-between;align-items:center;padding:20px 32px;border-top:1px solid var(--brd);background:var(--bg)}
+.btn{padding:12px 28px;border-radius:var(--radius-xs);font-size:15px;font-weight:600;cursor:pointer;border:none;transition:.2s;display:inline-flex;align-items:center;gap:8px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn-prev{background:#fff;border:1.5px solid var(--brd);color:var(--txt2)}
+.btn-prev:hover:not(:disabled){border-color:var(--pri);color:var(--pri)}
+.btn-next{background:var(--pri);color:#fff}
+.btn-next:hover:not(:disabled){background:var(--pri-dk);transform:translateY(-1px);box-shadow:var(--shadow)}
+.btn-cta{background:linear-gradient(135deg,var(--accent),#d97706);color:#fff;font-size:17px;padding:16px 36px;border-radius:var(--radius-sm);box-shadow:0 4px 16px rgba(245,158,11,.35)}
+.btn-cta:hover{transform:translateY(-2px);box-shadow:0 6px 24px rgba(245,158,11,.45)}
+.btn-sm{padding:8px 16px;font-size:13px}
+.btn-outline{background:transparent;border:1.5px solid var(--pri);color:var(--pri)}
+.btn-outline:hover{background:var(--pri-bg)}
+.btn-add{background:var(--pri-bg);border:1.5px dashed var(--pri);color:var(--pri);width:100%;padding:12px;border-radius:var(--radius-xs);cursor:pointer;font-weight:600;font-size:14px;transition:.2s}
+.btn-add:hover{background:var(--pri-lt)}
+
+/* ─── Fator R Gauge ─── */
+.fatorr-gauge{display:flex;align-items:center;gap:20px;padding:16px;background:var(--bg);border-radius:var(--radius-sm);border:1px solid var(--brd);margin-top:12px}
+.gauge-circle{width:90px;height:90px;border-radius:50%;position:relative;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.gauge-circle .gauge-value{font-size:20px;font-weight:800;font-family:var(--mono)}
+.gauge-info{flex:1}
+.gauge-info .gi-status{font-weight:700;font-size:14px;margin-bottom:4px}
+.gauge-info .gi-text{font-size:13px;color:var(--txt2);line-height:1.5}
+
+/* ─── Revenue Summary Card ─── */
+.revenue-summary{background:linear-gradient(135deg,var(--pri-dk),var(--pri));color:#fff;border-radius:var(--radius-sm);padding:20px;margin-top:20px}
+.revenue-summary .rs-label{font-size:12px;opacity:.8;text-transform:uppercase;letter-spacing:.5px}
+.revenue-summary .rs-value{font-size:28px;font-weight:800;font-family:var(--mono);margin:4px 0}
+.revenue-summary .rs-badge{display:inline-block;background:rgba(255,255,255,.2);padding:4px 12px;border-radius:12px;font-size:12px;font-weight:600;margin-top:8px}
+
+/* ─── Loading Overlay ─── */
+.loading-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(248,250,252,.92);z-index:200;display:none;align-items:center;justify-content:center;flex-direction:column}
+.loading-overlay.show{display:flex}
+.loading-card{background:#fff;border-radius:var(--radius);box-shadow:var(--shadow-lg);padding:48px;text-align:center;max-width:420px;width:90%}
+.loading-card h3{font-size:20px;margin-bottom:8px}
+.loading-card .loading-step-text{color:var(--txt2);font-size:14px;margin-bottom:24px;min-height:20px}
+.loading-bar{height:6px;background:var(--brd);border-radius:3px;overflow:hidden;margin-bottom:16px}
+.loading-bar-fill{height:100%;background:linear-gradient(90deg,var(--pri),var(--accent));border-radius:3px;transition:width .5s ease;width:0}
+.loading-pct{font-family:var(--mono);font-weight:700;color:var(--pri);font-size:18px}
+
+/* ═══════════════════════════════════════════════════
+   RESULTS DASHBOARD
+   ═══════════════════════════════════════════════════ */
+.results-section{display:none}
+.results-section.show{display:block}
+
+/* Hero Card */
+.hero-card{background:linear-gradient(135deg,#1e3a5f,var(--pri));color:#fff;border-radius:var(--radius);padding:36px;margin-bottom:24px;position:relative;overflow:hidden}
+.hero-card::after{content:'';position:absolute;top:-40%;right:-15%;width:50%;height:180%;background:rgba(255,255,255,.03);transform:rotate(-12deg);pointer-events:none}
+.hero-empresa{font-size:14px;opacity:.8;margin-bottom:16px}
+.hero-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:24px;margin-bottom:20px}
+.hero-metric .hm-label{font-size:11px;text-transform:uppercase;letter-spacing:.5px;opacity:.7;margin-bottom:4px}
+.hero-metric .hm-value{font-size:28px;font-weight:800;font-family:var(--mono)}
+.hero-metric .hm-value.green{color:#34d399}
+.hero-metric .hm-value.gold{color:#fbbf24}
+.hero-economia{background:rgba(255,255,255,.1);border-radius:var(--radius-sm);padding:16px;display:flex;align-items:center;gap:16px;backdrop-filter:blur(8px)}
+.hero-economia .he-icon{font-size:32px}
+.hero-economia .he-value{font-size:24px;font-weight:800;color:#fbbf24;font-family:var(--mono)}
+.hero-economia .he-label{font-size:12px;opacity:.8}
+.hero-badges{display:flex;gap:8px;margin-top:16px;flex-wrap:wrap}
+.hero-badge{background:rgba(255,255,255,.15);padding:5px 14px;border-radius:16px;font-size:12px;font-weight:600}
+
+/* KPI Cards */
+.kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px}
+.kpi-card{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);padding:20px;border-top:3px solid var(--brd)}
+.kpi-card.blue{border-top-color:var(--pri)}
+.kpi-card.green{border-top-color:var(--ok)}
+.kpi-card.gold{border-top-color:var(--accent)}
+.kpi-card.red{border-top-color:var(--danger)}
+.kpi-label{font-size:12px;color:var(--txt2);text-transform:uppercase;letter-spacing:.3px;margin-bottom:8px}
+.kpi-value{font-size:24px;font-weight:800;font-family:var(--mono);color:var(--txt)}
+.kpi-sub{font-size:12px;color:var(--txt3);margin-top:4px}
+
+/* Section Cards */
+.section-card{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);margin-bottom:24px;overflow:hidden}
+.section-card .sc-header{padding:20px 24px;border-bottom:1px solid var(--brd);display:flex;align-items:center;gap:12px}
+.section-card .sc-num{width:32px;height:32px;border-radius:50%;background:var(--pri-lt);color:var(--pri);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0}
+.section-card .sc-title{font-size:16px;font-weight:700}
+.section-card .sc-body{padding:24px}
+
+/* Score Gauge */
+.score-wrap{display:flex;align-items:center;gap:32px;flex-wrap:wrap}
+.score-circle{width:140px;height:140px;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;flex-shrink:0;position:relative}
+.score-circle .sc-val{font-size:42px;font-weight:800;color:#fff;line-height:1}
+.score-circle .sc-faixa{font-size:11px;font-weight:600;color:rgba(255,255,255,.9);text-transform:uppercase;letter-spacing:.5px;margin-top:2px}
+.score-bars{flex:1;min-width:260px}
+.score-bar{margin-bottom:12px}
+.score-bar .sb-header{display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px}
+.score-bar .sb-track{height:8px;background:var(--brd);border-radius:4px;overflow:hidden}
+.score-bar .sb-fill{height:100%;border-radius:4px;transition:width .6s ease}
+
+/* Comparison Table */
+.comp-table{width:100%;border-collapse:collapse;font-size:14px}
+.comp-table th{background:var(--bg);padding:12px 16px;text-align:left;font-weight:600;font-size:13px;border-bottom:2px solid var(--brd)}
+.comp-table td{padding:12px 16px;border-bottom:1px solid var(--brd)}
+.comp-table tr:hover td{background:var(--pri-bg)}
+.comp-table .col-best{background:var(--ok-lt)}
+.comp-table .col-best th{background:var(--ok);color:#fff}
+.comp-table .val{font-family:var(--mono);font-weight:600;text-align:right}
+.comp-badge-best{display:inline-block;background:var(--ok);color:#fff;font-size:10px;padding:2px 8px;border-radius:10px;font-weight:600;text-transform:uppercase;margin-left:8px}
+
+/* Opportunities */
+.opp-list{display:flex;flex-direction:column;gap:12px}
+.opp-card{border:1px solid var(--brd);border-radius:var(--radius-sm);overflow:hidden;transition:.2s}
+.opp-card:hover{border-color:var(--pri-lt);box-shadow:var(--shadow)}
+.opp-header{padding:16px;display:flex;align-items:center;gap:12px;cursor:pointer}
+.opp-icon{font-size:24px;flex-shrink:0}
+.opp-title{flex:1;font-weight:600;font-size:14px}
+.opp-impact{font-size:11px;padding:3px 10px;border-radius:10px;font-weight:600;text-transform:uppercase}
+.opp-impact.alto{background:var(--danger-lt);color:var(--danger)}
+.opp-impact.medio{background:var(--warn-lt);color:var(--warn)}
+.opp-impact.baixo{background:var(--ok-lt);color:var(--ok)}
+.opp-eco{font-family:var(--mono);font-weight:700;color:var(--ok);font-size:14px;flex-shrink:0}
+.opp-body{padding:0 16px 16px;display:none;font-size:13px;color:var(--txt2);line-height:1.7}
+.opp-card.open .opp-body{display:block}
+.opp-arrow{transition:.2s;font-size:18px;color:var(--txt3)}
+.opp-card.open .opp-arrow{transform:rotate(180deg)}
+
+/* Premium Lock */
+.premium-locked{position:relative;overflow:hidden}
+.premium-locked .premium-blur{filter:blur(4px);pointer-events:none;user-select:none;opacity:.6}
+.premium-overlay{position:absolute;top:0;left:0;right:0;bottom:0;display:flex;align-items:center;justify-content:center;z-index:10;background:rgba(255,255,255,.5)}
+.premium-cta-card{background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;border-radius:var(--radius-sm);padding:24px;text-align:center;max-width:340px;box-shadow:var(--shadow-lg)}
+.premium-cta-card h4{font-size:16px;margin-bottom:6px}
+.premium-cta-card p{font-size:13px;opacity:.9;margin-bottom:14px}
+.premium-cta-card .btn{background:#fff;color:#d97706;font-weight:700}
+
+/* Charts */
+.chart-container{position:relative;max-width:380px;margin:0 auto}
+.chart-row{display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:center}
+
+/* Simulator */
+.sim-slider-group{margin-bottom:20px}
+.sim-slider-group label{display:flex;justify-content:space-between;font-size:14px;font-weight:600;margin-bottom:8px}
+.sim-slider-group label span{font-family:var(--mono);color:var(--pri)}
+.sim-slider{width:100%;-webkit-appearance:none;height:6px;border-radius:3px;background:var(--brd);outline:none}
+.sim-slider::-webkit-slider-thumb{-webkit-appearance:none;width:20px;height:20px;border-radius:50%;background:var(--pri);cursor:pointer;box-shadow:0 2px 6px rgba(26,86,219,.3)}
+.sim-result{background:var(--pri-bg);border:1px solid var(--pri-lt);border-radius:var(--radius-sm);padding:16px;margin-top:12px}
+.sim-result .sr-row{display:flex;justify-content:space-between;padding:6px 0;font-size:14px}
+.sim-result .sr-value{font-family:var(--mono);font-weight:600}
+
+/* Timeline / Action Plan */
+.timeline{position:relative;padding-left:28px}
+.timeline::before{content:'';position:absolute;left:9px;top:0;bottom:0;width:3px;background:var(--pri-lt);border-radius:2px}
+.timeline-item{position:relative;margin-bottom:20px}
+.timeline-item::before{content:'';position:absolute;left:-23px;top:6px;width:14px;height:14px;border-radius:50%;border:3px solid var(--pri);background:#fff}
+.timeline-item.done::before{background:var(--ok);border-color:var(--ok)}
+.tl-title{font-weight:700;font-size:14px;margin-bottom:2px}
+.tl-eco{color:var(--ok);font-family:var(--mono);font-weight:600;font-size:13px}
+.tl-desc{font-size:13px;color:var(--txt2)}
+.tl-prazo{font-size:12px;color:var(--txt3);font-style:italic;margin-top:2px}
+
+/* Calendar */
+.cal-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px}
+.cal-item{background:var(--bg);border:1px solid var(--brd);border-radius:var(--radius-xs);padding:12px;display:flex;gap:12px;align-items:flex-start}
+.cal-date{background:var(--pri);color:#fff;border-radius:6px;padding:6px 10px;text-align:center;flex-shrink:0;min-width:50px}
+.cal-date .cd-day{font-size:18px;font-weight:800;font-family:var(--mono);line-height:1}
+.cal-date .cd-month{font-size:10px;text-transform:uppercase;letter-spacing:.5px;opacity:.8}
+.cal-desc{font-size:13px;line-height:1.4}
+.cal-legal{font-size:11px;color:var(--txt3);margin-top:2px}
+
+/* Risk Cards */
+.risk-card{border-left:4px solid;border-radius:var(--radius-xs);padding:14px 16px;margin-bottom:10px}
+.risk-card.critico{border-color:var(--danger);background:var(--danger-lt)}
+.risk-card.medio{border-color:var(--warn);background:var(--warn-lt)}
+.risk-card.baixo{border-color:var(--pri);background:var(--pri-bg)}
+.risk-title{font-weight:700;font-size:14px;margin-bottom:4px}
+.risk-text{font-size:13px;color:var(--txt2)}
+
+/* CTA Premium Section */
+.cta-premium{background:linear-gradient(135deg,#f59e0b 0%,#d97706 50%,#b45309 100%);border-radius:var(--radius);padding:40px;text-align:center;color:#fff;margin:32px 0}
+.cta-premium h3{font-size:24px;font-weight:800;margin-bottom:8px}
+.cta-premium .cta-sub{font-size:15px;opacity:.9;margin-bottom:24px}
+.plans-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:24px}
+.plan-card{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);border-radius:var(--radius-sm);padding:24px;backdrop-filter:blur(4px);position:relative}
+.plan-card.popular{background:rgba(255,255,255,.2);border-color:rgba(255,255,255,.4);transform:scale(1.04)}
+.plan-card .plan-badge{position:absolute;top:-10px;left:50%;transform:translateX(-50%);background:#fff;color:var(--accent);font-size:11px;font-weight:700;padding:3px 12px;border-radius:10px;text-transform:uppercase}
+.plan-card .plan-name{font-size:16px;font-weight:700;margin-bottom:4px}
+.plan-card .plan-price{font-size:28px;font-weight:800;font-family:var(--mono);margin-bottom:4px}
+.plan-card .plan-price small{font-size:14px;font-weight:400;opacity:.8}
+.plan-card .plan-desc{font-size:13px;opacity:.85;margin-bottom:12px}
+.plan-card .btn{width:100%;justify-content:center;background:#fff;color:var(--accent);font-weight:700}
+
+/* Footer */
+.report-footer{background:var(--bg);border-top:3px solid var(--accent);border-radius:0 0 var(--radius) var(--radius);padding:32px;margin-top:24px}
+.footer-logo{font-size:22px;font-weight:800;color:var(--pri-dk);margin-bottom:2px}
+.footer-logo span{color:var(--accent)}
+.footer-slogan{font-size:12px;color:var(--txt2);font-style:italic;margin-bottom:16px}
+.footer-disclaimer{font-size:11px;color:var(--txt3);line-height:1.7;background:#fff;border:1px solid var(--brd);border-radius:var(--radius-xs);padding:14px}
+.footer-meta{display:flex;justify-content:space-between;font-size:11px;color:var(--txt3);margin-top:12px;flex-wrap:wrap;gap:8px}
+
+/* ─── Responsive ─── */
+@media(max-width:768px){
+  .form-row,.form-row.col-3{grid-template-columns:1fr}
+  .hero-grid{grid-template-columns:1fr}
+  .kpi-grid{grid-template-columns:1fr 1fr}
+  .plans-grid{grid-template-columns:1fr}
+  .plan-card.popular{transform:none}
+  .chart-row{grid-template-columns:1fr}
+  .score-wrap{flex-direction:column}
+  .header-inner{flex-direction:column;text-align:center}
+  .wizard-footer{flex-direction:column;gap:12px}
+  .wizard-footer .btn{width:100%;justify-content:center}
+  .step-panel{padding:20px}
+  .hero-card{padding:24px}
+}
+@media(max-width:480px){
+  .kpi-grid{grid-template-columns:1fr}
+  .progress-step .step-label{font-size:9px}
+}
+
+/* ─── Print ─── */
+@media print{
+  .site-header,.progress-bar,.wizard-footer,.loading-overlay,.cta-premium,.premium-overlay,.btn{display:none!important}
+  .results-section{display:block!important}
+  .section-card{box-shadow:none;break-inside:avoid}
+  body{background:#fff}
+}
+
+/* ─── Months Grid ─── */
+.months-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:12px 0}
+.months-grid .form-group label{font-size:12px}
+
+/* ─── Back btn ─── */
+.btn-back-form{margin-bottom:20px}
+</style>
+</head>
+<body>
+<!-- ═══════════════════════════ HEADER ═══════════════════════════ -->
+<header class="site-header">
+  <div class="header-inner">
+    <div style="display:flex;align-items:center;gap:16px">
+      <div class="logo">IMPOST<span>.</span></div>
+      <span class="badge-sn">Simples Nacional</span>
+    </div>
+    <div class="tagline">Porque pagar imposto certo e direito. Pagar menos, legalmente, e inteligencia.</div>
+  </div>
+</header>
+
+<!-- ═══════════════════════════ PROGRESS ═══════════════════════════ -->
+<div class="progress-bar" id="progressBar">
+  <div style="position:relative">
+    <div class="progress-line"><div class="progress-line-fill" id="progressFill" style="width:0%"></div></div>
+    <div class="progress-steps">
+      <div class="progress-step active" data-step="1"><span class="step-num">1</span><span class="step-label">Empresa</span></div>
+      <div class="progress-step" data-step="2"><span class="step-num">2</span><span class="step-label">CNAE</span></div>
+      <div class="progress-step" data-step="3"><span class="step-num">3</span><span class="step-label">Receitas</span></div>
+      <div class="progress-step" data-step="4"><span class="step-num">4</span><span class="step-label">Folha</span></div>
+      <div class="progress-step" data-step="5"><span class="step-num">5</span><span class="step-label">Socios</span></div>
+      <div class="progress-step" data-step="6"><span class="step-num">6</span><span class="step-label">Complementar</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════ WIZARD ═══════════════════════════ -->
+<div class="container" id="wizardContainer">
+<div class="wizard-card" id="wizardCard">
+
+<!-- STEP 1: Dados da Empresa -->
+<div class="step-panel active" data-step="1">
+  <div class="step-header">
+    <h2>Dados da Empresa</h2>
+    <p>Informacoes basicas para identificacao e enquadramento.</p>
+  </div>
+  <div class="form-row">
+    <div class="form-group">
+      <label>Nome da empresa <span class="req">*</span></label>
+      <input type="text" id="nomeEmpresa" placeholder="Ex: Agrogeo Brasil Ltda" required>
+    </div>
+    <div class="form-group">
+      <label>CNPJ <span class="req">*</span></label>
+      <input type="text" id="cnpj" placeholder="00.000.000/0000-00" maxlength="18">
+      <span class="error-msg" id="cnpjError"></span>
+    </div>
+  </div>
+  <div class="form-row col-3">
+    <div class="form-group">
+      <label>Data de abertura</label>
+      <input type="date" id="dataAbertura">
+      <span class="hint">Para calculo de RBT12 proporcional</span>
+    </div>
+    <div class="form-group">
+      <label>Porte <span class="tooltip-icon" data-tip="MEI: ate R$ 81k | ME: ate R$ 360k | EPP: ate R$ 4,8M">?</span></label>
+      <select id="porte">
+        <option value="">Selecione...</option>
+        <option value="MEI">MEI - Microempreendedor Individual</option>
+        <option value="ME">ME - Microempresa</option>
+        <option value="EPP">EPP - Empresa de Pequeno Porte</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Regime atual</label>
+      <select id="regimeAtual">
+        <option value="simples" selected>Simples Nacional</option>
+        <option value="presumido">Lucro Presumido</option>
+        <option value="real">Lucro Real</option>
+        <option value="mei">MEI</option>
+      </select>
+    </div>
+  </div>
+</div>
+
+<!-- STEP 2: CNAE e Atividade -->
+<div class="step-panel" data-step="2">
+  <div class="step-header">
+    <h2>CNAE e Atividade</h2>
+    <p>Identifique a atividade economica principal para classificacao tributaria.</p>
+  </div>
+  <div class="form-row col-1">
+    <div class="form-group cnae-search">
+      <label>CNAE Principal <span class="req">*</span></label>
+      <input type="text" id="cnaePrincipal" placeholder="Busque por codigo ou descricao (ex: 7119700 ou topografia)" autocomplete="off">
+      <input type="hidden" id="cnaePrincipalCodigo">
+      <div class="cnae-results" id="cnaeResults"></div>
+      <div class="cnae-selected" id="cnaeSelected" style="display:none"></div>
+      <span class="error-msg" id="cnaeError"></span>
+    </div>
+  </div>
+  <div class="form-row col-1">
+    <div class="form-group">
+      <label>Tipo principal de receita</label>
+      <select id="tipoReceita">
+        <option value="">Auto-detectar pelo CNAE</option>
+        <option value="comercio">Comercio</option>
+        <option value="industria">Industria</option>
+        <option value="servicos">Servicos</option>
+        <option value="transporte">Transporte</option>
+        <option value="locacao">Locacao de bens moveis</option>
+      </select>
+    </div>
+  </div>
+  <div class="toggle-wrap">
+    <div class="toggle" id="toggleMono" role="button" tabindex="0"></div>
+    <span class="toggle-label">Tem produtos monofasicos? <span class="tooltip-icon" data-tip="Combustiveis, farmacias, cosmeticos, bebidas, autopecas — PIS/COFINS ja pago pelo fabricante">?</span></span>
+  </div>
+  <div id="monoFields" style="display:none">
+    <div class="form-row">
+      <div class="form-group">
+        <label>% da receita com produtos monofasicos</label>
+        <input type="number" id="percMonofasico" min="0" max="100" placeholder="Ex: 30" value="0">
+        <span class="hint">Percentual estimado da receita bruta</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- STEP 3: Receitas e Faturamento -->
+<div class="step-panel" data-step="3">
+  <div class="step-header">
+    <h2>Receitas e Faturamento</h2>
+    <p>Informe a receita bruta para calculo do DAS e enquadramento na faixa.</p>
+  </div>
+  <div class="form-row">
+    <div class="form-group">
+      <label>Receita Bruta Mensal media <span class="req">*</span></label>
+      <input type="text" id="receitaMensal" class="money-input" placeholder="R$ 0,00">
+    </div>
+    <div class="form-group">
+      <label>RBT12 (Receita Bruta 12 meses) <span class="tooltip-icon" data-tip="Receita acumulada dos ultimos 12 meses. Calculada automaticamente, mas pode editar.">?</span></label>
+      <input type="text" id="rbt12" class="money-input" placeholder="R$ 0,00">
+      <span class="hint">Calculado: mensal x 12 (editavel)</span>
+    </div>
+  </div>
+  <div class="toggle-wrap">
+    <div class="toggle" id="toggleMesAMes" role="button" tabindex="0"></div>
+    <span class="toggle-label">Informar receita mes a mes</span>
+  </div>
+  <div id="mesAMesFields" style="display:none">
+    <div class="months-grid" id="monthsGrid"></div>
+    <div class="info-card" id="monthsTotal"><span class="ic-title">Total 12 meses: </span><span id="monthsTotalValue" style="font-family:var(--mono);font-weight:700">R$ 0,00</span></div>
+  </div>
+  <div class="form-row">
+    <div class="form-group">
+      <label>Receita de exportacao mensal <span class="tooltip-icon" data-tip="Exportacao e isenta de ICMS, PIS, COFINS no Simples Nacional">?</span></label>
+      <input type="text" id="receitaExportacao" class="money-input" placeholder="R$ 0,00">
+    </div>
+    <div class="form-group">
+      <label>Receita com ICMS-ST mensal <span class="tooltip-icon" data-tip="Substituicao Tributaria — segregar no PGDAS-D para nao pagar ICMS duplicado">?</span></label>
+      <input type="text" id="receitaICMS_ST" class="money-input" placeholder="R$ 0,00">
+    </div>
+  </div>
+  <div class="form-row">
+    <div class="form-group">
+      <label>Receita monofasica mensal</label>
+      <input type="text" id="receitaMonofasica" class="money-input" placeholder="R$ 0,00">
+    </div>
+    <div class="form-group">
+      <label>Receita de locacao de bens moveis</label>
+      <input type="text" id="receitaLocacao" class="money-input" placeholder="R$ 0,00">
+    </div>
+  </div>
+  <div class="form-row">
+    <div class="form-group">
+      <label>ISS retido na fonte mensal</label>
+      <input type="text" id="issRetido" class="money-input" placeholder="R$ 0,00">
+    </div>
+    <div class="form-group">
+      <label>Vendas interestaduais?</label>
+      <select id="vendasInter">
+        <option value="nao">Nao</option>
+        <option value="sim">Sim</option>
+      </select>
+    </div>
+  </div>
+  <div class="revenue-summary" id="revenueSummary" style="display:none">
+    <div class="rs-label">Receita Bruta Anual Estimada</div>
+    <div class="rs-value" id="rsValue">R$ 0,00</div>
+    <div id="rsClassificacao"></div>
+  </div>
+</div>
+
+<!-- STEP 4: Folha de Pagamento -->
+<div class="step-panel" data-step="4">
+  <div class="step-header">
+    <h2>Folha de Pagamento e Pro-Labore</h2>
+    <p>Dados da folha sao essenciais para o calculo do Fator R e enquadramento no Anexo.</p>
+  </div>
+  <div class="form-row">
+    <div class="form-group">
+      <label>Folha de pagamento mensal <span class="req">*</span> <span class="tooltip-icon" data-tip="Inclua salarios brutos, 13o proporcional, ferias, FGTS, INSS patronal">?</span></label>
+      <input type="text" id="folhaMensal" class="money-input" placeholder="R$ 0,00">
+    </div>
+    <div class="form-group">
+      <label>Pro-labore dos socios mensal</label>
+      <input type="text" id="proLabore" class="money-input" placeholder="R$ 0,00">
+    </div>
+  </div>
+  <div class="form-row">
+    <div class="form-group">
+      <label>Numero de funcionarios</label>
+      <input type="number" id="qtdFuncionarios" min="0" value="0">
+    </div>
+    <div class="form-group">
+      <label>RAT (Risco Ambiental) <span class="tooltip-icon" data-tip="Aliquota do Risco Ambiental do Trabalho, definida pelo CNAE">?</span></label>
+      <select id="rat">
+        <option value="0.01">1%</option>
+        <option value="0.02" selected>2%</option>
+        <option value="0.03">3%</option>
+      </select>
+    </div>
+  </div>
+  <div class="fatorr-gauge" id="fatorrGauge" style="display:none">
+    <div class="gauge-circle" id="gaugeCircle">
+      <div class="gauge-value" id="gaugeValue">0%</div>
+    </div>
+    <div class="gauge-info">
+      <div class="gi-status" id="gaugeStatus"></div>
+      <div class="gi-text" id="gaugeText"></div>
+    </div>
+  </div>
+</div>
+
+<!-- STEP 5: Socios -->
+<div class="step-panel" data-step="5">
+  <div class="step-header">
+    <h2>Socios e Distribuicao de Lucros</h2>
+    <p>Opcional, mas recomendado para analise de dividendos e pro-labore otimo.</p>
+  </div>
+  <div class="socios-list" id="sociosList"></div>
+  <button type="button" class="btn-add" id="btnAddSocio">+ Adicionar socio</button>
+  <div id="sociosValidation" style="margin-top:12px"></div>
+  <div class="toggle-wrap" style="margin-top:20px">
+    <div class="toggle" id="toggleMultiCNPJ" role="button" tabindex="0"></div>
+    <span class="toggle-label">Tem mais de um CNPJ? <span class="tooltip-icon" data-tip="Para verificar grupo economico e sublimites somados (LC 123/2006, Art. 3o, §4o)">?</span></span>
+  </div>
+  <div id="distLucrosPreview" class="info-card" style="display:none">
+    <div class="ic-title">Distribuicao de Lucros Estimada</div>
+    <div class="ic-text" id="distLucrosText"></div>
+  </div>
+</div>
+
+<!-- STEP 6: Dados Complementares -->
+<div class="step-panel" data-step="6">
+  <div class="step-header">
+    <h2>Dados Complementares</h2>
+    <p>Informacoes adicionais para um estudo mais preciso e personalizado.</p>
+  </div>
+  <div class="form-row">
+    <div class="form-group">
+      <label>Estado (UF)</label>
+      <select id="uf"><option value="">Selecione...</option></select>
+    </div>
+    <div class="form-group">
+      <label>Municipio</label>
+      <select id="municipio" disabled><option value="">Selecione o estado primeiro</option></select>
+    </div>
+  </div>
+  <div class="form-row">
+    <div class="form-group">
+      <label>Aliquota ISS do municipio (%)</label>
+      <input type="number" id="issAliquota" min="2" max="5" step="0.01" value="5.00">
+      <span class="hint" id="issHint">Minimo 2%, maximo 5% (LC 116/2003)</span>
+    </div>
+    <div class="form-group">
+      <label>Despesas operacionais mensais</label>
+      <input type="text" id="despesas" class="money-input" placeholder="R$ 0,00">
+    </div>
+  </div>
+  <div class="form-row">
+    <div class="form-group">
+      <label>Lucro contabil efetivo mensal <span class="tooltip-icon" data-tip="Se tiver escrituracao contabil completa, o lucro efetivo pode ampliar a distribuicao isenta">?</span></label>
+      <input type="text" id="lucroEfetivo" class="money-input" placeholder="R$ 0,00">
+    </div>
+  </div>
+  <div class="toggle-wrap">
+    <div class="toggle" id="toggleProjecao" role="button" tabindex="0"></div>
+    <span class="toggle-label">Gerar projecao plurianual?</span>
+  </div>
+  <div id="projecaoFields" style="display:none">
+    <div class="form-group">
+      <label>Crescimento estimado: <span id="crescLabel">5%</span>/ano</label>
+      <input type="range" id="crescimento" class="sim-slider" min="0" max="30" value="5">
+    </div>
+  </div>
+  <div style="text-align:center;padding:24px 0">
+    <button type="button" class="btn btn-cta" id="btnGerar">Gerar Estudo Tributario Completo</button>
+  </div>
+</div>
+
+<!-- Wizard Footer -->
+<div class="wizard-footer" id="wizardFooter">
+  <button type="button" class="btn btn-prev" id="btnPrev" disabled>Anterior</button>
+  <button type="button" class="btn btn-next" id="btnNext">Proximo</button>
+</div>
+</div><!-- /wizard-card -->
+</div><!-- /container -->
+
+<!-- ═══════════════════════════ LOADING ═══════════════════════════ -->
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="loading-card">
+    <h3>Analisando sua empresa...</h3>
+    <div class="loading-step-text" id="loadingText">Verificando elegibilidade...</div>
+    <div class="loading-bar"><div class="loading-bar-fill" id="loadingFill"></div></div>
+    <div class="loading-pct" id="loadingPct">0%</div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════ RESULTS ═══════════════════════════ -->
+<div class="container results-section" id="resultsSection">
+  <button type="button" class="btn btn-outline btn-back-form" id="btnBackForm">Voltar ao formulario</button>
+  <div id="resultsContent"></div>
+</div>
+
+<!-- ═══════════════════════════ SCRIPTS ═══════════════════════════ -->
+<script src="cnae-mapeamento.js"></script>
+<script src="estados.js"></script>
+<script src="municipios.js"></script>
+<script src="simples_nacional.js"></script>
+<script src="simples-estudos.js"></script>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// IMPOST. — Estudo Tributario Simples Nacional — App Controller
+// ═══════════════════════════════════════════════════════════════
+(function () {
+'use strict';
+
+// ─── State ───
+const S = {
+  step: 1, totalSteps: 6, premium: false,
+  formData: {}, resultados: null, socios: []
+};
+const LS_KEY = 'impost_estudo_form';
+
+// ─── DOM refs ───
+const $ = id => document.getElementById(id);
+const $$ = sel => document.querySelectorAll(sel);
+
+// ─── Utility: Format BRL ───
+function fmtBRL(v) {
+  if (v == null || isNaN(v)) return 'R$ 0,00';
+  return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
+function parseBRL(str) {
+  if (!str) return 0;
+  return parseFloat(String(str).replace(/[^\d,.-]/g, '').replace(/\./g, '').replace(',', '.')) || 0;
+}
+function fmtPct(v, dec) {
+  if (v == null || isNaN(v)) return '0%';
+  return (v * 100).toFixed(dec != null ? dec : 2).replace('.', ',') + '%';
+}
+
+// ─── Money mask ───
+function moneyMask(input) {
+  input.addEventListener('input', function () {
+    let v = this.value.replace(/\D/g, '');
+    if (!v) { this.value = ''; return; }
+    v = (parseInt(v, 10) / 100).toFixed(2);
+    this.value = 'R$ ' + v.replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  });
+}
+
+// ─── CNPJ mask + validation ───
+function cnpjMask(input) {
+  input.addEventListener('input', function () {
+    let v = this.value.replace(/\D/g, '').slice(0, 14);
+    if (v.length > 12) v = v.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{0,2})/, '$1.$2.$3/$4-$5');
+    else if (v.length > 8) v = v.replace(/^(\d{2})(\d{3})(\d{3})(\d{0,4})/, '$1.$2.$3/$4');
+    else if (v.length > 5) v = v.replace(/^(\d{2})(\d{3})(\d{0,3})/, '$1.$2.$3');
+    else if (v.length > 2) v = v.replace(/^(\d{2})(\d{0,3})/, '$1.$2');
+    this.value = v;
+  });
+}
+function validarCNPJ(cnpj) {
+  const c = cnpj.replace(/\D/g, '');
+  if (c.length !== 14 || /^(\d)\1+$/.test(c)) return false;
+  let t = 0, p = [5,4,3,2,9,8,7,6,5,4,3,2];
+  for (let i = 0; i < 12; i++) t += parseInt(c[i]) * p[i];
+  let r = t % 11 < 2 ? 0 : 11 - (t % 11);
+  if (parseInt(c[12]) !== r) return false;
+  t = 0; p = [6,5,4,3,2,9,8,7,6,5,4,3,2];
+  for (let i = 0; i < 13; i++) t += parseInt(c[i]) * p[i];
+  r = t % 11 < 2 ? 0 : 11 - (t % 11);
+  return parseInt(c[13]) === r;
+}
+
+// ─── CPF mask ───
+function cpfMask(input) {
+  input.addEventListener('input', function () {
+    let v = this.value.replace(/\D/g, '').slice(0, 11);
+    if (v.length > 9) v = v.replace(/^(\d{3})(\d{3})(\d{3})(\d{0,2})/, '$1.$2.$3-$4');
+    else if (v.length > 6) v = v.replace(/^(\d{3})(\d{3})(\d{0,3})/, '$1.$2.$3');
+    else if (v.length > 3) v = v.replace(/^(\d{3})(\d{0,3})/, '$1.$2');
+    this.value = v;
+  });
+}
+
+// ═══════════════════════════════════════════
+// WIZARD NAVIGATION
+// ═══════════════════════════════════════════
+function updateProgress() {
+  const pct = ((S.step - 1) / (S.totalSteps - 1)) * 100;
+  $('progressFill').style.width = pct + '%';
+  $$('.progress-step').forEach(el => {
+    const s = parseInt(el.dataset.step);
+    el.classList.toggle('active', s === S.step);
+    el.classList.toggle('done', s < S.step);
+  });
+  $$('.step-panel').forEach(el => {
+    el.classList.toggle('active', parseInt(el.dataset.step) === S.step);
+  });
+  $('btnPrev').disabled = S.step === 1;
+  $('btnNext').style.display = S.step === S.totalSteps ? 'none' : '';
+  $('wizardFooter').style.display = S.step === S.totalSteps ? 'none' : '';
+}
+
+function nextStep() {
+  if (!validateStep(S.step)) return;
+  if (S.step < S.totalSteps) { S.step++; updateProgress(); saveToLS(); window.scrollTo({top:0,behavior:'smooth'}); }
+}
+function prevStep() {
+  if (S.step > 1) { S.step--; updateProgress(); window.scrollTo({top:0,behavior:'smooth'}); }
+}
+
+$('btnNext').addEventListener('click', nextStep);
+$('btnPrev').addEventListener('click', prevStep);
+
+// ═══════════════════════════════════════════
+// VALIDATION
+// ═══════════════════════════════════════════
+function validateStep(step) {
+  let valid = true;
+  function showErr(id, msg) {
+    const el = $(id);
+    if (!el) return;
+    const errEl = el.parentElement.querySelector('.error-msg');
+    if (errEl) { errEl.textContent = msg; errEl.classList.add('show'); }
+    el.classList.add('error');
+    el.classList.remove('valid');
+    if (valid) el.focus();
+    valid = false;
+  }
+  function clearErr(id) {
+    const el = $(id);
+    if (!el) return;
+    const errEl = el.parentElement.querySelector('.error-msg');
+    if (errEl) errEl.classList.remove('show');
+    el.classList.remove('error');
+  }
+  // Clear all errors first
+  $$('.error-msg').forEach(e => e.classList.remove('show'));
+  $$('.error').forEach(e => e.classList.remove('error'));
+
+  if (step === 1) {
+    if (!$('nomeEmpresa').value.trim()) showErr('nomeEmpresa', 'Nome da empresa e obrigatorio.');
+    else clearErr('nomeEmpresa');
+    const cnpjVal = $('cnpj').value.trim();
+    if (cnpjVal && !validarCNPJ(cnpjVal)) {
+      $('cnpjError').textContent = 'CNPJ invalido.';
+      $('cnpjError').classList.add('show');
+      $('cnpj').classList.add('error');
+      if (valid) $('cnpj').focus();
+      valid = false;
+    }
+  }
+  if (step === 2) {
+    if (!$('cnaePrincipalCodigo').value) {
+      $('cnaeError').textContent = 'Selecione um CNAE.';
+      $('cnaeError').classList.add('show');
+      $('cnaePrincipal').classList.add('error');
+      if (valid) $('cnaePrincipal').focus();
+      valid = false;
+    }
+  }
+  if (step === 3) {
+    if (parseBRL($('receitaMensal').value) <= 0) showErr('receitaMensal', 'Receita mensal e obrigatoria.');
+  }
+  if (step === 4) {
+    if (parseBRL($('folhaMensal').value) < 0) showErr('folhaMensal', 'Valor invalido.');
+  }
+  return valid;
+}
+
+// ═══════════════════════════════════════════
+// CNAE AUTOCOMPLETE
+// ═══════════════════════════════════════════
+(function initCNAE() {
+  const input = $('cnaePrincipal');
+  const results = $('cnaeResults');
+  const selected = $('cnaeSelected');
+  let debounce = null;
+
+  input.addEventListener('input', function () {
+    clearTimeout(debounce);
+    const term = this.value.trim();
+    if (term.length < 2) { results.classList.remove('open'); return; }
+    debounce = setTimeout(() => {
+      let items = [];
+      if (typeof SimplesEstudoCompleto !== 'undefined' && SimplesEstudoCompleto.BuscaCNAE) {
+        items = SimplesEstudoCompleto.BuscaCNAE.buscar(term) || [];
+      } else if (typeof IMPOST !== 'undefined' && IMPOST.MAPEAMENTO_CNAE) {
+        const t = term.toLowerCase();
+        items = IMPOST.MAPEAMENTO_CNAE.filter(m =>
+          (m.cnae && m.cnae.includes(term)) || (m.descricao && m.descricao.toLowerCase().includes(t))
+        ).slice(0, 15).map(m => ({
+          codigo: m.cnae, descricao: m.descricao,
+          anexo: m.tipo === 'fixo' ? m.anexoFixo : null,
+          fatorR: m.tipo === 'fator_r', vedado: m.tipo === 'vedado'
+        }));
+      }
+      renderCNAEResults(items);
+    }, 200);
+  });
+
+  input.addEventListener('focus', function () {
+    if (results.children.length > 0 && this.value.length >= 2) results.classList.add('open');
+  });
+  document.addEventListener('click', function (e) {
+    if (!e.target.closest('.cnae-search')) results.classList.remove('open');
+  });
+
+  function renderCNAEResults(items) {
+    results.innerHTML = '';
+    if (!items.length) { results.classList.remove('open'); return; }
+    items.forEach(item => {
+      const div = document.createElement('div');
+      div.className = 'cnae-item';
+      let badges = '';
+      if (item.vedado) badges += '<span class="cnae-badge vedado">Vedado</span>';
+      else if (item.fatorR) badges += '<span class="cnae-badge fatorr">Fator R</span><span class="cnae-badge anexo">III ou V</span>';
+      else if (item.anexo) badges += '<span class="cnae-badge anexo">Anexo ' + item.anexo + '</span>';
+      const mono = item.monofasico;
+      if (mono) badges += '<span class="cnae-badge mono">Monofasico</span>';
+      div.innerHTML = '<div><span class="cnae-code">' + formatCNAECode(item.codigo) + '</span><span class="cnae-desc"> — ' + (item.descricao || '') + '</span></div>' +
+        (badges ? '<div class="cnae-badges">' + badges + '</div>' : '');
+      div.addEventListener('click', () => selectCNAE(item));
+      results.appendChild(div);
+    });
+    results.classList.add('open');
+  }
+
+  function formatCNAECode(c) {
+    if (!c) return '';
+    const n = c.replace(/\D/g, '');
+    if (n.length === 7) return n.slice(0,4) + '-' + n[4] + '/' + n.slice(5);
+    return c;
+  }
+
+  function selectCNAE(item) {
+    $('cnaePrincipalCodigo').value = item.codigo.replace(/\D/g, '');
+    input.value = formatCNAECode(item.codigo) + ' — ' + (item.descricao || '');
+    results.classList.remove('open');
+    $('cnaeError').classList.remove('show');
+    input.classList.remove('error');
+    input.classList.add('valid');
+
+    let html = '<div class="cs-title">' + formatCNAECode(item.codigo) + '</div>';
+    html += '<div class="cs-desc">' + (item.descricao || '') + '</div>';
+    html += '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">';
+    if (item.vedado) {
+      html += '<span class="cnae-badge vedado" style="font-size:12px;padding:4px 12px">VEDADO AO SIMPLES</span>';
+    } else {
+      if (item.fatorR) html += '<span class="cnae-badge fatorr" style="font-size:12px;padding:4px 12px">Sujeito ao Fator R</span>';
+      if (item.anexo) html += '<span class="cnae-badge anexo" style="font-size:12px;padding:4px 12px">Anexo ' + item.anexo + '</span>';
+      if (item.monofasico) html += '<span class="cnae-badge mono" style="font-size:12px;padding:4px 12px">Monofasico: ' + item.monofasico + '</span>';
+    }
+    html += '</div>';
+    if (item.vedado) {
+      html += '<div class="info-card danger" style="margin-top:10px"><div class="ic-title">Atividade Vedada</div><div class="ic-text">Este CNAE nao pode optar pelo Simples Nacional (LC 123/2006, Art. 17). Considere Lucro Presumido ou Real.</div></div>';
+    }
+    if (item.fatorR) {
+      html += '<div class="info-card warn" style="margin-top:10px"><div class="ic-title">Fator R determina o Anexo</div><div class="ic-text">Se folha >= 28% da receita: Anexo III (menor aliquota). Se < 28%: Anexo V (maior). Informe a folha no Step 4.</div></div>';
+    }
+    selected.innerHTML = html;
+    selected.style.display = 'block';
+
+    // Auto-detect monofasico
+    if (item.monofasico && !$('toggleMono').classList.contains('on')) {
+      $('toggleMono').classList.add('on');
+      $('monoFields').style.display = 'block';
+    }
+
+    saveToLS();
+  }
+})();
+
+// ═══════════════════════════════════════════
+// TOGGLES
+// ═══════════════════════════════════════════
+function initToggle(toggleId, targetId) {
+  const t = $(toggleId);
+  if (!t) return;
+  t.addEventListener('click', function () {
+    this.classList.toggle('on');
+    const target = $(targetId);
+    if (target) target.style.display = this.classList.contains('on') ? 'block' : 'none';
+  });
+  t.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this.click(); }});
+}
+initToggle('toggleMono', 'monoFields');
+initToggle('toggleMesAMes', 'mesAMesFields');
+initToggle('toggleProjecao', 'projecaoFields');
+initToggle('toggleMultiCNPJ', null);
+
+// ═══════════════════════════════════════════
+// MONTHS GRID
+// ═══════════════════════════════════════════
+(function initMonths() {
+  const meses = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  const grid = $('monthsGrid');
+  if (!grid) return;
+  meses.forEach((m, i) => {
+    const div = document.createElement('div');
+    div.className = 'form-group';
+    div.innerHTML = '<label>' + m + '</label><input type="text" class="money-input month-input" data-month="' + i + '" placeholder="R$ 0,00">';
+    grid.appendChild(div);
+    moneyMask(div.querySelector('input'));
+  });
+  grid.addEventListener('input', function () {
+    let total = 0;
+    $$('.month-input').forEach(inp => { total += parseBRL(inp.value); });
+    $('monthsTotalValue').textContent = fmtBRL(total);
+    $('rbt12').value = fmtBRL(total).replace('R$\u00a0', 'R$ ');
+  });
+})();
+
+// ═══════════════════════════════════════════
+// REVENUE SUMMARY (real-time)
+// ═══════════════════════════════════════════
+function updateRevenueSummary() {
+  const mensal = parseBRL($('receitaMensal').value);
+  const anual = parseBRL($('rbt12').value) || mensal * 12;
+  const sum = $('revenueSummary');
+  if (mensal > 0) {
+    sum.style.display = 'block';
+    $('rsValue').textContent = fmtBRL(anual);
+    let badge = '';
+    if (anual <= 81000) badge = '<span class="rs-badge">MEI (ate R$ 81k)</span>';
+    else if (anual <= 360000) badge = '<span class="rs-badge">ME — Microempresa</span>';
+    else if (anual <= 4800000) badge = '<span class="rs-badge">EPP — Empresa de Pequeno Porte</span>';
+    else badge = '<span class="rs-badge" style="background:rgba(220,38,38,.3)">EXCEDE LIMITE DO SIMPLES (R$ 4,8M)</span>';
+    if (anual > 3600000 && anual <= 4800000) {
+      badge += '<span class="rs-badge" style="background:rgba(217,119,6,.3)">Acima do sublimite ICMS/ISS (R$ 3,6M)</span>';
+    }
+    $('rsClassificacao').innerHTML = badge;
+  } else {
+    sum.style.display = 'none';
+  }
+}
+$('receitaMensal').addEventListener('input', function () {
+  const v = parseBRL(this.value);
+  if (v > 0 && !$('toggleMesAMes').classList.contains('on')) {
+    $('rbt12').value = fmtBRL(v * 12).replace('R$\u00a0', 'R$ ');
+  }
+  updateRevenueSummary();
+});
+$('rbt12').addEventListener('input', updateRevenueSummary);
+
+// ═══════════════════════════════════════════
+// FATOR R GAUGE (real-time)
+// ═══════════════════════════════════════════
+function updateFatorRGauge() {
+  const folha = parseBRL($('folhaMensal').value) + parseBRL($('proLabore').value);
+  const receita = parseBRL($('receitaMensal').value);
+  const gauge = $('fatorrGauge');
+  if (folha >= 0 && receita > 0) {
+    gauge.style.display = 'flex';
+    const fr = folha / receita;
+    const pct = (fr * 100).toFixed(1);
+    $('gaugeValue').textContent = pct + '%';
+    const circle = $('gaugeCircle');
+    let bg, status, text;
+    if (fr >= 0.28) {
+      bg = 'conic-gradient(var(--ok) ' + Math.min(fr * 100, 100) + '%, var(--brd) 0)';
+      status = 'Anexo III (Fator R favoravel)';
+      text = 'Folha >= 28% da receita. Sua empresa tributa pelo Anexo III, com aliquotas menores.';
+    } else if (fr >= 0.25) {
+      bg = 'conic-gradient(var(--warn) ' + (fr * 100) + '%, var(--brd) 0)';
+      status = 'Zona de risco — proximo de 28%';
+      const falta = (receita * 0.28) - folha;
+      text = 'Faltam ' + fmtBRL(falta) + '/mes na folha para atingir 28% e migrar para o Anexo III.';
+    } else {
+      bg = 'conic-gradient(var(--danger) ' + (fr * 100) + '%, var(--brd) 0)';
+      status = 'Anexo V (Fator R baixo)';
+      const falta = (receita * 0.28) - folha;
+      text = 'Voce precisa de mais ' + fmtBRL(falta) + '/mes na folha para atingir 28%.';
+    }
+    circle.style.background = bg;
+    $('gaugeStatus').textContent = status;
+    $('gaugeStatus').style.color = fr >= 0.28 ? 'var(--ok)' : fr >= 0.25 ? 'var(--warn)' : 'var(--danger)';
+    $('gaugeText').textContent = text;
+  } else {
+    gauge.style.display = 'none';
+  }
+}
+['folhaMensal', 'proLabore'].forEach(id => {
+  $(id).addEventListener('input', updateFatorRGauge);
+});
+
+// ═══════════════════════════════════════════
+// SOCIOS
+// ═══════════════════════════════════════════
+let socioCount = 0;
+$('btnAddSocio').addEventListener('click', addSocio);
+
+function addSocio() {
+  socioCount++;
+  const card = document.createElement('div');
+  card.className = 'socio-card';
+  card.dataset.idx = socioCount;
+  card.innerHTML = '<div class="socio-header"><span class="socio-title">Socio ' + socioCount + '</span><button type="button" class="btn-remove" onclick="this.closest(\'.socio-card\').remove();updateSociosValidation()">x</button></div>' +
+    '<div class="form-row"><div class="form-group"><label>Nome</label><input type="text" class="socio-nome" placeholder="Nome completo"></div>' +
+    '<div class="form-group"><label>CPF</label><input type="text" class="socio-cpf" placeholder="000.000.000-00" maxlength="14"></div></div>' +
+    '<div class="form-row"><div class="form-group"><label>Participacao (%)</label><input type="number" class="socio-part" min="0" max="100" step="0.01" placeholder="50"></div>' +
+    '<div class="form-group"><label>Pro-labore individual</label><input type="text" class="socio-pl money-input" placeholder="R$ 0,00"></div></div>' +
+    '<div class="toggle-wrap"><div class="toggle socio-rend-toggle" role="button" tabindex="0"></div><span class="toggle-label">Recebe > R$ 50k/mes de outras fontes?</span></div>';
+  $('sociosList').appendChild(card);
+  card.querySelector('.socio-cpf') && cpfMask(card.querySelector('.socio-cpf'));
+  card.querySelector('.socio-pl') && moneyMask(card.querySelector('.socio-pl'));
+  card.querySelector('.socio-rend-toggle').addEventListener('click', function () { this.classList.toggle('on'); });
+  card.querySelectorAll('.socio-part').forEach(inp => inp.addEventListener('input', updateSociosValidation));
+}
+window.updateSociosValidation = function () {
+  let total = 0;
+  $$('.socio-part').forEach(inp => { total += parseFloat(inp.value) || 0; });
+  const div = $('sociosValidation');
+  if ($$('.socio-card').length === 0) { div.innerHTML = ''; return; }
+  if (Math.abs(total - 100) < 0.01) {
+    div.innerHTML = '<div class="info-card success"><div class="ic-text">Total de participacoes: <strong>' + total.toFixed(2) + '%</strong></div></div>';
+  } else {
+    div.innerHTML = '<div class="info-card warn"><div class="ic-text">Total de participacoes: <strong>' + total.toFixed(2) + '%</strong> (deve somar 100%)</div></div>';
+  }
+  // Distribution preview
+  const receita = parseBRL($('receitaMensal').value);
+  if (receita > 0) {
+    const presuncao = 0.32;
+    const lucroMensal = receita * presuncao;
+    $('distLucrosPreview').style.display = 'block';
+    $('distLucrosText').textContent = 'Lucro distribuivel estimado (presuncao ' + (presuncao * 100) + '%): ' + fmtBRL(lucroMensal) + '/mes | ' + fmtBRL(lucroMensal * 12) + '/ano — isento de IR por socio.';
+  }
+};
+
+// ═══════════════════════════════════════════
+// UF + MUNICIPIOS
+// ═══════════════════════════════════════════
+(function initUF() {
+  const sel = $('uf');
+  if (typeof Estados !== 'undefined' && Estados.opcoesSelect) {
+    Estados.opcoesSelect().forEach(opt => {
+      const o = document.createElement('option');
+      o.value = opt.value;
+      o.textContent = opt.label;
+      sel.appendChild(o);
+    });
+  } else if (typeof Estados !== 'undefined' && Estados.listarEstados) {
+    Estados.listarEstados().forEach(e => {
+      const o = document.createElement('option');
+      o.value = e.sigla;
+      o.textContent = e.sigla + ' — ' + e.nome;
+      sel.appendChild(o);
+    });
+  } else {
+    ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'].forEach(uf => {
+      const o = document.createElement('option');
+      o.value = uf; o.textContent = uf;
+      sel.appendChild(o);
+    });
+  }
+  sel.addEventListener('change', async function () {
+    const mun = $('municipio');
+    mun.innerHTML = '<option value="">Carregando...</option>';
+    mun.disabled = true;
+    const uf = this.value;
+    if (!uf) { mun.innerHTML = '<option value="">Selecione o estado primeiro</option>'; return; }
+    try {
+      let munis = [];
+      if (typeof MunicipiosIBGE !== 'undefined') {
+        const estadosRef = typeof Estados !== 'undefined' ? (Estados.UF_REGISTRY || Estados) : null;
+        munis = await MunicipiosIBGE.buscarMunicipios(uf, estadosRef);
+      }
+      mun.innerHTML = '<option value="">Selecione o municipio</option>';
+      munis.forEach(m => {
+        const o = document.createElement('option');
+        o.value = m.nome;
+        o.dataset.iss = m.iss;
+        o.textContent = m.nome + (m.issConhecido ? ' (ISS ' + m.iss.toFixed(2) + '%)' : '');
+        mun.appendChild(o);
+      });
+      mun.disabled = false;
+    } catch (e) {
+      mun.innerHTML = '<option value="">Erro ao carregar municipios</option>';
+      mun.disabled = false;
+    }
+  });
+  $('municipio').addEventListener('change', function () {
+    const opt = this.options[this.selectedIndex];
+    if (opt && opt.dataset.iss) {
+      $('issAliquota').value = parseFloat(opt.dataset.iss).toFixed(2);
+    }
+  });
+})();
+
+// ─── Crescimento slider ───
+$('crescimento').addEventListener('input', function () {
+  $('crescLabel').textContent = this.value + '%';
+});
+
+// ═══════════════════════════════════════════
+// APPLY MASKS
+// ═══════════════════════════════════════════
+['receitaMensal','rbt12','receitaExportacao','receitaICMS_ST','receitaMonofasica','receitaLocacao',
+ 'issRetido','folhaMensal','proLabore','despesas','lucroEfetivo'].forEach(id => {
+  const el = $(id);
+  if (el) moneyMask(el);
+});
+cnpjMask($('cnpj'));
+
+// ═══════════════════════════════════════════
+// localStorage persistence
+// ═══════════════════════════════════════════
+function saveToLS() {
+  try {
+    const data = {};
+    ['nomeEmpresa','cnpj','dataAbertura','porte','regimeAtual','cnaePrincipalCodigo','tipoReceita',
+     'receitaMensal','rbt12','receitaExportacao','receitaICMS_ST','receitaMonofasica','receitaLocacao',
+     'issRetido','vendasInter','folhaMensal','proLabore','qtdFuncionarios','rat',
+     'uf','municipio','issAliquota','despesas','lucroEfetivo','crescimento'].forEach(id => {
+      const el = $(id);
+      if (el) data[id] = el.value;
+    });
+    data.step = S.step;
+    data.cnaePrincipalText = $('cnaePrincipal') ? $('cnaePrincipal').value : '';
+    data.cnaeSelectedHTML = $('cnaeSelected') ? $('cnaeSelected').innerHTML : '';
+    localStorage.setItem(LS_KEY, JSON.stringify(data));
+  } catch (e) { /* ignore */ }
+}
+function loadFromLS() {
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    if (!raw) return;
+    const data = JSON.parse(raw);
+    Object.keys(data).forEach(id => {
+      if (id === 'step' || id === 'cnaePrincipalText' || id === 'cnaeSelectedHTML') return;
+      const el = $(id);
+      if (el) el.value = data[id];
+    });
+    if (data.cnaePrincipalText) $('cnaePrincipal').value = data.cnaePrincipalText;
+    if (data.cnaeSelectedHTML) { $('cnaeSelected').innerHTML = data.cnaeSelectedHTML; $('cnaeSelected').style.display = 'block'; }
+    if (data.step) S.step = Math.min(data.step, S.totalSteps);
+    updateProgress();
+    updateRevenueSummary();
+    updateFatorRGauge();
+  } catch (e) { /* ignore */ }
+}
+// Auto-save on any input change
+document.addEventListener('input', function () { clearTimeout(window._saveDebounce); window._saveDebounce = setTimeout(saveToLS, 500); });
+loadFromLS();
+
+// ═══════════════════════════════════════════
+// COLLECT FORM DATA
+// ═══════════════════════════════════════════
+function collectFormData() {
+  const receitaMensal = parseBRL($('receitaMensal').value);
+  const rbt12 = parseBRL($('rbt12').value) || receitaMensal * 12;
+  const folhaMensal = parseBRL($('folhaMensal').value);
+  const proLabore = parseBRL($('proLabore').value);
+
+  // Socios
+  const socios = [];
+  $$('.socio-card').forEach(card => {
+    socios.push({
+      nome: card.querySelector('.socio-nome') ? card.querySelector('.socio-nome').value : '',
+      cpf: card.querySelector('.socio-cpf') ? card.querySelector('.socio-cpf').value.replace(/\D/g, '') : '',
+      percentual: parseFloat(card.querySelector('.socio-part') ? card.querySelector('.socio-part').value : 0) || 0,
+      proLabore: parseBRL(card.querySelector('.socio-pl') ? card.querySelector('.socio-pl').value : '0'),
+      outrosRendimentos: card.querySelector('.socio-rend-toggle') ? card.querySelector('.socio-rend-toggle').classList.contains('on') : false
+    });
+  });
+
+  return {
+    nomeEmpresa: $('nomeEmpresa').value.trim(),
+    cnpj: $('cnpj').value.replace(/\D/g, ''),
+    cnae: $('cnaePrincipalCodigo').value,
+    uf: $('uf').value,
+    municipio: $('municipio').value,
+    receitaBrutaAnual: rbt12,
+    receitaBrutaMensal: receitaMensal,
+    folhaAnual: (folhaMensal + proLabore) * 12,
+    folhaMensal: folhaMensal + proLabore,
+    socios: socios,
+    despesasOperacionais: parseBRL($('despesas').value) * 12,
+    lucroContabilEfetivo: parseBRL($('lucroEfetivo').value) || null,
+    receitaMonofasica: parseBRL($('receitaMonofasica').value),
+    receitaICMS_ST: parseBRL($('receitaICMS_ST').value),
+    receitaExportacao: parseBRL($('receitaExportacao').value),
+    receitaLocacaoBensMoveis: parseBRL($('receitaLocacao').value),
+    issRetidoFonte: parseBRL($('issRetido').value),
+    aliquotaRAT: parseFloat($('rat').value) || 0.02,
+    issAliquota: parseFloat($('issAliquota').value) || 5,
+    proLabore: proLabore,
+    qtdFuncionarios: parseInt($('qtdFuncionarios').value) || 0,
+    temMaisDeUmCNPJ: $('toggleMultiCNPJ').classList.contains('on'),
+    crescimento: parseInt($('crescimento').value) || 5,
+    gerarProjecao: $('toggleProjecao').classList.contains('on')
+  };
+}
+
+// ═══════════════════════════════════════════
+// GENERATE STUDY — Engine Integration
+// ═══════════════════════════════════════════
+$('btnGerar').addEventListener('click', gerarEstudo);
+
+async function gerarEstudo() {
+  const params = collectFormData();
+  if (params.receitaBrutaMensal <= 0) { alert('Informe a receita bruta mensal.'); return; }
+  if (!params.cnae) { alert('Selecione um CNAE.'); return; }
+
+  // Show loading
+  const overlay = $('loadingOverlay');
+  overlay.classList.add('show');
+  const steps = [
+    'Verificando elegibilidade...', 'Calculando Fator R...',
+    'Determinando anexo...', 'Otimizando DAS...',
+    'Comparando regimes tributarios...', 'Gerando diagnostico...',
+    'Calculando score tributario...', 'Montando relatorio...'
+  ];
+  let i = 0;
+  const loadInterval = setInterval(() => {
+    const pct = Math.min(Math.round(((i + 1) / steps.length) * 100), 100);
+    $('loadingFill').style.width = pct + '%';
+    $('loadingPct').textContent = pct + '%';
+    $('loadingText').textContent = steps[Math.min(i, steps.length - 1)];
+    i++;
+    if (i > steps.length) clearInterval(loadInterval);
+  }, 400);
+
+  // Run calculations async-like
+  await new Promise(r => setTimeout(r, 500));
+
+  try {
+    const resultado = {};
+
+    // 1. Elegibilidade
+    try {
+      resultado.elegibilidade = IMPOST.verificarElegibilidade({
+        receitaBrutaAnual: params.receitaBrutaAnual, cnae: params.cnae
+      });
+    } catch (e) { resultado.elegibilidade = { elegivel: true, classificacao: 'EPP' }; }
+
+    await new Promise(r => setTimeout(r, 300));
+
+    // 2. Fator R
+    try {
+      resultado.fatorR = IMPOST.calcularFatorR({
+        folhaSalarios12Meses: params.folhaAnual,
+        receitaBruta12Meses: params.receitaBrutaAnual
+      });
+    } catch (e) {
+      resultado.fatorR = { fatorR: params.folhaAnual / params.receitaBrutaAnual, acimaDoLimiar: (params.folhaAnual / params.receitaBrutaAnual) >= 0.28, anexoResultante: (params.folhaAnual / params.receitaBrutaAnual) >= 0.28 ? 'III' : 'V' };
+    }
+
+    // 3. Determinar anexo
+    try {
+      const anexoStr = IMPOST.obterAnexoEfetivoCNAE(params.cnae, null, resultado.fatorR.fatorR);
+      resultado.anexo = typeof anexoStr === 'string' ? anexoStr : (anexoStr && anexoStr.anexo ? anexoStr.anexo : 'III');
+    } catch (e) { resultado.anexo = resultado.fatorR.anexoResultante || 'III'; }
+
+    await new Promise(r => setTimeout(r, 300));
+
+    // 4. DAS sem otimizacao
+    try {
+      resultado.dasAtual = IMPOST.calcularDASMensal({
+        receitaBrutaMensal: params.receitaBrutaMensal,
+        rbt12: params.receitaBrutaAnual,
+        anexo: resultado.anexo,
+        folhaMensal: params.folhaMensal
+      });
+    } catch (e) { resultado.dasAtual = { dasAPagar: 0, aliquotaEfetivaFormatada: '0%' }; }
+
+    // 5. DAS otimizado
+    try {
+      resultado.dasOtimizado = IMPOST.calcularDASMensalOtimizado({
+        receitaBrutaMensal: params.receitaBrutaMensal,
+        rbt12: params.receitaBrutaAnual,
+        anexo: resultado.anexo,
+        cnae: params.cnae,
+        uf: params.uf,
+        municipio: params.municipio,
+        receitaMonofasica: params.receitaMonofasica,
+        receitaICMS_ST: params.receitaICMS_ST,
+        receitaExportacao: params.receitaExportacao,
+        receitaLocacaoBensMoveis: params.receitaLocacaoBensMoveis,
+        issRetidoFonte: params.issRetidoFonte,
+        folhaMensal: params.folhaMensal
+      });
+    } catch (e) { resultado.dasOtimizado = resultado.dasAtual; }
+
+    await new Promise(r => setTimeout(r, 300));
+
+    // 6. Otimizar Fator R
+    try {
+      resultado.otimFatorR = IMPOST.otimizarFatorR({
+        rbt12: params.receitaBrutaAnual,
+        folhaAtual12Meses: params.folhaAnual,
+        receitaMensal: params.receitaBrutaMensal,
+        cnae: params.cnae
+      });
+    } catch (e) { resultado.otimFatorR = null; }
+
+    // 7. Comparativo regimes
+    try {
+      resultado.comparativo = IMPOST.compararRegimesCompleto({
+        receitaBrutaAnual: params.receitaBrutaAnual,
+        folhaAnual: params.folhaAnual,
+        cnae: params.cnae,
+        uf: params.uf,
+        municipio: params.municipio,
+        fatorR: resultado.fatorR.fatorR,
+        despesasOperacionais: params.despesasOperacionais,
+        lucroContabilEfetivo: params.lucroContabilEfetivo,
+        socios: params.socios
+      });
+    } catch (e) { resultado.comparativo = null; }
+
+    await new Promise(r => setTimeout(r, 300));
+
+    // 8. Dicas de economia
+    try {
+      resultado.dicas = IMPOST.gerarDicasEconomia({
+        receitaBrutaAnual: params.receitaBrutaAnual,
+        receitaBrutaMensal: params.receitaBrutaMensal,
+        folhaAnual: params.folhaAnual,
+        folhaMensal: params.folhaMensal,
+        cnae: params.cnae,
+        uf: params.uf,
+        anexo: resultado.anexo,
+        rbt12: params.receitaBrutaAnual,
+        socios: params.socios,
+        temProdutosMonofasicos: params.receitaMonofasica > 0,
+        receitaMonofasica: params.receitaMonofasica,
+        temMaisDeUmCNPJ: params.temMaisDeUmCNPJ
+      });
+    } catch (e) { resultado.dicas = { dicas: [], totalDicas: 0 }; }
+
+    // 9. Relatorio completo
+    try {
+      resultado.relatorio = IMPOST.gerarRelatorioOtimizacao(params);
+    } catch (e) { resultado.relatorio = null; }
+
+    await new Promise(r => setTimeout(r, 300));
+
+    // 10. SimplesEstudoCompleto integration
+    try {
+      if (typeof SimplesEstudoCompleto !== 'undefined') {
+        SimplesEstudoCompleto.Formulario.setDados({
+          nomeEmpresa: params.nomeEmpresa,
+          cnpj: params.cnpj,
+          cnae: params.cnae,
+          uf: params.uf,
+          municipio: params.municipio,
+          receitaBrutaMensal: params.receitaBrutaMensal,
+          folhaMensal: params.folhaMensal,
+          proLabore: params.proLabore,
+          socios: params.socios,
+          receitaMonofasica: params.receitaMonofasica,
+          receitaICMS_ST: params.receitaICMS_ST,
+          receitaExportacao: params.receitaExportacao,
+          receitaLocacaoBensMoveis: params.receitaLocacaoBensMoveis,
+          issRetidoFonte: params.issRetidoFonte,
+          despesasOperacionais: params.despesasOperacionais / 12,
+          issAliquota: params.issAliquota
+        });
+        resultado.calcTudo = SimplesEstudoCompleto.Calculadora.calcularTudo();
+        resultado.diagnostico = SimplesEstudoCompleto.Diagnostico.executar(resultado.calcTudo);
+        resultado.score = SimplesEstudoCompleto.Score.calcular(resultado.diagnostico, resultado.calcTudo);
+        resultado.dadosRelatorio = SimplesEstudoCompleto.Relatorio.consolidarDados();
+      }
+    } catch (e) { console.warn('SimplesEstudoCompleto:', e); }
+
+    // 11. Distribuicao de lucros
+    try {
+      resultado.distribuicao = IMPOST.calcularDistribuicaoLucros({
+        receitaBrutaAnual: params.receitaBrutaAnual,
+        socios: params.socios.length > 0 ? params.socios : [{ nome: 'Socio 1', percentual: 100, proLabore: params.proLabore }],
+        lucroContabilEfetivo: params.lucroContabilEfetivo
+      });
+    } catch (e) { resultado.distribuicao = null; }
+
+    // 12. Partilha tributos
+    try {
+      resultado.partilha = IMPOST.calcularPartilhaTributos ?
+        IMPOST.calcularPartilhaTributos({ rbt12: params.receitaBrutaAnual, anexo: resultado.anexo }) : null;
+    } catch (e) { resultado.partilha = null; }
+
+    // Calendar
+    resultado.calendario = IMPOST.CALENDARIO_FISCAL_2026 || [];
+
+    S.resultados = resultado;
+    S.formData = params;
+
+    clearInterval(loadInterval);
+    $('loadingFill').style.width = '100%';
+    $('loadingPct').textContent = '100%';
+    $('loadingText').textContent = 'Pronto!';
+
+    await new Promise(r => setTimeout(r, 400));
+    overlay.classList.remove('show');
+
+    renderResults(params, resultado);
+
+  } catch (err) {
+    clearInterval(loadInterval);
+    overlay.classList.remove('show');
+    alert('Erro ao gerar estudo: ' + err.message);
+    console.error(err);
+  }
+}
+
+// Back to form
+$('btnBackForm').addEventListener('click', function () {
+  $('resultsSection').classList.remove('show');
+  $('wizardContainer').style.display = '';
+  $('progressBar').style.display = '';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+});
+
+// ═══════════════════════════════════════════
+// RENDER RESULTS DASHBOARD
+// ═══════════════════════════════════════════
+function renderResults(params, R) {
+  $('wizardContainer').style.display = 'none';
+  $('progressBar').style.display = 'none';
+  const section = $('resultsSection');
+  section.classList.add('show');
+
+  const dasAtual = R.dasAtual ? (R.dasAtual.dasAPagar || R.dasAtual.totalAPagar || 0) : 0;
+  const dasOtim = R.dasOtimizado ? (R.dasOtimizado.dasAPagar || R.dasOtimizado.dasOtimizado || R.dasOtimizado.totalAPagar || 0) : dasAtual;
+  const economiaMensal = Math.max(0, dasAtual - dasOtim);
+  const economiaAnual = economiaMensal * 12;
+  const aliqEfetiva = R.dasAtual ? (R.dasAtual.aliquotaEfetivaFormatada || fmtPct(R.dasAtual.aliquotaEfetiva)) : '0%';
+  const fatorR = R.fatorR ? R.fatorR.fatorR : 0;
+  const anexo = R.anexo || 'III';
+  const score = R.score ? (R.score.total || R.score.pontuacaoTotal || 0) : 50;
+  const scoreFaixa = score >= 86 ? 'Excelente' : score >= 71 ? 'Bom' : score >= 51 ? 'Regular' : score >= 31 ? 'Atencao' : 'Critico';
+  const scoreColor = score >= 86 ? 'var(--ok)' : score >= 71 ? 'var(--pri)' : score >= 51 ? 'var(--accent)' : score >= 31 ? 'var(--warn)' : 'var(--danger)';
+
+  // Best regime
+  let melhorRegime = 'Simples Nacional';
+  let economiaMelhor = 0;
+  if (R.comparativo) {
+    const comp = R.comparativo;
+    if (comp.melhorRegime) melhorRegime = comp.melhorRegime;
+    else if (comp.ranking && comp.ranking[0]) melhorRegime = comp.ranking[0].regime || comp.ranking[0].nome;
+    economiaMelhor = comp.economiaMelhorVsPior || comp.economiaAnual || 0;
+  }
+
+  let html = '';
+
+  // ─── HERO CARD ───
+  html += '<div class="hero-card" data-section="hero">';
+  html += '<div class="hero-empresa">' + esc(params.nomeEmpresa) + (params.cnpj ? ' — CNPJ ' + fmtCNPJ(params.cnpj) : '') + '</div>';
+  html += '<div class="hero-grid">';
+  html += '<div class="hero-metric"><div class="hm-label">DAS Mensal Atual</div><div class="hm-value">' + fmtBRL(dasAtual) + '</div></div>';
+  html += '<div class="hero-metric"><div class="hm-label">DAS Otimizado IMPOST.</div><div class="hm-value green">' + fmtBRL(dasOtim) + '</div></div>';
+  html += '<div class="hero-metric"><div class="hm-label">Economia Mensal</div><div class="hm-value gold">' + fmtBRL(economiaMensal) + '</div></div>';
+  html += '</div>';
+  html += '<div class="hero-economia"><div class="he-icon">&#9733;</div><div><div class="he-value">' + fmtBRL(economiaAnual) + '</div><div class="he-label">Economia anual estimada</div></div></div>';
+  html += '<div class="hero-badges"><span class="hero-badge">Anexo ' + anexo + '</span>';
+  html += '<span class="hero-badge">Aliquota ' + aliqEfetiva + '</span>';
+  html += '<span class="hero-badge">Fator R: ' + fmtPct(fatorR) + '</span></div>';
+  html += '</div>';
+
+  // ─── KPIs ───
+  html += '<div class="kpi-grid" data-section="kpis">';
+  html += kpiCard('Carga Tributaria Anual', fmtBRL(dasAtual * 12), fmtPct(dasAtual * 12 / params.receitaBrutaAnual) + ' da receita', 'blue');
+  html += kpiCard('Fator R', fmtPct(fatorR), fatorR >= 0.28 ? 'Anexo III' : 'Anexo V', fatorR >= 0.28 ? 'green' : 'red');
+  html += kpiCard('Economia Potencial', fmtBRL(economiaAnual), economiaMensal > 0 ? fmtBRL(economiaMensal) + '/mes' : 'DAS ja otimizado', 'gold');
+  html += kpiCard('Regime Recomendado', melhorRegime, economiaMelhor > 0 ? 'Economia: ' + fmtBRL(economiaMelhor) : '', 'green');
+  html += '</div>';
+
+  // ─── SCORE ───
+  html += '<div class="section-card" data-section="score"><div class="sc-header"><span class="sc-num">01</span><span class="sc-title">Score Tributario</span></div><div class="sc-body">';
+  html += '<div class="score-wrap">';
+  html += '<div class="score-circle" style="background:' + scoreColor + '"><span class="sc-val">' + Math.round(score) + '</span><span class="sc-faixa">' + scoreFaixa + '</span></div>';
+  html += '<div class="score-bars">';
+  const cats = R.score && R.score.categorias ? R.score.categorias : [
+    { nome: 'Fator R', pontuacao: 15, maximo: 25 },
+    { nome: 'Segregacao', pontuacao: 12, maximo: 20 },
+    { nome: 'ISS', pontuacao: 10, maximo: 15 },
+    { nome: 'Pro-labore', pontuacao: 8, maximo: 15 },
+    { nome: 'Compliance', pontuacao: 10, maximo: 15 },
+    { nome: 'Obrigacoes', pontuacao: 7, maximo: 10 }
+  ];
+  (Array.isArray(cats) ? cats : Object.values(cats)).forEach(c => {
+    const pts = c.pontuacao || c.pontos || 0;
+    const max = c.maximo || c.max || 25;
+    const pct = max > 0 ? (pts / max) * 100 : 0;
+    const col = pct >= 80 ? 'var(--ok)' : pct >= 50 ? 'var(--accent)' : 'var(--danger)';
+    html += '<div class="score-bar"><div class="sb-header"><span>' + (c.nome || c.categoria || '') + '</span><span style="font-family:var(--mono)">' + pts + '/' + max + '</span></div>';
+    html += '<div class="sb-track"><div class="sb-fill" style="width:' + pct + '%;background:' + col + '"></div></div></div>';
+  });
+  html += '</div></div>';
+  html += '</div></div>';
+
+  // ─── COMPARATIVO ───
+  html += '<div class="section-card" data-section="comparativo"><div class="sc-header"><span class="sc-num">02</span><span class="sc-title">Comparativo de Regimes Tributarios</span></div><div class="sc-body">';
+  if (R.comparativo) {
+    const c = R.comparativo;
+    const sn = c.simplesNacional || c.simples || {};
+    const lp = c.lucroPresumido || c.presumido || {};
+    const lr = c.lucroReal || c.real || {};
+    const best = melhorRegime.toLowerCase();
+
+    html += '<table class="comp-table"><thead><tr><th>Indicador</th>';
+    html += '<th' + (best.includes('simples') ? ' class="col-best"' : '') + '>Simples Nacional' + (best.includes('simples') ? '<span class="comp-badge-best">Recomendado</span>' : '') + '</th>';
+    html += '<th' + (best.includes('presumido') ? ' class="col-best"' : '') + '>Lucro Presumido' + (best.includes('presumido') ? '<span class="comp-badge-best">Recomendado</span>' : '') + '</th>';
+    html += '<th' + (best.includes('real') ? ' class="col-best"' : '') + '>Lucro Real' + (best.includes('real') ? '<span class="comp-badge-best">Recomendado</span>' : '') + '</th>';
+    html += '</tr></thead><tbody>';
+
+    const snCarga = sn.cargaTotal || sn.cargaTributariaAnual || 0;
+    const lpCarga = lp.cargaTotal || lp.cargaTributariaAnual || 0;
+    const lrCarga = lr.cargaTotal || lr.cargaTributariaAnual || 0;
+    html += compRow('Carga Tributaria Anual', fmtBRL(snCarga), fmtBRL(lpCarga), fmtBRL(lrCarga));
+    html += compRow('Aliquota Efetiva', fmtPct(sn.aliquotaEfetiva || 0), fmtPct(lp.aliquotaEfetiva || 0), fmtPct(lr.aliquotaEfetiva || 0));
+    html += compRow('Complexidade', '&#9733;', '&#9733;&#9733;', '&#9733;&#9733;&#9733;');
+    html += '</tbody></table>';
+  } else {
+    html += '<p style="color:var(--txt2)">Comparativo nao disponivel. Informe UF e municipio para comparacao completa.</p>';
+  }
+  html += '</div></div>';
+
+  // ─── OPORTUNIDADES ───
+  html += '<div class="section-card" data-section="oportunidades"><div class="sc-header"><span class="sc-num">03</span><span class="sc-title">Oportunidades de Economia</span></div><div class="sc-body">';
+  html += '<div class="opp-list">';
+  const dicas = R.dicas && R.dicas.dicas ? R.dicas.dicas : [];
+  const diagOps = R.diagnostico && R.diagnostico.oportunidades ? R.diagnostico.oportunidades : [];
+  const allOps = dicas.length > 0 ? dicas : diagOps;
+  if (allOps.length === 0) {
+    html += '<div class="info-card success"><div class="ic-title">Parabens!</div><div class="ic-text">Nenhuma oportunidade de otimizacao identificada. Seu DAS ja esta otimizado.</div></div>';
+  }
+  allOps.forEach((op, i) => {
+    const locked = !S.premium && i >= 2 && op.nivel === 'premium';
+    html += '<div class="opp-card' + (locked ? ' premium-locked' : '') + '" onclick="this.classList.toggle(\'open\')">';
+    if (locked) {
+      html += '<div class="premium-blur">';
+    }
+    html += '<div class="opp-header">';
+    html += '<span class="opp-icon">' + (op.impacto === 'critico' || op.impacto === 'alto' ? '&#9888;' : op.impacto === 'medio' ? '&#128161;' : '&#10003;') + '</span>';
+    html += '<span class="opp-title">' + esc(op.titulo || op.oportunidade || '') + '</span>';
+    html += '<span class="opp-impact ' + (op.impacto || 'medio') + '">' + (op.impacto || 'medio') + '</span>';
+    const ecoStr = op.economiaMensal || op.economia || '';
+    html += '<span class="opp-eco">' + (typeof ecoStr === 'number' ? fmtBRL(ecoStr) + '/mes' : ecoStr) + '</span>';
+    html += '<span class="opp-arrow">&#9660;</span></div>';
+    html += '<div class="opp-body"><p>' + esc(op.descricao || op.detalhes || '') + '</p>';
+    if (op.acao) html += '<p style="margin-top:8px;font-weight:600;color:var(--pri)">Acao: ' + esc(typeof op.acao === 'string' ? op.acao : '') + '</p>';
+    if (op.baseLegal) html += '<p style="margin-top:4px;font-size:11px;color:var(--txt3);font-style:italic">Base legal: ' + esc(op.baseLegal) + '</p>';
+    html += '</div>';
+    if (locked) {
+      html += '</div><div class="premium-overlay"><div class="premium-cta-card"><h4>Conteudo Premium</h4><p>Desbloqueie esta estrategia de economia.</p><button class="btn btn-sm">Assinar IMPOST.</button></div></div>';
+    }
+    html += '</div>';
+  });
+  html += '</div></div></div>';
+
+  // ─── PARTILHA TRIBUTOS (Charts) ───
+  html += '<div class="section-card" data-section="partilha"><div class="sc-header"><span class="sc-num">04</span><span class="sc-title">Composicao do DAS — Partilha de Tributos</span></div><div class="sc-body">';
+  html += '<div class="chart-row"><div class="chart-container"><canvas id="chartPartilha"></canvas></div>';
+  html += '<div id="partilhaLegend"></div></div>';
+  html += '</div></div>';
+
+  // ─── DISTRIBUICAO LUCROS ───
+  html += '<div class="section-card" data-section="distribuicao"><div class="sc-header"><span class="sc-num">05</span><span class="sc-title">Distribuicao de Lucros</span></div><div class="sc-body">';
+  if (R.distribuicao) {
+    const dist = R.distribuicao;
+    html += '<div class="info-card"><div class="ic-title">Modalidade: ' + (dist.comEscrituracaoContabil ? 'Escrituracao Contabil' : 'Presuncao') + '</div>';
+    html += '<div class="ic-text">Percentual de presuncao: ' + ((dist.percentualPresuncao || 0.32) * 100).toFixed(0) + '% | Lucro distribuivel anual: ' + fmtBRL(dist.lucroDistribuivel || 0) + '</div></div>';
+    if (dist.porSocio && dist.porSocio.length > 0) {
+      html += '<table class="comp-table" style="margin-top:12px"><thead><tr><th>Socio</th><th>Participacao</th><th class="val">Valor Isento/Ano</th></tr></thead><tbody>';
+      dist.porSocio.forEach(s => {
+        html += '<tr><td>' + esc(s.nome || 'Socio') + '</td><td>' + (s.percentual || s.participacao || 0) + '%</td><td class="val">' + fmtBRL(s.valorIsento || s.valor || 0) + '</td></tr>';
+      });
+      html += '</tbody></table>';
+    }
+  } else {
+    html += '<p style="color:var(--txt2)">Adicione socios no Step 5 para ver a analise de distribuicao.</p>';
+  }
+  html += '</div></div>';
+
+  // ─── SIMULADOR E SE? ───
+  html += '<div class="section-card" data-section="simulador"><div class="sc-header"><span class="sc-num">06</span><span class="sc-title">Simulador "E se?"</span></div><div class="sc-body">';
+  html += '<div class="sim-slider-group"><label>E se minha receita mudar? <span id="simReceitaVal">' + fmtBRL(params.receitaBrutaMensal) + '</span></label>';
+  html += '<input type="range" class="sim-slider" id="simReceita" min="' + Math.round(params.receitaBrutaMensal * 0.5) + '" max="' + Math.round(params.receitaBrutaMensal * 2) + '" value="' + Math.round(params.receitaBrutaMensal) + '" step="1000"></div>';
+  html += '<div class="sim-slider-group"><label>E se eu mudar a folha? <span id="simFolhaVal">' + fmtBRL(params.folhaMensal) + '</span></label>';
+  html += '<input type="range" class="sim-slider" id="simFolha" min="0" max="' + Math.round(params.receitaBrutaMensal * 0.5) + '" value="' + Math.round(params.folhaMensal) + '" step="500"></div>';
+  html += '<div class="sim-result" id="simResult"></div>';
+  html += '</div></div>';
+
+  // ─── PLANO DE ACAO ───
+  html += '<div class="section-card" data-section="plano"><div class="sc-header"><span class="sc-num">07</span><span class="sc-title">Plano de Acao Priorizado</span></div><div class="sc-body">';
+  html += '<div class="timeline" id="timelinePlano">';
+  const acoes = (R.diagnostico && R.diagnostico.oportunidades) ? R.diagnostico.oportunidades.slice(0, 6) : allOps.slice(0, 6);
+  if (acoes.length === 0) html += '<p style="color:var(--txt2)">Nenhuma acao necessaria.</p>';
+  acoes.forEach(a => {
+    html += '<div class="timeline-item"><div class="tl-title">' + esc(a.titulo || a.oportunidade || '') + '</div>';
+    const eco = a.economiaAnual || a.economia || 0;
+    if (eco) html += '<div class="tl-eco">Economia: ' + (typeof eco === 'number' ? fmtBRL(eco) + '/ano' : eco) + '</div>';
+    html += '<div class="tl-desc">' + esc(a.acao || a.descricao || '').substring(0, 120) + '</div>';
+    html += '<div class="tl-prazo">' + (a.tempoImplementacao || a.prazo || 'Curto prazo') + '</div></div>';
+  });
+  html += '</div></div></div>';
+
+  // ─── CALENDARIO ───
+  html += '<div class="section-card" data-section="calendario"><div class="sc-header"><span class="sc-num">08</span><span class="sc-title">Calendario Fiscal 2026</span></div><div class="sc-body">';
+  html += '<div class="cal-grid">';
+  const cal = R.calendario || [];
+  cal.forEach(item => {
+    const d = item.data ? new Date(item.data + 'T12:00:00') : null;
+    const day = d ? d.getDate() : '--';
+    const monthNames = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+    const month = d ? monthNames[d.getMonth()] : 'Mensal';
+    html += '<div class="cal-item"><div class="cal-date"><div class="cd-day">' + day + '</div><div class="cd-month">' + month + '</div></div>';
+    html += '<div><div class="cal-desc">' + esc(item.evento || '') + '</div><div class="cal-legal">' + esc(item.baseLegal || '') + '</div></div></div>';
+  });
+  html += '</div></div></div>';
+
+  // ─── CTA PREMIUM ───
+  html += '<div class="cta-premium" data-section="cta">';
+  html += '<h3>Desbloqueie o poder completo do IMPOST.</h3>';
+  html += '<div class="cta-sub">Sua empresa pode estar pagando ' + fmtBRL(economiaAnual) + ' a mais por ano.</div>';
+  html += '<div class="plans-grid">';
+  html += planCard('Basico', '29,90', 'R$', '/mes', '1 empresa, relatorio mensal', false);
+  html += planCard('Profissional', '69,90', 'R$', '/mes', '5 empresas, relatorios ilimitados, exportacao', true);
+  html += planCard('Escritorio', '149,90', 'R$', '/mes', 'Ilimitado, white-label, API', false);
+  html += '</div>';
+  html += '<p style="font-size:13px;opacity:.8">Cancele quando quiser. Sem fidelidade. Teste gratis por 7 dias.</p>';
+  html += '</div>';
+
+  // ─── FOOTER ───
+  html += '<div class="report-footer">';
+  html += '<div class="footer-logo">IMPOST<span>.</span></div>';
+  html += '<div class="footer-slogan">Porque pagar imposto certo e direito. Pagar menos, legalmente, e inteligencia.</div>';
+  html += '<div class="footer-disclaimer">Este relatorio tem carater informativo e educacional. Nao substitui consultoria contabil ou juridica profissional. Os calculos sao baseados na legislacao vigente (LC 123/2006, Resolucao CGSN 140/2018, LC 214/2025, Lei 15.270/2025) e podem variar conforme interpretacoes especificas. Consulte seu contador antes de tomar decisoes fiscais.</div>';
+  html += '<div class="footer-meta"><span>Gerado por IMPOST. v4.1 em ' + new Date().toLocaleString('pt-BR') + '</span><span>Base legal: LC 123/2006 | Resolucao CGSN 140/2018</span></div>';
+  html += '</div>';
+
+  $('resultsContent').innerHTML = html;
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+
+  // Initialize charts and simulator after DOM is ready
+  setTimeout(() => {
+    initPartilhaChart(R);
+    initSimulator(params, R);
+  }, 100);
+}
+
+// ─── Helpers for render ───
+function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+function fmtCNPJ(c) {
+  if (!c || c.length < 14) return c || '';
+  return c.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
+}
+function kpiCard(label, value, sub, color) {
+  return '<div class="kpi-card ' + color + '"><div class="kpi-label">' + label + '</div><div class="kpi-value">' + value + '</div><div class="kpi-sub">' + sub + '</div></div>';
+}
+function compRow(label, v1, v2, v3) {
+  return '<tr><td>' + label + '</td><td class="val">' + v1 + '</td><td class="val">' + v2 + '</td><td class="val">' + v3 + '</td></tr>';
+}
+function planCard(name, price, currency, period, desc, popular) {
+  return '<div class="plan-card' + (popular ? ' popular' : '') + '">' +
+    (popular ? '<div class="plan-badge">Mais popular</div>' : '') +
+    '<div class="plan-name">' + name + '</div>' +
+    '<div class="plan-price">' + currency + ' ' + price + '<small>' + period + '</small></div>' +
+    '<div class="plan-desc">' + desc + '</div>' +
+    '<button class="btn btn-sm">Comecar teste gratis</button></div>';
+}
+
+// ─── Partilha Chart ───
+function initPartilhaChart(R) {
+  const canvas = document.getElementById('chartPartilha');
+  if (!canvas) return;
+  let partData = {};
+  if (R.partilha) {
+    partData = R.partilha;
+  } else if (R.dasAtual && R.dasAtual.partilha) {
+    partData = R.dasAtual.partilha;
+  } else if (R.relatorio && R.relatorio.resumo) {
+    // fallback
+  }
+  const tributos = ['IRPJ','CSLL','COFINS','PIS','CPP','ICMS','ISS'];
+  const colors = ['#1a56db','#6366f1','#f59e0b','#f97316','#059669','#14b8a6','#8b5cf6'];
+  const values = tributos.map(t => {
+    const k = t.toLowerCase();
+    let v = partData[k] || partData[t] || 0;
+    if (typeof v === 'object' && v.valor != null) v = v.valor;
+    if (typeof v === 'object' && v.percentual != null) v = v.percentual;
+    return typeof v === 'number' ? v : 0;
+  });
+  const hasData = values.some(v => v > 0);
+  if (!hasData) {
+    canvas.parentElement.innerHTML = '<p style="text-align:center;color:var(--txt2);padding:20px">Dados de partilha nao disponiveis.</p>';
+    return;
+  }
+  new Chart(canvas, {
+    type: 'doughnut',
+    data: {
+      labels: tributos,
+      datasets: [{ data: values, backgroundColor: colors, borderWidth: 2, borderColor: '#fff' }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { position: 'right', labels: { boxWidth: 14, padding: 12, font: { family: 'Inter', size: 13 } } },
+        tooltip: { callbacks: { label: ctx => ctx.label + ': ' + (ctx.parsed * 100).toFixed(2) + '%' } }
+      }
+    }
+  });
+}
+
+// ─── Simulator ───
+function initSimulator(params, R) {
+  const simReceita = document.getElementById('simReceita');
+  const simFolha = document.getElementById('simFolha');
+  if (!simReceita || !simFolha) return;
+
+  function updateSim() {
+    const novaReceita = parseInt(simReceita.value);
+    const novaFolha = parseInt(simFolha.value);
+    document.getElementById('simReceitaVal').textContent = fmtBRL(novaReceita);
+    document.getElementById('simFolhaVal').textContent = fmtBRL(novaFolha);
+
+    const novoFR = novaReceita > 0 ? novaFolha / novaReceita : 0;
+    const novoAnexo = novoFR >= 0.28 ? 'III' : 'V';
+    let novoDAS = 0;
+    try {
+      const r = IMPOST.calcularDASMensal({
+        receitaBrutaMensal: novaReceita,
+        rbt12: novaReceita * 12,
+        anexo: novoAnexo,
+        folhaMensal: novaFolha
+      });
+      novoDAS = r.dasAPagar || r.totalAPagar || 0;
+    } catch (e) { novoDAS = 0; }
+
+    const dasOriginal = R.dasAtual ? (R.dasAtual.dasAPagar || R.dasAtual.totalAPagar || 0) : 0;
+    const diff = novoDAS - dasOriginal;
+
+    const res = document.getElementById('simResult');
+    res.innerHTML = '<div class="sr-row"><span>Novo Fator R</span><span class="sr-value">' + fmtPct(novoFR) + '</span></div>' +
+      '<div class="sr-row"><span>Anexo</span><span class="sr-value">Anexo ' + novoAnexo + '</span></div>' +
+      '<div class="sr-row"><span>DAS Mensal</span><span class="sr-value">' + fmtBRL(novoDAS) + '</span></div>' +
+      '<div class="sr-row"><span>Diferenca vs atual</span><span class="sr-value" style="color:' + (diff <= 0 ? 'var(--ok)' : 'var(--danger)') + '">' + (diff <= 0 ? '-' : '+') + fmtBRL(Math.abs(diff)) + '/mes</span></div>';
+  }
+
+  simReceita.addEventListener('input', updateSim);
+  simFolha.addEventListener('input', updateSim);
+  updateSim();
+}
+
+// Init
+updateProgress();
+
+})();
+</script>
+</body>
+</html>
+</script>
+</body>
+</html>
