@@ -7,6 +7,25 @@
  *
  * CHANGELOG v5.0 (correções fiscais e de interface):
  *
+ * --- v5.1 (LC 224/2025 e teto global de incentivos) ---
+ *
+ * [FIX #8] IRRF sobre JCP atualizado para 17,5% (LC 224/2025, vigente 01/01/2026)
+ *   - JCP_IRRF_ALIQUOTA alterada de 0.15 para 0.175
+ *   - Economia líquida de JCP recalculada: 34% − 17,5% = 16,5% (antes 19%)
+ *   - Ref: LC 224/2025, Art. 9º — nova alíquota de IRRF sobre JCP
+ *
+ * [FIX #9] Limite global de 4% para incentivos fiscais (Art. 625)
+ *   - LIMITE_GLOBAL_INCENTIVOS agora define percentual numérico (0.04) e lista de incentivos sujeitos
+ *   - calcularIncentivos aplica teto global: PAT + FIA + Idoso + Rouanet + Audiovisual + Esporte ≤ 4% IRPJ normal
+ *   - Rateio proporcional automático quando a soma excede o teto, com alerta detalhado
+ *
+ * [FIX #10] PIS/COFINS para produtos de alíquota zero/reduzida (LC 224/2025, abr/2026+)
+ *   - Novas constantes: PIS_ALIQUOTA_REDUZIDA_LC224 (0,165%) e COFINS_ALIQUOTA_REDUZIDA_LC224 (0,76%)
+ *   - Novo parâmetro receitasAliquotaReduzidaLC224 em calcularPISCOFINSNaoCumulativo
+ *   - Débitos segregados entre alíquota padrão e alíquota reduzida LC 224/2025
+ *
+ * --- v5.0 ---
+ *
  * [FIX #1] Gratificações a Administradores — tratamento detalhado
  *   - Distinção entre: (a) administradores estatutários (indedutível IRPJ, dedutível CSLL),
  *     (b) diretores-empregados CLT (controvertido), (c) empregados gerais (dedutível).
@@ -89,8 +108,14 @@ const CONSTANTES = {
   COFINS_ALIQUOTA: 0.076,               // 7,6%
   PIS_COFINS_TOTAL: 0.0925,             // 9,25%
 
+  // --- PIS/COFINS — Alíquota reduzida LC 224/2025 (vigente a partir de abr/2026) ---
+  // Itens antes com alíquota zero ou reduzida passam a recolher 10% das alíquotas padrão
+  PIS_ALIQUOTA_REDUZIDA_LC224: 0.00165,   // 10% de 1,65% = 0,165%
+  COFINS_ALIQUOTA_REDUZIDA_LC224: 0.0076, // 10% de 7,60% = 0,76%
+  PIS_COFINS_REDUZIDA_LC224_TOTAL: 0.00925, // 10% de 9,25% = 0,925%
+
   // --- JCP ---
-  JCP_IRRF_ALIQUOTA: 0.15,              // 15% IRRF sobre JCP
+  JCP_IRRF_ALIQUOTA: 0.175,             // 17,5% IRRF sobre JCP (LC 224/2025, vigente a partir de 01/01/2026)
   JCP_LIMITE_LUCRO_LIQUIDO: 0.50,       // 50% do lucro líquido
   JCP_LIMITE_LUCROS_ACUMULADOS: 0.50,   // 50% de lucros acumulados + reservas
 
@@ -815,8 +840,10 @@ const INCENTIVOS_FISCAIS = [
 // Limite global combinado (Art. 625)
 const LIMITE_GLOBAL_INCENTIVOS = {
   artigo: 'Art. 625',
-  regra: 'PAT + FIA + Idoso + Rouanet + Audiovisual + Esporte <= percentual do IRPJ normal (sem adicional)',
-  nota: 'Verificar Art. 625 para limite global atualizado. Cada incentivo tem seu limite individual.',
+  percentual: 0.04, // 4% do IRPJ normal (sem adicional)
+  incentivosSujeitos: ['PAT', 'FIA', 'FUNDO_IDOSO', 'ROUANET', 'AUDIOVISUAL', 'ESPORTE'],
+  regra: 'PAT + FIA + Idoso + Rouanet + Audiovisual + Esporte <= 4% do IRPJ normal (sem adicional)',
+  nota: 'Cada incentivo tem seu limite individual, mas a soma dos sujeitos ao teto global não pode ultrapassar 4% do IRPJ normal.',
 };
 
 // ============================================================================
@@ -1321,7 +1348,7 @@ function calcularJCP(dados) {
   const custoIRRF = jcpDedutivel * CONSTANTES.JCP_IRRF_ALIQUOTA;
 
   // Economia líquida
-  const economiaLiquida = economiaTotal - custoIRRF;  // 34% - 15% = 19% do JCP
+  const economiaLiquida = economiaTotal - custoIRRF;  // 34% - 17,5% = 16,5% do JCP (LC 224/2025)
 
   return {
     patrimonioLiquido,
@@ -1427,7 +1454,9 @@ function calcularDepreciacao(bem) {
 function calcularIncentivos(irpjNormal, despesas = {}) {
   const resultado = [];
   let totalDeducao = 0;
+  let totalSujeitoLimiteGlobal = 0;
 
+  // ---------- Fase 1: calcular dedução individual de cada incentivo ----------
   for (const incentivo of INCENTIVOS_FISCAIS) {
     const despesaIncentivo = despesas[incentivo.id] || 0;
     if (despesaIncentivo <= 0) continue;
@@ -1456,19 +1485,67 @@ function calcularIncentivos(irpjNormal, despesas = {}) {
       deducaoCalculada,
       limiteIndividual,
       deducaoFinal,
+      sujeitoLimiteGlobal: LIMITE_GLOBAL_INCENTIVOS.incentivosSujeitos.includes(incentivo.id),
       artigo: incentivo.artigo,
     });
 
     totalDeducao += deducaoFinal;
   }
 
-  // Limite global (não pode exceder o IRPJ normal)
+  // ---------- Fase 2: aplicar limite global de 4% (Art. 625) ----------
+  const limiteGlobal = irpjNormal * LIMITE_GLOBAL_INCENTIVOS.percentual;
+  let alertaGlobal = null;
+
+  // Somar apenas os incentivos sujeitos ao teto global
+  for (const item of resultado) {
+    if (item.sujeitoLimiteGlobal) {
+      totalSujeitoLimiteGlobal += item.deducaoFinal;
+    }
+  }
+
+  if (totalSujeitoLimiteGlobal > limiteGlobal) {
+    // Reduzir proporcionalmente cada incentivo sujeito ao teto global
+    const fatorReducao = limiteGlobal / totalSujeitoLimiteGlobal;
+    let totalReduzido = 0;
+
+    for (const item of resultado) {
+      if (item.sujeitoLimiteGlobal) {
+        const deducaoOriginal = item.deducaoFinal;
+        item.deducaoAntesLimiteGlobal = deducaoOriginal;
+        item.deducaoFinal = Math.round(deducaoOriginal * fatorReducao * 100) / 100;
+        totalReduzido += deducaoOriginal - item.deducaoFinal;
+      }
+    }
+
+    // Recalcular totalDeducao após rateio
+    totalDeducao = resultado.reduce((soma, item) => soma + item.deducaoFinal, 0);
+
+    alertaGlobal = {
+      tipo: 'LIMITE_GLOBAL_EXCEDIDO',
+      mensagem: `Soma dos incentivos sujeitos ao teto global (R$ ${totalSujeitoLimiteGlobal.toFixed(2)}) `
+        + `excede 4% do IRPJ normal (R$ ${limiteGlobal.toFixed(2)}). `
+        + `Reduções proporcionais aplicadas — total cortado: R$ ${totalReduzido.toFixed(2)}.`,
+      artigo: LIMITE_GLOBAL_INCENTIVOS.artigo,
+      limiteGlobal,
+      somaOriginal: totalSujeitoLimiteGlobal,
+      fatorReducao,
+    };
+  }
+
+  // Limite adicional: total não pode exceder o IRPJ normal
   const totalFinal = Math.min(totalDeducao, irpjNormal);
 
   return {
     incentivos: resultado,
     totalDeducaoCalculada: totalDeducao,
     totalDeducaoFinal: totalFinal,
+    limiteGlobal: {
+      percentual: LIMITE_GLOBAL_INCENTIVOS.percentual,
+      valor: limiteGlobal,
+      somaSujeita: totalSujeitoLimiteGlobal > limiteGlobal ? limiteGlobal : totalSujeitoLimiteGlobal,
+      excedeu: totalSujeitoLimiteGlobal > limiteGlobal,
+    },
+    alertaGlobal,
     irpjNormal,
     percentualUtilizado: irpjNormal > 0
       ? ((totalFinal / irpjNormal) * 100).toFixed(2) + '%'
@@ -1504,6 +1581,9 @@ function calcularIncentivos(irpjNormal, despesas = {}) {
  * @param {number} [dados.freteArmazenagem=0]      - Frete e armazenagem
  * @param {number} [dados.leasing=0]               - Contraprestações de leasing
  * @param {number} [dados.outrosCreditos=0]        - Outros créditos admitidos
+ * @param {number} [dados.receitasAliquotaReduzidaLC224=0] - Receitas antes com alíquota zero/reduzida que,
+ *   a partir de abr/2026, passam a recolher 10% das alíquotas padrão de PIS/COFINS (LC 224/2025).
+ *   Informar o valor bruto dessas receitas; o motor aplica 0,165% (PIS) e 0,76% (COFINS).
  * @returns {Object} Cálculo completo com alertas
  */
 function calcularPISCOFINSNaoCumulativo(dados) {
@@ -1525,6 +1605,8 @@ function calcularPISCOFINSNaoCumulativo(dados) {
     freteArmazenagem = 0,
     leasing = 0,
     outrosCreditos = 0,
+    // v5.1: LC 224/2025 — receitas antes isentas que passam a 10% da alíquota padrão (abr/2026+)
+    receitasAliquotaReduzidaLC224 = 0,
     // v5.0: Manter retrocompatibilidade com parâmetro antigo
     depreciacaoBens,
   } = dados;
@@ -1592,6 +1674,25 @@ function calcularPISCOFINSNaoCumulativo(dados) {
   const pisSobreReceita = receitaTributavel * CONSTANTES.PIS_ALIQUOTA;
   const cofinsSobreReceita = receitaTributavel * CONSTANTES.COFINS_ALIQUOTA;
 
+  // v5.1: LC 224/2025 — débitos sobre receitas antes com alíquota zero/reduzida (10% da alíquota padrão)
+  let pisLC224 = 0;
+  let cofinsLC224 = 0;
+  if (receitasAliquotaReduzidaLC224 > 0) {
+    pisLC224 = receitasAliquotaReduzidaLC224 * CONSTANTES.PIS_ALIQUOTA_REDUZIDA_LC224;
+    cofinsLC224 = receitasAliquotaReduzidaLC224 * CONSTANTES.COFINS_ALIQUOTA_REDUZIDA_LC224;
+    alertasCredito.push({
+      tipo: 'INFO_LC224_ALIQUOTA_REDUZIDA',
+      mensagem: `Receitas antes com alíquota zero/reduzida (R$ ${receitasAliquotaReduzidaLC224.toFixed(2)}) `
+        + `agora recolhem 10% das alíquotas padrão: PIS 0,165% (R$ ${pisLC224.toFixed(2)}) `
+        + `+ COFINS 0,76% (R$ ${cofinsLC224.toFixed(2)}) = R$ ${(pisLC224 + cofinsLC224).toFixed(2)}.`,
+      artigo: 'LC 224/2025 — vigente a partir de abr/2026',
+    });
+  }
+
+  // Débitos totais (padrão + LC 224/2025)
+  const pisTotalDebito = pisSobreReceita + pisLC224;
+  const cofinsTotalDebito = cofinsSobreReceita + cofinsLC224;
+
   // Base de créditos — somente aluguéis PJ e depreciação calculada
   const totalBaseCreditos = comprasBensRevenda + insumosProducao + energiaEletrica
     + alugueisPJ + depreciacaoBaseCredito + devolucoes + freteArmazenagem + leasing + outrosCreditos;
@@ -1601,24 +1702,37 @@ function calcularPISCOFINSNaoCumulativo(dados) {
   const creditoCOFINS = totalBaseCreditos * CONSTANTES.COFINS_ALIQUOTA;
 
   // PIS/COFINS a pagar
-  const pisAPagar = Math.max(pisSobreReceita - creditoPIS, 0);
-  const cofinsAPagar = Math.max(cofinsSobreReceita - creditoCOFINS, 0);
+  const pisAPagar = Math.max(pisTotalDebito - creditoPIS, 0);
+  const cofinsAPagar = Math.max(cofinsTotalDebito - creditoCOFINS, 0);
 
   // Crédito excedente (saldo credor)
-  const saldoCredorPIS = Math.max(creditoPIS - pisSobreReceita, 0);
-  const saldoCredorCOFINS = Math.max(creditoCOFINS - cofinsSobreReceita, 0);
+  const saldoCredorPIS = Math.max(creditoPIS - pisTotalDebito, 0);
+  const saldoCredorCOFINS = Math.max(creditoCOFINS - cofinsTotalDebito, 0);
 
   // v5.0: Métricas claras de alíquota efetiva
-  const totalBruto = pisSobreReceita + cofinsSobreReceita;
+  const totalBruto = pisTotalDebito + cofinsTotalDebito;
   const totalLiquido = pisAPagar + cofinsAPagar;
 
   return {
     receitaBruta,
     receitaTributavel,
     debitos: {
-      pis: pisSobreReceita,
-      cofins: cofinsSobreReceita,
+      pis: pisTotalDebito,
+      cofins: cofinsTotalDebito,
       total: totalBruto,
+      // Detalhamento por regime
+      padrao: {
+        pis: pisSobreReceita,
+        cofins: cofinsSobreReceita,
+        total: pisSobreReceita + cofinsSobreReceita,
+      },
+      lc224_aliquotaReduzida: {
+        pis: pisLC224,
+        cofins: cofinsLC224,
+        total: pisLC224 + cofinsLC224,
+        receitaBase: receitasAliquotaReduzidaLC224,
+        nota: 'LC 224/2025 — 10% das alíquotas padrão sobre receitas antes com alíquota zero/reduzida (abr/2026+)',
+      },
     },
     creditos: {
       baseTotal: totalBaseCreditos,
