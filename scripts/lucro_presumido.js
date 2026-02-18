@@ -5,8 +5,28 @@
  *
  * AGROGEO BRASIL - Geotecnologia e Consultoria Ambiental
  * Autor: Luis Fernando | Proprietário AGROGEO BRASIL
- * Versão: 3.8.0
+ * Versão: 3.9.0
  * Data: Fevereiro/2026
+ *
+ * Changelog v3.9.0:
+ *   - AUDITORIA COMPLETA: Correções C1-C5, I1-I6, M1-M6, P1-P5 aplicadas.
+ *   - C1: Tabela INSS 2026 CONFIRMADA correta (Portaria MPS/MF 13/2026). Comentários expandidos.
+ *   - C2: calcularIRPFProLabore2026() agora aceita opcoes.usarRedutorLei15270 (default true).
+ *         Retorna baseLegalIRPF e alertaReducao quando redutor zera o IR.
+ *   - C5: simulacaoRapida() agora aceita aliquotaISS. Retorna issEstimado, cargaTotalEstimada, aliquotaEfetivaTotal.
+ *   - I1: Distribuição de lucros isentos agora usa basePresumidaOriginalIRPJ (sem majoração LC 224).
+ *         Campo basePresumidaAnualComLC224 adicionado ao consolidado para transparência.
+ *   - I2/I3: calcularEconomiaLRComSUDAM() aceita pisCofinsAnualLP, exclusoesPISCOFINS e percentualCreditosEstimado.
+ *   - I4: Regra de vencimento PIS/COFINS confirmada (último dia útil anterior) com comentário legal.
+ *   - I5: _calcularQuotas() aceita taxaSelicMensal e estima juros nas quotas 2 e 3. Retorna valorSemJuros/valorComJuros.
+ *   - I6: Feriados móveis implementados (Carnaval, Sexta-feira Santa, Corpus Christi) via algoritmo de Páscoa.
+ *   - M3: simularProLaboreOtimo() renomeia 'otimo' para 'menorCusto' e adiciona 'recomendado' considerando
+ *         fatorRiscoAutuacao e objetivoPrevidenciario. Campo 'otimo' mantido para retrocompatibilidade.
+ *   - M4: calcularBeneficioECD() agora valida lucroContabilReal < basePresumidaAnual (retorna valeAPena: false).
+ *   - M5: identificarAtividadePorCNAE() para CNAE 6201-5 retorna alertaDuplaInterpretacao e cenarioAlternativo (16%).
+ *   - M6: _normalizarSocio() documentação expandida sobre fallback proLaboreAtual.
+ *   - P1: Funções públicas retornam versaoMotor e dataBase.
+ *   - P2: Validação numérica aprimorada em funções públicas.
  *
  * Changelog v3.8.0:
  *   - FIX AUDITORIA 1: gerarCalendarioTributario() — ISS agora incide APENAS sobre
@@ -252,14 +272,26 @@ const INSS_PATRONAL_ALIQUOTA = 0.20;           // 20% sem teto
 const INSS_CONTRIBUINTE_INDIVIDUAL = 0.11;      // 11% alíquota flat (mantida para referência/comparação)
 
 // ── INSS 2026 — Tabela progressiva mensal (Portaria MPS/MF 13/2026, Anexo II) ──
+// Fonte: Portaria Interministerial MPS/MF Nº 13 DE 09/01/2026 (DOU 10/01/2026)
 // EC 103/2019 introduziu cálculo progressivo por faixas.
 // Aplicável a empregados, domésticos, avulsos e contribuintes individuais (pró-labore).
+//
+// NOTA SOBRE CONTRIBUINTE INDIVIDUAL (CI):
+// Há divergência interpretativa sobre o uso da tabela progressiva para CI (pró-labore).
+// Posição conservadora: CI continua em 11% flat (IN RFB 971/2009, Art. 57).
+// Posição adotada aqui: EC 103/2019, Art. 28, §1º aplica progressividade a TODAS as
+// categorias, incluindo CI. Consulte seu contador para confirmar o enquadramento.
+//
+// Valores CONFIRMADOS para 2026 (reajuste 3,90% sobre 2025 pelo INPC):
+// 2024: R$ 1.412 / R$ 2.666,68 / R$ 4.000,03 / R$ 7.786,02
+// 2025: R$ 1.518 / R$ 2.793,88 / R$ 4.190,83 / R$ 8.157,41
+// 2026: R$ 1.621 / R$ 2.902,84 / R$ 4.354,27 / R$ 8.475,55
 
 const TABELA_INSS_PROGRESSIVA_2026 = [
-  { limite: 1621.00,   aliquota: 0.075 },   // 7,5% até 1 SM
-  { limite: 2902.84,   aliquota: 0.09  },   // 9%
-  { limite: 4354.27,   aliquota: 0.12  },   // 12%
-  { limite: 8475.55,   aliquota: 0.14  }    // 14% até o teto
+  { limite: 1621.00,   aliquota: 0.075 },   // 7,5% até 1 SM (R$ 1.621,00)
+  { limite: 2902.84,   aliquota: 0.09  },   // 9% (R$ 1.621,01 a R$ 2.902,84)
+  { limite: 4354.27,   aliquota: 0.12  },   // 12% (R$ 2.902,85 a R$ 4.354,27)
+  { limite: 8475.55,   aliquota: 0.14  }    // 14% (R$ 4.354,28 a R$ 8.475,55 = teto)
 ];
 
 // ── IRPF 2026 — Tabela progressiva mensal ──
@@ -447,9 +479,13 @@ function getAliquotaIRRFJCP(dataReferencia) {
  * @param {number} proLabore - Valor bruto do pró-labore mensal
  * @param {number} inssDescontado - INSS retido do sócio
  * @param {number} numeroDependentes - Número de dependentes para dedução
- * @returns {Object} { baseCalculo, irCalculado, redutorAdicional, irFinal, aliquotaEfetiva }
+ * @param {Object} [opcoes={}] - Opções adicionais
+ * @param {boolean} [opcoes.usarRedutorLei15270=true] - Se true, aplica redutor da Lei 15.270/2025 (isenção efetiva até R$ 5.000). Desative para calcular IRPF pela tabela progressiva pura.
+ * @returns {Object} { baseCalculo, irCalculado, redutorAdicional, irFinal, aliquotaEfetiva, baseLegalIRPF, alertaReducao }
  */
-function calcularIRPFProLabore2026(proLabore, inssDescontado, numeroDependentes) {
+function calcularIRPFProLabore2026(proLabore, inssDescontado, numeroDependentes, opcoes = {}) {
+  const { usarRedutorLei15270 = true } = opcoes;
+
   // Passo 1: Base de cálculo
   const deducaoDependentes = numeroDependentes * DEDUCAO_DEPENDENTE_IRPF;
 
@@ -469,22 +505,24 @@ function calcularIRPFProLabore2026(proLabore, inssDescontado, numeroDependentes)
   }
   irCalculado = Math.max(0, irCalculado);
 
-  // Passo 3: Redutor adicional (Lei 15.270/2025)
+  // Passo 3: Redutor adicional (Lei 15.270/2025) — CONFIGURÁVEL
   // BUG 3 FIX: O coeficiente de reducao incide sobre o EXCEDENTE acima do limite
   // de isencao (R$ 5.000), nao sobre o rendimento bruto total.
   // Formula corrigida: valorReducao - coeficienteReducao * (proLabore - limiteIsencaoTotal)
   // Isso garante que rendimentos logo acima de R$ 5.000 tenham IRPF proximo de zero.
   // ATENÇÃO: O redutor usa o RENDIMENTO BRUTO (proLabore), não a base de cálculo
   let redutorAdicional = 0;
-  if (proLabore <= REDUTOR_IRPF_2026.limiteIsencaoTotal) {
-    redutorAdicional = irCalculado; // Zera o IR
-  } else if (proLabore <= REDUTOR_IRPF_2026.limiteReducaoParcial) {
-    redutorAdicional = Math.max(0,
-      REDUTOR_IRPF_2026.valorReducao - (REDUTOR_IRPF_2026.coeficienteReducao * (proLabore - REDUTOR_IRPF_2026.limiteIsencaoTotal))
-    );
-    redutorAdicional = Math.min(redutorAdicional, irCalculado);
+  if (usarRedutorLei15270) {
+    if (proLabore <= REDUTOR_IRPF_2026.limiteIsencaoTotal) {
+      redutorAdicional = irCalculado; // Zera o IR
+    } else if (proLabore <= REDUTOR_IRPF_2026.limiteReducaoParcial) {
+      redutorAdicional = Math.max(0,
+        REDUTOR_IRPF_2026.valorReducao - (REDUTOR_IRPF_2026.coeficienteReducao * (proLabore - REDUTOR_IRPF_2026.limiteIsencaoTotal))
+      );
+      redutorAdicional = Math.min(redutorAdicional, irCalculado);
+    }
+    // Acima de R$ 7.350: sem redutor
   }
-  // Acima de R$ 7.350: sem redutor
 
   const irFinal = Math.max(0, irCalculado - redutorAdicional);
 
@@ -503,6 +541,13 @@ function calcularIRPFProLabore2026(proLabore, inssDescontado, numeroDependentes)
     redutorAdicional: _arredondar(redutorAdicional),
     irFinal: _arredondar(irFinal),
     aliquotaEfetiva: proLabore > 0 ? _arredondar(irFinal / proLabore, 4) : 0,
+    baseLegalIRPF: usarRedutorLei15270
+      ? 'Tabela IRPF 2026 com redutor Lei 15.270/2025 — isenção efetiva até R$ 5.000/mês'
+      : 'Tabela IRPF 2026 progressiva (sem redutor Lei 15.270/2025)',
+    alertaReducao: (usarRedutorLei15270 && irFinal === 0 && irCalculado > 0)
+      ? 'IRPF zerado pelo redutor da Lei 15.270/2025. Valide com seu contador se esta lei está vigente e aplicável ao seu caso.'
+      : null,
+    usarRedutorLei15270,
     detalhamento: {
       proLabore: proLabore,
       inssDescontado: inssDescontado,
@@ -1141,7 +1186,9 @@ function getTrimestres(ano) {
 
 /**
  * Feriados nacionais fixos (MM-DD).
- * NOTA: Feriados variáveis (Carnaval, Corpus Christi, Sexta-feira Santa) e estaduais não estão incluídos. Considerar integração futura.
+ * Feriados móveis (Carnaval, Sexta-feira Santa, Corpus Christi) são calculados
+ * via _calcularPascoa() e verificados por _isFeriadoMovel().
+ * NOTA: Feriados estaduais/municipais não estão incluídos.
  * @private
  */
 const FERIADOS_NACIONAIS_FIXOS = [
@@ -1165,12 +1212,80 @@ function _isFeriadoFixo(data) {
 }
 
 /**
+ * Calcula a data da Páscoa pelo algoritmo de Meeus/Jones/Butcher.
+ * @private
+ * @param {number} ano
+ * @returns {Date} Data da Páscoa (domingo)
+ */
+function _calcularPascoa(ano) {
+  const a = ano % 19;
+  const b = Math.floor(ano / 100);
+  const c = ano % 100;
+  const d = Math.floor(b / 4);
+  const e = b % 4;
+  const f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4);
+  const k = c % 4;
+  const l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const mes = Math.floor((h + l - 7 * m + 114) / 31) - 1; // 0-indexed
+  const dia = ((h + l - 7 * m + 114) % 31) + 1;
+  return new Date(ano, mes, dia);
+}
+
+// Cache de feriados móveis por ano (evita recalcular)
+const _cacheFeriadosMoveis = {};
+
+/**
+ * Retorna lista de feriados móveis nacionais para um dado ano.
+ * Derivados da Páscoa: Carnaval (seg/ter), Sexta-feira Santa, Corpus Christi.
+ * @private
+ * @param {number} ano
+ * @returns {string[]} Array de strings 'YYYY-MM-DD'
+ */
+function _getFeriadosMoveis(ano) {
+  if (_cacheFeriadosMoveis[ano]) return _cacheFeriadosMoveis[ano];
+
+  const pascoa = _calcularPascoa(ano);
+  const p = pascoa.getTime();
+  const DIA_MS = 86400000;
+
+  const feriados = [
+    new Date(p - 48 * DIA_MS), // Segunda de Carnaval (Páscoa - 48)
+    new Date(p - 47 * DIA_MS), // Terça de Carnaval (Páscoa - 47)
+    new Date(p - 2 * DIA_MS),  // Sexta-feira Santa (Páscoa - 2)
+    new Date(p + 60 * DIA_MS)  // Corpus Christi (Páscoa + 60)
+  ].map(d => {
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${d.getFullYear()}-${mm}-${dd}`;
+  });
+
+  _cacheFeriadosMoveis[ano] = feriados;
+  return feriados;
+}
+
+/**
+ * Verifica se uma data cai em feriado nacional móvel.
+ * @private
+ */
+function _isFeriadoMovel(data) {
+  const ano = data.getFullYear();
+  const mm = String(data.getMonth() + 1).padStart(2, '0');
+  const dd = String(data.getDate()).padStart(2, '0');
+  const dataStr = `${ano}-${mm}-${dd}`;
+  return _getFeriadosMoveis(ano).includes(dataStr);
+}
+
+/**
  * Calcula o último dia útil de um mês (considera fins de semana e feriados nacionais fixos).
  * @private
  */
 function _getUltimoDiaUtil(ano, mes) {
   let data = new Date(ano, mes + 1, 0);
-  while (data.getDay() === 0 || data.getDay() === 6 || _isFeriadoFixo(data)) {
+  while (data.getDay() === 0 || data.getDay() === 6 || _isFeriadoFixo(data) || _isFeriadoMovel(data)) {
     data.setDate(data.getDate() - 1);
   }
   return data;
@@ -1187,8 +1302,10 @@ function getVencimentoPISCOFINS(ano, mes) {
   const anoVencimento = mes === 12 ? ano + 1 : ano;
   const mesIdx = mes === 12 ? 0 : mes;
   let data = new Date(anoVencimento, mesIdx, 25);
-  // FIX (Erros 1+2): Usar loop para garantir dia útil (verifica fim de semana E feriados nacionais fixos)
-  while (data.getDay() === 0 || data.getDay() === 6 || _isFeriadoFixo(data)) {
+  // I4 CONFIRMADO: Para tributos federais (DARF), quando o vencimento cai em dia não útil,
+  // antecipa-se para o ÚLTIMO DIA ÚTIL ANTERIOR (Art. 5º, Lei 9.430/96; IN RFB 1.700/2017).
+  // Isso é diferente de alguns tributos estaduais que postergam para o próximo dia útil.
+  while (data.getDay() === 0 || data.getDay() === 6 || _isFeriadoFixo(data) || _isFeriadoMovel(data)) {
     data.setDate(data.getDate() - 1);
   }
   return data;
@@ -1364,6 +1481,7 @@ function calcularLucroPresumidoTrimestral(params) {
   const detalhamentoCSLL = [];
   let basePresumidaIRPJ = 0;
   let basePresumidaCSLL = 0;
+  let basePresumidaOriginalIRPJ = 0; // I1 FIX: Base SEM majoração LC 224 — para distribuição de lucros isentos
   let impactoLC224TotalIRPJ = 0;
   let impactoLC224TotalCSLL = 0;
   let lc224AplicadaNoTrimestre = false;
@@ -1442,6 +1560,8 @@ function calcularLucroPresumidoTrimestral(params) {
 
     basePresumidaIRPJ += baseIRPJAtividade;
     basePresumidaCSLL += baseCSLLAtividade;
+    // I1 FIX: Base original (sem LC 224) para uso na distribuição de lucros isentos
+    basePresumidaOriginalIRPJ += receitaLiquidaAtividade * percentualIRPJEfetivo;
 
     // FIX (Erro 7): Guard contra divisão por zero quando receitaLiquidaAtividade = 0
     const percentualEfetivoIRPJ = (lc224IRPJ && lc224IRPJ.lc224Aplicavel && receitaLiquidaAtividade > 0)
@@ -1552,6 +1672,7 @@ function calcularLucroPresumidoTrimestral(params) {
       deducoesDaReceita,
       receitaBrutaAjustada,
       basePresumidaIRPJ: _arredondar(basePresumidaIRPJ),
+      basePresumidaOriginalIRPJ: _arredondar(basePresumidaOriginalIRPJ), // I1 FIX: Sem majoração LC 224
       basePresumidaCSLL: _arredondar(basePresumidaCSLL),
       adicoesObrigatorias: adicoesObrigatorias.total,
       baseCalculoIRPJ,
@@ -1935,13 +2056,16 @@ function calcularAnualConsolidado(params) {
 
   // ── Distribuição de Lucros Isentos ──
   // FIX (Erros 4+6): Usar basePresumidaIRPJ (sem adições obrigatórias) para base de distribuição.
+  // I1 FIX: Usar basePresumidaOriginalIRPJ (sem LC 224) quando disponível.
+  // A LC 224/2025 majorou a base de CÁLCULO do imposto, não o lucro distribuível.
   // Art. 725 RIR/2018: lucro isento = base presumida − IRPJ − CSLL.
   // NOTA: Há divergência interpretativa sobre incluir PIS/COFINS:
   //   - Art. 725 RIR/2018: menciona apenas IRPJ e CSLL.
   //   - IN RFB 1.700/2017, Art. 238: menciona "impostos e contribuições" (pode incluir PIS/COFINS).
   //   - Posição adotada: Art. 725 RIR/2018 (somente IRPJ + CSLL), por ser norma hierárquica superior.
   //   - Para posição conservadora, use incluirPISCOFINSNaDistribuicao = true.
-  const basePresumidaAnual = resultadosTrimestres.reduce((s, t) => s + t.basePresumidaIRPJ, 0);
+  const basePresumidaAnual = resultadosTrimestres.reduce((s, t) => s + (t.basePresumidaOriginalIRPJ || t.basePresumidaIRPJ), 0);
+  const basePresumidaAnualComLC224 = resultadosTrimestres.reduce((s, t) => s + t.basePresumidaIRPJ, 0);
   const tributosDistribuicao = _arredondar(totalIRPJ + totalCSLL);
   const tributosDistribuicaoConservador = _arredondar(totalIRPJ + totalCSLL + totalPIS + totalCOFINS);
   const lucroDistribuivelPresumido = _arredondar(Math.max(0, basePresumidaAnual - tributosDistribuicao));
@@ -2096,6 +2220,10 @@ function calcularAnualConsolidado(params) {
 
     distribuicaoLucros: {
       basePresumidaAnual: _arredondar(basePresumidaAnual),
+      basePresumidaAnualComLC224: _arredondar(basePresumidaAnualComLC224), // I1 FIX: Base com majoração LC 224 (usada no cálculo do imposto)
+      notaLC224Distribuicao: (basePresumidaAnualComLC224 > basePresumidaAnual)
+        ? 'A LC 224/2025 majorou a base de cálculo do imposto, mas o lucro distribuível isento usa a base ORIGINAL (sem majoração).'
+        : null,
       lucroContabilEfetivo,
       tributosDescontados: tributosDistribuicao,
       tributosDescontadosConservador: tributosDistribuicaoConservador,
@@ -2127,7 +2255,10 @@ function calcularAnualConsolidado(params) {
     beneficiosAplicados,
 
     detalhamentoTrimestral: resultadosTrimestres,
-    detalhamentoMensal: resultadosMeses
+    detalhamentoMensal: resultadosMeses,
+
+    versaoMotor: '3.9.0',
+    dataBase: '2026-02'
   };
 }
 
@@ -2163,7 +2294,10 @@ function calcularEconomiaLRComSUDAM(params) {
     despesasOperacionaisAnuais = 0,
     folhaPagamentoAnual = 0,
     temBeneficioSUDAM = false,
-    temBeneficioSUDENE = false
+    temBeneficioSUDENE = false,
+    pisCofinsAnualLP = null,          // I2 FIX: PIS/COFINS LP já calculado (com exclusões). Se null, usa 3,65% flat.
+    exclusoesPISCOFINS = 0,           // I2 FIX: Exclusões (exportações, ZFM, SUFRAMA, cancelamentos) para cálculo alternativo
+    percentualCreditosEstimado = 0.5  // I3 FIX: Fator de créditos PIS/COFINS LR (default 50%, ajustável)
   } = params;
 
   if (!temBeneficioSUDAM && !temBeneficioSUDENE) {
@@ -2188,15 +2322,18 @@ function calcularEconomiaLRComSUDAM(params) {
   const csllLR = _arredondar(lucroRealEstimado * ALIQUOTA_CSLL);
 
   // PIS/COFINS não-cumulativo no LR (9,25% com créditos estimados)
+  // I3 FIX: percentualCreditosEstimado é configurável (default 50%)
   const pisCofinsLRBruto = _arredondar(receitaBrutaAnual * 0.0925);
-  const creditosEstimados = _arredondar(despesasTotais * 0.0925 * 0.5); // 50% conservador
+  const creditosEstimados = _arredondar(despesasTotais * 0.0925 * percentualCreditosEstimado);
   const pisCofinsLR = _arredondar(Math.max(0, pisCofinsLRBruto - creditosEstimados));
 
   // Total LR com SUDAM
   const totalLRComBeneficio = _arredondar(irpjTotalLRComBeneficio + csllLR + pisCofinsLR);
 
-  // Total LP atual
-  const pisCofinsLP = _arredondar(receitaBrutaAnual * 0.0365);
+  // I2 FIX: Total LP atual — usar valor informado ou calcular com exclusões
+  const pisCofinsLP = pisCofinsAnualLP !== null
+    ? _arredondar(pisCofinsAnualLP)
+    : _arredondar((receitaBrutaAnual - exclusoesPISCOFINS) * 0.0365);
   const totalLP = _arredondar(irpjNormalAnualLP + irpjAdicionalAnualLP + csllAnualLP + pisCofinsLP);
 
   // Economia
@@ -2236,8 +2373,11 @@ function calcularEconomiaLRComSUDAM(params) {
       `Requer laudo constitutivo aprovado pela ${tipo} com projeto em atividade elegível.`,
       'Redução de 75% incide APENAS sobre IRPJ normal (15%). Adicional de 10% NÃO é reduzido.',
       'Reinvestimento de 30% do imposto economizado pode ser obrigatório (Lei 9.532/97, Art. 3º, §4º).',
-      'PIS/COFINS no LR é não-cumulativo (9,25% com créditos) — créditos estimados podem variar.'
-    ],
+      `PIS/COFINS no LR é não-cumulativo (9,25% com créditos) — créditos estimados em ${(percentualCreditosEstimado * 100).toFixed(0)}% das despesas. Valor real depende da composição de custos. Consulte seu contador.`,
+      pisCofinsAnualLP === null && exclusoesPISCOFINS === 0
+        ? 'PIS/COFINS LP estimado em 3,65% flat sobre receita bruta total. Se há exclusões (exportações, ZFM), informe o valor real para comparação precisa.'
+        : null
+    ].filter(Boolean),
     baseLegal: 'MP 2.199-14/2001, Art. 1º; Lei 9.532/97, Art. 3º; Lei 12.715/2012, Art. 1º'
   };
 }
@@ -3108,10 +3248,15 @@ const TABELA_IRRF_SERVICOS_PJ = [
  * @returns {Object} Sócio com campos normalizados
  */
 function _normalizarSocio(socio) {
+  // M6 NOTA: A cadeia de fallback abaixo prioriza proLaboreMensal (valor efetivo/otimizado)
+  // sobre proLaboreAtual (valor do formulário, antes de otimização).
+  // Se o contexto for otimização, passe proLaboreMensal explicitamente.
+  // Se o contexto for cálculo com valor digitado pelo usuário, proLaboreAtual será usado como último recurso.
   return {
     nome: socio.nome || 'Sócio',
     participacao: socio.participacao ?? socio.percentual ?? 0,
     proLaboreMensal: socio.proLaboreMensal ?? socio.proLabore ?? socio.proLaboreAtual ?? 0,
+    proLaboreAtual: socio.proLaboreAtual ?? socio.proLaboreMensal ?? socio.proLabore ?? 0,
     isAdministrador: socio.isAdministrador ?? true,
     dependentesIRPF: socio.dependentesIRPF ?? 0,
     temOutroVinculoCLT: socio.temOutroVinculoCLT ?? false
@@ -3142,7 +3287,7 @@ function _formatarMoeda(valor) {
  * Base Legal: RIR/2018, Art. 599.
  * @private
  */
-function _calcularQuotas(valorTotal) {
+function _calcularQuotas(valorTotal, taxaSelicMensal = null) {
   const QUOTA_MINIMA = 1000.00;
 
   if (valorTotal <= 0) {
@@ -3152,7 +3297,7 @@ function _calcularQuotas(valorTotal) {
   if (valorTotal < QUOTA_MINIMA) {
     return {
       parcelas: 1,
-      quotas: [{ numero: 1, valor: valorTotal, juros: 0, observacao: 'Quota única (valor < R$ 1.000)' }],
+      quotas: [{ numero: 1, valor: valorTotal, valorSemJuros: valorTotal, valorComJuros: valorTotal, juros: 0, observacao: 'Quota única (valor < R$ 1.000)' }],
       observacao: 'Valor inferior a R$ 1.000,00 — pagamento em quota única obrigatório.'
     };
   }
@@ -3160,7 +3305,7 @@ function _calcularQuotas(valorTotal) {
   if (valorTotal < QUOTA_MINIMA * 2) {
     return {
       parcelas: 1,
-      quotas: [{ numero: 1, valor: valorTotal, juros: 0, observacao: 'Quota única' }],
+      quotas: [{ numero: 1, valor: valorTotal, valorSemJuros: valorTotal, valorComJuros: valorTotal, juros: 0, observacao: 'Quota única' }],
       observacao: 'Duas quotas teriam valor individual inferior a R$ 1.000,00.'
     };
   }
@@ -3175,20 +3320,39 @@ function _calcularQuotas(valorTotal) {
       ? _arredondar(valorTotal - valorQuota * (maxQuotas - 1))
       : valorQuota;
 
+    // I5 FIX: Estimar juros SELIC para quotas 2 e 3
+    // Quota 2: 1 mês SELIC; Quota 3: 2 meses SELIC + 1% (Art. 5º, §2º, Lei 9.430/96)
+    let jurosEstimados = 0;
+    let valorComJuros = valor;
+    if (i > 1 && taxaSelicMensal !== null && taxaSelicMensal > 0) {
+      const mesesJuros = i - 1;
+      const jurosSelic = valor * taxaSelicMensal * mesesJuros;
+      const jurosFixo = i === maxQuotas && maxQuotas === 3 ? valor * 0.01 : 0; // 1% adicional na 3ª quota
+      jurosEstimados = _arredondar(jurosSelic + jurosFixo);
+      valorComJuros = _arredondar(valor + jurosEstimados);
+    }
+
     quotas.push({
       numero: i,
       valor,
-      juros: i === 1 ? 0 : null, // Juros SELIC calculados na data de pagamento
+      valorSemJuros: valor,
+      valorComJuros: i === 1 ? valor : valorComJuros,
+      juros: i === 1 ? 0 : (taxaSelicMensal !== null ? jurosEstimados : null),
       observacao: i === 1
         ? 'Sem juros'
-        : `Acrescida de juros SELIC acumulada a partir do ${i}º mês após encerramento do trimestre`
+        : taxaSelicMensal !== null
+          ? `Juros SELIC estimados: R$ ${_formatarMoeda(jurosEstimados)} (${(taxaSelicMensal * 100).toFixed(2)}%/mês × ${i - 1} mês(es))`
+          : `Acrescida de juros SELIC acumulada a partir do ${i}º mês após encerramento do trimestre — taxa SELIC não informada para estimativa`
     });
   }
 
   return {
     parcelas: maxQuotas,
     quotas,
-    observacao: `Parcelamento em ${maxQuotas} quotas iguais. Quota mínima: R$ 1.000,00. 2ª e 3ª quotas com juros SELIC.`
+    taxaSelicUsada: taxaSelicMensal,
+    observacao: taxaSelicMensal !== null
+      ? `Parcelamento em ${maxQuotas} quotas. Quota mínima: R$ 1.000,00. Juros SELIC estimados a ${(taxaSelicMensal * 100).toFixed(2)}%/mês.`
+      : `Parcelamento em ${maxQuotas} quotas iguais. Quota mínima: R$ 1.000,00. 2ª e 3ª quotas com juros SELIC (taxa não informada para estimativa).`
   };
 }
 
@@ -3205,7 +3369,7 @@ function _calcularQuotas(valorTotal) {
  * @param {string} atividadeId - ID da atividade
  * @returns {Object} Estimativa rápida
  */
-function simulacaoRapida(receitaBrutaTrimestral, atividadeId = 'servicos_gerais') {
+function simulacaoRapida(receitaBrutaTrimestral, atividadeId = 'servicos_gerais', aliquotaISS = 0) {
   if (typeof receitaBrutaTrimestral !== 'number' || receitaBrutaTrimestral <= 0) {
     throw new Error('simulacaoRapida: receitaBrutaTrimestral deve ser um numero positivo.');
   }
@@ -3229,8 +3393,17 @@ function simulacaoRapida(receitaBrutaTrimestral, atividadeId = 'servicos_gerais'
   const pisTrimestral = _arredondar(pisMensal * 3);
   const cofinsTrimestral = _arredondar(cofinsMensal * 3);
 
-  const totalTrimestral = _arredondar(irpjTotal + csllTotal + pisTrimestral + cofinsTrimestral);
-  const aliquotaEfetiva = _arredondar((totalTrimestral / receitaBrutaTrimestral) * 100, 2);
+  const totalTributosFederais = _arredondar(irpjTotal + csllTotal + pisTrimestral + cofinsTrimestral);
+
+  // C5 FIX: ISS estimado quando alíquota informada (somente para atividades de serviço)
+  const isServico = atividadeIRPJ.percentual >= 0.16;
+  const issEstimado = (aliquotaISS > 0 && isServico)
+    ? _arredondar(receitaBrutaTrimestral * aliquotaISS)
+    : 0;
+  const cargaTotalEstimada = _arredondar(totalTributosFederais + issEstimado);
+
+  const aliquotaEfetivaFederal = _arredondar((totalTributosFederais / receitaBrutaTrimestral) * 100, 2);
+  const aliquotaEfetivaTotal = _arredondar((cargaTotalEstimada / receitaBrutaTrimestral) * 100, 2);
 
   return {
     receitaBrutaTrimestral,
@@ -3243,9 +3416,16 @@ function simulacaoRapida(receitaBrutaTrimestral, atividadeId = 'servicos_gerais'
     csll: csllTotal,
     pisTrimestral,
     cofinsTrimestral,
-    totalTributosFederais: totalTrimestral,
-    aliquotaEfetiva: `${aliquotaEfetiva}%`,
-    observacao: 'Estimativa sem considerar adições obrigatórias, IRRF retido ou ISS. Use calcularLucroPresumidoTrimestral() para cálculo completo.'
+    totalTributosFederais,
+    issEstimado,
+    cargaTotalEstimada,
+    aliquotaEfetiva: `${aliquotaEfetivaFederal}%`,
+    aliquotaEfetivaTotal: `${aliquotaEfetivaTotal}%`,
+    observacao: aliquotaISS > 0
+      ? `Carga total estimada inclui ISS de ${(aliquotaISS * 100).toFixed(1)}% sobre receita de serviços.`
+      : `ISS não incluído. Carga total real = tributos federais (${aliquotaEfetivaFederal}%) + ISS municipal sobre serviços. Use calcularLucroPresumidoTrimestral() para cálculo completo.`,
+    versaoMotor: '3.9.0',
+    dataBase: '2026-02'
   };
 }
 
@@ -3284,7 +3464,7 @@ function identificarAtividadePorCNAE(cnae) {
     for (const cnaePadrao of atividade.cnaes) {
       const padrao = cnaePadrao.replace(/[.\-\/]/g, '').replace(/\*/g, '');
       if (cnaeNormalizado.startsWith(padrao)) {
-        return {
+        const resultado = {
           atividadeId: atividade.id,
           descricao: atividade.descricao,
           percentualIRPJ: atividade.percentual,
@@ -3292,6 +3472,22 @@ function identificarAtividadePorCNAE(cnae) {
           baseLegal: atividade.baseLegal,
           alertaCNAE: atividade.alertaCNAE || null
         };
+
+        // M5 FIX: CNAE 6201-5 pode ter presunção de 16% (licenciamento/cessão de direito de uso)
+        // ou 32% (serviços gerais). Oferecer cenário alternativo para simulação.
+        if (cnaeNormalizado.startsWith('62015') || cnaeNormalizado.startsWith('6201')) {
+          resultado.alertaDuplaInterpretacao = true;
+          resultado.cenarioAlternativo = {
+            atividadeId: 'transporte_passageiros', // Usa 16% como proxy (cessão de direito de uso)
+            percentualIRPJ: 0.16,
+            percentualCSLL: 0.12,
+            descricao: 'Software — Cessão de direito de uso / Licenciamento (presunção reduzida 16%)',
+            baseLegal: 'Lei 9.249/95, Art. 15, §1º, III, "a" c/c IN RFB 1.700/2017, Art. 215'
+          };
+          resultado.notaDuplaInterpretacao = 'CNAE 62.01-5 pode ser enquadrado como serviços (32%) ou como cessão de direito de uso de software (16%). Simule ambos os cenários e consulte seu tributarista.';
+        }
+
+        return resultado;
       }
     }
   }
@@ -4663,16 +4859,17 @@ function simularProLaboreOtimo(socio, lucroDistribuivelIsento, opcoes = {}) {
     });
   }
 
-  // Encontrar ótimo (menor custo tributário)
+  // M3 FIX: Renomeado 'otimo' para 'menorCusto' — é simplesmente o cenário com menor custo tributário.
+  // Adicionado 'recomendado' que considera risco de autuação e objetivo previdenciário.
   const cenariosOrdenados = [...cenarios].sort((a, b) => a.tributosAnuais - b.tributosAnuais);
-  const otimo = cenariosOrdenados[0];
+  const menorCusto = cenariosOrdenados[0];
 
   // Cenário atual para comparação
   // BUG 2 FIX: O valor exato do usuário agora está na grade, então find() vai achar exato
   const atual = cenarios.find(c => c.proLaboreMensal === (socio.proLaboreAtual || MIN))
     || _encontrarCenarioMaisProximo(cenarios, socio.proLaboreAtual || MIN);
 
-  const economiaAnual = _arredondar((atual.tributosAnuais || 0) - (otimo.tributosAnuais || 0));
+  const economiaAnual = _arredondar((atual.tributosAnuais || 0) - (menorCusto.tributosAnuais || 0));
 
   // Cenários-chave para exibição rápida (5 cenários)
   const tetoINSS = cenarios.find(c => c.proLaboreMensal >= TETO_INSS_2026)
@@ -4683,7 +4880,7 @@ function simularProLaboreOtimo(socio, lucroDistribuivelIsento, opcoes = {}) {
   const cenariosChave = [
     { ...cenarios[0], label: 'Minimo (1 SM)' },
     { ...atual, label: 'Atual' },
-    { ...otimo, label: 'Otimo' },
+    { ...menorCusto, label: 'Menor Custo' },
     { ...tetoINSS, label: 'Teto INSS' },
     { ...intermediario, label: 'Intermediario' }
   ];
@@ -4712,23 +4909,40 @@ function simularProLaboreOtimo(socio, lucroDistribuivelIsento, opcoes = {}) {
       || cenarios[cenarios.length - 1];
   }
 
+  // M3 FIX: Cenário "recomendado" — considera risco de autuação e objetivo previdenciário
+  let recomendado;
+  if (fatorRiscoAutuacao && minimoAntiAutuacao && minimoAntiAutuacao.proLaboreMensal > menorCusto.proLaboreMensal) {
+    recomendado = minimoAntiAutuacao;
+  } else if (objetivoPrevidenciario === 'teto' && cenarioPrevidenciario) {
+    recomendado = cenarioPrevidenciario;
+  } else {
+    recomendado = menorCusto;
+  }
+
   return {
     cenarios,
     cenariosChave: cenariosChaveUnicos,
-    otimo,
+    menorCusto,
+    otimo: menorCusto, // Retrocompatibilidade — DEPRECADO, usar menorCusto
+    recomendado,
     atual,
     economiaAnual,
     minimoAntiAutuacao,
     cenarioPrevidenciario,
     objetivoPrevidenciario,
     alerta: 'Todo socio-administrador DEVE receber pro-labore de pelo menos 1 salario minimo (R$ 1.621,00 em 2026). A ausencia gera risco de autuacao pelo INSS com cobranca retroativa de 20% patronal + 11% do socio + multa + juros.',
+    alertaMenorCusto: menorCusto.proLaboreMensal === SALARIO_MINIMO_2026
+      ? 'O cenário de menor custo é o salário mínimo. Embora legal, pró-labore muito abaixo do praticado pelo mercado pode gerar questionamento pela RFB. Considere o cenário "recomendado".'
+      : null,
     alertaPrevidenciario: objetivoPrevidenciario === 'teto'
       ? `Para aposentadoria pelo teto do INSS (R$ ${TETO_INSS_2026.toLocaleString('pt-BR', {minimumFractionDigits: 2})}), o pro-labore deve ser de pelo menos R$ ${TETO_INSS_2026.toLocaleString('pt-BR', {minimumFractionDigits: 2})}/mes.`
       : null,
-    recomendacao: otimo.proLaboreMensal === SALARIO_MINIMO_2026
-      ? `O pro-labore otimo e o salario minimo (R$ ${SALARIO_MINIMO_2026.toLocaleString('pt-BR', {minimumFractionDigits: 2})}). Distribua o restante como lucros isentos.`
-      : `O pro-labore otimo e R$ ${otimo.proLaboreMensal.toLocaleString('pt-BR', {minimumFractionDigits: 2})}/mes.`,
-    baseLegal: 'IN RFB 971/2009, Art. 57; Decreto 3.048/99, Art. 201; Lei 9.249/95, Art. 10; IN RFB 1.700/2017, Art. 238'
+    recomendacao: recomendado.proLaboreMensal === SALARIO_MINIMO_2026
+      ? `O pro-labore recomendado e o salario minimo (R$ ${SALARIO_MINIMO_2026.toLocaleString('pt-BR', {minimumFractionDigits: 2})}). Distribua o restante como lucros isentos.`
+      : `O pro-labore recomendado e R$ ${recomendado.proLaboreMensal.toLocaleString('pt-BR', {minimumFractionDigits: 2})}/mes.`,
+    baseLegal: 'IN RFB 971/2009, Art. 57; Decreto 3.048/99, Art. 201; Lei 9.249/95, Art. 10; IN RFB 1.700/2017, Art. 238',
+    versaoMotor: '3.9.0',
+    dataBase: '2026-02'
   };
 }
 
@@ -5043,8 +5257,43 @@ function calcularBeneficioECD(params) {
     custoAnualECD
   } = params;
 
+  // M4 FIX: Validar que lucroContabilReal é informado e consistente
+  if (typeof lucroContabilReal !== 'number' || lucroContabilReal < 0) {
+    return {
+      limitePresumido: 0,
+      limiteContabil: 0,
+      distribuicaoExtra: 0,
+      custoECD: custoAnualECD,
+      beneficioLiquido: 0,
+      percentualGanho: 0,
+      valeAPena: false,
+      recomendacao: 'Lucro contábil real não informado ou inválido. Informe o lucro contábil para avaliar o benefício da ECD.',
+      baseLegal: 'IN RFB 1.700/2017, Art. 238; IN RFB 1.774/2017 (ECD); RIR/2018, Art. 725',
+      versaoMotor: '3.9.0',
+      dataBase: '2026-02'
+    };
+  }
+
   const limitePresumido = _arredondar(Math.max(0, basePresumidaAnual - tributosFederaisAnuais));
   const limiteContabil = _arredondar(Math.max(0, lucroContabilReal - tributosFederaisAnuais));
+
+  // M4 FIX: Se lucro contábil < base presumida, ECD expõe lucro menor e NÃO traz benefício
+  if (lucroContabilReal < basePresumidaAnual) {
+    return {
+      limitePresumido: limitePresumido,
+      limiteContabil: limiteContabil,
+      distribuicaoExtra: 0,
+      custoECD: custoAnualECD,
+      beneficioLiquido: _arredondar(-custoAnualECD), // Custo sem benefício
+      percentualGanho: 0,
+      valeAPena: false,
+      alertaLucroInferior: true,
+      recomendacao: `O lucro contábil real (R$ ${lucroContabilReal.toLocaleString('pt-BR', {minimumFractionDigits: 2})}) é INFERIOR à base presumida (R$ ${basePresumidaAnual.toLocaleString('pt-BR', {minimumFractionDigits: 2})}). A ECD não gera benefício na distribuição e pode expor que o lucro efetivo é menor que a presunção. Sem ECD, a distribuição isenta é limitada pela base presumida (Art. 725 RIR/2018). A empresa pode distribuir até o limite presumido sem necessidade de comprovar lucro contábil.`,
+      baseLegal: 'IN RFB 1.700/2017, Art. 238; IN RFB 1.774/2017 (ECD); RIR/2018, Art. 725',
+      versaoMotor: '3.9.0',
+      dataBase: '2026-02'
+    };
+  }
 
   const distribuicaoExtraPossivel = _arredondar(Math.max(0, limiteContabil - limitePresumido));
   const beneficioLiquido = _arredondar(distribuicaoExtraPossivel - custoAnualECD);
@@ -5061,12 +5310,15 @@ function calcularBeneficioECD(params) {
     beneficioLiquido: beneficioLiquido,
     percentualGanho: percentualGanho,
     valeAPena: beneficioLiquido > 0,
+    alertaLucroInferior: false,
     recomendacao: beneficioLiquido > 0
       ? `Com ECD, distribua R$ ${distribuicaoExtraPossivel.toLocaleString('pt-BR', {minimumFractionDigits: 2})} a mais por ano como lucro isento. Beneficio liquido (descontando custo da ECD): R$ ${beneficioLiquido.toLocaleString('pt-BR', {minimumFractionDigits: 2})}/ano.`
       : custoAnualECD > 0
         ? `O custo da ECD (R$ ${custoAnualECD.toLocaleString('pt-BR', {minimumFractionDigits: 2})}) supera o beneficio de R$ ${distribuicaoExtraPossivel.toLocaleString('pt-BR', {minimumFractionDigits: 2})}. Nao recomendado.`
         : 'O lucro contabil nao excede a base presumida. ECD nao gera beneficio adicional na distribuicao.',
-    baseLegal: 'IN RFB 1.700/2017, Art. 238; IN RFB 1.774/2017 (ECD); RIR/2018, Art. 725'
+    baseLegal: 'IN RFB 1.700/2017, Art. 238; IN RFB 1.774/2017 (ECD); RIR/2018, Art. 725',
+    versaoMotor: '3.9.0',
+    dataBase: '2026-02'
   };
 }
 
@@ -6610,7 +6862,7 @@ function _executarDemonstracao() {
     },
     300000 // lucro distribuível isento anual estimado
   );
-  console.log(`  Ótimo: R$ ${_formatarMoeda(simPL.otimo.proLaboreMensal)}/mês`);
+  console.log(`  Ótimo: R$ ${_formatarMoeda(simPL.menorCusto.proLaboreMensal)}/mês`);
   console.log(`  Atual: R$ ${_formatarMoeda(simPL.atual.proLaboreMensal)}/mês`);
   console.log(`  Economia anual: R$ ${_formatarMoeda(simPL.economiaAnual)}`);
   console.log(`  ${simPL.recomendacao}`);
@@ -6674,7 +6926,7 @@ function _executarDemonstracao() {
   cal.picosCaixa.forEach(p => console.log(`    ${p.mes}: R$ ${_formatarMoeda(p.valor)}`));
 
   console.log('\n\n═══════════════════════════════════════════════════════');
-  console.log('  Demonstração concluída. Motor v3.8.0 — Todas as etapas (1-4) + Seções 17-32 + Correções Auditoria.');
+  console.log('  Demonstração concluída. Motor v3.9.0 — Todas as etapas (1-4) + Seções 17-32 + Correções Auditoria v2.');
   console.log('═══════════════════════════════════════════════════════\n');
 }
 
