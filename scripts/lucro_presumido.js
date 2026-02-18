@@ -5,8 +5,18 @@
  *
  * AGROGEO BRASIL - Geotecnologia e Consultoria Ambiental
  * Autor: Luis Fernando | Proprietário AGROGEO BRASIL
- * Versão: 3.7.1
+ * Versão: 3.7.2
  * Data: Fevereiro/2026
+ *
+ * Changelog v3.7.2:
+ *   - BUG 2 FIX (DEFINITIVO): INSS Sócio — calcularINSSSocio() agora usa tabela
+ *     progressiva por faixas (Portaria MPS/MF 13/2026, Anexo II; EC 103/2019) em vez
+ *     de alíquota flat de 11%. Para R$ 5.000 de pró-labore: antes R$ 550,00 (11% flat),
+ *     agora R$ 501,52 (progressivo). Isso elimina a divergência entre a linha "Atual"
+ *     e os demais cenários na simulação de pró-labore ótimo.
+ *     Tabela: 7,5% até R$ 1.621 | 9% até R$ 2.902,84 | 12% até R$ 4.354,27 | 14% até teto.
+ *     Constante TABELA_INSS_PROGRESSIVA_2026 adicionada. INSS_CONTRIBUINTE_INDIVIDUAL (0.11)
+ *     mantida para referência/comparação, mas não mais usada no cálculo.
  *
  * Changelog v3.7.1:
  *   - BUG 1 FIX: Coluna "Eficiência" na tabela Pró-Labore exibia "NaN%" —
@@ -222,7 +232,18 @@ const ALIQUOTA_INSS_PATRONAL = 0.20;
 const SALARIO_MINIMO_2026 = 1621.00;
 const TETO_INSS_2026 = 8475.55;
 const INSS_PATRONAL_ALIQUOTA = 0.20;           // 20% sem teto
-const INSS_CONTRIBUINTE_INDIVIDUAL = 0.11;      // 11% limitado ao teto
+const INSS_CONTRIBUINTE_INDIVIDUAL = 0.11;      // 11% alíquota flat (mantida para referência/comparação)
+
+// ── INSS 2026 — Tabela progressiva mensal (Portaria MPS/MF 13/2026, Anexo II) ──
+// EC 103/2019 introduziu cálculo progressivo por faixas.
+// Aplicável a empregados, domésticos, avulsos e contribuintes individuais (pró-labore).
+
+const TABELA_INSS_PROGRESSIVA_2026 = [
+  { limite: 1621.00,   aliquota: 0.075 },   // 7,5% até 1 SM
+  { limite: 2902.84,   aliquota: 0.09  },   // 9%
+  { limite: 4354.27,   aliquota: 0.12  },   // 12%
+  { limite: 8475.55,   aliquota: 0.14  }    // 14% até o teto
+];
 
 // ── IRPF 2026 — Tabela progressiva mensal ──
 
@@ -488,8 +509,26 @@ function calcularIRPFProLabore2026(proLabore, inssDescontado, numeroDependentes)
  * @returns {number} Valor do INSS retido
  */
 function calcularINSSSocio(proLabore) {
+  // ── BUG 2 FIX (v3.7.2): Usar tabela progressiva em vez de alíquota flat de 11% ──
+  // A EC 103/2019 introduziu alíquotas progressivas por faixas.
+  // Cálculo idêntico ao do IRPF: cada faixa incide apenas sobre o trecho correspondente.
+  // Base Legal: Portaria MPS/MF 13/2026, Anexo II; EC 103/2019.
   const base = Math.min(proLabore, TETO_INSS_2026);
-  return _arredondar(base * INSS_CONTRIBUINTE_INDIVIDUAL);
+  if (base <= 0) return 0;
+
+  let total = 0;
+  let faixaAnterior = 0;
+
+  for (const faixa of TABELA_INSS_PROGRESSIVA_2026) {
+    if (base <= faixaAnterior) break;
+    const trechoBase = Math.min(base, faixa.limite) - faixaAnterior;
+    if (trechoBase > 0) {
+      total += trechoBase * faixa.aliquota;
+    }
+    faixaAnterior = faixa.limite;
+  }
+
+  return _arredondar(total);
 }
 
 /**
@@ -6183,6 +6222,7 @@ const LucroPresumido = {
   TETO_INSS_2026,
   INSS_PATRONAL_ALIQUOTA,
   INSS_CONTRIBUINTE_INDIVIDUAL,
+  TABELA_INSS_PROGRESSIVA_2026,
   TABELA_IRPF_2026,
   REDUTOR_IRPF_2026,
   DEDUCAO_DEPENDENTE_IRPF,
