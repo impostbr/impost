@@ -1474,8 +1474,8 @@
     <div class="logo">IMPOST<span class="logo-dot">.</span></div>
     <div class="header-sep"></div>
     <span class="header-title">Estudo Tributário — Lucro Real</span>
-    <span class="header-version" id="versionBadge">v3.3</span>
-    <a class="header-btn-dashboard" href="../pages/dashboard.html">← Dashboard</a>
+    <span class="header-version" id="versionBadge">v3.4</span>
+    <a class="header-btn-dashboard" href="dashboard.html">← Dashboard</a>
   </header>
 
   <!-- ═══════════════════════════════════════════════════════════════════════════
@@ -1492,7 +1492,7 @@
        1. estados.js       → window.Estados (dados de 27 UFs)
        2. municipios.js    → API IBGE (depende de estados.js para siglas)
        3. motor v4.6       → window.MotorLR (cálculos puros, sem dependência)
-       4. mapeamento v3.4  → window.LR (ponte motor↔HTML, lê de Estados via LR.setEstado)
+       4. mapeamento v3.3  → window.LR (ponte motor↔HTML, lê de Estados via LR.setEstado)
        5-7. Libs externas  → Chart.js, html2pdf, SheetJS
        8. estudos.js       → window.LucroRealEstudos (wizard, depende de TODOS acima)
        9. Script inline    → Ponte HTML↔LR.setEstado + action bar
@@ -1501,14 +1501,14 @@
        ═══════════════════════════════════════════════════════════════════════════ -->
   <!-- 1. Dados de estados (window.Estados / window.EstadosBR) -->
   <!-- v3.3 FIX E3#2: onerror handler para dependências -->
-  <script src="../scripts/estados.js" onerror="console.warn('[IMPOST] estados.js não carregado — ISS/SUDAM/SUDENE usarão dados estáticos do mapeamento'); window._depFalha = (window._depFalha||[]); window._depFalha.push('estados.js');"></script>
+  <script src="estados.js" onerror="console.warn('[IMPOST] estados.js não carregado — ISS/SUDAM/SUDENE usarão dados estáticos do mapeamento'); window._depFalha = (window._depFalha||[]); window._depFalha.push('estados.js');"></script>
   <!-- 2. Municípios via API IBGE (depende de estados.js) -->
-  <script src="../scripts/municipios.js" onerror="console.warn('[IMPOST] municipios.js não carregado — municípios indisponíveis'); window._depFalha = (window._depFalha||[]); window._depFalha.push('municipios.js');"></script>
+  <script src="municipios.js" onerror="console.warn('[IMPOST] municipios.js não carregado — municípios indisponíveis'); window._depFalha = (window._depFalha||[]); window._depFalha.push('municipios.js');"></script>
   <!-- 3. Motor fiscal unificado v4.6 (cálculos puros, sem dependência) -->
   <!-- v3.3 FIX E3#1: onerror handler para motor fiscal — ativa fallback silencioso -->
-  <script src="../scripts/motor-lucro-real-v4.6-unificado.js" onerror="console.error('[IMPOST] Motor fiscal não carregado — todos os cálculos usarão fallback simplificado'); window._motorFiscalFalhou = true; window._depFalha = (window._depFalha||[]); window._depFalha.push('motor-lucro-real-v4.6-unificado.js');"></script>
-  <!-- 4. Mapeamento unificado v3.4 (ponte motor↔HTML, lê de estados.js via LR.setEstado) -->
-  <script src="../scripts/lucro-real-mapeamento.js" onerror="console.error('[IMPOST] Mapeamento não carregado — sistema não funcional'); window._depFalha = (window._depFalha||[]); window._depFalha.push('lucro-real-mapeamento.js');"></script>
+  <script src="motor-lucro-real-v4.6-unificado.js" onerror="console.error('[IMPOST] Motor fiscal não carregado — todos os cálculos usarão fallback simplificado'); window._motorFiscalFalhou = true; window._depFalha = (window._depFalha||[]); window._depFalha.push('motor-lucro-real-v4.6-unificado.js');"></script>
+  <!-- 4. Mapeamento unificado v3.3 (ponte motor↔HTML, lê de estados.js via LR.setEstado) -->
+  <script src="lucro-real-mapeamento.js" onerror="console.error('[IMPOST] Mapeamento não carregado — sistema não funcional'); window._depFalha = (window._depFalha||[]); window._depFalha.push('lucro-real-mapeamento.js');"></script>
   <!-- 5. Chart.js 4.4 CDN com fallback -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"
     onerror="this.onerror=null;this.src='https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.7/chart.umd.min.js';console.warn('[IMPOST] Chart.js CDN primário falhou, tentando fallback');"></script>
@@ -1519,20 +1519,17 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"
     onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';console.warn('[IMPOST] SheetJS CDN primário falhou, tentando fallback');window._depFalha=(window._depFalha||[]);window._depFalha.push('xlsx.js');"></script>
   <!-- 8. Motor principal do wizard (depende de TODOS acima) -->
-  <script src="../scripts/lucro-real-estudos.js" onerror="console.error('[IMPOST] estudos.js não carregado — wizard não funcional'); window._depFalha = (window._depFalha||[]); window._depFalha.push('lucro-real-estudos.js');"></script>
+  <script src="lucro-real-estudos.js" onerror="console.error('[IMPOST] estudos.js não carregado — wizard não funcional'); window._depFalha = (window._depFalha||[]); window._depFalha.push('lucro-real-estudos.js');"></script>
 
-  <!-- v3.4 FIX BUG 2: Sincronizar versão do badge com o JS -->
+  <!-- Sincronizar versão do badge com o JS -->
   <script>
   (function() {
     'use strict';
     function syncVersion() {
       var badge = document.getElementById('versionBadge');
       if (!badge) return;
-      // Prioridade: LucroRealEstudos.VERSAO > LR versão header > fallback
       if (typeof LucroRealEstudos !== 'undefined' && LucroRealEstudos.VERSAO) {
         badge.textContent = 'v' + LucroRealEstudos.VERSAO;
-      } else if (typeof LR !== 'undefined' && LR._versao) {
-        badge.textContent = 'v' + LR._versao;
       }
     }
     if (document.readyState === 'loading') {
@@ -1556,18 +1553,6 @@
     //  NOTA v1.1: _m e _pp removidos — eram cópias de LR.helpers.formatarMoeda()
     //  e LR.helpers.formatarPercentual(), nunca utilizados neste inline.
     // ═══════════════════════════════════════════════════════════════════════
-
-    function showLoading(msg) {
-      var overlay = document.createElement('div');
-      overlay.className = 'export-loading';
-      overlay.id = 'exportLoading';
-      overlay.innerHTML = '<div class="export-loading-inner"><div class="spinner"></div><div>' + (msg || 'Gerando...') + '</div></div>';
-      document.body.appendChild(overlay);
-    }
-    function hideLoading() {
-      var el = document.getElementById('exportLoading');
-      if (el) el.remove();
-    }
 
     // ═══════════════════════════════════════════════════════════════════════
     //  INJETAR BARRA DE AÇÕES QUANDO RESULTADOS APARECEM
