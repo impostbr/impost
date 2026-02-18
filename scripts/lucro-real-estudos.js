@@ -1,6 +1,6 @@
 /**
  * ╔══════════════════════════════════════════════════════════════════════════════╗
- * ║  LUCRO REAL — ESTUDOS TRIBUTÁRIOS  v2.2  (ARQUIVO UNIFICADO)              ║
+ * ║  LUCRO REAL — ESTUDOS TRIBUTÁRIOS  v2.3  (ARQUIVO UNIFICADO)              ║
  * ║  Wizard 7 etapas + Motor de diagnóstico + Exportação PDF/Excel            ║
  * ║  100% LUCRO REAL — Sem comparativo com Simples/Presumido                   ║
  * ║  Motor: cruza respostas do usuário com LucroRealMap (LR.calcular.*)        ║
@@ -20,10 +20,24 @@
  *   window.IMPOSTExport      — alias de compatibilidade para exportação
  *
  * IMPOST. — Inteligência em Modelagem de Otimização Tributária
- * Versão: 2.2.0 | Data: Fevereiro/2026
+ * Versão: 2.3.0 | Data: Fevereiro/2026
  *
  * NOTA: Este arquivo unifica os antigos lucro-real-estudos.js + lucro-real-estudos-export.js
  *       Não é mais necessário carregar o arquivo de exportação separadamente.
+ *
+ * CHANGELOG v2.3.0 (Fevereiro/2026):
+ *   FALHA #1 — Cards SIMULACAO_COMPLETA e MAPA_ECONOMIA marcados como consolidação (_isConsolidada)
+ *              para não duplicar economia ao somar oportunidades. Visual distinto no relatório e Excel.
+ *   FALHA #2 — pisCofins.aliquotaEfetiva agora é LÍQUIDA (após retenções/créditos).
+ *              Adicionada pisCofins.aliquotaEfetivaBruta. Seção 5 mostra alíquota líquida com nota.
+ *   FALHA #3 — Dashboard já exibe labels "(Bruto)" e "(Líquido)" com tooltips explicativos.
+ *   FALHA #4 — Oportunidade Prejuízo Fiscal: inclui economia IRPJ+CSLL quando não há card separado
+ *              de Base Negativa CSLL (evita duplicação quando ambos existem).
+ *   FALHA #5 — Guarda para multaOficio: não calcula quando não há débito relevante.
+ *   MELHORIA — TJLP default atualizado de 6% para 7,97% (taxa 2025).
+ *   MELHORIA — Novo campo PL Ajustado JCP (Lei 14.789/2023) na Etapa 3.
+ *   MELHORIA — Disclaimer jurídico em destaque no INÍCIO do relatório.
+ *   MELHORIA — Alerta inteligente sobre Lei 14.789/2023 quando PL Ajustado não informado.
  */
 (function () {
   "use strict";
@@ -31,7 +45,7 @@
   // ═══════════════════════════════════════════════════════════════════════════
   //  CONSTANTES E HELPERS
   // ═══════════════════════════════════════════════════════════════════════════
-  const VERSAO = "2.2.0";
+  const VERSAO = "2.3.0";
   const LS_KEY_DADOS = "impost_lr_dados";
   const LS_KEY_STEP = "impost_lr_step";
   const LS_KEY_RESULTADOS = "impost_lr_resultados";
@@ -1316,8 +1330,11 @@
       );
     }
     h += _field("tjlp", "TJLP anual vigente (%)", "percent", {
-      default: "6",
-      tip: "Taxa de Juros de Longo Prazo. Consultar Banco Central para valor vigente.",
+      default: "7.97",
+      tip: "Taxa de Juros de Longo Prazo (TJLP 2025: 7,97% a.a.). Consulte a taxa vigente no Banco Central (www.bcb.gov.br).",
+    });
+    h += _field("plAjustadoJCP", "PL Ajustado p/ JCP — Lei 14.789/2023 (opcional)", "money", {
+      tip: "Conforme Lei 14.789/2023, a base do JCP pode ser limitada ao PL Ajustado (PL - MEP - PDD - AVP). Se informado, será usado no lugar do PL contábil total para cálculo do JCP máximo.",
     });
     h += _autoCalcBox("calcJCP");
 
@@ -2228,13 +2245,13 @@
       if (plVal > 0 && llVal > 0) {
         try {
           var jcpRes = LR.calcular.jcp({
-            patrimonioLiquido: plVal,
+            patrimonioLiquido: _n(d.plAjustadoJCP) > 0 ? _n(d.plAjustadoJCP) : plVal,
             capitalSocial: _n(d.capitalSocial) || null,
             reservasCapital: _n(d.reservasCapital),
             reservasLucros: _n(d.reservasLucros),
             lucrosAcumulados: _n(d.lucrosAcumulados) + _n(d.reservasLucros),
             prejuizosAcumulados: _n(d.prejuizosContabeis),
-            tjlp: (_n(d.tjlp) || 6) / 100,
+            tjlp: (_n(d.tjlp) || 7.97) / 100,
             lucroLiquidoAntes: llVal,
             numMeses: 12,
           });
@@ -3168,9 +3185,10 @@
     var _totalDebitos = _r(pisCofinsResult.debitoPIS + pisCofinsResult.debitoCOFINS);
     pisCofinsResult.economiaCreditos = pisCofinsResult.economiaCreditos || _r(Math.max(_totalDebitos - pisCofinsResult.totalAPagarBruto, 0));
     pisCofinsResult.receitasIsentas  = pisCofinsResult.receitasIsentas || receitasIsentas;
-    // CORREÇÃO BUG #1: _pp() só existe em renderResultados(), não pode ser chamada aqui.
-    // Usar .toFixed(2) + '%' diretamente.
-    pisCofinsResult.aliquotaEfetiva  = pisCofinsResult.aliquotaEfetiva || (receitaBruta > 0 ? (_r(pisCofinsResult.totalAPagarBruto / receitaBruta * 100)).toFixed(2) + '%' : '0.00%');
+    // CORREÇÃO FALHA #2: aliquotaEfetiva agora é LÍQUIDA (após retenções e créditos).
+    // aliquotaEfetivaBruta é BRUTA (débitos sobre receita).
+    pisCofinsResult.aliquotaEfetiva = pisCofinsResult.aliquotaEfetiva || (receitaBruta > 0 ? (_r(pisCofinsResult.totalAPagarLiquido / receitaBruta * 100)).toFixed(2) + '%' : '0.00%');
+    pisCofinsResult.aliquotaEfetivaBruta = pisCofinsResult.aliquotaEfetivaBruta || (receitaBruta > 0 ? (_r(pisCofinsResult.totalAPagarBruto / receitaBruta * 100)).toFixed(2) + '%' : '0.00%');
 
     // CORREÇÃO BUG #4: Validar consistência entre totalAPagarBruto e aPagar.total
     if (pisCofinsResult.aPagar && pisCofinsResult.aPagar.total !== undefined) {
@@ -3235,17 +3253,19 @@
     //  PASSO 10 — JCP → LR.calcular.jcp()
     // ═══════════════════════════════════════════════════════════════════════
     // plVal já calculado no PASSO 3A
+    // MELHORIA Lei 14.789/2023: usar PL Ajustado quando informado
+    var plParaJCP = _n(d.plAjustadoJCP) > 0 ? _n(d.plAjustadoJCP) : plVal;
     var jcpResult = null;
-    if (plVal > 0 && lucroLiquido > 0) {
+    if (plParaJCP > 0 && lucroLiquido > 0) {
       try {
         jcpResult = LR.calcular.jcp({
-          patrimonioLiquido: plVal,
+          patrimonioLiquido: plParaJCP,
           capitalSocial: _n(d.capitalSocial) || null,
           reservasCapital: _n(d.reservasCapital),
           reservasLucros: _n(d.reservasLucros),
           lucrosAcumulados: _n(d.lucrosAcumulados) + _n(d.reservasLucros),
           prejuizosAcumulados: _n(d.prejuizosContabeis),
-          tjlp: (_n(d.tjlp) || 6) / 100,
+          tjlp: (_n(d.tjlp) || 7.97) / 100,
           lucroLiquidoAntes: lucroLiquido,
           numMeses: 12
         });
@@ -3746,7 +3766,8 @@
     }
 
     // Multa de ofício — simulação com base na carga tributária calculada
-    if (LR.calcular && LR.calcular.multaOficio) {
+    // CORREÇÃO FALHA #5: só calcular multa de ofício se houver valor relevante de tributo
+    if (LR.calcular && LR.calcular.multaOficio && _r(cargaBruta / 12) > 0) {
       try {
         multaOficioResult = LR.calcular.multaOficio({
           valorDiferenca: _r(cargaBruta / 12),
@@ -3758,6 +3779,10 @@
           temConformidade: d.temConformidadeLei14689 === true || d.temConformidadeLei14689 === "true",
           temTransacao: d.temTransacaoTributaria === true || d.temTransacaoTributaria === "true"
         });
+        // FALHA #5: limpar resultado se multaLiquida é 0 (empresa adimplente)
+        if (multaOficioResult && (multaOficioResult.multaLiquida || multaOficioResult.valorFinal || 0) <= 0) {
+          multaOficioResult = null;
+        }
       } catch(e) { if (typeof console !== 'undefined') console.warn('[Passo 22F] multaOficio:', e.message); }
     }
 
@@ -4236,15 +4261,28 @@
 
     // #2 — Prejuízo Fiscal
     if (_n(d.prejuizoFiscal) > 0 && ctx.lucroAjustado > 0 && ctx.compensacao) {
-      var econPrej = ctx.compensacao.resumo ? ctx.compensacao.resumo.economia.irpj : 0;
+      // CORREÇÃO FALHA #4: incluir economia IRPJ + CSLL quando não há card #3 separado.
+      // Se há base negativa CSLL separada, card #2 fica apenas IRPJ para evitar duplicação.
+      var _temBaseNeg = _n(d.baseNegativaCSLL) > 0;
+      var econPrej;
+      if (_temBaseNeg) {
+        // Cards separados: #2 = IRPJ, #3 = CSLL
+        econPrej = ctx.compensacao.resumo ? _n(ctx.compensacao.resumo.economia.irpj) : 0;
+      } else {
+        // Sem card #3: incluir tudo em #2
+        econPrej = ctx.compensacao.resumo ? (ctx.compensacao.resumo.economia.total || (_n(ctx.compensacao.resumo.economia.irpj) + _n(ctx.compensacao.resumo.economia.csll))) : 0;
+      }
       if (econPrej > 0) {
+        var _descrPrej = _temBaseNeg
+          ? "Prejuízo fiscal acumulado de " + _m(_n(d.prejuizoFiscal)) + " permite compensar até 30% do lucro ajustado, economizando " + _m(econPrej) + " em IRPJ."
+          : "Prejuízo fiscal acumulado de " + _m(_n(d.prejuizoFiscal)) + " permite compensar até 30% do lucro ajustado, economizando " + _m(econPrej) + " em IRPJ+CSLL.";
         ops.push({
           id: "PREJUIZO_FISCAL", titulo: "Compensação de Prejuízo Fiscal",
           tipo: "Compensação", complexidade: "Baixa", risco: "Baixo",
           economiaAnual: econPrej,
-          descricao: "Prejuízo fiscal acumulado de " + _m(_n(d.prejuizoFiscal)) + " permite compensar até 30% do lucro ajustado, economizando " + _m(econPrej) + " em IRPJ.",
+          descricao: _descrPrej,
           baseLegal: "Art. 579-586 do RIR/2018",
-          acaoRecomendada: "Manter controle na Parte B do LALUR. Verificar vedações de compensação.",
+          acaoRecomendada: "Manter controle na Parte B do LALUR/LACS. Verificar vedações de compensação.",
           prazoImplementacao: "Imediato",
           detalhes: ctx.compensacao.resumo
         });
@@ -4898,11 +4936,11 @@
           receitaBruta: ctx.receitaBruta,
           adicoes: ctx.totalAdicoes || 0,
           exclusoes: ctx.totalExclusoes || 0,
-          patrimonioLiquido: ctx.plVal,
+          patrimonioLiquido: _n(d.plAjustadoJCP) > 0 ? _n(d.plAjustadoJCP) : ctx.plVal,
           prejuizoFiscal: _n(d.prejuizoFiscal),
           baseNegativaCSLL: _n(d.baseNegativaCSLL),
           lucrosAcumulados: _n(d.lucrosAcumulados) + _n(d.reservasLucros),
-          tjlp: (_n(d.tjlp) || 6) / 100,
+          tjlp: (_n(d.tjlp) || 7.97) / 100,
           financeira: ctx.ehFinanceira,
           despesasIncentivos: ctx.despesasIncentivos || {},
           retencoesFonte: ctx.totalIRRF || 0,
@@ -4915,8 +4953,10 @@
           ops.push({
             id: "SIMULACAO_COMPLETA", titulo: "Simulação Integrada — Economia Consolidada",
             tipo: "Dedução", complexidade: "Média", risco: "Baixo",
+            // CORREÇÃO FALHA #1: Marcar como consolidação para não somar com itens individuais
+            _isConsolidada: true,
             economiaAnual: simCompleta.economia.total,
-            descricao: "Simulação consolidada IRPJ+CSLL+JCP+Incentivos indica economia total otimizada de " + _m(simCompleta.economia.total) + " vs cenário sem otimizações.",
+            descricao: "⚠️ CONSOLIDAÇÃO (não somar com itens acima) — Simulação consolidada IRPJ+CSLL+JCP+Incentivos indica economia total otimizada de " + _m(simCompleta.economia.total) + " vs cenário sem otimizações.",
             baseLegal: "Diversos — consolidação de todos os incentivos aplicáveis",
             acaoRecomendada: "Implementar todas as otimizações identificadas na simulação completa para maximizar a economia fiscal.",
             prazoImplementacao: "30-90 dias",
@@ -4995,8 +5035,10 @@
           ops.push({
             id: "MAPA_ECONOMIA", titulo: "Mapa de Economia Consolidado IMPOST.",
             tipo: "Dedução", complexidade: "Baixa", risco: "Baixo",
+            // CORREÇÃO FALHA #1: Marcar como consolidação para não somar com itens individuais
+            _isConsolidada: true,
             economiaAnual: mapaEconomia.economiaTotal,
-            descricao: "Mapa consolidado de todas as estratégias identifica economia total potencial de " + _m(mapaEconomia.economiaTotal) + ". " + (mapaEconomia.estrategiasAtivas || 0) + " estratégias ativas de " + (mapaEconomia.estrategiasDisponiveis || 0) + " disponíveis.",
+            descricao: "⚠️ CONSOLIDAÇÃO (não somar com itens acima) — Mapa consolidado de todas as estratégias identifica economia total potencial de " + _m(mapaEconomia.economiaTotal) + ". " + (mapaEconomia.estrategiasAtivas || 0) + " estratégias ativas de " + (mapaEconomia.estrategiasDisponiveis || 0) + " disponíveis.",
             baseLegal: "Consolidação de todas as bases legais aplicáveis",
             acaoRecomendada: "Utilizar o Mapa de Economia como roteiro de implementação. Priorizar estratégias por impacto e complexidade.",
             prazoImplementacao: "Contínuo",
@@ -5567,6 +5609,15 @@
     }
     html += '</div>';
 
+    // MELHORIA: Aviso Legal em destaque no INÍCIO do relatório (antes do painel)
+    html += '<div class="res-disclaimer-top" style="margin:16px 0;padding:14px 18px;background:#FFF9E6;border-left:4px solid #F39C12;border-radius:4px;font-size:0.92em;color:#666;">';
+    html += '<strong style="color:#F39C12;">⚠️ AVISO LEGAL</strong><br>';
+    html += cfg.disclaimer;
+    html += '<br><span style="font-size:0.85em;color:#999;">Os valores apresentados são estimativas baseadas nos dados informados e na legislação vigente. ' +
+      'Não substitui a análise individualizada de profissional contábil/jurídico habilitado. ' +
+      'Todos os cálculos devem ser validados antes de qualquer implementação.</span>';
+    html += '</div>';
+
     // ═══════════════════════════════════════════════════════════════════════
     //  SEÇÃO 2 — PAINEL RESUMO (6 Cards)
     // ═══════════════════════════════════════════════════════════════════════
@@ -6001,15 +6052,17 @@
     s5 += '<tbody>';
     s5 += '<tr><td style="color:#E74C3C;">IRPJ</td><td>' + _m(compBaseIRPJ) + '</td><td>' + _pp(compBaseIRPJ > 0 ? _r(comp.irpj.valor / compBaseIRPJ * 100) : 0) + '</td><td>' + _m(comp.irpj.valor) + '</td><td>' + _m(_r(comp.irpj.valor / 12)) + '</td><td>' + _pp(comp.irpj.percentual) + '</td></tr>';
     s5 += '<tr><td style="color:#F39C12;">CSLL</td><td>' + _m(compBaseCSLL) + '</td><td>' + _pp(compBaseCSLL > 0 ? _r(comp.csll.valor / compBaseCSLL * 100) : 0) + '</td><td>' + _m(comp.csll.valor) + '</td><td>' + _m(_r(comp.csll.valor / 12)) + '</td><td>' + _pp(comp.csll.percentual) + '</td></tr>';
-    // BUG#2 CORRIGIDO: alíquota calculada sobre valor bruto (mesma base que comp.pisCofins.valor após Bug#1)
-    var pcValorBruto = comp.pisCofins.valor; // bruto após correção Bug#1
-    var pcAliqEfetiva = dre.receitaBruta > 0 ? _pp(_r(pcValorBruto / dre.receitaBruta * 100)) : '0,00%';
-    var pcAliqDisplay = r.pisCofins.aliquotaEfetivaBruta || pcAliqEfetiva;
+    // CORREÇÃO FALHA #2: alíquota efetiva LÍQUIDA (após retenções e créditos)
+    var pcValorBruto = comp.pisCofins.valor; // bruto para consistência com cargaBruta
+    var pcAliqEfetivaLiquida = dre.receitaBruta > 0 ? _pp(_r(r.pisCofins.totalAPagarLiquido / dre.receitaBruta * 100)) : '0,00%';
+    var pcAliqDisplay = r.pisCofins.aliquotaEfetiva || pcAliqEfetivaLiquida;
     s5 += '<tr><td style="color:#3498DB;">PIS/COFINS</td><td>' + _m(dre.receitaBruta) + '</td><td>' + pcAliqDisplay + '</td><td>' + _m(pcValorBruto) + '</td><td>' + _m(_r(pcValorBruto / 12)) + '</td><td>' + _pp(comp.pisCofins.percentual) + '</td></tr>';
     s5 += '<tr><td style="color:#9B59B6;">ISS</td><td>' + _m(r.iss.receitaServicos) + '</td><td>' + _pp(r.iss.aliquota) + '</td><td>' + _m(comp.iss.valor) + '</td><td>' + _m(_r(comp.iss.valor / 12)) + '</td><td>' + _pp(comp.iss.percentual) + '</td></tr>';
     s5 += '</tbody>';
     s5 += '<tfoot><tr class="res-total"><td><strong>TOTAL</strong></td><td></td><td><strong>' + _pp(res.aliquotaEfetiva) + '</strong></td><td><strong>' + _m(res.cargaBruta) + '</strong></td><td><strong>' + _m(res.cargaBrutaMensal) + '</strong></td><td><strong>100%</strong></td></tr></tfoot>';
     s5 += '</table>';
+    // FALHA #2 nota: esclarecer que PIS/COFINS exibe alíquota líquida (após créditos e retenções)
+    s5 += '<p class="res-nota">* A alíquota efetiva de PIS/COFINS exibida é <strong>líquida</strong> (após créditos e retenções). Alíquota bruta (antes de créditos): <strong>' + (r.pisCofins.aliquotaEfetivaBruta || '—') + '</strong></p>';
     // BUG#1 — notas de valores líquidos (após retenções) para transparência
     var _pisCofinsLiqS5 = _r(Math.max(pcValorBruto - _n(d.pisRetido) - _n(d.cofinsRetido), 0));
     var _csllLiqS5 = _r(Math.max(_n(comp.csll.valor) - _n(d.csllRetido), 0));
@@ -6133,9 +6186,11 @@
         var corRisco = op.risco === 'Baixo' ? '#2ECC71' : op.risco === 'Médio' ? '#F39C12' : '#E74C3C';
         var corCompl = op.complexidade === 'Baixa' ? '#2ECC71' : op.complexidade === 'Média' ? '#F39C12' : '#E74C3C';
 
-        s7 += '<div class="res-oport-card">';
+        // CORREÇÃO FALHA #1: cards consolidados recebem estilo visual diferente
+        var cardStyle = op._isConsolidada ? ' style="border:2px dashed #95A5A6;opacity:0.85;background:#f8f9fa;"' : '';
+        s7 += '<div class="res-oport-card"' + cardStyle + '>';
         s7 += '<div class="res-oport-header">';
-        s7 += '<div class="res-oport-rank">#' + rankNum + '</div>';
+        s7 += '<div class="res-oport-rank">' + (op._isConsolidada ? '⊕' : '#' + rankNum) + '</div>';
         s7 += '<div class="res-oport-titulo">' + op.titulo + '</div>';
         s7 += '<div class="res-oport-valor">' + _m(op.economiaAnual) + '<span>/ano</span></div>';
         s7 += '</div>';
@@ -6311,11 +6366,15 @@
     if (r.jcpDetalhado && r.jcpDetalhado.economiaLiquida > 0 && r.economia.jcp > 0) {
       s11 += '<div class="res-alerta res-alerta-economia"><span class="res-alerta-icon">&#x1F7E2;</span><strong>JCP DISPONÍVEL:</strong> Economia líquida de ' + _m(r.jcpDetalhado.economiaLiquida) + '/ano com distribuição de Juros sobre Capital Próprio.</div>';
       // CORREÇÃO RJ-01: Alerta sobre Lei 14.789/2023 que alterou o cálculo do JCP
-      s11 += '<div class="res-alerta res-alerta-warn"><span class="res-alerta-icon">&#x26A0;&#xFE0F;</span><strong>ATENÇÃO — Lei 14.789/2023 (vigente desde 01/01/2024):</strong> ' +
-        'O novo §8º do art. 9º da Lei 9.249/95 passou a excluir da base patrimonial do JCP diversos itens ' +
-        '(lucros do período, reservas de incentivos, AAP, AVP, entre outros). ' +
-        'O valor de JCP apresentado utiliza cálculo simplificado (PL × TJLP) e pode estar superestimado. ' +
-        '<strong>Recomenda-se validação com contador para aplicar as exclusões do §8º antes de distribuir JCP.</strong></div>';
+      if (!_n(d.plAjustadoJCP)) {
+        s11 += '<div class="res-alerta res-alerta-warn"><span class="res-alerta-icon">&#x26A0;&#xFE0F;</span><strong>ATENÇÃO — Lei 14.789/2023 (vigente desde 01/01/2024):</strong> ' +
+          'O novo §8º do art. 9º da Lei 9.249/95 passou a excluir da base patrimonial do JCP diversos itens ' +
+          '(lucros do período, reservas de incentivos, AAP, AVP, entre outros). ' +
+          'O valor de JCP apresentado utiliza PL contábil total (PL Ajustado não foi informado) e pode estar superestimado. ' +
+          '<strong>Informe o PL Ajustado conforme Lei 14.789/2023 na Etapa 3 ou valide com contador.</strong></div>';
+      } else {
+        s11 += '<div class="res-alerta res-alerta-info"><span class="res-alerta-icon">&#x1F535;</span><strong>JCP — Lei 14.789/2023:</strong> Cálculo utiliza PL Ajustado de ' + _m(_n(d.plAjustadoJCP)) + ' conforme informado.</div>';
+      }
     }
 
     // SUDAM/SUDENE potencial
@@ -6499,9 +6558,9 @@
     if (LR.estrategiasEconomia && LR.estrategiasEconomia.length > 0) {
       var sN8 = '';
       var opsArr = r.oportunidades || [];
-      // Calcular total economia para % barras
+      // Calcular total economia para % barras — CORREÇÃO FALHA #1: excluir cards consolidados
       var totalEconOps = 0;
-      opsArr.forEach(function (op) { totalEconOps += (op.economiaAnual || 0); });
+      opsArr.forEach(function (op) { if (!op._isConsolidada) totalEconOps += (op.economiaAnual || 0); });
 
       sN8 += '<div class="res-oportunidades">';
       LR.estrategiasEconomia.forEach(function (est) {
@@ -7433,7 +7492,7 @@
       capitalSocial: 300000,
       lucrosAcumulados: 300000,
       detalharPL: true,
-      tjlp: 6,
+      tjlp: 7.97,
       prejuizoFiscal: 200000,
       baseNegativaCSLL: 150000,
       irrfRetidoPublico: 21600,
@@ -9598,8 +9657,8 @@
     var opsRank = (r.oportunidades || []).slice().sort(function (a, b) { return (b.economiaAnual || 0) - (a.economiaAnual || 0); });
     opsRank.forEach(function (op, i) {
       aba11.push([
-        i + 1,
-        op.titulo || '',
+        op._isConsolidada ? '⊕' : (i + 1),
+        (op._isConsolidada ? '[CONSOLIDAÇÃO] ' : '') + (op.titulo || ''),
         op.tipo || '',
         mv(op.economiaAnual),
         op.complexidade || '',
@@ -9610,7 +9669,7 @@
     });
     if (opsRank.length > 0) {
       var econTotalXls = 0;
-      opsRank.forEach(function (op) { econTotalXls += (op.economiaAnual || 0); });
+      opsRank.forEach(function (op) { if (!op._isConsolidada) econTotalXls += (op.economiaAnual || 0); });
       aba11.push(['', 'TOTAL', '', mv(econTotalXls), '', '', '', '']);
     }
     addSheet('Mapa Economia', aba11, [5, 30, 12, 16, 12, 10, 25, 50]);
