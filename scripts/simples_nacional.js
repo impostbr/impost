@@ -1,22 +1,33 @@
 /**
  * ================================================================================
- * MOTOR DE CÁLCULO FISCAL — SIMPLES NACIONAL v2.0
+ * IMPOST. — Inteligência em Modelagem de Otimização Tributária v4.0
  * ================================================================================
  *
- * Módulo completo de cálculo fiscal do Simples Nacional brasileiro.
- * Parte de um sistema maior que compara 3 regimes tributários:
- * Simples Nacional, Lucro Presumido e Lucro Real.
+ * Motor fiscal otimizado para cálculo do Simples Nacional brasileiro.
+ * Compara 4 regimes tributários: Simples Nacional, Lucro Presumido,
+ * Lucro Real e Lucro Real + Incentivos (SUDAM/SUDENE/ZFM).
  *
- * @author      AGROGEO BRASIL — Geotecnologia e Consultoria Ambiental
- * @version     2.0.0
- * @date        2026-02-11
+ * Integra com módulos auxiliares:
+ *   - cnae-mapeamento.js (CnaeMapeamento) — classificação CNAE em 4 níveis
+ *   - estados.js (Estados/EstadosBR)      — dados tributários das 27 UFs
+ *   - municipios.js (MunicipiosIBGE)      — ISS municipal via API IBGE
+ *
+ * @product     IMPOST. — Porque pagar imposto certo é direito. Pagar menos, legalmente, é inteligência.
+ * @version     4.1.0
+ * @date        2026-02-17
  * @license     Proprietary
  *
  * Base Legal Principal:
  *   - Lei Complementar 123/2006 (Estatuto Nacional da ME e EPP)
- *   - Lei Complementar 155/2016 (Alterações LC 123)
+ *   - Lei Complementar 147/2014 (Universalização do Simples Nacional)
+ *   - Lei Complementar 155/2016 (Alterações LC 123 — Fator "r")
  *   - Resolução CGSN nº 140/2018 (Regulamentação completa)
  *   - Lei Complementar 224/2025 (Reforma Tributária — impactos futuros)
+ *   - Lei Complementar 214/2025 (IBS e CBS — Reforma Tributária do Consumo)
+ *   - Lei Complementar 227/2026 (Alterações IBS/CBS e processo administrativo)
+ *   - Lei nº 15.270/2025 (Tributação de dividendos e IRPF mínimo)
+ *   - Resolução CGSN nº 183/2025 (Novas multas PGDAS-D/DEFIS)
+ *   - Emenda Constitucional nº 132/2023 (Reforma Tributária do Consumo)
  *
  * Compatibilidade: Node.js (CommonJS) + Browser (ESM/globalThis)
  * Dependências: ZERO (vanilla JavaScript puro)
@@ -257,18 +268,19 @@ const PARTILHA = {
   ],
 
   V: [
-    // Faixa 1
-    { irpj: 0.1410, csll: 0.1240, cofins: 0.1410, pis: 0.0305, cpp: 0.2885, iss: 0.1410 },  // VERIFICAR: extraído de fonte secundária, soma ~86,6%
+    // Faixa 1 — Resolução CGSN 140/2018, Anexo V (valores oficiais: 14,10/12,40/14,10/3,05/28,85/14,10 = 86,60%)
+    //           Renormalizados para 100% (÷ 0.866) para partilha correta do DAS
+    { irpj: 0.1628, csll: 0.1432, cofins: 0.1628, pis: 0.0352, cpp: 0.3332, iss: 0.1628 },
     // Faixa 2
-    { irpj: 0.1410, csll: 0.1240, cofins: 0.1410, pis: 0.0305, cpp: 0.2885, iss: 0.1410 },
+    { irpj: 0.1628, csll: 0.1432, cofins: 0.1628, pis: 0.0352, cpp: 0.3332, iss: 0.1628 },
     // Faixa 3
-    { irpj: 0.1410, csll: 0.1240, cofins: 0.1410, pis: 0.0305, cpp: 0.2885, iss: 0.1410 },
+    { irpj: 0.1628, csll: 0.1432, cofins: 0.1628, pis: 0.0352, cpp: 0.3332, iss: 0.1628 },
     // Faixa 4
-    { irpj: 0.1410, csll: 0.1240, cofins: 0.1410, pis: 0.0305, cpp: 0.2885, iss: 0.1410 },
+    { irpj: 0.1628, csll: 0.1432, cofins: 0.1628, pis: 0.0352, cpp: 0.3332, iss: 0.1628 },
     // Faixa 5
-    { irpj: 0.1410, csll: 0.1240, cofins: 0.1410, pis: 0.0305, cpp: 0.2885, iss: 0.1410 },
-    // Faixa 6
-    { irpj: 0.1410, csll: 0.1240, cofins: 0.1410, pis: 0.0305, cpp: 0.2885, iss: 0.1410 }
+    { irpj: 0.1628, csll: 0.1432, cofins: 0.1628, pis: 0.0352, cpp: 0.3332, iss: 0.1628 },
+    // Faixa 6 — ISS = 0% (recolhido por fora); valores oficiais CGSN 140/2018
+    { irpj: 0.3500, csll: 0.1500, cofins: 0.1603, pis: 0.0347, cpp: 0.3050, iss: 0.0000 }
   ]
 };
 
@@ -984,6 +996,8 @@ function calcularAnualConsolidado(params) {
   const {
     meses,
     socios = [],
+    cnae = null,
+    tipoAtividade = 'servicos',
     lucroContabilEfetivo = null,
     aliquotaRAT = ALIQUOTA_RAT_PADRAO
   } = params;
@@ -1076,9 +1090,9 @@ function calcularAnualConsolidado(params) {
     receitaBrutaAnual,
     dasAnual,
     socios,
-    cnae: '71.19-7', // Default AGROGEO
+    cnae: cnae || null,
     lucroContabilEfetivo,
-    tipoAtividade: 'servicos'
+    tipoAtividade: tipoAtividade || 'servicos'
   });
 
   // Arredondar partilha anual
@@ -1302,12 +1316,12 @@ function calcularDistribuicaoLucros(params) {
     receitaBrutaAnual,
     dasAnual,
     socios = [],
-    cnae = '71.19-7',
+    cnae = null,
     lucroContabilEfetivo = null,
     tipoAtividade = 'servicos'
   } = params;
 
-  // Determinar percentual de presunção
+  // Determinar percentual de presunção — usar CnaeMapeamento se disponível
   let percentualPresuncao;
   switch (tipoAtividade) {
     case 'comercio':
@@ -2169,14 +2183,3014 @@ function formatarResultadoTexto(resultado) {
 
 
 // ================================================================================
-// SEÇÃO 20: EXPORTAÇÕES (CommonJS + ESM + globalThis)
+// SEÇÃO 20: ANEXO VI HISTÓRICO (LC 147/2014 — vigência 01/01/2015 a 31/12/2017)
 // ================================================================================
+
+/**
+ * Tabela do Anexo VI — Vigência: 01/01/2015 a 31/12/2017.
+ * Substituído pela sistemática Fator "r" (LC 155/2016) a partir de 01/01/2018.
+ *
+ * IMPORTANTE: Atividades do antigo Anexo VI (§5º-I) agora são tributadas no
+ * Anexo III (se r ≥ 28%) ou Anexo V (se r < 28%) conforme LC 155/2016.
+ *
+ * Mantido como referência histórica e para cálculos retroativos.
+ *
+ * Base legal: LC 123/2006, §5º-I, Anexo VI (redação LC 147/2014).
+ */
+const ANEXO_VI_HISTORICO = {
+  nome: 'Anexo VI — Serviços Profissionais (HISTÓRICO — vigência 2015-2017)',
+  descricao: 'Atividades intelectuais, técnicas, científicas, desportivas, artísticas — §5º-I',
+  baseLegal: 'LC 123/2006, §5º-I c/c Anexo VI (redação LC 147/2014)',
+  vigencia: { inicio: '2015-01-01', fim: '2017-12-31' },
+  substituidoPor: 'Fator "r" → Anexo III (r≥28%) ou Anexo V (r<28%) — LC 155/2016',
+  tributosDentro: ['IRPJ', 'CSLL', 'COFINS', 'PIS/PASEP', 'CPP', 'ISS'],
+  cppInclusa: true,
+  faixas: [
+    { faixa: 1,  min: 0.00,           max: 180_000.00,   aliquota: 0.1693, irpjPisCsllCofinsCpp: 0.1493, iss: 0.0200 },
+    { faixa: 2,  min: 180_000.01,     max: 360_000.00,   aliquota: 0.1772, irpjPisCsllCofinsCpp: 0.1493, iss: 0.0279 },
+    { faixa: 3,  min: 360_000.01,     max: 540_000.00,   aliquota: 0.1843, irpjPisCsllCofinsCpp: 0.1493, iss: 0.0350 },
+    { faixa: 4,  min: 540_000.01,     max: 720_000.00,   aliquota: 0.1877, irpjPisCsllCofinsCpp: 0.1493, iss: 0.0384 },
+    { faixa: 5,  min: 720_000.01,     max: 900_000.00,   aliquota: 0.1904, irpjPisCsllCofinsCpp: 0.1517, iss: 0.0387 },
+    { faixa: 6,  min: 900_000.01,     max: 1_080_000.00, aliquota: 0.1994, irpjPisCsllCofinsCpp: 0.1571, iss: 0.0423 },
+    { faixa: 7,  min: 1_080_000.01,   max: 1_260_000.00, aliquota: 0.2034, irpjPisCsllCofinsCpp: 0.1608, iss: 0.0426 },
+    { faixa: 8,  min: 1_260_000.01,   max: 1_440_000.00, aliquota: 0.2066, irpjPisCsllCofinsCpp: 0.1635, iss: 0.0431 },
+    { faixa: 9,  min: 1_440_000.01,   max: 1_620_000.00, aliquota: 0.2117, irpjPisCsllCofinsCpp: 0.1656, iss: 0.0461 },
+    { faixa: 10, min: 1_620_000.01,   max: 1_800_000.00, aliquota: 0.2138, irpjPisCsllCofinsCpp: 0.1673, iss: 0.0465 },
+    { faixa: 11, min: 1_800_000.01,   max: 1_980_000.00, aliquota: 0.2186, irpjPisCsllCofinsCpp: 0.1686, iss: 0.0500 },
+    { faixa: 12, min: 1_980_000.01,   max: 2_160_000.00, aliquota: 0.2197, irpjPisCsllCofinsCpp: 0.1697, iss: 0.0500 },
+    { faixa: 13, min: 2_160_000.01,   max: 2_340_000.00, aliquota: 0.2206, irpjPisCsllCofinsCpp: 0.1706, iss: 0.0500 },
+    { faixa: 14, min: 2_340_000.01,   max: 2_520_000.00, aliquota: 0.2214, irpjPisCsllCofinsCpp: 0.1714, iss: 0.0500 },
+    { faixa: 15, min: 2_520_000.01,   max: 2_700_000.00, aliquota: 0.2221, irpjPisCsllCofinsCpp: 0.1721, iss: 0.0500 },
+    { faixa: 16, min: 2_700_000.01,   max: 2_880_000.00, aliquota: 0.2221, irpjPisCsllCofinsCpp: 0.1721, iss: 0.0500 },
+    { faixa: 17, min: 2_880_000.01,   max: 3_060_000.00, aliquota: 0.2232, irpjPisCsllCofinsCpp: 0.1732, iss: 0.0500 },
+    { faixa: 18, min: 3_060_000.01,   max: 3_240_000.00, aliquota: 0.2237, irpjPisCsllCofinsCpp: 0.1737, iss: 0.0500 },
+    { faixa: 19, min: 3_240_000.01,   max: 3_420_000.00, aliquota: 0.2241, irpjPisCsllCofinsCpp: 0.1741, iss: 0.0500 },
+    { faixa: 20, min: 3_420_000.01,   max: 3_600_000.00, aliquota: 0.2245, irpjPisCsllCofinsCpp: 0.1745, iss: 0.0500 }
+  ]
+};
+
+
+// ================================================================================
+// SEÇÃO 21: ATIVIDADES §5º-I (ANTIGO ANEXO VI) — MAPEAMENTO COMPLETO
+// ================================================================================
+
+/**
+ * Lista completa das atividades do §5º-I do Art. 18 da LC 123/2006 (redação LC 147/2014).
+ *
+ * Após LC 155/2016, todas estas atividades passaram a ser tributadas pelo
+ * sistema Fator "r": Anexo III (r ≥ 28%) ou Anexo V (r < 28%).
+ *
+ * ESTRATÉGIA FISCAL: Manter Fator "r" ≥ 28% para estas atividades garante
+ * alíquota efetiva MENOR (Anexo III vs V). Diferença pode ser de até 10 pontos
+ * percentuais nas faixas superiores.
+ *
+ * Base legal: LC 123/2006, Art. 18, §5º-I (redação LC 147/2014);
+ *             LC 155/2016 (migração para sistema Fator "r");
+ *             Resolução CGSN 140/2018, Art. 18, §5º-J e §5º-M.
+ */
+const ATIVIDADES_PARAGRAFO_5I = [
+  // Inciso I
+  {
+    inciso: 'I',
+    descricao: 'Medicina, inclusive laboratorial e enfermagem',
+    exemplosAtividades: ['Clínicas médicas', 'Laboratórios', 'Enfermagem domiciliar', 'Medicina do trabalho'],
+    exemplosCNAE: ['86.30-5', '86.10-1', '86.21-6'],
+    tributacaoAtual: 'Fator "r" — Anexo III (r≥28%) ou Anexo V (r<28%)',
+    baseLegal: 'LC 123/2006, Art. 18, §5º-I, I'
+  },
+  // Inciso II
+  {
+    inciso: 'II',
+    descricao: 'Medicina veterinária',
+    exemplosAtividades: ['Clínicas veterinárias', 'Consultórios veterinários'],
+    exemplosCNAE: ['75.00-1'],
+    tributacaoAtual: 'Fator "r" — Anexo III (r≥28%) ou Anexo V (r<28%)',
+    baseLegal: 'LC 123/2006, Art. 18, §5º-I, II'
+  },
+  // Inciso III
+  {
+    inciso: 'III',
+    descricao: 'Odontologia',
+    exemplosAtividades: ['Consultórios odontológicos', 'Clínicas odontológicas'],
+    exemplosCNAE: ['86.30-5/03'],
+    tributacaoAtual: 'Fator "r" — Anexo III (r≥28%) ou Anexo V (r<28%)',
+    baseLegal: 'LC 123/2006, Art. 18, §5º-I, III'
+  },
+  // Inciso IV
+  {
+    inciso: 'IV',
+    descricao: 'Psicologia, psicanálise, terapia ocupacional, acupuntura, podologia, fonoaudiologia, clínicas de nutrição e de vacinação e bancos de leite',
+    exemplosAtividades: ['Psicólogos', 'Psicanalistas', 'Terapeutas ocupacionais', 'Acupunturistas', 'Fonoaudiólogos', 'Nutricionistas', 'Clínicas de vacinação'],
+    exemplosCNAE: ['86.50-0', '86.90-9'],
+    tributacaoAtual: 'Fator "r" — Anexo III (r≥28%) ou Anexo V (r<28%)',
+    baseLegal: 'LC 123/2006, Art. 18, §5º-I, IV'
+  },
+  // Inciso V
+  {
+    inciso: 'V',
+    descricao: 'Serviços de comissaria, de despachantes, de tradução e de interpretação',
+    exemplosAtividades: ['Comissários de avarias', 'Despachantes aduaneiros', 'Tradutores', 'Intérpretes'],
+    exemplosCNAE: ['52.50-8', '74.90-1'],
+    tributacaoAtual: 'Fator "r" — Anexo III (r≥28%) ou Anexo V (r<28%)',
+    baseLegal: 'LC 123/2006, Art. 18, §5º-I, V'
+  },
+  // Inciso VI — AGROGEO BRASIL enquadra-se aqui
+  {
+    inciso: 'VI',
+    descricao: 'Arquitetura, engenharia, medição, cartografia, topografia, geologia, geodésia, testes, suporte e análises técnicas e tecnológicas, pesquisa, design, desenho e agronomia',
+    exemplosAtividades: [
+      'Escritórios de arquitetura', 'Empresas de engenharia', 'Serviços de medição e cartografia',
+      'Topografia', 'Geologia', 'Geodésia', 'Laboratórios de ensaio',
+      'Pesquisa científica', 'Design gráfico/industrial', 'Desenho técnico',
+      'Agronomia', 'Geotecnologia', 'Consultoria ambiental', 'Georeferenciamento'
+    ],
+    exemplosCNAE: ['71.11-1', '71.12-0', '71.19-7', '71.20-1', '72.10-0', '73.19-0', '74.10-2', '01.61-0'],
+    tributacaoAtual: 'Fator "r" — Anexo III (r≥28%) ou Anexo V (r<28%)',
+    baseLegal: 'LC 123/2006, Art. 18, §5º-I, VI',
+    observacao: '⭐ AGROGEO BRASIL — CNAE 71.19-7 enquadra-se neste inciso'
+  },
+  // Inciso VII
+  {
+    inciso: 'VII',
+    descricao: 'Representação comercial e demais atividades de intermediação de negócios e serviços de terceiros',
+    exemplosAtividades: ['Representantes comerciais', 'Intermediários de negócios', 'Agentes de comércio'],
+    exemplosCNAE: ['46.13-3', '74.90-1'],
+    tributacaoAtual: 'Fator "r" — Anexo III (r≥28%) ou Anexo V (r<28%)',
+    baseLegal: 'LC 123/2006, Art. 18, §5º-I, VII'
+  },
+  // Inciso VIII
+  {
+    inciso: 'VIII',
+    descricao: 'Perícia, leilão e avaliação',
+    exemplosAtividades: ['Peritos judiciais', 'Leiloeiros', 'Avaliadores de imóveis'],
+    exemplosCNAE: ['69.20-6', '82.99-7'],
+    tributacaoAtual: 'Fator "r" — Anexo III (r≥28%) ou Anexo V (r<28%)',
+    baseLegal: 'LC 123/2006, Art. 18, §5º-I, VIII'
+  },
+  // Inciso IX
+  {
+    inciso: 'IX',
+    descricao: 'Auditoria, economia, consultoria, gestão, organização, controle e administração',
+    exemplosAtividades: ['Empresas de auditoria', 'Economistas', 'Consultorias de gestão', 'Organizadores de eventos corporativos'],
+    exemplosCNAE: ['69.20-6', '70.20-4', '82.11-3'],
+    tributacaoAtual: 'Fator "r" — Anexo III (r≥28%) ou Anexo V (r<28%)',
+    baseLegal: 'LC 123/2006, Art. 18, §5º-I, IX'
+  },
+  // Inciso X
+  {
+    inciso: 'X',
+    descricao: 'Jornalismo e publicidade',
+    exemplosAtividades: ['Agências de jornalismo', 'Agências de publicidade', 'Assessoria de imprensa'],
+    exemplosCNAE: ['63.91-7', '73.11-4', '73.12-2'],
+    tributacaoAtual: 'Fator "r" — Anexo III (r≥28%) ou Anexo V (r<28%)',
+    baseLegal: 'LC 123/2006, Art. 18, §5º-I, X'
+  },
+  // Inciso XI
+  {
+    inciso: 'XI',
+    descricao: 'Agenciamento, exceto de mão de obra',
+    exemplosAtividades: ['Agentes de viagem', 'Agenciadores de publicidade', 'Agentes de propriedade industrial'],
+    exemplosCNAE: ['79.11-2', '79.12-1', '74.90-1'],
+    tributacaoAtual: 'Fator "r" — Anexo III (r≥28%) ou Anexo V (r<28%)',
+    baseLegal: 'LC 123/2006, Art. 18, §5º-I, XI'
+  },
+  // Inciso XII — Cláusula residual
+  {
+    inciso: 'XII',
+    descricao: 'Outras atividades do setor de serviços que tenham por finalidade a prestação de serviços decorrentes do exercício de atividade intelectual, de natureza técnica, científica, desportiva, artística ou cultural, que constitua profissão regulamentada ou não',
+    exemplosAtividades: ['Consultores em geral', 'Profissionais liberais', 'Treinadores esportivos', 'Professores', 'Artistas'],
+    exemplosCNAE: ['Diversos — verificar enquadramento específico'],
+    tributacaoAtual: 'Fator "r" — Anexo III (r≥28%) ou Anexo V (r<28%)',
+    baseLegal: 'LC 123/2006, Art. 18, §5º-I, XII',
+    observacao: 'Cláusula residual — aplica-se quando não sujeitas à tributação na forma dos Anexos III, IV ou V'
+  }
+];
+
+
+// ================================================================================
+// SEÇÃO 22: REGRAS DE TRIBUTAÇÃO ESPECIAL POR TIPO DE ATIVIDADE
+// ================================================================================
+
+/**
+ * Mapeamento completo das regras de tributação por tipo de serviço/atividade.
+ * Essencial para determinar o MENOR imposto legal possível.
+ *
+ * Base legal: LC 123/2006, Art. 18, §§4º a 5º-I (redação LC 147/2014 e LC 155/2016).
+ */
+const REGRAS_TRIBUTACAO_ATIVIDADE = {
+  // Art. 18, §4º, I — Comércio
+  comercio_revenda: {
+    descricao: 'Revenda de mercadorias',
+    anexo: 'I',
+    tipo: 'fixo',
+    baseLegal: 'LC 123/2006, Art. 18, §4º, I'
+  },
+
+  // Art. 18, §4º, II — Indústria
+  industria: {
+    descricao: 'Venda de mercadorias industrializadas pelo contribuinte',
+    anexo: 'II',
+    tipo: 'fixo',
+    baseLegal: 'LC 123/2006, Art. 18, §4º, II'
+  },
+
+  // Art. 18, §4º, III — Serviços Anexo III (§5º-B)
+  servicos_anexo_iii_fixo: {
+    descricao: 'Serviços do §5º-B (corretagem de imóveis, bens imóveis, fisioterapia, corretagem de seguros, etc.)',
+    anexo: 'III',
+    tipo: 'fixo',
+    baseLegal: 'LC 123/2006, Art. 18, §4º, III c/c §5º-B',
+    servicos: [
+      'Locação de bens imóveis e corretagem de imóveis',
+      'Fisioterapia',
+      'Corretagem de seguros',
+      'Creches e pré-escolas',
+      'Academias de dança, capoeira, yoga, artes marciais',
+      'Academias de atividades físicas/desportivas/natação',
+      'Elaboração de programas de computador',
+      'Licenciamento de programas de computador customizáveis',
+      'Planejamento, confecção, manutenção e atualização de páginas eletrônicas',
+      'Escritórios de serviços contábeis (condições especiais)',
+      'Produções cinematográficas, audiovisuais, artísticas e culturais',
+      'Serviços de transporte municipal de passageiros',
+      'Empresas montadoras de stands',
+      'Agências lotéricas',
+      'Serviços de instalação, manutenção e reparação',
+      'Serviços de comunicação por conta e ordem de terceiros',
+      'Serviços de varrição, coleta de resíduos (não perigosos), limpeza urbana'
+    ]
+  },
+
+  // Art. 18, §4º, V — Locação de bens móveis (Anexo III SEM ISS)
+  locacao_bens_moveis: {
+    descricao: 'Locação de bens móveis',
+    anexo: 'III',
+    tipo: 'fixo',
+    deducaoISS: true,
+    baseLegal: 'LC 123/2006, Art. 18, §4º, V',
+    observacao: '⭐ BENEFÍCIO: Tributada no Anexo III, MAS deduzida a parcela do ISS (locação de bem móvel não é prestação de serviço = sem ISS). Reduz alíquota efetiva!'
+  },
+
+  // Art. 18, §4º, VI — IPI + ISS simultâneo
+  ipi_mais_iss: {
+    descricao: 'Atividade com incidência simultânea de IPI e ISS',
+    anexo: 'II',
+    tipo: 'fixo',
+    deducaoICMS: true,
+    acrescimoISS_Anexo_III: true,
+    baseLegal: 'LC 123/2006, Art. 18, §4º, VI',
+    observacao: 'Tributada no Anexo II, deduzida parcela ICMS, acrescida parcela ISS do Anexo III'
+  },
+
+  // Art. 18, §4º, VII — Medicamentos manipulados
+  medicamentos_manipulados_encomenda: {
+    descricao: 'Medicamentos/produtos magistrais sob encomenda pessoal',
+    anexo: 'III',
+    tipo: 'fixo',
+    baseLegal: 'LC 123/2006, Art. 18, §4º, VII, "a"'
+  },
+  medicamentos_manipulados_geral: {
+    descricao: 'Medicamentos/produtos magistrais — demais casos (venda em prateleira)',
+    anexo: 'I',
+    tipo: 'fixo',
+    baseLegal: 'LC 123/2006, Art. 18, §4º, VII, "b"'
+  },
+
+  // Art. 18, §5º-C — Serviços com Fator "r" (Advocacia incluída no Anexo IV)
+  servicos_5C: {
+    descricao: 'Serviços do §5º-C, incluindo advocacia',
+    tipo: 'misto',
+    baseLegal: 'LC 123/2006, Art. 18, §5º-C',
+    servicos: [
+      'Administração e locação de imóveis de terceiros',
+      'Academias de atividades físicas em geral',
+      'Centros de cultura, arte e educação',
+      'Laboratórios de análises clínicas',
+      'Serviços de tomografia e diagnósticos médicos',
+      'Serviços de prótese em geral',
+      'Serviços advocatícios (Anexo IV — SEM CPP no DAS)'
+    ],
+    observacao: 'Advocacia é tributada no Anexo IV (sem CPP no DAS). Demais podem usar Fator "r".'
+  },
+
+  // Art. 18, §5º-E — Transporte e comunicação (REGRA ESPECIAL)
+  transporte_comunicacao: {
+    descricao: 'Comunicação e transportes interestadual/intermunicipal de cargas e passageiros (modalidades autorizadas)',
+    tipo: 'especial',
+    regra: 'Anexo III (base), deduzida parcela ISS, acrescida parcela ICMS do Anexo I',
+    baseLegal: 'LC 123/2006, Art. 18, §5º-E (redação LC 147/2014)',
+    observacao: 'Transporte fluvial incluso. Transporte urbano/metropolitano e fretamento contínuo de estudantes/trabalhadores também.'
+  },
+
+  // Art. 18, §5º-F — Serviços do §2º do Art. 17
+  servicos_art17_paragrafo2: {
+    descricao: 'Serviços não vedados do §2º do Art. 17',
+    tipo: 'misto',
+    regra: 'Tributados no Anexo III, SALVO se houver previsão expressa nos Anexos IV, V ou VI',
+    baseLegal: 'LC 123/2006, Art. 18, §5º-F (redação LC 147/2014)',
+    observacao: 'Regra residual favorável — na dúvida, aplica-se Anexo III (alíquotas menores)'
+  },
+
+  // Art. 18, §5º-I — Serviços intelectuais/técnicos (ver ATIVIDADES_PARAGRAFO_5I)
+  servicos_intelectuais_5I: {
+    descricao: 'Serviços intelectuais, técnicos, científicos, artísticos, desportivos (§5º-I)',
+    tipo: 'fator_r',
+    anexoFatorRAlto: 'III',
+    anexoFatorRBaixo: 'V',
+    baseLegal: 'LC 123/2006, Art. 18, §5º-I (redação LC 147/2014); LC 155/2016 (migração Fator "r")',
+    observacao: 'Após LC 155/2016: Fator "r" ≥ 28% → Anexo III; Fator "r" < 28% → Anexo V'
+  }
+};
+
+
+// ================================================================================
+// SEÇÃO 23: REDUÇÕES LEGAIS E BENEFÍCIOS PARA MENOR IMPOSTO
+// ================================================================================
+
+/**
+ * Catálogo completo de TODAS as reduções, isenções e benefícios fiscais legais
+ * disponíveis no Simples Nacional para pagar o menor imposto possível.
+ *
+ * CADA redução inclui: base legal, condições de aplicação, impacto estimado
+ * e função de cálculo que pode ser importada por outro arquivo.
+ *
+ * Base legal: LC 123/2006 (redações LC 147/2014 e LC 155/2016);
+ *             Resolução CGSN 140/2018.
+ */
+const REDUCOES_LEGAIS = [
+  // ─── 1. TRIBUTAÇÃO MONOFÁSICA ────────────────────────────────────────────────
+  {
+    id: 'monofasica',
+    titulo: 'Tributação Monofásica (concentrada em etapa única)',
+    descricao: 'Produtos com PIS/COFINS já recolhidos na indústria/importador. O revendedor NÃO paga PIS/COFINS novamente no DAS.',
+    aplicavelA: ['Anexo I', 'Anexo II'],
+    tributoReduzido: ['PIS/PASEP', 'COFINS'],
+    tipoReducao: 'exclusao_base_calculo',
+    baseLegal: 'LC 123/2006, Art. 18, §4º-A, I; Resolução CGSN 140/2018, Art. 25, I',
+    condicoes: 'Produto deve estar na lista de tributação monofásica (Art. 13, §1º, XIII, "a")',
+    produtosComuns: [
+      'Combustíveis e lubrificantes',
+      'Medicamentos e produtos farmacêuticos',
+      'Cosméticos e perfumaria',
+      'Bebidas frias (água, refrescos, cervejas)',
+      'Autopeças',
+      'Pneus e câmaras de ar',
+      'Máquinas e veículos',
+      'Cigarros e derivados do fumo'
+    ],
+    impactoEstimado: 'Redução de 3,65% a 9,25% no valor do DAS sobre receita desses produtos',
+    /** Calcula redução mensal por monofásica */
+    calcularReducao: function(receitaMonofasica, aliquotaEfetiva, faixa, anexo) {
+      if (!receitaMonofasica || receitaMonofasica <= 0 || !PARTILHA[anexo]) return 0;
+      const idx = faixa - 1;
+      const p = PARTILHA[anexo][idx];
+      if (!p) return 0;
+      const percPisCofins = (p.pis || 0) + (p.cofins || 0);
+      return _arredondar(receitaMonofasica * aliquotaEfetiva * percPisCofins);
+    }
+  },
+
+  // ─── 2. SUBSTITUIÇÃO TRIBUTÁRIA (ICMS-ST) ─────────────────────────────────────
+  {
+    id: 'icms_st',
+    titulo: 'ICMS já recolhido por Substituição Tributária',
+    descricao: 'Quando o ICMS já foi recolhido por ST (pelo fabricante/importador), o revendedor deduz a parcela do ICMS do DAS.',
+    aplicavelA: ['Anexo I', 'Anexo II'],
+    tributoReduzido: ['ICMS'],
+    tipoReducao: 'exclusao_base_calculo',
+    baseLegal: 'LC 123/2006, Art. 18, §4º-A, I; Resolução CGSN 140/2018, Art. 25, I',
+    condicoes: 'ICMS deve ter sido recolhido antecipadamente por ST',
+    impactoEstimado: 'Redução de até 3,35% do valor do DAS (parcela ICMS excluída)',
+    calcularReducao: function(receitaST, aliquotaEfetiva, faixa, anexo) {
+      if (!receitaST || receitaST <= 0 || !PARTILHA[anexo]) return 0;
+      const idx = faixa - 1;
+      const p = PARTILHA[anexo][idx];
+      if (!p) return 0;
+      return _arredondar(receitaST * aliquotaEfetiva * (p.icms || 0));
+    }
+  },
+
+  // ─── 3. ISS RETIDO NA FONTE ────────────────────────────────────────────────────
+  {
+    id: 'iss_retido_fonte',
+    titulo: 'ISS retido na fonte pelo tomador do serviço',
+    descricao: 'Quando o ISS é retido na fonte pelo tomador, o valor deve ser DEDUZIDO do DAS para evitar bitributação.',
+    aplicavelA: ['Anexo III', 'Anexo IV', 'Anexo V'],
+    tributoReduzido: ['ISS'],
+    tipoReducao: 'deducao_das',
+    baseLegal: 'LC 123/2006, Art. 18, §4º-A, II c/c Art. 21, §4º',
+    condicoes: 'ISS retido deve estar informado no documento fiscal. Tomador deve estar em município diverso do prestador.',
+    impactoEstimado: 'Dedução de 2% a 5% do valor da nota fiscal do DAS mensal',
+    calcularReducao: function(valorISSRetido) {
+      return _arredondar(Math.max(0, valorISSRetido || 0));
+    }
+  },
+
+  // ─── 4. ISS VALOR FIXO MUNICIPAL ──────────────────────────────────────────────
+  {
+    id: 'iss_valor_fixo',
+    titulo: 'ISS em valor fixo mensal (municipal)',
+    descricao: 'Municípios podem estabelecer valor fixo de ISS para ME com receita até a 2ª faixa, substituindo o percentual variável.',
+    aplicavelA: ['Anexo III', 'Anexo IV', 'Anexo V'],
+    tributoReduzido: ['ISS'],
+    tipoReducao: 'valor_fixo',
+    baseLegal: 'LC 123/2006, Art. 18, §§18 e 18-A (redação LC 147/2014)',
+    condicoes: 'Microempresa com RBT12 até o limite da 2ª faixa de receitas. Município deve ter legislação específica.',
+    limiteRBT12: 360_000.00,
+    impactoEstimado: 'Pode reduzir ISS significativamente para microempresas de baixo faturamento'
+  },
+
+  // ─── 5. EXPORTAÇÃO — ISENÇÃO DE TRIBUTOS ──────────────────────────────────────
+  {
+    id: 'exportacao_isencao',
+    titulo: 'Isenção de tributos sobre receita de exportação',
+    descricao: 'Receitas de exportação são isentas de COFINS, PIS/PASEP, IPI, ICMS e ISS dentro do DAS. Paga-se apenas IRPJ, CSLL e CPP.',
+    aplicavelA: ['Todos os Anexos'],
+    tributoReduzido: ['COFINS', 'PIS/PASEP', 'IPI', 'ICMS', 'ISS'],
+    tipoReducao: 'isencao_exportacao',
+    baseLegal: 'LC 123/2006, Art. 18, §14 e §4º-A, IV (redação LC 147/2014); Art. 3º, §14',
+    condicoes: 'Receitas de exportação de mercadorias ou serviços, inclusive via comercial exportadora. Exportação também não pode exceder o limite de R$ 4,8M.',
+    impactoEstimado: 'Redução de 40% a 70% da alíquota efetiva sobre receita exportada',
+    calcularReducao: function(receitaExportacao, aliquotaEfetiva, faixa, anexo) {
+      if (!receitaExportacao || receitaExportacao <= 0 || !PARTILHA[anexo]) return 0;
+      const idx = faixa - 1;
+      const p = PARTILHA[anexo][idx];
+      if (!p) return 0;
+      const percIsentos = (p.cofins || 0) + (p.pis || 0) + (p.ipi || 0) + (p.icms || 0) + (p.iss || 0);
+      return _arredondar(receitaExportacao * aliquotaEfetiva * percIsentos);
+    }
+  },
+
+  // ─── 6. RECEITAS COM ISENÇÃO OU REDUÇÃO DE ICMS/ISS ──────────────────────────
+  {
+    id: 'isencao_reducao_icms_iss',
+    titulo: 'Receitas com isenção ou redução de ICMS ou ISS',
+    descricao: 'Quando há isenção ou redução de ICMS ou ISS concedida por legislação específica, a parcela desses tributos é deduzida do DAS.',
+    aplicavelA: ['Todos os Anexos'],
+    tributoReduzido: ['ICMS', 'ISS'],
+    tipoReducao: 'isencao_reducao',
+    baseLegal: 'LC 123/2006, Art. 18, §4º-A, III; Resolução CGSN 140/2018, Art. 25, III',
+    condicoes: 'Deve haver legislação estadual/municipal específica concedendo isenção ou redução. Verificar regulamentação local.',
+    impactoEstimado: 'Variável — pode representar de 2% a 5% de redução no DAS'
+  },
+
+  // ─── 7. CESTA BÁSICA — ISENÇÃO ESPECIAL ───────────────────────────────────────
+  {
+    id: 'cesta_basica',
+    titulo: 'Isenção/redução de COFINS, PIS e ICMS para produtos de cesta básica',
+    descricao: 'União, Estados e DF podem estabelecer isenção ou redução de COFINS, PIS/PASEP e ICMS para produtos da cesta básica vendidos por ME/EPP.',
+    aplicavelA: ['Anexo I', 'Anexo II'],
+    tributoReduzido: ['COFINS', 'PIS/PASEP', 'ICMS'],
+    tipoReducao: 'isencao_cesta_basica',
+    baseLegal: 'LC 123/2006, Art. 18, §20-B (redação LC 147/2014)',
+    condicoes: 'Depende de lei específica federal, estadual ou distrital. Verificar legislação vigente.',
+    impactoEstimado: 'Variável conforme legislação local'
+  },
+
+  // ─── 8. FATOR "r" OTIMIZADO (ESTRATÉGIA DE FOLHA) ─────────────────────────────
+  {
+    id: 'fator_r_otimizado',
+    titulo: 'Otimização do Fator "r" para manter Anexo III',
+    descricao: 'Manter o Fator "r" ≥ 28% garantindo tributação pelo Anexo III ao invés do Anexo V. Estratégia: aumentar pró-labore/folha de salários.',
+    aplicavelA: ['Atividades §5º-I', 'Atividades §5º-C', 'Atividades com Fator "r"'],
+    tributoReduzido: ['Alíquota global'],
+    tipoReducao: 'planejamento_fator_r',
+    baseLegal: 'LC 123/2006, Art. 18, §24 (redação LC 147/2014); Resolução CGSN 140/2018, Art. 18, §5º-J',
+    condicoes: 'Fator "r" = Folha de Salários (12 meses) / Receita Bruta (12 meses). Folha inclui: salários, pró-labore, FGTS, encargos patronais.',
+    impactoEstimado: 'Diferença de 9,5% na alíquota inicial (15,5% no Anexo V vs 6% no Anexo III). Economia de até R$ 200.000+ em empresas maiores.',
+    /** Calcula folha mínima necessária para atingir Fator "r" de 28% */
+    calcularFolhaMinima: function(rbt12) {
+      return _arredondar(rbt12 * LIMITE_FATOR_R);
+    },
+    /** Calcula economia ao manter Anexo III vs cair no Anexo V */
+    calcularEconomiaAnexoIIIvsV: function(rbt12, receitaMensal) {
+      if (!rbt12 || rbt12 <= 0 || !receitaMensal) return 0;
+      try {
+        const aliqIII = calcularAliquotaEfetiva({ rbt12, anexo: 'III' });
+        const aliqV = calcularAliquotaEfetiva({ rbt12, anexo: 'V' });
+        const dasIII = receitaMensal * aliqIII.aliquotaEfetiva;
+        const dasV = receitaMensal * aliqV.aliquotaEfetiva;
+        return _arredondar(dasV - dasIII);
+      } catch (e) {
+        return 0;
+      }
+    }
+  },
+
+  // ─── 9. REGIME DE CAIXA ────────────────────────────────────────────────────────
+  {
+    id: 'regime_caixa',
+    titulo: 'Opção pelo regime de caixa',
+    descricao: 'Reconhecer receitas apenas quando efetivamente recebidas (não quando faturadas). Adia o pagamento de tributos para o mês do recebimento.',
+    aplicavelA: ['Todos os Anexos'],
+    tributoReduzido: ['Fluxo de caixa'],
+    tipoReducao: 'diferimento',
+    baseLegal: 'LC 123/2006, Art. 18, §3º; Resolução CGSN 140/2018, Art. 16',
+    condicoes: 'Opção feita no PGDAS-D no mês de janeiro ou no início de atividade. Irretratável para o ano-calendário.',
+    impactoEstimado: 'Não reduz alíquota, mas melhora o fluxo de caixa significativamente. Tributo pago apenas sobre receita efetivamente recebida.'
+  },
+
+  // ─── 10. ANTECIPAÇÃO TRIBUTÁRIA COM ENCERRAMENTO ──────────────────────────────
+  {
+    id: 'antecipacao_encerramento',
+    titulo: 'Antecipação tributária de ICMS com encerramento',
+    descricao: 'Quando o ICMS já foi recolhido por antecipação tributária com encerramento de tributação, a parcela do ICMS é excluída do DAS.',
+    aplicavelA: ['Anexo I', 'Anexo II'],
+    tributoReduzido: ['ICMS'],
+    tipoReducao: 'exclusao_base_calculo',
+    baseLegal: 'LC 123/2006, Art. 18, §4º-A, I; Art. 13, §1º, XIII, "a" (redação LC 147/2014)',
+    condicoes: 'ICMS deve ter sido recolhido por antecipação com encerramento de tributação.',
+    impactoEstimado: 'Similar ao ICMS-ST — redução da parcela ICMS no DAS'
+  },
+
+  // ─── 11. MULTAS REDUZIDAS (Art. 38-B) ─────────────────────────────────────────
+  {
+    id: 'multas_reduzidas',
+    titulo: 'Redução de multas por obrigações acessórias',
+    descricao: 'Multas em valor fixo ou mínimo por descumprimento de obrigações acessórias são reduzidas: 90% para MEI e 50% para ME/EPP no Simples.',
+    aplicavelA: ['MEI', 'ME', 'EPP optante Simples'],
+    tributoReduzido: ['Multas'],
+    tipoReducao: 'reducao_penalidades',
+    baseLegal: 'LC 123/2006, Art. 38-B (incluído LC 147/2014)',
+    condicoes: 'Multa em valor fixo ou mínimo. Não se aplica em caso de fraude, resistência ou embaraço à fiscalização. Pagamento em 30 dias.',
+    reducaoMEI: 0.90,
+    reducaoME_EPP: 0.50,
+    excecoes: ['Fraude', 'Resistência à fiscalização', 'Embaraço à fiscalização', 'Não pagamento em 30 dias'],
+    calcularMultaReduzida: function(valorMultaOriginal, tipoEmpresa) {
+      if (tipoEmpresa === 'MEI') return _arredondar(valorMultaOriginal * (1 - 0.90));
+      if (tipoEmpresa === 'ME' || tipoEmpresa === 'EPP') return _arredondar(valorMultaOriginal * (1 - 0.50));
+      return valorMultaOriginal;
+    }
+  },
+
+  // ─── 12. FISCALIZAÇÃO ORIENTADORA (DUPLA VISITA) ──────────────────────────────
+  {
+    id: 'fiscalizacao_orientadora',
+    titulo: 'Fiscalização de natureza prioritariamente orientadora (dupla visita)',
+    descricao: 'Antes de autuar, o fiscal deve orientar a ME/EPP na primeira visita. Auto de infração SEM dupla visita é NULO.',
+    aplicavelA: ['ME', 'EPP'],
+    tributoReduzido: ['Multas', 'Autos de infração'],
+    tipoReducao: 'protecao_legal',
+    baseLegal: 'LC 123/2006, Art. 55, §§5º e 6º (redação LC 147/2014)',
+    condicoes: 'Aplica-se a aspectos trabalhista, metrológico, sanitário, ambiental, de segurança e uso do solo. Atividade deve comportar grau de risco compatível.',
+    excecoesAplicacao: [
+      'Infrações trabalhistas (exceto obrigações acessórias)',
+      'Ocupação irregular de reserva de faixa não edificável',
+      'Áreas de preservação permanente',
+      'Faixas de domínio público de rodovias/ferrovias'
+    ],
+    impactoEstimado: 'Nulidade de autos de infração que não cumpriram critério da dupla visita. Proteção legal significativa.'
+  },
+
+  // ─── 13. LOCAÇÃO DE BENS MÓVEIS SEM ISS ──────────────────────────────────────
+  {
+    id: 'locacao_bens_moveis_sem_iss',
+    titulo: 'Locação de bens móveis — dedução do ISS',
+    descricao: 'Locação de bens móveis é tributada no Anexo III, MAS com dedução da parcela ISS, pois locação não constitui prestação de serviço para fins de ISS.',
+    aplicavelA: ['Anexo III'],
+    tributoReduzido: ['ISS'],
+    tipoReducao: 'deducao_iss',
+    baseLegal: 'LC 123/2006, Art. 18, §4º, V',
+    impactoEstimado: 'Redução de até 5% (parcela ISS) na alíquota efetiva sobre receita de locação',
+    calcularReducao: function(receitaLocacao, aliquotaEfetiva, faixa) {
+      if (!receitaLocacao || !PARTILHA.III) return 0;
+      const idx = faixa - 1;
+      const p = PARTILHA.III[idx];
+      if (!p) return 0;
+      return _arredondar(receitaLocacao * aliquotaEfetiva * (p.iss || 0));
+    }
+  }
+];
+
+
+// ================================================================================
+// SEÇÃO 24: SEGREGAÇÃO DE RECEITAS — REGRAS PARA MENOR TRIBUTAÇÃO
+// ================================================================================
+
+/**
+ * Regras de segregação de receitas no PGDAS-D.
+ * A segregação CORRETA é OBRIGATÓRIA e pode gerar economia tributária significativa.
+ *
+ * Base legal: LC 123/2006, Art. 18, §§4º e 4º-A (redação LC 147/2014);
+ *             Resolução CGSN 140/2018, Art. 25.
+ */
+const SEGREGACAO_RECEITAS = {
+  descricao: 'Regras para segregação obrigatória de receitas no PGDAS-D para cálculo correto (e otimizado) do DAS',
+  baseLegal: 'LC 123/2006, Art. 18, §§4º e 4º-A; Resolução CGSN 140/2018, Art. 25',
+
+  /** Tipos de segregação com impacto na tributação */
+  tipos: [
+    {
+      id: 'monofasica',
+      descricao: 'Receitas com PIS/COFINS monofásico',
+      impactoTributario: 'REDUZ DAS — exclui parcela PIS/COFINS',
+      baseLegal: 'Art. 18, §4º-A, I',
+      comoInformar: 'Marcar como "Tributação Monofásica" no PGDAS-D para PIS/COFINS'
+    },
+    {
+      id: 'icms_st',
+      descricao: 'Receitas com ICMS já recolhido por ST',
+      impactoTributario: 'REDUZ DAS — exclui parcela ICMS',
+      baseLegal: 'Art. 18, §4º-A, I',
+      comoInformar: 'Marcar como "Substituição Tributária" no PGDAS-D para ICMS'
+    },
+    {
+      id: 'iss_retido',
+      descricao: 'Receitas com ISS retido na fonte',
+      impactoTributario: 'REDUZ DAS — deduz valor do ISS retido',
+      baseLegal: 'Art. 18, §4º-A, II',
+      comoInformar: 'Informar valor do ISS retido no PGDAS-D'
+    },
+    {
+      id: 'isencao_icms_iss',
+      descricao: 'Receitas com isenção/redução de ICMS ou ISS',
+      impactoTributario: 'REDUZ DAS — exclui/reduz parcela isenta',
+      baseLegal: 'Art. 18, §4º-A, III',
+      comoInformar: 'Marcar receita como sujeita à isenção/redução no PGDAS-D'
+    },
+    {
+      id: 'exportacao',
+      descricao: 'Receitas de exportação de mercadorias ou serviços',
+      impactoTributario: 'REDUZ DAS SIGNIFICATIVAMENTE — exclui COFINS, PIS, IPI, ICMS, ISS',
+      baseLegal: 'Art. 18, §4º-A, IV',
+      comoInformar: 'Informar receita como "Exportação" no PGDAS-D'
+    },
+    {
+      id: 'iss_municipio_diverso',
+      descricao: 'ISS devido a município diverso do estabelecimento prestador',
+      impactoTributario: 'NEUTRO — ISS recolhido dentro do DAS mas para outro município',
+      baseLegal: 'Art. 18, §4º-A, V',
+      comoInformar: 'Informar o município onde o ISS é devido no PGDAS-D'
+    }
+  ],
+
+  /** Fórmula legal de apuração do montante devido (Art. 18, §12) */
+  formulaReducao: 'Na apuração do montante mensal, para receitas dos tipos acima, serão consideradas as reduções relativas aos tributos já recolhidos, monofásicos, isentos, reduzidos ou retidos.',
+
+  /** Alerta importante */
+  alerta: '⚠️ ATENÇÃO: A falta de segregação correta pode resultar em PAGAMENTO A MAIOR de tributos. Verificar mensalmente se todas as receitas estão corretamente classificadas no PGDAS-D.'
+};
+
+
+// ================================================================================
+// SEÇÃO 25: DADOS DO MEI (Microempreendedor Individual)
+// ================================================================================
+
+/**
+ * Constantes e regras do MEI — Microempreendedor Individual.
+ * Base legal: LC 123/2006, Arts. 18-A a 18-E (redação LC 147/2014 e LC 155/2016).
+ */
+const MEI = {
+  /** Limite de receita bruta anual — MEI (atualizado LC 188/2021) */
+  limiteReceitaAnual: 81_000.00,
+  limiteReceitaMensal: 6_750.00,
+
+  /** Limitar de receita em início de atividade — proporcional ao mês */
+  limiteReceitaProporcional: 'R$ 6.750,00 por mês de atividade no ano',
+
+  /** Valores fixos mensais do DAS-MEI (atualizados anualmente conforme salário mínimo) */
+  valores2025: {
+    inss: null, // 5% do salário mínimo — atualizar conforme SM vigente
+    percentualINSS: 0.05,
+    icms: 1.00,
+    iss: 5.00,
+    baseLegal: 'LC 123/2006, Art. 18-A, §3º, V'
+  },
+
+  /** Benefícios especiais do MEI (LC 147/2014) */
+  beneficios: [
+    {
+      titulo: 'Isenção de taxas de registro e legalização',
+      baseLegal: 'LC 123/2006, Art. 4º, §3º (redação LC 147/2014)',
+      descricao: 'Todos os custos de abertura, registro, funcionamento, alvará, licença reduzidos a ZERO.'
+    },
+    {
+      titulo: 'Isenção de vigilância sanitária',
+      baseLegal: 'LC 123/2006, Art. 4º, §3º-A (incluído LC 147/2014)',
+      descricao: 'Isento de taxas de fiscalização da vigilância sanitária.'
+    },
+    {
+      titulo: 'Redução de 90% em multas',
+      baseLegal: 'LC 123/2006, Art. 38-B, I (incluído LC 147/2014)',
+      descricao: 'Multas por obrigações acessórias em valor fixo ou mínimo reduzidas em 90%.'
+    },
+    {
+      titulo: 'IPTU mais favorável para MEI que atua em casa',
+      baseLegal: 'LC 123/2006, Art. 18-D (incluído LC 147/2014)',
+      descricao: 'Menor alíquota vigente (residencial ou comercial) para MEI que atua no mesmo local de residência.'
+    },
+    {
+      titulo: 'Vedação de cobrança associativa indevida',
+      baseLegal: 'LC 123/2006, Art. 4º, §4º (redação LC 147/2014)',
+      descricao: 'Cobrança de sindicatos/associações só com contrato assinado pelo próprio MEI.'
+    },
+    {
+      titulo: 'Vedação de aumento de tarifas de concessionárias',
+      baseLegal: 'LC 123/2006, Art. 18-A, §22 (incluído LC 147/2014)',
+      descricao: 'Concessionárias não podem aumentar tarifas por conta da condição de PJ do MEI.'
+    },
+    {
+      titulo: 'Cancelamento automático por inatividade',
+      baseLegal: 'LC 123/2006, Art. 18-A, §15-B (incluído LC 147/2014)',
+      descricao: '12 meses sem recolhimento ou declarações = cancelamento automático (sem penalidades adicionais).'
+    },
+    {
+      titulo: 'Participação em licitações',
+      baseLegal: 'LC 123/2006, Art. 18-E, §4º (incluído LC 147/2014)',
+      descricao: 'Vedado impor restrições ao MEI em licitações por sua natureza jurídica.'
+    }
+  ],
+
+  /** Vedações — quem NÃO pode ser MEI */
+  vedacoes: [
+    'Atividades do Anexo V ou VI (salvo autorização CGSN) — Art. 18-A, §4º, I (LC 147/2014)',
+    'Sócio, administrador ou titular de outra empresa',
+    'Receita bruta > R$ 81.000 no ano anterior',
+    'Exercício de atividade vedada na lista CGSN'
+  ],
+
+  baseLegal: 'LC 123/2006, Arts. 18-A a 18-E (redação LC 147/2014 e LC 155/2016)'
+};
+
+
+// ================================================================================
+// SEÇÃO 26: BENEFÍCIOS EM LICITAÇÕES E COMPRAS PÚBLICAS
+// ================================================================================
+
+/**
+ * Tratamento diferenciado para ME/EPP em licitações e contratações públicas.
+ * Base legal: LC 123/2006, Arts. 43 a 49 (redação LC 147/2014);
+ *             Lei 8.666/1993, Arts. 3º e 5º-A (redação LC 147/2014).
+ */
+const LICITACOES_BENEFICIOS = {
+  descricao: 'Tratamento diferenciado em contratações públicas para ME/EPP',
+  baseLegal: 'LC 123/2006, Arts. 43 a 49 (redação LC 147/2014); Lei 8.666/1993, Art. 3º, §14',
+
+  beneficios: [
+    {
+      titulo: 'Licitação exclusiva até R$ 80.000',
+      descricao: 'Administração pública DEVERÁ realizar processo licitatório destinado EXCLUSIVAMENTE a ME/EPP nos itens de até R$ 80.000.',
+      valorLimite: 80_000.00,
+      obrigatorioPara: 'Administração pública direta e indireta, federal, estadual e municipal',
+      baseLegal: 'LC 123/2006, Art. 48, I (redação LC 147/2014)'
+    },
+    {
+      titulo: 'Subcontratação de ME/EPP',
+      descricao: 'Pode ser exigida a subcontratação de ME/EPP em obras e serviços.',
+      baseLegal: 'LC 123/2006, Art. 48, II (redação LC 147/2014)'
+    },
+    {
+      titulo: 'Cota de 25% para ME/EPP',
+      descricao: 'Administração DEVERÁ estabelecer cota de até 25% do objeto para contratação de ME/EPP em bens divisíveis.',
+      percentualCota: 0.25,
+      baseLegal: 'LC 123/2006, Art. 48, III (redação LC 147/2014)'
+    },
+    {
+      titulo: 'Preferência local/regional',
+      descricao: 'Prioridade para ME/EPP sediadas local ou regionalmente, até 10% do melhor preço válido.',
+      percentualPreferencia: 0.10,
+      baseLegal: 'LC 123/2006, Art. 48, §3º (redação LC 147/2014)'
+    },
+    {
+      titulo: 'Prazo para regularização fiscal',
+      descricao: '5 dias úteis para regularização de documentação fiscal após declarada vencedora, prorrogável por mais 5 dias.',
+      prazo: '5 dias úteis + 5 dias (prorrogável)',
+      baseLegal: 'LC 123/2006, Art. 43, §1º (redação LC 147/2014)'
+    },
+    {
+      titulo: 'Preferência em compras diretas (dispensa)',
+      descricao: 'Em dispensas de licitação (incisos I e II do Art. 24 da Lei 8.666), compra PREFERENCIAL de ME/EPP.',
+      baseLegal: 'LC 123/2006, Art. 49, IV (redação LC 147/2014)'
+    },
+    {
+      titulo: 'Prioridade sobre preferências estrangeiras',
+      descricao: 'Preferências para ME/EPP prevalecem sobre preferências para produtos/serviços estrangeiros.',
+      baseLegal: 'Lei 8.666/1993, Art. 3º, §15 (incluído LC 147/2014)'
+    }
+  ]
+};
+
+
+// ================================================================================
+// SEÇÃO 27: RECUPERAÇÃO JUDICIAL — BENEFÍCIOS ME/EPP
+// ================================================================================
+
+/**
+ * Benefícios em recuperação judicial para ME/EPP.
+ * Base legal: Lei 11.101/2005 (com alterações da LC 147/2014).
+ */
+const RECUPERACAO_JUDICIAL = {
+  descricao: 'Benefícios especiais em recuperação judicial para ME/EPP',
+  baseLegal: 'Lei 11.101/2005, alterada pela LC 147/2014',
+
+  beneficios: [
+    {
+      titulo: 'Remuneração reduzida do administrador judicial',
+      descricao: 'Limitada a 2% (vs até 5% para demais empresas)',
+      baseLegal: 'Lei 11.101/2005, Art. 24, §5º'
+    },
+    {
+      titulo: 'Classe própria de credores',
+      descricao: 'Créditos de ME/EPP formam classe própria (Classe IV)',
+      baseLegal: 'Lei 11.101/2005, Art. 41, IV'
+    },
+    {
+      titulo: 'Aprovação por maioria simples',
+      descricao: 'Plano de recuperação aprovado por maioria simples de credores presentes (não por valor)',
+      baseLegal: 'Lei 11.101/2005, Art. 45, §2º'
+    },
+    {
+      titulo: 'Parcelamento em até 36 vezes',
+      descricao: 'Plano especial com parcelamento em até 36 parcelas mensais, com juros SELIC + possibilidade de abatimento',
+      baseLegal: 'Lei 11.101/2005, Art. 71, II'
+    },
+    {
+      titulo: 'Prazos 20% superiores',
+      descricao: 'ME/EPP fazem jus a prazos 20% maiores que demais empresas no processo',
+      baseLegal: 'Lei 11.101/2005, Art. 68, parágrafo único'
+    },
+    {
+      titulo: 'Preferência na ordem de pagamento',
+      descricao: 'Créditos de ME/EPP têm preferência na Classe IV (quirografários prioritários)',
+      baseLegal: 'Lei 11.101/2005, Art. 83, IV, "d"'
+    }
+  ]
+};
+
+
+// ================================================================================
+// SEÇÃO 28: ESTRATÉGIAS LEGAIS PARA MENOR IMPOSTO — RESUMO EXECUTIVO
+// ================================================================================
+
+/**
+ * Resumo consolidado de TODAS as estratégias legais para pagar o menor imposto
+ * possível no Simples Nacional. Referências cruzadas com as seções acima.
+ *
+ * Organizadas por impacto (alto/médio/baixo) e facilidade de implementação.
+ *
+ * Pode ser importado por segundo arquivo para gerar relatório ou dashboard.
+ */
+const ESTRATEGIAS_MENOR_IMPOSTO = [
+  {
+    id: 'E01',
+    prioridade: 1,
+    impacto: 'critico',
+    titulo: 'Manter Fator "r" ≥ 28% (Anexo III vs V)',
+    descricao: 'Garantir que a razão folha/receita fique ≥ 28% para tributação pelo Anexo III.',
+    economiaEstimada: 'Até 9,5 p.p. na alíquota nominal (6% vs 15,5% na 1ª faixa)',
+    comoFazer: [
+      'Ajustar pró-labore dos sócios para manter folha proporcional',
+      'Incluir FGTS e encargos no cálculo da folha',
+      'Monitorar mensalmente a relação folha/receita',
+      'Se receita crescer, aumentar folha proporcionalmente'
+    ],
+    referencia: 'REDUCOES_LEGAIS[7] (fator_r_otimizado)',
+    baseLegal: 'LC 123/2006, Art. 18, §24 e §5º-J'
+  },
+  {
+    id: 'E02',
+    prioridade: 2,
+    impacto: 'alto',
+    titulo: 'Segregar receitas com tributação monofásica',
+    descricao: 'Identificar e segregar no PGDAS-D as receitas de produtos com PIS/COFINS monofásico.',
+    economiaEstimada: 'Redução de 3,65% a 9,25% sobre receita de produtos monofásicos',
+    comoFazer: [
+      'Listar todos os produtos vendidos que possuem tributação monofásica',
+      'Classificar corretamente no PGDAS-D mensalmente',
+      'Manter documentação comprobatória (NCM dos produtos)'
+    ],
+    referencia: 'REDUCOES_LEGAIS[0] (monofasica)',
+    baseLegal: 'LC 123/2006, Art. 18, §4º-A, I'
+  },
+  {
+    id: 'E03',
+    prioridade: 3,
+    impacto: 'alto',
+    titulo: 'Segregar receitas com ICMS-ST',
+    descricao: 'Excluir parcela ICMS do DAS quando já recolhido por substituição tributária.',
+    economiaEstimada: 'Até 3,35% de redução no DAS (parcela ICMS)',
+    comoFazer: [
+      'Identificar notas de compra com ICMS-ST destacado',
+      'Segregar revenda destes produtos no PGDAS-D',
+      'Manter documentação fiscal organizada'
+    ],
+    referencia: 'REDUCOES_LEGAIS[1] (icms_st)',
+    baseLegal: 'LC 123/2006, Art. 18, §4º-A, I'
+  },
+  {
+    id: 'E04',
+    prioridade: 4,
+    impacto: 'alto',
+    titulo: 'Deduzir ISS retido na fonte do DAS',
+    descricao: 'Abater do DAS o ISS que já foi retido na fonte pelo tomador do serviço.',
+    economiaEstimada: '2% a 5% do valor das notas com ISS retido',
+    comoFazer: [
+      'Identificar todas as notas com ISS retido',
+      'Informar o valor retido no PGDAS-D mensalmente',
+      'Conferir com o tomador a efetiva retenção e recolhimento'
+    ],
+    referencia: 'REDUCOES_LEGAIS[2] (iss_retido_fonte)',
+    baseLegal: 'LC 123/2006, Art. 18, §4º-A, II; Art. 21, §4º'
+  },
+  {
+    id: 'E05',
+    prioridade: 5,
+    impacto: 'alto',
+    titulo: 'Isenções sobre receitas de exportação',
+    descricao: 'Receitas de exportação são isentas de COFINS, PIS, IPI, ICMS e ISS no DAS.',
+    economiaEstimada: '40% a 70% de redução na alíquota efetiva sobre exportação',
+    comoFazer: [
+      'Classificar receitas de exportação separadamente no PGDAS-D',
+      'Incluir exportação via comercial exportadora ou SPE',
+      'Manter documentação de exportação (DU-E, contratos)'
+    ],
+    referencia: 'REDUCOES_LEGAIS[4] (exportacao_isencao)',
+    baseLegal: 'LC 123/2006, Art. 18, §14 e §4º-A, IV'
+  },
+  {
+    id: 'E06',
+    prioridade: 6,
+    impacto: 'medio',
+    titulo: 'Optar pelo regime de caixa',
+    descricao: 'Reconhecer receitas apenas quando recebidas, adiando tributação.',
+    economiaEstimada: 'Melhora fluxo de caixa — tributo pago somente sobre recebimentos efetivos',
+    comoFazer: [
+      'Optar pelo regime de caixa no PGDAS-D em janeiro',
+      'Controlar rigorosamente recebimentos x faturamento',
+      'Considerar se inadimplência é significativa'
+    ],
+    referencia: 'REDUCOES_LEGAIS[8] (regime_caixa)',
+    baseLegal: 'LC 123/2006, Art. 18, §3º'
+  },
+  {
+    id: 'E07',
+    prioridade: 7,
+    impacto: 'medio',
+    titulo: 'Locação de bens móveis sem ISS',
+    descricao: 'Segregar receita de locação de bens móveis para deduzir parcela ISS do DAS.',
+    economiaEstimada: 'Até 5% de redução na alíquota sobre receita de locação',
+    comoFazer: [
+      'Classificar receita de locação separadamente no PGDAS-D',
+      'Emitir notas específicas para locação (sem ISS)'
+    ],
+    referencia: 'REDUCOES_LEGAIS[12] (locacao_bens_moveis_sem_iss)',
+    baseLegal: 'LC 123/2006, Art. 18, §4º, V'
+  },
+  {
+    id: 'E08',
+    prioridade: 8,
+    impacto: 'medio',
+    titulo: 'Escrituração contábil para distribuição de lucros otimizada',
+    descricao: 'Manter escrituração contábil completa para distribuir lucros acima da presunção (32%), com isenção de IRPF.',
+    economiaEstimada: 'Distribuição isenta acima de 32% quando lucro contábil for maior',
+    comoFazer: [
+      'Contratar contador para escrituração contábil completa',
+      'Apurar lucro contábil real mês a mês',
+      'Distribuir o MAIOR entre presunção e lucro contábil'
+    ],
+    referencia: 'Função calcularDistribuicaoLucros()',
+    baseLegal: 'LC 123/2006, Art. 14'
+  },
+  {
+    id: 'E09',
+    prioridade: 9,
+    impacto: 'medio',
+    titulo: 'Verificar isenções municipais/estaduais de ICMS/ISS',
+    descricao: 'Identificar se há isenções ou reduções concedidas pelo município/estado para atividades específicas.',
+    economiaEstimada: 'Variável — de 2% a 5% de redução no DAS',
+    comoFazer: [
+      'Consultar legislação municipal sobre ISS (alíquotas, isenções)',
+      'Consultar legislação estadual sobre ICMS (incentivos, reduções)',
+      'Informar corretamente no PGDAS-D'
+    ],
+    referencia: 'REDUCOES_LEGAIS[5] (isencao_reducao_icms_iss)',
+    baseLegal: 'LC 123/2006, Art. 18, §4º-A, III'
+  },
+  {
+    id: 'E10',
+    prioridade: 10,
+    impacto: 'baixo',
+    titulo: 'Invocar fiscalização orientadora (dupla visita) contra autos de infração',
+    descricao: 'Contestar autos de infração que não respeitaram o critério da dupla visita.',
+    economiaEstimada: 'Nulidade de autos de infração — pode evitar multas significativas',
+    comoFazer: [
+      'Verificar se houve visita orientadora prévia',
+      'Se não houve, impugnar o auto de infração com base no Art. 55',
+      'Protocolar defesa administrativa citando §6º (nulidade)'
+    ],
+    referencia: 'REDUCOES_LEGAIS[11] (fiscalizacao_orientadora)',
+    baseLegal: 'LC 123/2006, Art. 55, §§5º e 6º'
+  }
+];
+
+
+// ================================================================================
+// SEÇÃO 29: TABELA DE PRODUTOS COM TRIBUTAÇÃO MONOFÁSICA (REFERÊNCIA)
+// ================================================================================
+
+/**
+ * Lista expandida de produtos sujeitos à tributação concentrada (monofásica),
+ * conforme Art. 13, §1º, XIII, "a" (redação LC 147/2014).
+ *
+ * Para estes produtos, PIS/COFINS (e em alguns casos ICMS) já foram recolhidos
+ * na etapa de fabricação/importação. O revendedor EXCLUI estas parcelas do DAS.
+ *
+ * IMPORTANTE: Esta lista é uma referência. A verificação final deve ser feita
+ * pela NCM (Nomenclatura Comum do Mercosul) do produto.
+ *
+ * Base legal: LC 123/2006, Art. 13, §1º, XIII, "a" (redação LC 147/2014);
+ *             Art. 18, §4º-A, I; Resolução CGSN 140/2018, Art. 25.
+ */
+const PRODUTOS_MONOFASICOS = [
+  { categoria: 'Combustíveis e lubrificantes', tributosConcentrados: ['PIS', 'COFINS', 'ICMS'], baseLegal: 'Lei 10.336/2001; Lei 10.865/2004' },
+  { categoria: 'Cigarros e derivados do fumo', tributosConcentrados: ['PIS', 'COFINS', 'IPI'], baseLegal: 'Lei 11.196/2005' },
+  { categoria: 'Bebidas frias (água, refrescos, cervejas)', tributosConcentrados: ['PIS', 'COFINS'], baseLegal: 'Lei 13.097/2015' },
+  { categoria: 'Medicamentos e produtos farmacêuticos', tributosConcentrados: ['PIS', 'COFINS'], baseLegal: 'Lei 10.147/2000' },
+  { categoria: 'Cosméticos, perfumaria e higiene pessoal', tributosConcentrados: ['PIS', 'COFINS'], baseLegal: 'Lei 10.147/2000' },
+  { categoria: 'Veículos automotivos e autopeças', tributosConcentrados: ['PIS', 'COFINS'], baseLegal: 'Lei 10.485/2002' },
+  { categoria: 'Pneumáticos, câmaras de ar e protetores', tributosConcentrados: ['PIS', 'COFINS'], baseLegal: 'Lei 10.485/2002' },
+  { categoria: 'Máquinas e veículos (peças e acessórios)', tributosConcentrados: ['PIS', 'COFINS'], baseLegal: 'Lei 10.485/2002' },
+  { categoria: 'Energia elétrica', tributosConcentrados: ['PIS', 'COFINS', 'ICMS'], baseLegal: 'Lei 10.637/2002' },
+  { categoria: 'Óleos e azeites vegetais comestíveis', tributosConcentrados: ['ICMS-ST'], baseLegal: 'Convênio ICMS' },
+  { categoria: 'Farinha de trigo e misturas', tributosConcentrados: ['ICMS-ST'], baseLegal: 'Convênio ICMS' },
+  { categoria: 'Massas alimentícias', tributosConcentrados: ['ICMS-ST'], baseLegal: 'Art. 13, §8º (LC 147/2014) — somente escala industrial relevante' },
+  { categoria: 'Açúcares', tributosConcentrados: ['ICMS-ST'], baseLegal: 'Convênio ICMS' },
+  { categoria: 'Produtos lácteos', tributosConcentrados: ['ICMS-ST'], baseLegal: 'Art. 13, §8º (LC 147/2014) — somente escala industrial relevante' },
+  { categoria: 'Carnes e preparações', tributosConcentrados: ['ICMS-ST'], baseLegal: 'Art. 13, §8º (LC 147/2014) — somente escala industrial relevante' },
+  { categoria: 'Preparações à base de cereais', tributosConcentrados: ['ICMS-ST'], baseLegal: 'Art. 13, §8º (LC 147/2014)' },
+  { categoria: 'Chocolates', tributosConcentrados: ['ICMS-ST'], baseLegal: 'Art. 13, §8º (LC 147/2014)' },
+  { categoria: 'Produtos de padaria, bolachas e biscoitos', tributosConcentrados: ['ICMS-ST'], baseLegal: 'Art. 13, §8º (LC 147/2014)' },
+  { categoria: 'Sorvetes e preparados para sorvetes', tributosConcentrados: ['ICMS-ST'], baseLegal: 'Convênio ICMS' },
+  { categoria: 'Cafés, mates, extratos e concentrados', tributosConcentrados: ['ICMS-ST'], baseLegal: 'Convênio ICMS' },
+  { categoria: 'Molhos e preparações para molhos', tributosConcentrados: ['ICMS-ST'], baseLegal: 'Art. 13, §8º (LC 147/2014)' },
+  { categoria: 'Rações para animais domésticos', tributosConcentrados: ['ICMS-ST'], baseLegal: 'Convênio ICMS' },
+  { categoria: 'Papéis', tributosConcentrados: ['ICMS-ST'], baseLegal: 'Convênio ICMS' },
+  { categoria: 'Plásticos', tributosConcentrados: ['ICMS-ST'], baseLegal: 'Convênio ICMS' },
+  { categoria: 'Cimentos, cal e argamassas', tributosConcentrados: ['ICMS-ST'], baseLegal: 'Convênio ICMS' },
+  { categoria: 'Produtos cerâmicos para construção', tributosConcentrados: ['ICMS-ST'], baseLegal: 'Art. 13, §8º (LC 147/2014)' },
+  { categoria: 'Vidros', tributosConcentrados: ['ICMS-ST'], baseLegal: 'Convênio ICMS' },
+  { categoria: 'Tintas e vernizes', tributosConcentrados: ['ICMS-ST'], baseLegal: 'Convênio ICMS' },
+  { categoria: 'Produtos eletrônicos e eletrodomésticos', tributosConcentrados: ['ICMS-ST'], baseLegal: 'Convênio ICMS' },
+  { categoria: 'Fios, cabos e condutores elétricos', tributosConcentrados: ['ICMS-ST'], baseLegal: 'Convênio ICMS' },
+  { categoria: 'Lâmpadas, disjuntores, interruptores', tributosConcentrados: ['ICMS-ST'], baseLegal: 'Convênio ICMS' },
+  { categoria: 'Ferramentas', tributosConcentrados: ['ICMS-ST'], baseLegal: 'Convênio ICMS' },
+  { categoria: 'Álcool etílico', tributosConcentrados: ['PIS', 'COFINS', 'ICMS-ST'], baseLegal: 'Lei 9.718/1998' },
+  { categoria: 'Sabões, detergentes, alvejantes, amaciantes', tributosConcentrados: ['ICMS-ST'], baseLegal: 'Art. 13, §8º (LC 147/2014) — somente escala industrial relevante para detergentes' }
+];
+
+
+// ================================================================================
+// SEÇÃO 30: PRAZO MÍNIMO ICMS-ST (Art. 21-B — LC 147/2014)
+// ================================================================================
+
+/**
+ * Prazo mínimo para vencimento do ICMS-ST, monofásico e antecipação tributária.
+ * Base legal: LC 123/2006, Art. 21-B (incluído LC 147/2014).
+ */
+const PRAZO_MINIMO_ICMS_ST = {
+  descricao: 'Prazo mínimo de 60 dias para vencimento de ICMS devido por ST, monofásica e antecipação tributária',
+  prazoMinimoDias: 60,
+  contadoA_partir: 'Primeiro dia do mês do fato gerador',
+  aplicavelQuando: 'Responsabilidade recai sobre operações ou prestações subsequentes',
+  baseLegal: 'LC 123/2006, Art. 21-B (incluído LC 147/2014)',
+  observacao: 'Estados e DF devem respeitar este prazo mínimo. Prazo inferior é ilegal.'
+};
+
+
+// ================================================================================
+// SEÇÃO 31: CNAE ADICIONAIS (§5º-I) PARA MAPEAMENTO COMPLETO
+// ================================================================================
+
+/**
+ * CNAEs adicionais mapeados para completar o mapeamento §5º-I.
+ * Todos usam Fator "r" para determinação de Anexo III ou V.
+ */
+const MAPEAMENTO_CNAE_ADICIONAL = [
+  // Engenharia e Geotecnologia (Inciso VI do §5º-I)
+  { cnae: '71.11-1', descricao: 'Serviços de arquitetura', tipo: 'fator_r', anexoFatorRAlto: 'III', anexoFatorRBaixo: 'V', paragrafo5I: 'VI' },
+  { cnae: '71.12-0', descricao: 'Serviços de engenharia', tipo: 'fator_r', anexoFatorRAlto: 'III', anexoFatorRBaixo: 'V', paragrafo5I: 'VI' },
+  { cnae: '71.20-1', descricao: 'Testes e análises técnicas', tipo: 'fator_r', anexoFatorRAlto: 'III', anexoFatorRBaixo: 'V', paragrafo5I: 'VI' },
+  { cnae: '72.10-0', descricao: 'Pesquisa e desenvolvimento em ciências físicas e naturais', tipo: 'fator_r', anexoFatorRAlto: 'III', anexoFatorRBaixo: 'V', paragrafo5I: 'VI' },
+  { cnae: '74.10-2', descricao: 'Design e decoração de interiores', tipo: 'fator_r', anexoFatorRAlto: 'III', anexoFatorRBaixo: 'V', paragrafo5I: 'VI' },
+
+  // Medicina (Inciso I)
+  { cnae: '86.10-1', descricao: 'Atividades de atendimento hospitalar', tipo: 'fator_r', anexoFatorRAlto: 'III', anexoFatorRBaixo: 'V', paragrafo5I: 'I' },
+  { cnae: '86.21-6', descricao: 'Serviços móveis de atendimento a urgências', tipo: 'fator_r', anexoFatorRAlto: 'III', anexoFatorRBaixo: 'V', paragrafo5I: 'I' },
+
+  // Medicina Veterinária (Inciso II)
+  { cnae: '75.00-1', descricao: 'Atividades veterinárias', tipo: 'fator_r', anexoFatorRAlto: 'III', anexoFatorRBaixo: 'V', paragrafo5I: 'II' },
+
+  // Psicologia, terapia, etc. (Inciso IV)
+  { cnae: '86.50-0', descricao: 'Atividades de profissionais da área de saúde (exceto médicos e odontólogos)', tipo: 'fator_r', anexoFatorRAlto: 'III', anexoFatorRBaixo: 'V', paragrafo5I: 'IV' },
+  { cnae: '86.90-9', descricao: 'Atividades de atenção à saúde humana NE', tipo: 'fator_r', anexoFatorRAlto: 'III', anexoFatorRBaixo: 'V', paragrafo5I: 'IV' },
+
+  // Representação Comercial (Inciso VII)
+  { cnae: '46.13-3', descricao: 'Representantes comerciais e agentes do comércio', tipo: 'fator_r', anexoFatorRAlto: 'III', anexoFatorRBaixo: 'V', paragrafo5I: 'VII' },
+
+  // Jornalismo e Publicidade (Inciso X)
+  { cnae: '63.91-7', descricao: 'Agências de notícias', tipo: 'fator_r', anexoFatorRAlto: 'III', anexoFatorRBaixo: 'V', paragrafo5I: 'X' },
+  { cnae: '73.12-2', descricao: 'Agenciamento de espaços para publicidade', tipo: 'fator_r', anexoFatorRAlto: 'III', anexoFatorRBaixo: 'V', paragrafo5I: 'X' },
+
+  // Agenciamento (Inciso XI)
+  { cnae: '79.11-2', descricao: 'Agências de viagens', tipo: 'fator_r', anexoFatorRAlto: 'III', anexoFatorRBaixo: 'V', paragrafo5I: 'XI' },
+  { cnae: '79.12-1', descricao: 'Operadores turísticos', tipo: 'fator_r', anexoFatorRAlto: 'III', anexoFatorRBaixo: 'V', paragrafo5I: 'XI' },
+
+  // Transporte — Regra especial (§5º-E)
+  { cnae: '49.30-2', descricao: 'Transporte rodoviário de carga', tipo: 'fixo', anexoFixo: 'III_ESPECIAL', observacao: 'Anexo III base, deduz ISS, acrescenta ICMS Anexo I — §5º-E' },
+  { cnae: '50.11-4', descricao: 'Transporte marítimo de cabotagem — carga', tipo: 'fixo', anexoFixo: 'III_ESPECIAL', observacao: 'Transporte fluvial/marítimo — §5º-E' },
+  { cnae: '50.22-0', descricao: 'Transporte por navegação interior de carga', tipo: 'fixo', anexoFixo: 'III_ESPECIAL', observacao: 'Transporte fluvial — §5º-E e inciso VI Art. 17' },
+
+  // Fisioterapia e Corretagem de Seguros — Anexo III FIXO (§5º-B)
+  { cnae: '86.50-0/04', descricao: 'Atividades de fisioterapia', tipo: 'fixo', anexoFixo: 'III', paragrafo: '5B-XVI' },
+  { cnae: '66.22-3', descricao: 'Corretagem e intermediação de seguros', tipo: 'fixo', anexoFixo: 'III', paragrafo: '5B-XVII' }
+];
+
+
+// ================================================================================
+// SEÇÃO 4-INT: INTEGRAÇÃO COM CnaeMapeamento (cnae-mapeamento.js)
+// ================================================================================
+
+/**
+ * Funções de integração com o módulo CnaeMapeamento.
+ * Fallback gracioso: se CnaeMapeamento não estiver disponível, usa MAPEAMENTO_CNAE local.
+ *
+ * @requires CnaeMapeamento (cnae-mapeamento.js) — opcional, com fallback
+ */
+
+/**
+ * Obtém referência ao módulo CnaeMapeamento, se disponível.
+ * @returns {Object|null}
+ */
+function _getCnaeMapeamento() {
+  if (typeof CnaeMapeamento !== 'undefined') return CnaeMapeamento;
+  if (typeof globalThis !== 'undefined' && globalThis.CnaeMapeamento) return globalThis.CnaeMapeamento;
+  try { return require('./cnae-mapeamento.js'); } catch (e) { return null; }
+}
+
+/**
+ * Obtém regras tributárias de um CNAE, usando CnaeMapeamento se disponível.
+ * @param {string} codigo — Código CNAE (ex: '7119-7/00' ou '71.19-7')
+ * @param {string} [categoria] — Categoria fallback: 'Comercio', 'Industria', 'Servico', 'Transporte'
+ * @returns {Object} { anexo, fatorR, presuncaoIRPJ, presuncaoCSLL, vedado, motivoVedacao, obs, monofasico }
+ */
+function obterRegrasCNAE(codigo, categoria) {
+  const cm = _getCnaeMapeamento();
+  if (cm && typeof cm.obterRegrasCNAE === 'function') {
+    const regras = cm.obterRegrasCNAE(codigo, categoria);
+    const monofasico = typeof cm.isMonofasico === 'function' ? cm.isMonofasico(codigo) : false;
+    return { ...regras, monofasico };
+  }
+  // Fallback: usar MAPEAMENTO_CNAE local
+  const cnaeNorm = codigo.replace(/[^0-9]/g, '').substring(0, 5);
+  const cnaeFormatado = cnaeNorm.substring(0, 2) + '.' + cnaeNorm.substring(2, 4) + '-' + cnaeNorm.substring(4);
+  const local = MAPEAMENTO_CNAE.find(c => c.cnae === cnaeFormatado);
+  if (local) {
+    const isServico = ['III', 'IV', 'V'].includes(local.anexoFixo || local.anexoFatorRAlto);
+    return {
+      anexo: local.tipo === 'fixo' ? local.anexoFixo : null,
+      fatorR: local.tipo === 'fator_r',
+      presuncaoIRPJ: isServico ? 0.32 : 0.08,
+      presuncaoCSLL: isServico ? 0.32 : 0.12,
+      vedado: local.tipo === 'vedado',
+      motivoVedacao: local.tipo === 'vedado' ? local.observacao : null,
+      obs: local.observacao,
+      monofasico: false,
+      fonte: 'MAPEAMENTO_CNAE_LOCAL'
+    };
+  }
+  // Fallback por categoria
+  const fallbacks = {
+    'Comercio': { anexo: 'I', presuncaoIRPJ: 0.08, presuncaoCSLL: 0.12 },
+    'Industria': { anexo: 'II', presuncaoIRPJ: 0.08, presuncaoCSLL: 0.12 },
+    'Servico': { anexo: null, presuncaoIRPJ: 0.32, presuncaoCSLL: 0.32 },
+    'Transporte': { anexo: 'III', presuncaoIRPJ: 0.16, presuncaoCSLL: 0.12 }
+  };
+  const fb = fallbacks[categoria] || fallbacks['Servico'];
+  return {
+    ...fb, fatorR: !fb.anexo, vedado: false, motivoVedacao: null,
+    obs: `Fallback por categoria: ${categoria || 'Servico'}`, monofasico: false, fonte: 'FALLBACK'
+  };
+}
+
+/**
+ * Verifica se CNAE é vedado ao Simples Nacional.
+ * @param {string} codigo
+ * @returns {false|string} false se permitido, string com motivo se vedado
+ */
+function isVedadoCNAE(codigo) {
+  const cm = _getCnaeMapeamento();
+  if (cm && typeof cm.isVedado === 'function') return cm.isVedado(codigo);
+  const regras = obterRegrasCNAE(codigo);
+  return regras.vedado ? (regras.motivoVedacao || 'Vedado ao Simples Nacional') : false;
+}
+
+/**
+ * Obtém o anexo efetivo considerando Fator R.
+ * @param {string} codigo
+ * @param {string} [categoria]
+ * @param {number} [fatorR]
+ * @returns {string} 'I'|'II'|'III'|'IV'|'V'|'VEDADO'
+ */
+function obterAnexoEfetivoCNAE(codigo, categoria, fatorR) {
+  const cm = _getCnaeMapeamento();
+  if (cm && typeof cm.obterAnexoEfetivo === 'function') return cm.obterAnexoEfetivo(codigo, categoria, fatorR);
+  const regras = obterRegrasCNAE(codigo, categoria);
+  if (regras.vedado) return 'VEDADO';
+  if (regras.fatorR) return (fatorR !== undefined && fatorR >= LIMITE_FATOR_R) ? 'III' : 'V';
+  return regras.anexo || 'III';
+}
+
+/**
+ * Verifica se CNAE possui tributação monofásica.
+ * @param {string} codigo
+ * @returns {false|string}
+ */
+function isMonofasicoCNAE(codigo) {
+  const cm = _getCnaeMapeamento();
+  if (cm && typeof cm.isMonofasico === 'function') return cm.isMonofasico(codigo);
+  return false; // Sem CnaeMapeamento, não temos dados de monofásica
+}
+
+
+// ================================================================================
+// SEÇÃO 5-INT: INTEGRAÇÃO COM Estados (estados.js)
+// ================================================================================
+
+/**
+ * Funções de integração com o módulo Estados/EstadosBR.
+ * @requires Estados (estados.js) — opcional, com fallback
+ */
+
+/**
+ * Obtém referência ao módulo Estados.
+ * @returns {Object|null}
+ */
+function _getEstados() {
+  if (typeof Estados !== 'undefined') return Estados;
+  if (typeof EstadosBR !== 'undefined') return EstadosBR;
+  if (typeof globalThis !== 'undefined') {
+    if (globalThis.Estados) return globalThis.Estados;
+    if (globalThis.EstadosBR) return globalThis.EstadosBR;
+  }
+  try { return require('./estados.js'); } catch (e) { return null; }
+}
+
+/**
+ * Obtém dados completos de um estado brasileiro.
+ * @param {string} uf — Sigla da UF (ex: 'PA', 'SP')
+ * @returns {Object|null}
+ */
+function obterDadosEstado(uf) {
+  const est = _getEstados();
+  if (est && typeof est.getEstado === 'function') return est.getEstado(uf);
+  // Fallback mínimo
+  return null;
+}
+
+/**
+ * Verifica se a UF está em área de incentivo SUDAM/SUDENE/ZFM.
+ * @param {string} uf
+ * @returns {Object} { sudam: boolean, sudene: boolean, zfm: boolean, reducaoIRPJ: number }
+ */
+function verificarIncentivosRegionais(uf) {
+  const dadosEstado = obterDadosEstado(uf);
+  if (dadosEstado && dadosEstado.incentivos) {
+    const inc = dadosEstado.incentivos;
+    const sudam = !!(inc.sudam || inc.SUDAM);
+    const sudene = !!(inc.sudene || inc.SUDENE);
+    const zfm = !!(inc.zfm || inc.ZFM);
+    return { sudam, sudene, zfm, reducaoIRPJ: (sudam || sudene) ? 0.75 : (zfm ? 0.75 : 0) };
+  }
+  // Fallback por UF conhecida
+  const SUDAM_UFS = ['AC', 'AM', 'AP', 'MA', 'MT', 'PA', 'RO', 'RR', 'TO'];
+  const SUDENE_UFS = ['AL', 'BA', 'CE', 'MA', 'PB', 'PE', 'PI', 'RN', 'SE'];
+  const sudam = SUDAM_UFS.includes(uf);
+  const sudene = SUDENE_UFS.includes(uf);
+  const zfm = uf === 'AM'; // Zona Franca de Manaus
+  return { sudam, sudene, zfm, reducaoIRPJ: (sudam || sudene || zfm) ? 0.75 : 0 };
+}
+
+/**
+ * Obtém alíquota ICMS interna do estado.
+ * @param {string} uf
+ * @returns {number} Alíquota ICMS (ex: 0.17 para 17%)
+ */
+function obterAliquotaICMS(uf) {
+  const dadosEstado = obterDadosEstado(uf);
+  if (dadosEstado && dadosEstado.icms && dadosEstado.icms.aliquota_interna) {
+    return dadosEstado.icms.aliquota_interna;
+  }
+  // Fallback genérico
+  const aliquotasPadrao = { SP: 0.18, MG: 0.18, RJ: 0.20, RS: 0.17, PR: 0.19 };
+  return aliquotasPadrao[uf] || 0.17;
+}
+
+
+// ================================================================================
+// SEÇÃO 6-INT: INTEGRAÇÃO COM MunicipiosIBGE (municipios.js)
+// ================================================================================
+
+/**
+ * Funções de integração com o módulo MunicipiosIBGE.
+ * @requires MunicipiosIBGE (municipios.js) — opcional, com fallback
+ */
+
+/**
+ * Obtém referência ao módulo MunicipiosIBGE.
+ * @returns {Object|null}
+ */
+function _getMunicipiosIBGE() {
+  if (typeof MunicipiosIBGE !== 'undefined') return MunicipiosIBGE;
+  if (typeof globalThis !== 'undefined' && globalThis.MunicipiosIBGE) return globalThis.MunicipiosIBGE;
+  try { return require('./municipios.js'); } catch (e) { return null; }
+}
+
+/**
+ * Obtém alíquota ISS de um município.
+ * @param {string} uf
+ * @param {string} municipio — Nome do município
+ * @returns {number} Alíquota ISS (ex: 0.05 para 5%)
+ */
+function obterAliquotaISS(uf, municipio) {
+  // Tentar do módulo Estados primeiro (ISS da capital como referência)
+  const dadosEstado = obterDadosEstado(uf);
+  if (dadosEstado && dadosEstado.iss) {
+    // Se tiver ISS por município
+    if (dadosEstado.iss.municipios && dadosEstado.iss.municipios[municipio]) {
+      return dadosEstado.iss.municipios[municipio] / 100;
+    }
+    // ISS geral do estado (capital)
+    if (dadosEstado.iss.aliquota_geral) {
+      return dadosEstado.iss.aliquota_geral / 100;
+    }
+  }
+  // Fallback: ISS padrão 5%
+  return ISS_MAXIMO;
+}
+
+
+// ================================================================================
+// SEÇÃO 13: calcularDASMensalOtimizado() ★ NOVO
+// ================================================================================
+
+/**
+ * Calcula o DAS mensal COM TODAS as deduções legais aplicadas automaticamente.
+ * Esta é a função PRINCIPAL do IMPOST. — calcula o MENOR DAS legal possível.
+ *
+ * Base legal: LC 123/2006, Art. 18, §§4º e 4º-A; Resolução CGSN 140/2018, Art. 25.
+ *
+ * @param {Object} params
+ * @param {number} params.receitaBrutaMensal     — Receita bruta total do mês
+ * @param {number} params.rbt12                   — RBT12 (últimos 12 meses)
+ * @param {string} params.anexo                   — Anexo aplicável (I a V)
+ * @param {string} [params.cnae]                  — CNAE principal
+ * @param {string} [params.uf]                    — UF da empresa
+ * @param {string} [params.municipio]             — Município da empresa
+ * @param {number} [params.receitaMonofasica=0]   — Parcela com PIS/COFINS monofásico
+ * @param {number} [params.receitaICMS_ST=0]      — Parcela com ICMS já recolhido por ST
+ * @param {number} [params.receitaExportacao=0]   — Parcela de exportação
+ * @param {number} [params.receitaLocacaoBensMoveis=0] — Parcela de locação sem ISS
+ * @param {number} [params.issRetidoFonte=0]      — Valor de ISS retido na fonte
+ * @param {number} [params.folhaMensal=0]         — Folha mensal (para Anexo IV)
+ * @param {number} [params.aliquotaRAT=0.02]      — RAT
+ * @param {number} [params.aliquotaISS=null]      — ISS do município (se null, busca automaticamente)
+ * @returns {Object} Resultado completo com DAS otimizado e economia
+ */
+function calcularDASMensalOtimizado(params) {
+  const {
+    receitaBrutaMensal,
+    rbt12,
+    anexo,
+    cnae = null,
+    uf = null,
+    municipio = null,
+    receitaMonofasica = 0,
+    receitaICMS_ST = 0,
+    receitaExportacao = 0,
+    receitaLocacaoBensMoveis = 0,
+    issRetidoFonte = 0,
+    folhaMensal = 0,
+    aliquotaRAT = ALIQUOTA_RAT_PADRAO,
+    aliquotaISS = null
+  } = params;
+
+  if (!receitaBrutaMensal || receitaBrutaMensal <= 0) {
+    throw new Error('[DAS_OPT_001] Receita bruta mensal deve ser maior que zero.');
+  }
+  if (!rbt12 || rbt12 <= 0) {
+    throw new Error('[DAS_OPT_002] RBT12 deve ser maior que zero.');
+  }
+
+  // 1. Calcular DAS "cheio" (sem otimização)
+  const dasCheio = calcularDASMensal({
+    receitaBrutaMensal,
+    rbt12,
+    anexo,
+    issRetidoFonte: 0,
+    folhaMensal,
+    aliquotaRAT
+  });
+
+  const aliquotaEfetiva = dasCheio.aliquotaEfetiva;
+  const faixa = dasCheio.faixa;
+  const idx = faixa - 1;
+  const partilhaPerc = PARTILHA[anexo] ? PARTILHA[anexo][idx] : null;
+
+  if (!partilhaPerc) {
+    throw new Error(`[DAS_OPT_003] Partilha não encontrada para Anexo ${anexo}, Faixa ${faixa}.`);
+  }
+
+  // 2. Array de deduções aplicadas
+  const deducoes = [];
+  let dasOtimizado = 0;
+
+  // Parcela de receita com tributação normal (sem benefício)
+  const receitaNormal = Math.max(0,
+    receitaBrutaMensal - receitaMonofasica - receitaICMS_ST - receitaExportacao - receitaLocacaoBensMoveis
+  );
+
+  // DAS sobre receita normal = alíquota efetiva × receita normal
+  const dasNormal = _arredondar(receitaNormal * aliquotaEfetiva);
+  dasOtimizado += dasNormal;
+
+  // 3a. MONOFÁSICA: zerar PIS/COFINS sobre receitaMonofasica
+  if (receitaMonofasica > 0 && partilhaPerc) {
+    const percPisCofins = (partilhaPerc.pis || 0) + (partilhaPerc.cofins || 0);
+    const dasMonofasica = _arredondar(receitaMonofasica * aliquotaEfetiva * (1 - percPisCofins));
+    const economiaMonofasica = _arredondar(receitaMonofasica * aliquotaEfetiva * percPisCofins);
+    dasOtimizado += dasMonofasica;
+    deducoes.push({
+      id: 'monofasica',
+      descricao: 'Tributação Monofásica — PIS/COFINS zerados',
+      receitaAfetada: _arredondar(receitaMonofasica),
+      economia: economiaMonofasica,
+      baseLegal: 'LC 123/2006, Art. 18, §4º-A, I'
+    });
+  }
+
+  // 3b. ICMS-ST: zerar ICMS sobre receitaICMS_ST
+  if (receitaICMS_ST > 0 && partilhaPerc) {
+    const percICMS = partilhaPerc.icms || 0;
+    const dasST = _arredondar(receitaICMS_ST * aliquotaEfetiva * (1 - percICMS));
+    const economiaST = _arredondar(receitaICMS_ST * aliquotaEfetiva * percICMS);
+    dasOtimizado += dasST;
+    deducoes.push({
+      id: 'icms_st',
+      descricao: 'ICMS-ST — ICMS já recolhido por Substituição Tributária',
+      receitaAfetada: _arredondar(receitaICMS_ST),
+      economia: economiaST,
+      baseLegal: 'LC 123/2006, Art. 18, §4º-A, I'
+    });
+  }
+
+  // 3c. EXPORTAÇÃO: zerar COFINS, PIS, IPI, ICMS, ISS (manter IRPJ + CSLL + CPP)
+  if (receitaExportacao > 0 && partilhaPerc) {
+    const percMantidos = (partilhaPerc.irpj || 0) + (partilhaPerc.csll || 0) + (partilhaPerc.cpp || 0);
+    const dasExportacao = _arredondar(receitaExportacao * aliquotaEfetiva * percMantidos);
+    const economiaExportacao = _arredondar(receitaExportacao * aliquotaEfetiva * (1 - percMantidos));
+    dasOtimizado += dasExportacao;
+    deducoes.push({
+      id: 'exportacao',
+      descricao: 'Exportação — isentos COFINS, PIS, IPI, ICMS, ISS',
+      receitaAfetada: _arredondar(receitaExportacao),
+      economia: economiaExportacao,
+      baseLegal: 'LC 123/2006, Art. 18, §14 e §4º-A, IV'
+    });
+  }
+
+  // 3d. LOCAÇÃO DE BENS MÓVEIS: zerar ISS
+  if (receitaLocacaoBensMoveis > 0 && partilhaPerc) {
+    const percISS = partilhaPerc.iss || 0;
+    const dasLocacao = _arredondar(receitaLocacaoBensMoveis * aliquotaEfetiva * (1 - percISS));
+    const economiaLocacao = _arredondar(receitaLocacaoBensMoveis * aliquotaEfetiva * percISS);
+    dasOtimizado += dasLocacao;
+    deducoes.push({
+      id: 'locacao_bens_moveis',
+      descricao: 'Locação de bens móveis — ISS não incide',
+      receitaAfetada: _arredondar(receitaLocacaoBensMoveis),
+      economia: economiaLocacao,
+      baseLegal: 'LC 123/2006, Art. 18, §4º, V'
+    });
+  }
+
+  // 3e. ISS RETIDO NA FONTE: deduzir do DAS
+  let issRetidoEfetivo = 0;
+  if (issRetidoFonte > 0) {
+    const issNoDAS = dasOtimizado * (partilhaPerc.iss || 0);
+    issRetidoEfetivo = _arredondar(Math.min(issRetidoFonte, issNoDAS));
+    dasOtimizado = _arredondar(dasOtimizado - issRetidoEfetivo);
+    deducoes.push({
+      id: 'iss_retido',
+      descricao: 'ISS retido na fonte pelo tomador',
+      receitaAfetada: 0,
+      economia: issRetidoEfetivo,
+      baseLegal: 'LC 123/2006, Art. 18, §4º-A, II; Art. 21, §4º'
+    });
+  }
+
+  dasOtimizado = _arredondar(Math.max(0, dasOtimizado));
+  const dasSemOtimizacao = dasCheio.dasValor;
+  const economiaTotal = _arredondar(dasSemOtimizacao - dasOtimizado);
+
+  // INSS patronal por fora (Anexo IV)
+  let inssPatronalFora = 0;
+  if (anexo === 'IV') {
+    inssPatronalFora = _arredondar(folhaMensal * (ALIQUOTA_INSS_PATRONAL_ANEXO_IV + aliquotaRAT));
+  }
+
+  // Calcular partilha otimizada
+  const partilhaOtimizada = calcularPartilhaTributos(dasOtimizado, faixa, anexo, receitaBrutaMensal, aliquotaEfetiva);
+
+  // Alertas
+  const alertas = [];
+  if (economiaTotal > 0) {
+    alertas.push({
+      tipo: 'economia',
+      mensagem: `✅ Economia de ${_fmtBRL(economiaTotal)} (${((economiaTotal / dasSemOtimizacao) * 100).toFixed(1)}%) aplicando ${deducoes.length} dedução(ões) legal(is).`
+    });
+  }
+  if (rbt12 > SUBLIMITE_ICMS_ISS) {
+    alertas.push({
+      tipo: 'sublimite',
+      mensagem: `⚠️ RBT12 acima do sublimite de ${_fmtBRL(SUBLIMITE_ICMS_ISS)}. ICMS e ISS devem ser recolhidos por fora.`
+    });
+  }
+  if (cnae) {
+    const mono = isMonofasicoCNAE(cnae);
+    if (mono && receitaMonofasica === 0) {
+      alertas.push({
+        tipo: 'oportunidade',
+        mensagem: `💡 CNAE ${cnae} pode ter produtos monofásicos (${mono}). Segregar receita monofásica pode gerar economia adicional.`
+      });
+    }
+  }
+
+  return {
+    receitaBrutaMensal: _arredondar(receitaBrutaMensal),
+    rbt12: _arredondar(rbt12),
+    anexo,
+    faixa,
+    aliquotaEfetiva,
+    aliquotaEfetivaFormatada: dasCheio.aliquotaEfetivaFormatada,
+    dasSemOtimizacao: _arredondar(dasSemOtimizacao),
+    dasOtimizado,
+    economiaTotal,
+    economiaPercentual: dasSemOtimizacao > 0 ? _arredondar(economiaTotal / dasSemOtimizacao, 4) : 0,
+    deducoes,
+    partilha: partilhaOtimizada,
+    issRetidoFonte: issRetidoEfetivo,
+    inssPatronalFora,
+    totalAPagar: _arredondar(dasOtimizado + inssPatronalFora),
+    alertas,
+    baseLegal: 'LC 123/2006, Art. 18, §§4º e 4º-A; Resolução CGSN 140/2018, Art. 25'
+  };
+}
+
+
+// ================================================================================
+// SEÇÃO 14: calcularDASSegregado() ★ NOVO
+// ================================================================================
+
+/**
+ * Calcula DAS com receitas segregadas por múltiplos CNAEs/anexos.
+ *
+ * Base legal: Resolução CGSN 140/2018, Art. 25 — segregação obrigatória.
+ *
+ * @param {Object} params
+ * @param {Array<Object>} params.receitas — Array de receitas segregadas:
+ *   [{ valor, cnae, anexo, receitaMonofasica, receitaICMS_ST, receitaExportacao, ... }]
+ * @param {number} params.rbt12          — RBT12 total (compartilhado)
+ * @param {number} [params.folhaSalarios12Meses=0] — Folha total 12 meses
+ * @param {string} [params.uf]
+ * @param {string} [params.municipio]
+ * @returns {Object} Resultado consolidado com DAS total e detalhamento por CNAE
+ */
+function calcularDASSegregado(params) {
+  const {
+    receitas,
+    rbt12,
+    folhaSalarios12Meses = 0,
+    uf = null,
+    municipio = null
+  } = params;
+
+  if (!receitas || !Array.isArray(receitas) || receitas.length === 0) {
+    throw new Error('[DAS_SEG_001] Deve fornecer array de receitas segregadas.');
+  }
+
+  const fatorR = rbt12 > 0 ? folhaSalarios12Meses / rbt12 : 0;
+  const detalhamento = [];
+  let dasTotal = 0;
+  let dasSemOtimizacaoTotal = 0;
+  let receitaTotal = 0;
+
+  for (const receita of receitas) {
+    const cnae = receita.cnae || null;
+    let anexo = receita.anexo;
+
+    // Determinar anexo automaticamente se não fornecido
+    if (!anexo && cnae) {
+      anexo = obterAnexoEfetivoCNAE(cnae, null, fatorR);
+    }
+    if (!anexo) {
+      throw new Error(`[DAS_SEG_002] Não foi possível determinar o anexo para a receita com CNAE ${cnae}.`);
+    }
+    if (anexo === 'VEDADO') {
+      throw new Error(`[DAS_SEG_003] CNAE ${cnae} é vedado ao Simples Nacional.`);
+    }
+
+    const resultado = calcularDASMensalOtimizado({
+      receitaBrutaMensal: receita.valor,
+      rbt12, // RBT12 compartilhado
+      anexo,
+      cnae,
+      uf,
+      municipio,
+      receitaMonofasica: receita.receitaMonofasica || 0,
+      receitaICMS_ST: receita.receitaICMS_ST || 0,
+      receitaExportacao: receita.receitaExportacao || 0,
+      receitaLocacaoBensMoveis: receita.receitaLocacaoBensMoveis || 0,
+      issRetidoFonte: receita.issRetidoFonte || 0,
+      folhaMensal: receita.folhaMensal || 0
+    });
+
+    dasTotal += resultado.dasOtimizado;
+    dasSemOtimizacaoTotal += resultado.dasSemOtimizacao;
+    receitaTotal += receita.valor;
+
+    detalhamento.push({
+      cnae,
+      anexo,
+      receita: _arredondar(receita.valor),
+      dasOtimizado: resultado.dasOtimizado,
+      dasSemOtimizacao: resultado.dasSemOtimizacao,
+      economia: resultado.economiaTotal,
+      aliquotaEfetiva: resultado.aliquotaEfetiva,
+      deducoes: resultado.deducoes
+    });
+  }
+
+  dasTotal = _arredondar(dasTotal);
+  dasSemOtimizacaoTotal = _arredondar(dasSemOtimizacaoTotal);
+  const economiaTotal = _arredondar(dasSemOtimizacaoTotal - dasTotal);
+
+  return {
+    receitaTotal: _arredondar(receitaTotal),
+    rbt12: _arredondar(rbt12),
+    dasTotal,
+    dasSemOtimizacaoTotal,
+    economiaTotal,
+    aliquotaEfetivaMedia: receitaTotal > 0 ? _arredondar(dasTotal / receitaTotal, 6) : 0,
+    totalCNAEs: receitas.length,
+    detalhamento,
+    baseLegal: 'Resolução CGSN 140/2018, Art. 25 — segregação obrigatória de receitas'
+  };
+}
+
+
+// ================================================================================
+// SEÇÃO 21: otimizarFatorR() ★ NOVO
+// ================================================================================
+
+/**
+ * Simula cenários de folha de pagamento e retorna o ponto ótimo.
+ * Responde: "Se aumentar o pró-labore em R$ X, economiza R$ Y no DAS"
+ *
+ * Base legal: Resolução CGSN 140/2018, Art. 18, §5º-J.
+ *
+ * @param {Object} params
+ * @param {number} params.rbt12
+ * @param {number} params.folhaAtual12Meses
+ * @param {number} params.receitaMensal
+ * @param {string} [params.cnae]
+ * @param {number} [params.encargosPatronaisFolha=0.368] — FGTS+INSS+RAT+Terceiros
+ * @returns {Object} Cenário ótimo e tabela de cenários
+ */
+function otimizarFatorR(params) {
+  const {
+    rbt12,
+    folhaAtual12Meses,
+    receitaMensal,
+    cnae = null,
+    encargosPatronaisFolha = 0.368
+  } = params;
+
+  if (!rbt12 || rbt12 <= 0) throw new Error('[FATOR_R_OPT_001] RBT12 deve ser maior que zero.');
+  if (!receitaMensal || receitaMensal <= 0) throw new Error('[FATOR_R_OPT_002] Receita mensal deve ser maior que zero.');
+
+  const fatorRAtual = folhaAtual12Meses / rbt12;
+  const anexoAtual = fatorRAtual >= LIMITE_FATOR_R ? 'III' : 'V';
+  const folhaNecessaria12Meses = _arredondar(rbt12 * LIMITE_FATOR_R);
+  const deficitFolha12Meses = Math.max(0, folhaNecessaria12Meses - folhaAtual12Meses);
+  const aumentoMensalNecessario = _arredondar(deficitFolha12Meses / 12);
+
+  // Se já está no Anexo III
+  if (fatorRAtual >= LIMITE_FATOR_R) {
+    return {
+      fatorRAtual: _arredondar(fatorRAtual, 4),
+      anexoAtual: 'III',
+      jaOtimizado: true,
+      mensagem: `Fator "r" atual (${(fatorRAtual * 100).toFixed(2)}%) já está acima de 28%. Empresa já tributada no Anexo III.`,
+      fatorRNecessario: LIMITE_FATOR_R,
+      folhaNecessaria12Meses,
+      aumentoMensalNecessario: 0,
+      custoAumentoMensal: 0,
+      custoAumentoAnual: 0,
+      economiaDASMensal: 0,
+      economiaDASAnual: 0,
+      economiaLiquida: 0,
+      vale_a_pena: false,
+      cenarios: [],
+      baseLegal: 'Resolução CGSN 140/2018, Art. 18, §5º-J'
+    };
+  }
+
+  // Calcular DAS atual (Anexo V) e DAS alvo (Anexo III)
+  let dasAnexoV, dasAnexoIII;
+  try {
+    const aliqV = calcularAliquotaEfetiva({ rbt12, anexo: 'V' });
+    const aliqIII = calcularAliquotaEfetiva({ rbt12, anexo: 'III' });
+    dasAnexoV = _arredondar(receitaMensal * aliqV.aliquotaEfetiva);
+    dasAnexoIII = _arredondar(receitaMensal * aliqIII.aliquotaEfetiva);
+  } catch (e) {
+    throw new Error(`[FATOR_R_OPT_003] Erro ao calcular alíquotas: ${e.message}`);
+  }
+
+  const economiaDASMensal = _arredondar(dasAnexoV - dasAnexoIII);
+  const economiaDASAnual = _arredondar(economiaDASMensal * 12);
+  const custoAumentoMensal = _arredondar(aumentoMensalNecessario * (1 + encargosPatronaisFolha));
+  const custoAumentoAnual = _arredondar(custoAumentoMensal * 12);
+  const economiaLiquida = _arredondar(economiaDASAnual - custoAumentoAnual);
+
+  // Simular cenários incrementais (de R$ 500 em R$ 500)
+  const cenarios = [];
+  const maxIncremento = Math.ceil(aumentoMensalNecessario / 500) + 5;
+  for (let i = 0; i <= maxIncremento; i++) {
+    const incremento = i * 500;
+    const novaFolhaMensal = (folhaAtual12Meses / 12) + incremento;
+    const novaFolha12M = novaFolhaMensal * 12;
+    const novoFatorR = novaFolha12M / rbt12;
+    const novoAnexo = novoFatorR >= LIMITE_FATOR_R ? 'III' : 'V';
+    const novoAliq = novoAnexo === 'III' ? dasAnexoIII : dasAnexoV;
+    const custoExtra = _arredondar(incremento * (1 + encargosPatronaisFolha));
+    const custoExtraAnual = _arredondar(custoExtra * 12);
+    const economiaDAS = novoAnexo === 'III' ? economiaDASAnual : 0;
+    const econLiquida = _arredondar(economiaDAS - custoExtraAnual);
+
+    cenarios.push({
+      incrementoMensal: incremento,
+      folhaMensal: _arredondar(novaFolhaMensal),
+      fatorR: _arredondar(novoFatorR, 4),
+      anexo: novoAnexo,
+      dasMensal: novoAliq,
+      custoExtraMensal: custoExtra,
+      custoExtraAnual: custoExtraAnual,
+      economiaLiquida: econLiquida
+    });
+
+    // Parar quando já está no Anexo III e economia começa a diminuir
+    if (novoAnexo === 'III' && i > 2 && cenarios.length > 3) {
+      if (cenarios[cenarios.length - 1].economiaLiquida < cenarios[cenarios.length - 2].economiaLiquida) {
+        break;
+      }
+    }
+  }
+
+  // Encontrar cenário ótimo (maior economia líquida)
+  const cenarioOtimo = cenarios.reduce((melhor, c) => {
+    return c.economiaLiquida > melhor.economiaLiquida ? c : melhor;
+  }, cenarios[0]);
+
+  return {
+    fatorRAtual: _arredondar(fatorRAtual, 4),
+    fatorRAtualFormatado: (fatorRAtual * 100).toFixed(2).replace('.', ',') + '%',
+    anexoAtual,
+    jaOtimizado: false,
+    fatorRNecessario: LIMITE_FATOR_R,
+    folhaNecessaria12Meses,
+    aumentoMensalNecessario,
+    custoAumentoMensal,
+    custoAumentoAnual,
+    economiaDASMensal,
+    economiaDASAnual,
+    economiaLiquida,
+    vale_a_pena: economiaLiquida > 0,
+    cenarioOtimo,
+    cenarios,
+    baseLegal: 'Resolução CGSN 140/2018, Art. 18, §5º-J'
+  };
+}
+
+
+// ================================================================================
+// SEÇÃO 20: compararRegimesCompleto() ★ NOVO
+// ================================================================================
+
+/**
+ * Comparação completa entre regimes tributários usando dados reais dos módulos.
+ * Refatoração da compararComOutrosRegimes() com integração CnaeMapeamento + Estados.
+ *
+ * @param {Object} params
+ * @param {number} params.receitaBrutaAnual
+ * @param {number} params.folhaAnual
+ * @param {string} params.cnae
+ * @param {string} [params.uf]
+ * @param {string} [params.municipio]
+ * @param {number} [params.fatorR]
+ * @param {number} [params.despesasOperacionais=0]
+ * @param {number} [params.lucroContabilEfetivo]
+ * @param {Object} [params.receitasSegregadas] — Para DAS otimizado
+ * @param {Array<Object>} [params.socios]
+ * @returns {Object} Comparativo completo entre regimes
+ */
+function compararRegimesCompleto(params) {
+  const {
+    receitaBrutaAnual,
+    folhaAnual,
+    cnae,
+    uf = null,
+    municipio = null,
+    fatorR = null,
+    despesasOperacionais = 0,
+    lucroContabilEfetivo = null,
+    receitasSegregadas = null,
+    socios = [],
+    aliquotaRAT = ALIQUOTA_RAT_PADRAO
+  } = params;
+
+  // 1. Buscar regras CNAE
+  const regrasCNAE = cnae ? obterRegrasCNAE(cnae) : { presuncaoIRPJ: 0.32, presuncaoCSLL: 0.32 };
+  const presuncaoIRPJ = regrasCNAE.presuncaoIRPJ || 0.32;
+  const presuncaoCSLL = regrasCNAE.presuncaoCSLL || 0.32;
+
+  // 2. Buscar incentivos regionais
+  const incentivos = uf ? verificarIncentivosRegionais(uf) : { sudam: false, sudene: false, zfm: false, reducaoIRPJ: 0 };
+  const temIncentivo = incentivos.sudam || incentivos.sudene || incentivos.zfm;
+
+  // 3. Buscar ISS do município
+  const aliquotaISS = (uf && municipio) ? obterAliquotaISS(uf, municipio) : ISS_MAXIMO;
+
+  // 4. Determinar anexo
+  const fatorRCalc = fatorR !== null ? fatorR : (folhaAnual / receitaBrutaAnual);
+  const anexo = cnae ? obterAnexoEfetivoCNAE(cnae, null, fatorRCalc) : 'III';
+
+  if (anexo === 'VEDADO') {
+    return {
+      erro: `CNAE ${cnae} é vedado ao Simples Nacional.`,
+      regimes: [],
+      recomendacao: 'CNAE vedado ao Simples. Avaliar Lucro Presumido ou Lucro Real.'
+    };
+  }
+
+  // Rodar o comparativo original com os dados enriquecidos
+  const resultadoBase = compararComOutrosRegimes({
+    receitaBrutaAnual,
+    folhaAnual,
+    cnae: cnae || '',
+    fatorR: fatorRCalc,
+    anexo,
+    despesasOperacionais,
+    aliquotaRAT,
+    aliquotaISS,
+    temSUDAM: temIncentivo
+  });
+
+  // Enriquecer com presunções corretas para Lucro Presumido
+  const regimeLP = resultadoBase.regimes.find(r => r.regime === 'Lucro Presumido');
+  if (regimeLP && presuncaoIRPJ !== 0.32) {
+    // Recalcular LP com presunção correta
+    const baseIRPJ = receitaBrutaAnual * presuncaoIRPJ;
+    const baseCSLL = receitaBrutaAnual * presuncaoCSLL;
+    const irpjLP = _arredondar(baseIRPJ * 0.15);
+    const adicionalIR = _arredondar(Math.max(0, (baseIRPJ - 240_000) * 0.10));
+    const csllLP = _arredondar(baseCSLL * 0.09);
+    const cofinsLP = _arredondar(receitaBrutaAnual * 0.03);
+    const pisLP = _arredondar(receitaBrutaAnual * 0.0065);
+    const issLP = _arredondar(receitaBrutaAnual * aliquotaISS);
+    const inssPatronalLP = _arredondar(folhaAnual * (0.20 + aliquotaRAT));
+    const terceirosLP = _arredondar(folhaAnual * 0.058);
+    const fgtsLP = _arredondar(folhaAnual * ALIQUOTA_FGTS);
+    const novaCarga = _arredondar(irpjLP + adicionalIR + csllLP + cofinsLP + pisLP + issLP + inssPatronalLP + terceirosLP + fgtsLP);
+
+    regimeLP.cargaTotal = novaCarga;
+    regimeLP.percentualCarga = _arredondar(novaCarga / receitaBrutaAnual, 4);
+    regimeLP.percentualCargaFormatado = ((novaCarga / receitaBrutaAnual) * 100).toFixed(2).replace('.', ',') + '%';
+    regimeLP.detalhamento = {
+      presuncaoIRPJ, presuncaoCSLL,
+      irpj: irpjLP, adicionalIR, csll: csllLP,
+      cofins: cofinsLP, pis: pisLP, iss: issLP,
+      inssPatronal: inssPatronalLP, terceiros: terceirosLP, fgts: fgtsLP
+    };
+    regimeLP.observacoes.push(`Presunção IRPJ: ${(presuncaoIRPJ * 100).toFixed(0)}% (CNAE ${cnae})`);
+  }
+
+  // Re-sort e re-rank
+  resultadoBase.regimes.sort((a, b) => a.cargaTotal - b.cargaTotal);
+  resultadoBase.regimes.forEach((r, i) => {
+    r.ranking = i + 1;
+    r.melhorOpcao = i === 0;
+  });
+
+  const melhor = resultadoBase.regimes[0];
+  const pior = resultadoBase.regimes[resultadoBase.regimes.length - 1];
+
+  return {
+    ...resultadoBase,
+    presuncaoIRPJ,
+    presuncaoCSLL,
+    incentivos,
+    aliquotaISS,
+    economiaMelhorVsPior: _arredondar(pior.cargaTotal - melhor.cargaTotal),
+    economiaFormatada: _fmtBRL(pior.cargaTotal - melhor.cargaTotal),
+    recomendacao: `O regime mais vantajoso é ${melhor.regime} com carga de ${melhor.percentualCargaFormatado} (${_fmtBRL(melhor.cargaTotal)}).` +
+      (temIncentivo ? ` Empresa em área ${incentivos.sudam ? 'SUDAM' : incentivos.sudene ? 'SUDENE' : 'ZFM'} — considerar Lucro Real com redução de 75% do IRPJ.` : '')
+  };
+}
+
+
+// ================================================================================
+// SEÇÃO 27: gerarRelatorioOtimizacao() ★ NOVO
+// ================================================================================
+
+/**
+ * Gera relatório completo de otimização tributária — o produto final do IMPOST.
+ *
+ * @param {Object} params — Todos os dados da empresa
+ * @param {string} params.nomeEmpresa
+ * @param {string} params.cnae
+ * @param {string} params.uf
+ * @param {string} params.municipio
+ * @param {number} params.receitaBrutaAnual
+ * @param {number} params.receitaBrutaMensal
+ * @param {number} params.folhaAnual
+ * @param {number} params.folhaMensal
+ * @param {Array<Object>} [params.socios]
+ * @param {number} [params.despesasOperacionais=0]
+ * @param {number} [params.lucroContabilEfetivo]
+ * @param {number} [params.receitaMonofasica=0]
+ * @param {number} [params.receitaICMS_ST=0]
+ * @param {number} [params.receitaExportacao=0]
+ * @param {number} [params.receitaLocacaoBensMoveis=0]
+ * @param {number} [params.issRetidoFonte=0]
+ * @returns {Object} Relatório estruturado completo
+ */
+function gerarRelatorioOtimizacao(params) {
+  const {
+    nomeEmpresa = 'Empresa',
+    cnae,
+    uf,
+    municipio,
+    receitaBrutaAnual,
+    receitaBrutaMensal = receitaBrutaAnual / 12,
+    folhaAnual,
+    folhaMensal = folhaAnual / 12,
+    socios = [],
+    despesasOperacionais = 0,
+    lucroContabilEfetivo = null,
+    receitaMonofasica = 0,
+    receitaICMS_ST = 0,
+    receitaExportacao = 0,
+    receitaLocacaoBensMoveis = 0,
+    issRetidoFonte = 0,
+    aliquotaRAT = ALIQUOTA_RAT_PADRAO
+  } = params;
+
+  const resultado = {};
+  resultado.timestamp = new Date().toISOString();
+  resultado.versao = '4.0.0';
+  resultado.produto = 'IMPOST. — Inteligência em Modelagem de Otimização Tributária';
+  resultado.baseLegal = 'LC 123/2006; LC 155/2016; Resolução CGSN 140/2018';
+
+  // Dados da empresa
+  resultado.dadosEmpresa = {
+    nome: nomeEmpresa, cnae, uf, municipio,
+    receitaBrutaAnual: _arredondar(receitaBrutaAnual),
+    folhaAnual: _arredondar(folhaAnual),
+    socios
+  };
+
+  // Classificação CNAE
+  resultado.classificacaoCNAE = obterRegrasCNAE(cnae);
+
+  // Fator R
+  const fatorResult = calcularFatorR({
+    folhaSalarios12Meses: folhaAnual,
+    receitaBruta12Meses: receitaBrutaAnual
+  });
+  resultado.fatorR = fatorResult;
+
+  // Anexo efetivo
+  const anexo = obterAnexoEfetivoCNAE(cnae, null, fatorResult.fatorR);
+  resultado.anexo = anexo;
+
+  // Elegibilidade
+  resultado.elegibilidade = verificarElegibilidade({
+    receitaBrutaAnual,
+    receitaBrutaAnualAnterior: receitaBrutaAnual,
+    cnae,
+    fatorR: fatorResult.fatorR
+  });
+
+  // DAS sem otimização
+  try {
+    resultado.dasAtual = calcularDASMensal({
+      receitaBrutaMensal, rbt12: receitaBrutaAnual, anexo
+    });
+  } catch (e) {
+    resultado.dasAtual = { erro: e.message };
+  }
+
+  // DAS otimizado
+  try {
+    resultado.dasOtimizado = calcularDASMensalOtimizado({
+      receitaBrutaMensal, rbt12: receitaBrutaAnual, anexo, cnae, uf, municipio,
+      receitaMonofasica, receitaICMS_ST, receitaExportacao, receitaLocacaoBensMoveis,
+      issRetidoFonte, folhaMensal, aliquotaRAT
+    });
+  } catch (e) {
+    resultado.dasOtimizado = { erro: e.message };
+  }
+
+  // Economia imediata
+  if (resultado.dasAtual.dasValor && resultado.dasOtimizado.dasOtimizado !== undefined) {
+    resultado.economiaImediata = {
+      mensal: _arredondar(resultado.dasAtual.dasValor - resultado.dasOtimizado.dasOtimizado),
+      anual: _arredondar((resultado.dasAtual.dasValor - resultado.dasOtimizado.dasOtimizado) * 12)
+    };
+  }
+
+  // Otimização Fator R (se aplicável — empresa está no Anexo V)
+  if (anexo === 'V') {
+    try {
+      resultado.otimizacaoFatorR = otimizarFatorR({
+        rbt12: receitaBrutaAnual,
+        folhaAtual12Meses: folhaAnual,
+        receitaMensal: receitaBrutaMensal,
+        cnae
+      });
+    } catch (e) {
+      resultado.otimizacaoFatorR = { erro: e.message };
+    }
+  }
+
+  // Comparativo de regimes
+  try {
+    resultado.comparativoRegimes = compararRegimesCompleto({
+      receitaBrutaAnual, folhaAnual, cnae, uf, municipio,
+      fatorR: fatorResult.fatorR, despesasOperacionais, socios
+    });
+  } catch (e) {
+    resultado.comparativoRegimes = { erro: e.message };
+  }
+
+  // Estratégias aplicáveis
+  resultado.estrategiasAplicaveis = ESTRATEGIAS_MENOR_IMPOSTO
+    .filter(e => {
+      if (e.id === 'E01' && anexo !== 'V') return false; // Fator R só se Anexo V
+      return true;
+    })
+    .map(e => ({
+      ...e,
+      aplicavel: true
+    }));
+
+  // Riscos fiscais
+  resultado.riscos = RISCOS_FISCAIS;
+
+  // Obrigações acessórias
+  resultado.obrigacoes = OBRIGACOES_ACESSORIAS;
+
+  // Incentivos regionais
+  resultado.incentivos = uf ? verificarIncentivosRegionais(uf) : null;
+
+  // Resumo executivo
+  const melhorRegime = resultado.comparativoRegimes && resultado.comparativoRegimes.regimes
+    ? resultado.comparativoRegimes.regimes[0]
+    : null;
+  resultado.resumoExecutivo = {
+    empresa: nomeEmpresa,
+    regimeRecomendado: melhorRegime ? melhorRegime.regime : 'Simples Nacional',
+    cargaTributariaAnual: melhorRegime ? _fmtBRL(melhorRegime.cargaTotal) : 'N/D',
+    percentualCarga: melhorRegime ? melhorRegime.percentualCargaFormatado : 'N/D',
+    economiaOtimizacao: resultado.economiaImediata ? _fmtBRL(resultado.economiaImediata.anual) : 'R$ 0,00',
+    deducoesAplicadas: resultado.dasOtimizado.deducoes ? resultado.dasOtimizado.deducoes.length : 0
+  };
+
+  return resultado;
+}
+
+
+
+
+
+
+// ================================================================================
+// SEÇÃO 34: MÓDULO AVANÇADO — INTELIGÊNCIA FISCAL COMPLEMENTAR v4.1 (2026)
+// ================================================================================
+// Base Legal: LC 214/2025, LC 227/2026, Lei 15.270/2025, Res. CGSN 183/2025
+// ================================================================================
+
+/**
+ * 34.1 — PENALIDADES 2026 (Vigência 01/01/2026)
+ *
+ * Novas multas automáticas para PGDAS-D e DEFIS.
+ * ANTES de 2026: PGDAS-D não gerava multa automática; DEFIS também não.
+ * AGORA: Multa já no primeiro dia de atraso para ambas.
+ *
+ * Base Legal: LC 214/2025, Art. 38-A §2º da LC 123/2006, Res. CGSN 183/2025
+ */
+const PENALIDADES_2026 = {
+  PGDAS_D: {
+    descricao: 'Multa por atraso no PGDAS-D (declaração mensal)',
+    percentualMensal: 0.02,         // 2% ao mês ou fração
+    limitePercentual: 0.20,         // Máximo 20% do total dos tributos informados
+    valorMinimo: 50.00,             // R$ 50,00 mínimo
+    termoInicial: 'Dia seguinte ao vencimento do prazo legal',
+    termoFinal: 'Data da efetiva transmissão ou lavratura do auto de infração',
+    vigencia: '2026-01-01',
+    baseLegal: 'Resolução CGSN nº 183/2025; LC 123/2006, Art. 38-A, §2º',
+    observacao: 'Antes de 2026 NÃO havia multa automática. Agora qualquer atraso, mesmo de 1 dia, gera multa.',
+    impactoAssinante: 'ALTO — Acompanhamento mensal de prazos é essencial para evitar multas.'
+  },
+  DEFIS: {
+    descricao: 'Multa por atraso na DEFIS (declaração anual)',
+    percentualMensal: 0.02,         // 2% ao mês ou fração
+    limitePercentual: 0.20,         // Máximo 20%
+    multaPorGrupoOmissoes: 100.00,  // R$ 100 por grupo de 10 informações incorretas/omitidas
+    valorMinimo: 200.00,            // R$ 200,00 mínimo
+    prazoEntrega2025: '2026-03-31', // DEFIS do ano-calendário 2025
+    termoInicial: 'Dia seguinte ao término do prazo fixado',
+    termoFinal: 'Data da efetiva prestação ou lavratura do auto de infração',
+    vigencia: '2026-01-01',
+    reducaoEntregaEspontanea: true,
+    baseLegal: 'Resolução CGSN nº 183/2025; LC 123/2006, Art. 38-A',
+    observacao: 'Primeira vez que DEFIS gera multa por atraso. Entrega até 31/03/2026 (AC 2025).',
+    impactoAssinante: 'CRÍTICO — DEFIS do AC 2025 deve ser entregue até 31/03/2026, senão multa de no mínimo R$ 200.'
+  }
+};
+
+/**
+ * Calcula a multa estimada por atraso no PGDAS-D ou DEFIS.
+ * @param {Object} params
+ * @param {string} params.tipo — 'PGDAS_D' ou 'DEFIS'
+ * @param {number} params.valorTributos — Total de tributos informados/declarados
+ * @param {number} params.diasAtraso — Dias de atraso
+ * @returns {Object} Detalhamento da multa
+ */
+function calcularMultaAtraso(params) {
+  const { tipo, valorTributos = 0, diasAtraso = 0 } = params;
+
+  const regra = PENALIDADES_2026[tipo];
+  if (!regra) throw new Error(`[MULTA_001] Tipo "${tipo}" inválido. Use PGDAS_D ou DEFIS.`);
+
+  if (diasAtraso <= 0) return { multa: 0, observacao: 'Sem atraso', baseLegal: regra.baseLegal };
+
+  // Meses de atraso (fração de mês conta como mês inteiro)
+  const mesesAtraso = Math.ceil(diasAtraso / 30);
+  const percentualAplicado = Math.min(mesesAtraso * regra.percentualMensal, regra.limitePercentual);
+  const multaCalculada = _arredondar(valorTributos * percentualAplicado);
+  const multa = Math.max(multaCalculada, regra.valorMinimo);
+
+  return {
+    tipo,
+    diasAtraso,
+    mesesAtraso,
+    percentualAplicado,
+    percentualFormatado: (percentualAplicado * 100).toFixed(1) + '%',
+    multaCalculada: _arredondar(multaCalculada),
+    multaMinima: regra.valorMinimo,
+    multaFinal: _arredondar(multa),
+    multaFinalFormatada: _fmtBRL(multa),
+    baseLegal: regra.baseLegal,
+    alertaAssinante: multa > 0 ? `⚠️ Multa de ${_fmtBRL(multa)} por ${diasAtraso} dia(s) de atraso no ${tipo}.` : null
+  };
+}
+
+
+/**
+ * 34.2 — TRIBUTAÇÃO DE DIVIDENDOS 2026 (Lei 15.270/2025)
+ *
+ * A partir de janeiro/2026, distribuição de lucros/dividendos > R$ 50.000/mês
+ * por uma mesma PJ a uma mesma PF residente no Brasil está sujeita a IRRF de 10%.
+ *
+ * CONTROVÉRSIA JURÍDICA: Há forte debate se essa regra se aplica ao Simples Nacional,
+ * uma vez que o Art. 14 da LC 123/2006 prevê isenção específica. ADIs 7912 e 7914
+ * foram ajuizadas no STF questionando a constitucionalidade.
+ *
+ * A Receita Federal posiciona-se que a retenção APLICA-SE ao Simples Nacional.
+ * Juristas argumentam que lei ordinária não pode revogar benefício de lei complementar.
+ */
+const TRIBUTACAO_DIVIDENDOS_2026 = {
+  descricao: 'Retenção de IRRF sobre lucros/dividendos acima de R$ 50 mil/mês',
+  limiteIsencaoMensal: 50_000.00,
+  aliquotaIRRF: 0.10,
+  vigencia: '2026-01-01',
+  baseLegalNova: 'Lei nº 15.270/2025, Art. 6º-A da Lei 9.250/1995',
+  baseLegalSN: 'LC 123/2006, Art. 14 (isenção na fonte e no ajuste anual)',
+  posicaoRFB: 'Receita Federal entende que a retenção aplica-se inclusive ao Simples Nacional.',
+  controversia: 'ADIs 7912 e 7914 no STF questionam constitucionalidade para empresas do Simples. ' +
+                'Lei ordinária (15.270) x Lei Complementar (123/2006, Art. 14). ' +
+                'Hierarquia normativa: LC 123 tem caráter especial protegido pelo Art. 146, III, "d" da CF.',
+  regraTransicao: {
+    lucrosAte2025: 'Lucros apurados até AC 2025 permanecem isentos se distribuição aprovada até 31/12/2025.',
+    prazoProrrogado: 'Ministro Nunes Marques (STF) prorrogou prazo para 31/01/2026.',
+    pagamentoAte2028: 'Pagamento dos lucros isentos pode ocorrer até 2028, conforme aprovação.'
+  },
+  tributacaoMinima: {
+    descricao: 'IRPF Mínimo para rendimentos anuais > R$ 600 mil',
+    limiteAnual: 600_000.00,
+    aliquotaMaxima: 0.10,
+    faixaInicial: 600_000.00,
+    faixaFinal: 1_200_000.00,
+    observacao: 'Alíquota cresce progressivamente de 0% (R$ 600k) até 10% (R$ 1,2M+).',
+    baseLegal: 'Lei 15.270/2025, Art. 16-A da Lei 9.250/1995'
+  },
+  calculoSimplificadoLucro: {
+    descricao: 'Empresas fora do Lucro Real podem optar por cálculo simplificado do lucro contábil',
+    deducoesPermitidas: [
+      'Folha de salários, administradores e encargos',
+      'Custo de mercadorias (comércio)',
+      'Matéria-prima e embalagem (indústria)',
+      'Aluguéis de imóveis necessários à operação',
+      'Juros sobre financiamentos (instituições autorizadas pelo BACEN)',
+      'Depreciação de equipamentos (indústria)'
+    ],
+    baseLegal: 'Lei 15.270/2025, Art. 10, §6º da Lei 9.249/1995'
+  },
+  impactoAssinante: 'CRÍTICO — Pode impactar sócios que recebem > R$ 50k/mês em dividendos. ' +
+                    'Planejamento de distribuição de lucros é essencial.'
+};
+
+/**
+ * Calcula o impacto da tributação de dividendos (Lei 15.270/2025) para sócios.
+ *
+ * @param {Object} params
+ * @param {number} params.lucroDistribuivelMensal — Lucro distribuível mensal
+ * @param {Array}  params.socios — Array com {nome, percentual}
+ * @returns {Object} Análise de impacto por sócio
+ */
+function calcularImpactoDividendos2026(params) {
+  const { lucroDistribuivelMensal, socios = [] } = params;
+  const limite = TRIBUTACAO_DIVIDENDOS_2026.limiteIsencaoMensal;
+  const aliq = TRIBUTACAO_DIVIDENDOS_2026.aliquotaIRRF;
+
+  const resultado = {
+    lucroDistribuivelMensal: _arredondar(lucroDistribuivelMensal),
+    baseLegal: TRIBUTACAO_DIVIDENDOS_2026.baseLegalNova,
+    controversiaSTF: TRIBUTACAO_DIVIDENDOS_2026.controversia,
+    porSocio: []
+  };
+
+  let totalRetidoMensal = 0;
+
+  for (const socio of socios) {
+    const valorMensal = _arredondar(lucroDistribuivelMensal * (socio.percentual || 0));
+    const ultrapassaLimite = valorMensal > limite;
+    // Se ultrapassa R$ 50k, IRRF de 10% sobre o TOTAL (não apenas o excedente)
+    const irrfRetido = ultrapassaLimite ? _arredondar(valorMensal * aliq) : 0;
+    const valorLiquido = _arredondar(valorMensal - irrfRetido);
+
+    totalRetidoMensal += irrfRetido;
+
+    resultado.porSocio.push({
+      nome: socio.nome,
+      percentual: socio.percentual,
+      valorBrutoMensal: valorMensal,
+      valorBrutoFormatado: _fmtBRL(valorMensal),
+      ultrapassaLimite,
+      irrfRetido: _arredondar(irrfRetido),
+      irrfRetidoFormatado: _fmtBRL(irrfRetido),
+      valorLiquido,
+      valorLiquidoFormatado: _fmtBRL(valorLiquido),
+      alertaAssinante: ultrapassaLimite
+        ? `⚠️ ${socio.nome}: IRRF de ${_fmtBRL(irrfRetido)}/mês (10% sobre ${_fmtBRL(valorMensal)}). Considere fracionar distribuição.`
+        : `✅ ${socio.nome}: Dentro do limite de R$ 50 mil — isento de IRRF.`
+    });
+  }
+
+  resultado.totalRetidoMensal = _arredondar(totalRetidoMensal);
+  resultado.totalRetidoAnual = _arredondar(totalRetidoMensal * 12);
+  resultado.totalRetidoMensalFormatado = _fmtBRL(totalRetidoMensal);
+  resultado.totalRetidoAnualFormatado = _fmtBRL(totalRetidoMensal * 12);
+
+  // Estratégia de economia
+  resultado.estrategiasEconomia = [];
+  if (totalRetidoMensal > 0) {
+    resultado.estrategiasEconomia.push({
+      titulo: 'Fracionamento mensal da distribuição',
+      descricao: 'Distribuir lucros em parcelas ≤ R$ 50 mil por mês para cada sócio.',
+      economiaEstimada: _fmtBRL(totalRetidoMensal * 12),
+      impacto: 'alto',
+      baseLegal: 'Lei 15.270/2025, Art. 6º-A'
+    });
+    resultado.estrategiasEconomia.push({
+      titulo: 'Revisão de pró-labore vs dividendos',
+      descricao: 'Ajustar mix de pró-labore e dividendos para otimizar a carga tributária total.',
+      impacto: 'alto',
+      observacao: 'Pró-labore tem INSS (11%) mas é dedutível. Dividendos agora podem ter 10% IRRF.'
+    });
+    resultado.estrategiasEconomia.push({
+      titulo: 'Contestação judicial (ADIs 7912/7914)',
+      descricao: 'Questionar aplicação da Lei 15.270 ao Simples Nacional via mandado de segurança.',
+      impacto: 'medio',
+      risco: 'Resultado depende do julgamento das ADIs no STF. Recomendável acompanhar.',
+      baseLegal: 'Art. 146, III, "d" CF c/c Art. 14 LC 123/2006'
+    });
+    resultado.estrategiasEconomia.push({
+      titulo: 'Escrituração contábil completa',
+      descricao: 'Manter escrituração contábil completa permite distribuir lucro contábil efetivo (que pode ser maior que a presunção), otimizando a base de distribuição.',
+      impacto: 'medio',
+      baseLegal: 'LC 123/2006, Art. 14, §1º'
+    });
+  }
+
+  return resultado;
+}
+
+
+/**
+ * 34.3 — REFORMA TRIBUTÁRIA — IBS/CBS NO SIMPLES NACIONAL (2026-2033)
+ *
+ * Em 2026: Empresas do Simples Nacional ESTÃO ISENTAS das alíquotas-teste de IBS/CBS.
+ * A partir de set/2026: Opção para 2027 — continuar no SN ou migrar para IBS/CBS.
+ * 2027+: CBS substitui PIS/COFINS; IBS substitui ICMS/ISS (transição gradual até 2033).
+ *
+ * Base Legal: LC 214/2025 (Art. 117-125, Art. 348, III, "c"); EC 132/2023
+ */
+const REFORMA_TRIBUTARIA_SIMPLES = {
+  fase2026: {
+    descricao: 'Período de testes — Simples Nacional ISENTO de IBS/CBS em 2026',
+    aliquotaTesteCBS: 0.009,  // 0,9%
+    aliquotaTesteIBS: 0.001,  // 0,1%
+    aplicavelSimplesNacional: false, // NÃO se aplica ao SN em 2026
+    obrigacoesAcessorias: {
+      nfe: 'Empresas do SN NÃO precisam destacar IBS/CBS nas NF-e em 2026.',
+      nfse: 'Destaque de IBS/CBS na NFS-e é facultativo em 2026.',
+      cClassTrib: 'Novo código obrigatório nas NF a partir de 2026 (identificação do tipo de tributação).',
+      preparacao: 'Recomendado: revisar NCM, NBS, CST, CFOP e adotar cClassTrib para preparação.'
+    },
+    baseLegal: 'LC 214/2025, Art. 348, III, "c"'
+  },
+  fase2027_2028: {
+    descricao: 'CBS entra em vigor (substitui PIS/COFINS). IBS inicia transição.',
+    prazoOpcao: 'Até setembro/2026 para optar se em 2027 continua no SN ou migra para IBS/CBS.',
+    cbsAliquotaReferencia: 0.093, // ~9,3% estimativa
+    ibsAliquotaReferencia: 0.187, // ~18,7% estimativa
+    observacao: 'Simples pode optar por recolher CBS/IBS fora do DAS (modelo híbrido) para gerar créditos aos clientes.',
+    baseLegal: 'LC 214/2025, Arts. 353-359'
+  },
+  fase2029_2032: {
+    descricao: 'Aumento progressivo de IBS/CBS. Redução gradual de ICMS/ISS/PIS/COFINS.',
+    extintosPIS_COFINS: '2027 (substituídos por CBS)',
+    transicaoICMS_ISS: '2029-2032 (redução gradual até extinção)',
+    extintosFinal: '2033 — extinção total de ICMS, ISS, PIS, COFINS, IPI'
+  },
+  modeloHibrido: {
+    descricao: 'Empresa do Simples pode optar por recolher IBS/CBS fora do DAS',
+    vantagem: 'Permite que clientes B2B aproveitem créditos de IBS/CBS nas suas compras.',
+    desvantagem: 'Maior complexidade fiscal e contábil.',
+    recomendacao: 'Indicado para empresas B2B cujos clientes são do Lucro Presumido/Real.',
+    impactoAssinante: 'ALTO — Decisão estratégica que pode afetar competitividade em vendas B2B.'
+  },
+  cronograma: [
+    { ano: 2026, evento: 'Testes IBS 0,1% + CBS 0,9% (SN isento). Preparação de sistemas.' },
+    { ano: 2027, evento: 'CBS efetiva. PIS/COFINS extintos. IPI zerado (exceto ZFM). IS entra em vigor.' },
+    { ano: 2028, evento: 'Continuação CBS. Alíquotas de transição para IBS.' },
+    { ano: 2029, evento: 'IBS efetivo. Início da redução do ICMS e ISS.' },
+    { ano: 2030, evento: 'Redução progressiva ICMS/ISS.' },
+    { ano: 2031, evento: 'Redução progressiva ICMS/ISS.' },
+    { ano: 2032, evento: 'Últimas alíquotas de transição ICMS/ISS.' },
+    { ano: 2033, evento: 'Extinção total: ICMS, ISS, PIS, COFINS, IPI. Apenas IBS + CBS + IS.' }
+  ],
+  impactoAssinante: 'ESTRATÉGICO — Acompanhar a transição é fundamental. Decisão de regime em set/2026.'
+};
+
+
+/**
+ * 34.4 — GRUPO ECONÔMICO (LC 214/2025 — Nova Fiscalização)
+ *
+ * A Receita Federal agora analisa a REALIDADE ECONÔMICA dos negócios.
+ * Não basta ter CNPJs separados; se funcionam como um só, será tratado como grupo.
+ * Impacta diretamente o enquadramento no Simples (soma de faturamento).
+ */
+const GRUPO_ECONOMICO_2026 = {
+  descricao: 'Novo conceito de grupo econômico para fins de enquadramento no Simples Nacional',
+  indicadores: [
+    'Controle comum: mesmos donos, sócios relacionados (familiares) ou sócio com poder de mando',
+    'Compartilhamento de estrutura: endereço, funcionários, equipamentos',
+    'Vendas/serviços cruzados: uma empresa vende majoritariamente para/da outra',
+    'Mesmo ramo de negócio ou atividades complementares',
+    'Administração ou gestão financeira centralizada',
+    'Funcionários transitando entre empresas',
+    'Clientes ou fornecedores em comum de forma predominante'
+  ],
+  consequencia: 'Receitas das empresas do grupo são SOMADAS para verificar o limite de R$ 4,8 milhões.',
+  risco: 'Exclusão retroativa do Simples Nacional com cobrança de diferenças tributárias + multas.',
+  checklistRisco: [
+    { pergunta: 'Sócios com participação em mais de uma empresa no Simples Nacional?', risco: 'alto' },
+    { pergunta: 'Empresas atuam no mesmo ramo ou atividades complementares?', risco: 'alto' },
+    { pergunta: 'Compartilham endereço, estrutura, funcionários ou equipamentos?', risco: 'critico' },
+    { pergunta: 'Vendas/serviços destinados majoritariamente entre as empresas?', risco: 'critico' },
+    { pergunta: 'Administração ou gestão financeira centralizada?', risco: 'medio' },
+    { pergunta: 'Clientes/fornecedores em comum de forma predominante?', risco: 'medio' }
+  ],
+  baseLegal: 'LC 214/2025; LC 123/2006, Art. 3º, §4º',
+  impactoAssinante: 'CRÍTICO — Em 2026, a estratégia de "dividir para não crescer" é a mais perigosa.'
+};
+
+
+/**
+ * 34.5 — DIFAL (Diferencial de Alíquota de ICMS)
+ * Base Legal: Lei Complementar nº 190/2022, Convênio ICMS 236/21
+ */
+const ALIQUOTAS_INTERNAS_UF = {
+  'AC': 0.19, 'AL': 0.19, 'AP': 0.18, 'AM': 0.20, 'BA': 0.205, 'CE': 0.20,
+  'DF': 0.20, 'ES': 0.17, 'GO': 0.19, 'MA': 0.22, 'MT': 0.17, 'MS': 0.17,
+  'MG': 0.18, 'PA': 0.19, 'PB': 0.20, 'PR': 0.195, 'PE': 0.205, 'PI': 0.21,
+  'RJ': 0.22, 'RN': 0.20, 'RS': 0.17, 'RO': 0.195, 'RR': 0.20, 'SC': 0.17,
+  'SP': 0.18, 'SE': 0.19, 'TO': 0.20
+};
+
+/**
+ * Calcula o DIFAL (Diferencial de Alíquota) para operações interestaduais.
+ *
+ * @param {Object} params
+ * @param {number} params.valorOperacao — Valor da operação
+ * @param {string} params.ufOrigem — UF de origem
+ * @param {string} params.ufDestino — UF de destino
+ * @param {boolean} params.isConsumidorFinal — Se o destinatário é consumidor final
+ * @returns {Object}
+ */
+function calcularDIFAL(params) {
+  const { valorOperacao, ufOrigem, ufDestino, isConsumidorFinal = false } = params;
+
+  if (!isConsumidorFinal) {
+    return {
+      valorDIFAL: 0,
+      observacao: 'DIFAL não se aplica — destinatário NÃO é consumidor final.',
+      baseLegal: 'LC 190/2022'
+    };
+  }
+
+  if (ufOrigem === ufDestino) {
+    return {
+      valorDIFAL: 0,
+      observacao: 'Operação interna — não há DIFAL.',
+      baseLegal: 'LC 190/2022'
+    };
+  }
+
+  // Alíquotas interestaduais: 7% (Sul/Sudeste → N/NE/CO) ou 12% (demais)
+  const ufsSulSudeste = ['SP', 'RJ', 'MG', 'PR', 'RS', 'SC', 'ES'];
+  const ufsNorteNordesteCO = ['AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'GO', 'MA', 'MT', 'MS',
+                               'PA', 'PB', 'PE', 'PI', 'RN', 'RO', 'RR', 'SE', 'TO'];
+  
+  let aliqInter = 0.12; // padrão
+  if (ufsSulSudeste.includes(ufOrigem) && ufsNorteNordesteCO.includes(ufDestino)) {
+    aliqInter = 0.07;
+  }
+
+  const aliqInternaDestino = ALIQUOTAS_INTERNAS_UF[ufDestino] || 0.17;
+  const valorDIFAL = _arredondar(Math.max(0, valorOperacao * (aliqInternaDestino - aliqInter)));
+
+  return {
+    valorOperacao: _arredondar(valorOperacao),
+    ufOrigem,
+    ufDestino,
+    aliquotaInterestadual: aliqInter,
+    aliquotaInternaDestino: aliqInternaDestino,
+    valorDIFAL,
+    valorDIFALFormatado: _fmtBRL(valorDIFAL),
+    responsavel: 'Remetente (empresa do Simples)',
+    baseLegal: 'LC 190/2022; Convênio ICMS 236/21',
+    observacao: 'O Simples Nacional recolhe o DIFAL por fora do DAS.',
+    impactoAssinante: valorDIFAL > 0
+      ? `⚠️ DIFAL de ${_fmtBRL(valorDIFAL)} deve ser recolhido separadamente do DAS.`
+      : 'Sem DIFAL aplicável.'
+  };
+}
+
+
+/**
+ * 34.6 — PRODUTOS MONOFÁSICOS — NCMs (Inteligência PGDAS-D)
+ *
+ * Produtos com tributação monofásica de PIS/COFINS NÃO devem ter esses tributos
+ * cobrados novamente no DAS. Segregar corretamente no PGDAS-D gera ECONOMIA REAL.
+ */
+const PRODUTOS_MONOFASICOS_NCM = {
+  BEBIDAS_FRIAS: {
+    ncms: ['2201', '2202', '2203', '2204', '2205', '2206', '2207', '2208'],
+    descricao: 'Cervejas, águas, refrigerantes, sucos, vinhos, destilados',
+    tributacao: 'PIS/COFINS recolhidos pelo fabricante/importador (tributação concentrada)',
+    impactoRevenda: 'Varejista/atacadista paga ZERO de PIS/COFINS sobre essas receitas no DAS.',
+    baseLegal: 'Lei 10.833/2003, Art. 58-A a 58-V; Lei 13.097/2015'
+  },
+  PERFUMARIA_HIGIENE: {
+    ncms: ['3303', '3304', '3305', '3307'],
+    descricao: 'Perfumes, maquiagem, shampoos, desodorantes, produtos de higiene',
+    tributacao: 'PIS/COFINS concentrados na indústria/importação',
+    impactoRevenda: 'Revenda isenta de PIS/COFINS no DAS.',
+    baseLegal: 'Lei 10.147/2000'
+  },
+  FARMACEUTICOS: {
+    ncms: ['3001', '3002', '3003', '3004', '3005', '3006'],
+    descricao: 'Medicamentos, preparações farmacêuticas, curativos',
+    tributacao: 'PIS/COFINS com alíquota zero no varejo para grande parte dos itens',
+    impactoRevenda: 'Revenda isenta ou com alíquota zero de PIS/COFINS no DAS.',
+    baseLegal: 'Lei 10.147/2000; Decreto 3.803/2001'
+  },
+  AUTOPECAS: {
+    ncms: ['4011', '4012', '4013', '8433', '8481', '8482', '8483', '8484'],
+    descricao: 'Pneus, câmaras de ar, peças automotivas',
+    tributacao: 'PIS/COFINS monofásicos concentrados no fabricante/importador',
+    impactoRevenda: 'Revenda de autopeças pode excluir PIS/COFINS do DAS.',
+    baseLegal: 'Lei 10.485/2002'
+  },
+  COMBUSTIVEIS: {
+    ncms: ['2710', '2711'],
+    descricao: 'Gasolina, Diesel, GLP, querosene',
+    tributacao: 'Tributação monofásica — recolhimento concentrado na refinaria/distribuidora',
+    impactoRevenda: 'Postos de combustíveis pagam ZERO de PIS/COFINS no DAS.',
+    baseLegal: 'Lei 9.718/1998; Lei 10.336/2001'
+  },
+  MAQUINAS_VEICULOS: {
+    ncms: ['8429', '8430', '8432', '8433', '8434', '8435', '8436', '8701', '8702', '8703', '8704', '8711'],
+    descricao: 'Veículos, máquinas agrícolas, tratores, caminhões, motocicletas',
+    tributacao: 'PIS/COFINS concentrados no fabricante/importador',
+    impactoRevenda: 'Concessionárias e revendas pagam PIS/COFINS reduzido ou zero no DAS.',
+    baseLegal: 'Lei 10.485/2002; Decreto 5.060/2004'
+  }
+};
+
+/**
+ * Verifica se um NCM é monofásico e retorna informações de economia.
+ * @param {string} ncm — Código NCM (mínimo 4 dígitos)
+ * @returns {Object|null}
+ */
+function verificarMonofasicoNCM(ncm) {
+  if (!ncm) return null;
+  const ncm4 = ncm.replace(/[.\-\/]/g, '').substring(0, 4);
+
+  for (const [categoria, dados] of Object.entries(PRODUTOS_MONOFASICOS_NCM)) {
+    if (dados.ncms.includes(ncm4)) {
+      return {
+        monofasico: true,
+        categoria,
+        descricao: dados.descricao,
+        impactoRevenda: dados.impactoRevenda,
+        baseLegal: dados.baseLegal,
+        alertaAssinante: `💰 NCM ${ncm} é MONOFÁSICO! Segregue no PGDAS-D para NÃO pagar PIS/COFINS no DAS.`
+      };
+    }
+  }
+  return { monofasico: false, ncm, observacao: 'NCM não identificado como monofásico na base.' };
+}
+
+/**
+ * Calcula economia com segregação monofásica no PGDAS-D.
+ * @param {Object} params
+ * @param {number} params.receitaMonofasica — Receita de produtos monofásicos no mês
+ * @param {number} params.rbt12 — RBT12
+ * @param {string} params.anexo — Anexo
+ * @returns {Object}
+ */
+function calcularEconomiaMonofasica(params) {
+  const { receitaMonofasica, rbt12, anexo } = params;
+
+  if (!receitaMonofasica || receitaMonofasica <= 0) {
+    return { economia: 0, observacao: 'Sem receita monofásica.' };
+  }
+
+  const aliqResult = calcularAliquotaEfetiva({ rbt12, anexo });
+  const faixa = aliqResult.faixa;
+  const partilhaPct = PARTILHA[anexo] ? PARTILHA[anexo][faixa - 1] : null;
+
+  if (!partilhaPct) return { economia: 0, observacao: 'Não foi possível calcular.' };
+
+  const pctPIS = partilhaPct.pis || 0;
+  const pctCOFINS = partilhaPct.cofins || 0;
+  const pctTotalExcluido = pctPIS + pctCOFINS;
+  const aliqEfetivaSemMonofasica = aliqResult.aliquotaEfetiva * (1 - pctTotalExcluido);
+  const dasComMonofasico = _arredondar(receitaMonofasica * aliqResult.aliquotaEfetiva);
+  const dasSemMonofasico = _arredondar(receitaMonofasica * aliqEfetivaSemMonofasica);
+  const economiaMensal = _arredondar(dasComMonofasico - dasSemMonofasico);
+
+  return {
+    receitaMonofasica: _arredondar(receitaMonofasica),
+    aliquotaEfetivaNormal: aliqResult.aliquotaEfetiva,
+    aliquotaEfetivaSemPISCOFINS: _arredondar(aliqEfetivaSemMonofasica, 6),
+    percentualPISExcluido: pctPIS,
+    percentualCOFINSExcluido: pctCOFINS,
+    dasSeNaoSegregasse: dasComMonofasico,
+    dasComSegregacao: dasSemMonofasico,
+    economiaMensal,
+    economiaMensalFormatada: _fmtBRL(economiaMensal),
+    economiaAnual: _arredondar(economiaMensal * 12),
+    economiaAnualFormatada: _fmtBRL(economiaMensal * 12),
+    baseLegal: 'Resolução CGSN 140/2018, Art. 25-A; Lei 10.147/2000',
+    alertaAssinante: `💰 Segregação monofásica gera economia de ${_fmtBRL(economiaMensal)}/mês (${_fmtBRL(economiaMensal * 12)}/ano).`
+  };
+}
+
+
+/**
+ * 34.7 — BENEFÍCIOS ESTADUAIS (Isenção de ICMS por Faixa)
+ *
+ * Alguns estados isentam 100% do ICMS para microempresas dentro do Simples.
+ * Atualizado para 2026 com dados dos principais estados.
+ */
+const ISENCAO_ESTADUAL_ICMS = {
+  'RS': { limiteReceita: 360_000.00, isencao: 1.00, descricao: 'Isenção integral do ICMS para MEs', baseLegal: 'Lei Estadual RS 13.036/2008' },
+  'SE': { limiteReceita: 360_000.00, isencao: 1.00, descricao: 'Isenção integral do ICMS para MEs', baseLegal: 'Lei Estadual SE' },
+  'PR': { limiteReceita: 360_000.00, isencao: 1.00, descricao: 'Isenção total do ICMS para MEs', baseLegal: 'Lei Estadual PR' },
+  'SC': { limiteReceita: 360_000.00, isencao: 1.00, descricao: 'Isenção integral do ICMS para MEs', baseLegal: 'Lei Estadual SC' },
+  'AM': { limiteReceita: 360_000.00, isencao: 1.00, descricao: 'Isenção integral ZFM + SN', baseLegal: 'Lei Estadual AM; SUFRAMA' },
+  'PA': { limiteReceita: 360_000.00, isencao: 0.00, descricao: 'SEM isenção estadual de ICMS para MEs', baseLegal: 'N/A' },
+  'SP': { limiteReceita: 0, isencao: 0.00, descricao: 'Redução de base de cálculo para bares/restaurantes (Convênio 09/93)', baseLegal: 'Convênio ICMS 09/93' },
+  'RJ': { limiteReceita: 0, isencao: 0.00, descricao: 'SEM isenção estadual de ICMS para MEs', baseLegal: 'N/A' },
+  'MG': { limiteReceita: 360_000.00, isencao: 0.50, descricao: 'Redução de 50% do ICMS para MEs (faixa 1)', baseLegal: 'Lei Estadual MG' }
+};
+
+
+/**
+ * 34.8 — PRAZO DE IMPUGNAÇÃO (LC 227/2026)
+ *
+ * Mudança crítica: prazo de defesa passou de dias CORRIDOS para dias ÚTEIS.
+ */
+const PRAZO_IMPUGNACAO_2026 = {
+  dias: 20,
+  tipo: 'DIAS ÚTEIS',
+  mudanca: 'Antes eram dias corridos. Agora são 20 dias ÚTEIS — mais prazo real de defesa.',
+  vigencia: '2026',
+  baseLegal: 'LC 227/2026',
+  impactoAssinante: 'FAVORÁVEL — Mais tempo real para preparar defesa. Finais de semana e feriados não contam.'
+};
+
+
+/**
+ * 34.9 — CALENDÁRIO FISCAL 2026 (Datas Críticas para Assinantes)
+ */
+const CALENDARIO_FISCAL_2026 = [
+  { data: '2026-01-31', evento: 'Prazo final para opção pelo Simples Nacional (empresas existentes)', baseLegal: 'LC 123/2006, Art. 16' },
+  { data: '2026-01-31', evento: 'Prazo prorrogado (STF) para aprovação de distribuição de lucros AC 2025', baseLegal: 'Decisão Min. Nunes Marques' },
+  { data: '2026-02-28', evento: 'DIRF — Último dia útil de fevereiro (entrega referente AC 2025)', baseLegal: 'IN RFB 1.990/2020' },
+  { data: '2026-03-31', evento: 'DEFIS AC 2025 — Entrega obrigatória. Atraso gera multa mín. R$ 200', baseLegal: 'Resolução CGSN 183/2025' },
+  { data: '2026-05-31', evento: 'DASN-SIMEI — Declaração anual do MEI (AC 2025)', baseLegal: 'Resolução CGSN 140/2018' },
+  { data: '2026-09-30', evento: 'Prazo para optar entre SN ou novo sistema IBS/CBS para 2027', baseLegal: 'LC 214/2025' },
+  { data: null, evento: 'PGDAS-D — Todo dia 20 do mês subsequente. ATRASO GERA MULTA.', baseLegal: 'Resolução CGSN 183/2025' },
+  { data: null, evento: 'DAS — Pagamento até dia 20 do mês subsequente ao faturamento', baseLegal: 'LC 123/2006, Art. 21' },
+  { data: null, evento: 'eSocial — Eventos periódicos até dia 15 do mês subsequente', baseLegal: 'Decreto 8.373/2014' },
+  { data: null, evento: 'EFD-Reinf — Até dia 15 do mês subsequente', baseLegal: 'IN RFB 2.043/2021' },
+  { data: null, evento: 'DCTFWeb — Até dia 15 do mês seguinte (se tem empregados)', baseLegal: 'IN RFB 2.005/2021' }
+];
+
+
+/**
+ * 34.10 — GERADOR DE DICAS DE ECONOMIA (Motor de Vendas de Assinatura)
+ *
+ * Analisa os dados da empresa e gera dicas personalizadas de economia fiscal.
+ * Cada dica indica a economia estimada e o nível de acesso (gratuito/premium).
+ */
+function gerarDicasEconomia(params) {
+  const {
+    receitaBrutaAnual,
+    receitaBrutaMensal,
+    folhaAnual,
+    folhaMensal,
+    cnae,
+    uf,
+    anexo,
+    rbt12,
+    socios = [],
+    temProdutosMonofasicos = false,
+    receitaMonofasica = 0,
+    vendasInterestaduais = false,
+    temMaisDeUmCNPJ = false
+  } = params;
+
+  const dicas = [];
+  const fatorR = folhaAnual > 0 && receitaBrutaAnual > 0 ? folhaAnual / receitaBrutaAnual : 0;
+
+  // ─── DICA 1: Fator R (migração Anexo V → III) ───
+  if (anexo === 'V' || (fatorR > 0 && fatorR < LIMITE_FATOR_R)) {
+    const aliqV = calcularAliquotaEfetiva({ rbt12, anexo: 'V' });
+    const aliqIII = calcularAliquotaEfetiva({ rbt12, anexo: 'III' });
+    const economiaMensal = _arredondar(receitaBrutaMensal * (aliqV.aliquotaEfetiva - aliqIII.aliquotaEfetiva));
+    dicas.push({
+      id: 'fator_r_otimizacao',
+      titulo: '🎯 Otimize o Fator "r" e pague menos',
+      descricao: `Seu Fator "r" é ${(fatorR * 100).toFixed(1)}%. Aumentando a folha para atingir 28%, você cai do Anexo V para o III.`,
+      economiaMensal: _fmtBRL(economiaMensal),
+      economiaAnual: _fmtBRL(economiaMensal * 12),
+      impacto: 'alto',
+      nivel: 'premium',
+      acao: 'Aumente pró-labore ou contrate registrado para elevar a folha acima de 28% da receita.'
+    });
+  }
+
+  // ─── DICA 2: Segregação Monofásica ───
+  if (temProdutosMonofasicos || (anexo === 'I' || anexo === 'II')) {
+    const econMono = receitaMonofasica > 0
+      ? calcularEconomiaMonofasica({ receitaMonofasica, rbt12, anexo })
+      : null;
+    dicas.push({
+      id: 'monofasico_segregacao',
+      titulo: '💰 Segregação de produtos monofásicos',
+      descricao: 'Produtos como combustíveis, bebidas, perfumaria, autopeças e farmacêuticos têm PIS/COFINS pagos pelo fabricante. Segregue no PGDAS-D e NÃO pague novamente.',
+      economiaMensal: econMono ? econMono.economiaMensalFormatada : 'A calcular — informe receita monofásica.',
+      economiaAnual: econMono ? econMono.economiaAnualFormatada : 'A calcular',
+      impacto: 'alto',
+      nivel: 'gratuito',
+      acao: 'Classifique as receitas de produtos monofásicos corretamente no PGDAS-D.'
+    });
+  }
+
+  // ─── DICA 3: Multas PGDAS-D / DEFIS ───
+  dicas.push({
+    id: 'multas_2026',
+    titulo: '⚠️ ALERTA: Novas multas por atraso em 2026',
+    descricao: 'Desde jan/2026, PGDAS-D e DEFIS geram multa automática no 1º dia de atraso. Mínimo R$ 50 (PGDAS-D) e R$ 200 (DEFIS).',
+    economiaAnual: 'Evite até R$ 2.400/ano em multas.',
+    impacto: 'medio',
+    nivel: 'gratuito',
+    acao: 'Configure alertas de prazo. Use o calendário fiscal do IMPOST.'
+  });
+
+  // ─── DICA 4: Dividendos (Lei 15.270/2025) ───
+  const lucroDistribuivelMensal = receitaBrutaMensal * 0.32; // presunção serviços
+  const maiorSocio = socios.length > 0 ? socios.reduce((a, b) => (a.percentual > b.percentual ? a : b)) : null;
+  const valorMaiorSocio = maiorSocio ? lucroDistribuivelMensal * (maiorSocio.percentual || 0) : 0;
+
+  if (valorMaiorSocio > 50_000) {
+    const irrfEstimado = _arredondar(valorMaiorSocio * 0.10);
+    dicas.push({
+      id: 'dividendos_2026',
+      titulo: '🚨 Tributação de dividendos: IRRF de 10%',
+      descricao: `Sócio ${maiorSocio.nome || 'principal'} recebe ~${_fmtBRL(valorMaiorSocio)}/mês. Acima de R$ 50 mil → IRRF de 10%.`,
+      economiaMensal: _fmtBRL(irrfEstimado),
+      economiaAnual: _fmtBRL(irrfEstimado * 12),
+      impacto: 'critico',
+      nivel: 'premium',
+      acao: 'Fracione distribuição em parcelas ≤ R$ 50k/mês por sócio. Revise mix pró-labore/dividendos.'
+    });
+  }
+
+  // ─── DICA 5: ISS Retido na Fonte ───
+  if (['III', 'IV', 'V'].includes(anexo)) {
+    dicas.push({
+      id: 'iss_retido',
+      titulo: '📋 Deduza ISS retido na fonte do DAS',
+      descricao: 'Quando o tomador retém ISS, esse valor deve ser ABATIDO do DAS mensal.',
+      impacto: 'medio',
+      nivel: 'gratuito',
+      acao: 'Informe o ISS retido no PGDAS-D para reduzir o valor do DAS.'
+    });
+  }
+
+  // ─── DICA 6: Sublimite ICMS/ISS ───
+  if (rbt12 > 3_200_000 && rbt12 <= SUBLIMITE_ICMS_ISS) {
+    dicas.push({
+      id: 'sublimite_alerta',
+      titulo: '⚠️ Próximo do sublimite de R$ 3,6 milhões',
+      descricao: 'Se ultrapassar R$ 3,6M em RBT12, ICMS e ISS saem do DAS e são recolhidos por fora.',
+      impacto: 'alto',
+      nivel: 'premium',
+      acao: 'Planeje faturamento para evitar ultrapassar o sublimite. Simule no comparativo de regimes.'
+    });
+  }
+
+  // ─── DICA 7: Grupo Econômico ───
+  if (temMaisDeUmCNPJ) {
+    dicas.push({
+      id: 'grupo_economico',
+      titulo: '🚨 ALERTA: Novo conceito de grupo econômico em 2026',
+      descricao: 'A Receita Federal agora analisa a REALIDADE ECONÔMICA. Se suas empresas compartilham estrutura, podem ser tratadas como grupo.',
+      impacto: 'critico',
+      nivel: 'premium',
+      acao: 'Faça o checklist de risco de grupo econômico. Busque independência operacional.'
+    });
+  }
+
+  // ─── DICA 8: Comparativo de Regimes ───
+  if (receitaBrutaAnual > 1_800_000) {
+    dicas.push({
+      id: 'comparativo_regimes',
+      titulo: '📊 Compare: Simples x Lucro Presumido x Lucro Real',
+      descricao: 'Com faturamento acima de R$ 1,8M, pode valer a pena migrar de regime. Use o comparativo completo.',
+      impacto: 'alto',
+      nivel: 'premium',
+      acao: 'Execute compararRegimesCompleto() para análise detalhada.'
+    });
+  }
+
+  // ─── DICA 9: Isenção Estadual de ICMS ───
+  const isencaoUF = ISENCAO_ESTADUAL_ICMS[uf];
+  if (isencaoUF && isencaoUF.isencao > 0 && receitaBrutaAnual <= isencaoUF.limiteReceita) {
+    dicas.push({
+      id: 'isencao_estadual',
+      titulo: `✅ Isenção de ICMS no estado ${uf}`,
+      descricao: isencaoUF.descricao,
+      impacto: 'medio',
+      nivel: 'gratuito',
+      acao: 'Verifique se a isenção está sendo aplicada corretamente no DAS.'
+    });
+  }
+
+  // ─── DICA 10: Reforma Tributária — Opção set/2026 ───
+  dicas.push({
+    id: 'reforma_tributaria_opcao',
+    titulo: '🔄 Reforma Tributária: decida até setembro/2026',
+    descricao: 'Empresas do SN devem optar até set/2026 se em 2027 continuam no Simples ou migram para IBS/CBS.',
+    impacto: 'alto',
+    nivel: 'premium',
+    acao: 'Se sua empresa vende muito B2B, avaliar o modelo híbrido pode dar vantagem competitiva.'
+  });
+
+  // Ordenar por impacto
+  const ordemImpacto = { critico: 0, alto: 1, medio: 2, baixo: 3 };
+  dicas.sort((a, b) => (ordemImpacto[a.impacto] || 3) - (ordemImpacto[b.impacto] || 3));
+
+  // Resumo
+  const dicasGratuitas = dicas.filter(d => d.nivel === 'gratuito');
+  const dicasPremium = dicas.filter(d => d.nivel === 'premium');
+
+  return {
+    totalDicas: dicas.length,
+    dicasGratuitas: dicasGratuitas.length,
+    dicasPremium: dicasPremium.length,
+    dicas,
+    mensagemVenda: dicasPremium.length > 0
+      ? `🔓 Você tem ${dicasPremium.length} dica(s) PREMIUM bloqueada(s). ` +
+        `Assine o IMPOST. para desbloquear estratégias avançadas de economia fiscal.`
+      : null,
+    ctaAssinatura: '💎 Assine agora e economize — IMPOST. Premium a partir de R$ 49,90/mês.'
+  };
+}
+
+
+/**
+ * 34.11 — RELATÓRIO COMPLETO DE ECONOMIA (Para Vendas de Assinatura)
+ *
+ * Gera relatório detalhado com todas as oportunidades de economia.
+ * Versão gratuita mostra resumo; Premium mostra detalhes + ações.
+ */
+function gerarRelatorioEconomiaCompleto(params) {
+  const {
+    receitaBrutaAnual,
+    receitaBrutaMensal,
+    folhaAnual,
+    folhaMensal,
+    cnae,
+    uf,
+    municipio,
+    socios = [],
+    despesasOperacionais = 0,
+    produtosMonofasicos = [],
+    receitaMonofasica = 0,
+    nivelAcesso = 'gratuito' // 'gratuito' ou 'premium'
+  } = params;
+
+  const rbt12 = receitaBrutaAnual;
+  const fatorR = folhaAnual > 0 && rbt12 > 0 ? folhaAnual / rbt12 : 0;
+
+  // Determinar anexo
+  let anexo;
+  try {
+    const anexoResult = determinarAnexo({ cnae, fatorR });
+    anexo = anexoResult.vedado ? null : anexoResult.anexo;
+  } catch (e) {
+    // Fallback: tentar via fator R direto
+    anexo = fatorR >= LIMITE_FATOR_R ? 'III' : 'V';
+  }
+
+  if (!anexo) return { erro: 'CNAE vedado ao Simples Nacional.' };
+
+  // DAS atual
+  const dasAtual = calcularDASMensal({
+    receitaBrutaMensal,
+    rbt12,
+    anexo,
+    folhaMensal,
+    aliquotaRAT: ALIQUOTA_RAT_PADRAO
+  });
+
+  // Dicas de economia
+  const dicas = gerarDicasEconomia({
+    receitaBrutaAnual,
+    receitaBrutaMensal,
+    folhaAnual,
+    folhaMensal,
+    cnae,
+    uf,
+    anexo,
+    rbt12,
+    socios,
+    temProdutosMonofasicos: produtosMonofasicos.length > 0 || receitaMonofasica > 0,
+    receitaMonofasica
+  });
+
+  // Impacto dividendos
+  let impactoDividendos = null;
+  if (socios.length > 0) {
+    const lucroPresumido = receitaBrutaMensal * PRESUNCAO_LUCRO_SERVICOS;
+    impactoDividendos = calcularImpactoDividendos2026({
+      lucroDistribuivelMensal: lucroPresumido,
+      socios
+    });
+  }
+
+  // Economia monofásica
+  let economiaMonofasica = null;
+  if (receitaMonofasica > 0) {
+    economiaMonofasica = calcularEconomiaMonofasica({ receitaMonofasica, rbt12, anexo });
+  }
+
+  // Penalidades evitáveis
+  const penalidades = {
+    pgdasd: calcularMultaAtraso({ tipo: 'PGDAS_D', valorTributos: dasAtual.dasAPagar, diasAtraso: 30 }),
+    defis: calcularMultaAtraso({ tipo: 'DEFIS', valorTributos: dasAtual.dasAPagar * 12, diasAtraso: 30 })
+  };
+
+  const relatorio = {
+    versao: '4.1.0',
+    dataGeracao: new Date().toISOString(),
+    produto: 'IMPOST. — Inteligência em Modelagem de Otimização Tributária',
+    nivelAcesso,
+
+    // Resumo (sempre visível)
+    resumo: {
+      dasAtual: dasAtual.dasAPagar,
+      dasAtualFormatado: _fmtBRL(dasAtual.dasAPagar),
+      aliquotaEfetiva: dasAtual.aliquotaEfetivaFormatada,
+      anexo,
+      fatorR: (fatorR * 100).toFixed(2) + '%',
+      totalDicasEconomia: dicas.totalDicas,
+      dicasPremiumBloqueadas: nivelAcesso === 'gratuito' ? dicas.dicasPremium : 0
+    },
+
+    // Calendário fiscal (sempre visível)
+    calendarioFiscal: CALENDARIO_FISCAL_2026,
+
+    // Penalidades 2026 (sempre visível como alerta)
+    penalidades2026: PENALIDADES_2026,
+
+    // Reforma Tributária (sempre visível)
+    reformaTributaria: REFORMA_TRIBUTARIA_SIMPLES,
+
+    // Dicas de economia (parcialmente bloqueadas)
+    dicasEconomia: nivelAcesso === 'premium'
+      ? dicas.dicas
+      : dicas.dicas.map(d => d.nivel === 'gratuito' ? d : {
+          ...d,
+          economiaMensal: '🔒 Premium',
+          economiaAnual: '🔒 Premium',
+          acao: '🔒 Assine para desbloquear',
+          bloqueado: true
+        }),
+
+    // Impacto dividendos (premium)
+    impactoDividendos: nivelAcesso === 'premium' ? impactoDividendos : {
+      resumo: impactoDividendos ? `${impactoDividendos.porSocio.length} sócio(s) analisado(s)` : null,
+      detalhes: '🔒 Assine para ver a análise completa de dividendos.',
+      bloqueado: true
+    },
+
+    // Economia monofásica (premium)
+    economiaMonofasica: nivelAcesso === 'premium' ? economiaMonofasica : {
+      resumo: economiaMonofasica ? `Economia estimada: 🔒 Premium` : null,
+      bloqueado: true
+    },
+
+    // Grupo econômico (sempre visível como alerta)
+    grupoEconomico: GRUPO_ECONOMICO_2026,
+
+    // CTA de vendas
+    cta: nivelAcesso === 'gratuito' ? {
+      mensagem: `🎯 Você tem ${dicas.dicasPremium} estratégia(s) de economia bloqueada(s).`,
+      acao: 'Assine o IMPOST. Premium e desbloqueie TODAS as estratégias.',
+      preco: 'A partir de R$ 49,90/mês',
+      beneficios: [
+        'Dicas personalizadas de economia fiscal',
+        'Comparativo completo de regimes tributários',
+        'Alerta de prazos e multas automatizado',
+        'Simulador de Fator "r" e migração de anexo',
+        'Análise de impacto de dividendos (Lei 15.270/2025)',
+        'Segregação monofásica automatizada',
+        'Relatório mensal de otimização',
+        'Suporte prioritário'
+      ]
+    } : null
+  };
+
+  return relatorio;
+}
+
 
 /**
  * Objeto principal de exportação do módulo.
  */
 const SimplesNacional = {
-  // Constantes
+  // ── Constantes Legais ──────────────────────────────────────
   LIMITE_ME,
   LIMITE_EPP,
   SUBLIMITE_ICMS_ISS,
@@ -2193,16 +5207,40 @@ const SimplesNacional = {
   LIMITE_EXCESSO_20_PORCENTO,
   ALIQUOTA_FGTS,
 
-  // Tabelas
+  // ── Tabelas dos Anexos ─────────────────────────────────────
   ANEXOS,
   PARTILHA,
+  ANEXO_VI_HISTORICO,
+
+  // ── Mapeamento CNAE ────────────────────────────────────────
   MAPEAMENTO_CNAE,
+  MAPEAMENTO_CNAE_ADICIONAL,
+  ATIVIDADES_PARAGRAFO_5I,
+
+  // ── Regras de Tributação ───────────────────────────────────
+  REGRAS_TRIBUTACAO_ATIVIDADE,
+  SEGREGACAO_RECEITAS,
+  PRODUTOS_MONOFASICOS,
+  PRAZO_MINIMO_ICMS_ST,
+
+  // ── Reduções Legais e Estratégias ──────────────────────────
+  REDUCOES_LEGAIS,
+  ESTRATEGIAS_MENOR_IMPOSTO,
+
+  // ── MEI ────────────────────────────────────────────────────
+  MEI,
+
+  // ── Benefícios Especiais ───────────────────────────────────
+  LICITACOES_BENEFICIOS,
+  RECUPERACAO_JUDICIAL,
+
+  // ── Vedações e Riscos ──────────────────────────────────────
   VEDACOES,
   OBRIGACOES_ACESSORIAS,
   RISCOS_FISCAIS,
   TRANSICOES,
 
-  // Funções de cálculo
+  // ── Funções Base ────────────────────────────────────────────
   calcularFatorR,
   determinarAnexo,
   calcularAliquotaEfetiva,
@@ -2214,51 +5252,99 @@ const SimplesNacional = {
   analisarVantagensDesvantagens,
   compararComOutrosRegimes,
 
-  // Funções auxiliares
+  // ── Funções Otimizadas (NOVAS) ★ ────────────────────────────
+  calcularDASMensalOtimizado,
+  calcularDASSegregado,
+  otimizarFatorR,
+  compararRegimesCompleto,
+  gerarRelatorioOtimizacao,
+
+  // ── Integração com Módulos Auxiliares ────────────────────────
+  obterRegrasCNAE,
+  isVedadoCNAE,
+  obterAnexoEfetivoCNAE,
+  isMonofasicoCNAE,
+  obterDadosEstado,
+  verificarIncentivosRegionais,
+  obterAliquotaICMS,
+  obterAliquotaISS,
+
+  // ── Módulo Avançado 2026 (NOVO v4.1) ★ ──────────────────────
+  PENALIDADES_2026,
+  TRIBUTACAO_DIVIDENDOS_2026,
+  REFORMA_TRIBUTARIA_SIMPLES,
+  GRUPO_ECONOMICO_2026,
+  PRODUTOS_MONOFASICOS_NCM,
+  ISENCAO_ESTADUAL_ICMS,
+  PRAZO_IMPUGNACAO_2026,
+  CALENDARIO_FISCAL_2026,
+  ALIQUOTAS_INTERNAS_UF,
+  calcularMultaAtraso,
+  calcularImpactoDividendos2026,
+  calcularDIFAL,
+  verificarMonofasicoNCM,
+  calcularEconomiaMonofasica,
+  gerarDicasEconomia,
+  gerarRelatorioEconomiaCompleto,
+
+  // ── Funções Auxiliares ─────────────────────────────────────
   getAnexosDisponiveis,
   getFaixaByRBT12,
   calcularRBT12Proporcional,
   validarDadosEntrada,
   formatarResultadoTexto,
   _arredondar,
-  _formatarMoeda: _fmtBRL
+  _formatarMoeda: _fmtBRL,
+
+  // ── Metadados ──────────────────────────────────────────────
+  VERSION: '4.1.0',
+  PRODUTO: 'IMPOST. — Inteligência em Modelagem de Otimização Tributária',
+  DATA_ATUALIZACAO: new Date().toISOString().split('T')[0],
+  BASE_LEGAL: 'LC 123/2006; LC 155/2016; LC 214/2025; LC 227/2026; Lei 15.270/2025; Resolução CGSN 140/2018; Resolução CGSN 183/2025'
 };
+
+// Alias: IMPOST_API = SimplesNacional (retrocompatibilidade)
+const IMPOST_API = SimplesNacional;
 
 // CommonJS
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = SimplesNacional;
+  module.exports = IMPOST_API;
 }
 
 // ESM / Browser
 if (typeof globalThis !== 'undefined') {
-  globalThis.SimplesNacional = SimplesNacional;
+  globalThis.IMPOST = IMPOST_API;
+  globalThis.SimplesNacional = IMPOST_API; // retrocompatibilidade
 }
 
 
 // ================================================================================
-// SEÇÃO 21: DEMONSTRAÇÃO (executar com `node simples_nacional.js`)
+// SEÇÃO 33: DEMONSTRAÇÃO IMPOST v4.0 (executar com `node simples_nacional.js`)
 // ================================================================================
 
 /**
- * Execução de demonstração quando rodado diretamente via Node.js.
- * Utiliza dados da empresa AGROGEO BRASIL como referência.
+ * Execução de demonstração do IMPOST. v4.0.
+ * Aceita dados como parâmetro ou usa exemplo padrão.
+ * @param {Object} [dadosEmpresa] — Dados da empresa (opcional)
  */
-function executarDemonstracao() {
-  const sep = '═'.repeat(64);
-  const sep2 = '─'.repeat(64);
+function executarDemonstracao(dadosEmpresa) {
+  const sep = '═'.repeat(68);
+  const sep2 = '─'.repeat(68);
+  const log = console.log.bind(console);
 
-  console.log('');
-  console.log('╔' + sep + '╗');
-  console.log('║   MOTOR DE CÁLCULO FISCAL — SIMPLES NACIONAL v2.0' + ' '.repeat(13) + '║');
-  console.log('║   AGROGEO BRASIL — Geotecnologia e Consultoria Ambiental' + ' '.repeat(5) + '║');
-  console.log('╚' + sep + '╝');
-  console.log('');
+  log('');
+  log('╔' + sep + '╗');
+  log('║   IMPOST. — Inteligência em Modelagem de Otimização Tributária     ║');
+  log('║   Motor de Cálculo Fiscal Otimizado v4.0                           ║');
+  log('╚' + sep + '╝');
+  log('');
 
-  // Dados da AGROGEO BRASIL
-  const AGROGEO = {
-    nome: 'AGROGEO BRASIL',
-    cnae: '71.19-7',
-    localizacao: 'Novo Progresso, Pará (Amazônia Legal — SUDAM)',
+  // Dados da empresa (parâmetro ou exemplo)
+  const empresa = dadosEmpresa || {
+    nome: 'EMPRESA EXEMPLO S/A',
+    cnae: '7119-7/00',
+    uf: 'PA',
+    municipio: 'Novo Progresso',
     receitaBrutaAnual: 2_350_000.00,
     receitaBrutaMensal: 2_350_000 / 12,
     folhaAnual: 1_000_000.00,
@@ -2267,219 +5353,278 @@ function executarDemonstracao() {
       { nome: 'Sócio 1 (Majoritário)', percentual: 0.65 },
       { nome: 'Sócio 2 (Minoritário)', percentual: 0.35 }
     ],
-    despesasOperacionais: 800_000.00
+    despesasOperacionais: 800_000.00,
+    receitaMonofasica: 0,
+    receitaICMS_ST: 0,
+    receitaExportacao: 0
   };
 
-  // ▸ 1. IDENTIFICAÇÃO POR CNAE
-  console.log('▸ 1. IDENTIFICAÇÃO POR CNAE');
-  console.log(sep2);
-  const cnaeResult = determinarAnexo({ cnae: AGROGEO.cnae, fatorR: AGROGEO.folhaAnual / AGROGEO.receitaBrutaAnual });
-  console.log(`  CNAE: ${cnaeResult.cnae} — ${cnaeResult.descricao}`);
-  console.log(`  Tipo: ${cnaeResult.tipo}`);
-  console.log(`  Anexo Determinado: ${cnaeResult.anexo} (${cnaeResult.descricaoAnexo})`);
-  console.log(`  CPP Incluída no DAS: ${cnaeResult.cppInclusa ? 'SIM' : 'NÃO'}`);
-  console.log(`  Tributos no DAS: ${cnaeResult.tributosDentro.join(', ')}`);
-  console.log(`  Motivo: ${cnaeResult.motivoAnexo}`);
-  console.log('');
+  // ▸ 1. DADOS DA EMPRESA
+  log('▸ 1. DADOS DA EMPRESA');
+  log(sep2);
+  log(`  Nome:       ${empresa.nome}`);
+  log(`  CNAE:       ${empresa.cnae}`);
+  log(`  UF:         ${empresa.uf}`);
+  log(`  Município:  ${empresa.municipio}`);
+  log(`  Receita Bruta Anual: ${_fmtBRL(empresa.receitaBrutaAnual)}`);
+  log(`  Folha Anual:         ${_fmtBRL(empresa.folhaAnual)}`);
+  log('');
 
-  // ▸ 2. FATOR "r"
-  console.log('▸ 2. FATOR "r"');
-  console.log(sep2);
+  // ▸ 2. CLASSIFICAÇÃO CNAE (via CnaeMapeamento)
+  log('▸ 2. CLASSIFICAÇÃO CNAE');
+  log(sep2);
+  const regrasCNAE = obterRegrasCNAE(empresa.cnae);
+  log(`  Anexo:          ${regrasCNAE.anexo || 'Fator R'}`);
+  log(`  Fator R:        ${regrasCNAE.fatorR ? 'SIM' : 'NÃO'}`);
+  log(`  Presunção IRPJ: ${((regrasCNAE.presuncaoIRPJ || 0) * 100).toFixed(0)}%`);
+  log(`  Presunção CSLL: ${((regrasCNAE.presuncaoCSLL || 0) * 100).toFixed(0)}%`);
+  log(`  Vedado:         ${regrasCNAE.vedado ? 'SIM — ' + regrasCNAE.motivoVedacao : 'NÃO'}`);
+  log(`  Monofásico:     ${regrasCNAE.monofasico || 'NÃO'}`);
+  log(`  Fonte:          ${regrasCNAE.fonte || 'CnaeMapeamento'}`);
+  log('');
+
+  // ▸ 3. FATOR "r" E ANEXO
+  log('▸ 3. FATOR "r" E ANEXO');
+  log(sep2);
   const fatorResult = calcularFatorR({
-    folhaSalarios12Meses: AGROGEO.folhaAnual,
-    receitaBruta12Meses: AGROGEO.receitaBrutaAnual
+    folhaSalarios12Meses: empresa.folhaAnual,
+    receitaBruta12Meses: empresa.receitaBrutaAnual
   });
-  console.log(`  Folha de Salários (12 meses): ${_fmtBRL(fatorResult.folhaSalarios12Meses)}`);
-  console.log(`  Receita Bruta (12 meses):     ${_fmtBRL(fatorResult.receitaBruta12Meses)}`);
-  console.log(`  Fator "r":                     ${fatorResult.fatorRPercentual}`);
-  console.log(`  Limiar:                        ${fatorResult.limiarPercentual}`);
-  console.log(`  Acima do Limiar:               ${fatorResult.acimaDoLimiar ? 'SIM' : 'NÃO'}`);
-  console.log(`  Anexo Resultante:              ${fatorResult.anexoResultante}`);
-  console.log(`  ${fatorResult.observacao}`);
-  console.log('');
+  log(`  Folha (12m):  ${_fmtBRL(fatorResult.folhaSalarios12Meses)}`);
+  log(`  RBT12:        ${_fmtBRL(fatorResult.receitaBruta12Meses)}`);
+  log(`  Fator "r":    ${fatorResult.fatorRPercentual}`);
+  log(`  Limiar:       ${fatorResult.limiarPercentual}`);
+  log(`  Anexo:        ${fatorResult.anexoResultante}`);
+  log(`  ${fatorResult.observacao}`);
+  log('');
 
-  // ▸ 3. ELEGIBILIDADE
-  console.log('▸ 3. ELEGIBILIDADE');
-  console.log(sep2);
+  const anexo = obterAnexoEfetivoCNAE(empresa.cnae, null, fatorResult.fatorR);
+
+  // ▸ 4. ELEGIBILIDADE
+  log('▸ 4. ELEGIBILIDADE');
+  log(sep2);
   const elegResult = verificarElegibilidade({
-    receitaBrutaAnual: AGROGEO.receitaBrutaAnual,
-    receitaBrutaAnualAnterior: AGROGEO.receitaBrutaAnual,
-    cnae: AGROGEO.cnae,
-    naturezaJuridica: 'LTDA',
-    fatorR: fatorResult.fatorR
+    receitaBrutaAnual: empresa.receitaBrutaAnual,
+    receitaBrutaAnualAnterior: empresa.receitaBrutaAnual,
+    cnae: empresa.cnae, fatorR: fatorResult.fatorR
   });
-  console.log(`  Elegível: ${elegResult.elegivel ? '✅ SIM' : '❌ NÃO'}`);
-  console.log(`  Classificação: ${elegResult.classificacao}`);
-  console.log(`  Impedimentos: ${elegResult.impedimentos.length === 0 ? 'Nenhum' : elegResult.impedimentos.map(i => i.descricao).join('; ')}`);
-  if (elegResult.alertas.length > 0) {
-    console.log(`  Alertas:`);
-    elegResult.alertas.forEach(a => console.log(`    ${a.mensagem}`));
-  }
-  console.log(`  Sublimite Estadual: ${elegResult.sublimiteEstadual.observacao}`);
-  console.log('');
+  log(`  Elegível:      ${elegResult.elegivel ? '✅ SIM' : '❌ NÃO'}`);
+  log(`  Classificação: ${elegResult.classificacao}`);
+  log(`  Impedimentos:  ${elegResult.impedimentos.length === 0 ? 'Nenhum' : elegResult.impedimentos.map(i => i.descricao).join('; ')}`);
+  log('');
 
-  // ▸ 4. CÁLCULO DAS MENSAL
-  console.log('▸ 4. CÁLCULO DAS MENSAL');
-  console.log(sep2);
-  const dasResult = calcularDASMensal({
-    receitaBrutaMensal: AGROGEO.receitaBrutaMensal,
-    rbt12: AGROGEO.receitaBrutaAnual,
-    anexo: fatorResult.anexoResultante
+  // ▸ 5. DAS MENSAL — SEM OTIMIZAÇÃO
+  log('▸ 5. DAS MENSAL — SEM OTIMIZAÇÃO');
+  log(sep2);
+  const dasSemOtim = calcularDASMensal({
+    receitaBrutaMensal: empresa.receitaBrutaMensal,
+    rbt12: empresa.receitaBrutaAnual,
+    anexo
   });
-  console.log(`  Receita Bruta Mensal: ${_fmtBRL(dasResult.receitaBrutaMensal)}`);
-  console.log(`  RBT12:                ${_fmtBRL(dasResult.rbt12)}`);
-  console.log(`  Anexo:                ${dasResult.anexo} (${dasResult.descricaoAnexo})`);
-  console.log(`  Faixa:                ${dasResult.faixaDescricao}`);
-  console.log(`  Alíquota Nominal:     ${dasResult.aliquotaNominalFormatada}`);
-  console.log(`  Alíquota Efetiva:     ${dasResult.aliquotaEfetivaFormatada}`);
-  console.log(`  Valor do DAS:         ${_fmtBRL(dasResult.dasValor)}`);
-  console.log(`  DAS a Pagar:          ${_fmtBRL(dasResult.dasAPagar)}`);
-  console.log(`  INSS Patronal Fora:   ${_fmtBRL(dasResult.inssPatronalFora)}`);
-  console.log(`  TOTAL a Pagar:        ${_fmtBRL(dasResult.totalAPagar)}`);
-  console.log('');
+  log(`  Alíquota Efetiva: ${dasSemOtim.aliquotaEfetivaFormatada}`);
+  log(`  DAS Mensal:       ${_fmtBRL(dasSemOtim.dasValor)}`);
+  log(`  Total a Pagar:    ${_fmtBRL(dasSemOtim.totalAPagar)}`);
+  log('');
 
-  // ▸ 5. PARTILHA DE TRIBUTOS
-  console.log('▸ 5. PARTILHA DE TRIBUTOS (mensal)');
-  console.log(sep2);
-  const p = dasResult.partilha;
-  const tributosList = ['irpj', 'csll', 'cofins', 'pis', 'cpp', 'iss', 'icms', 'ipi'];
-  for (const t of tributosList) {
-    if (p[t] && p[t].valor > 0) {
-      console.log(`  ${t.toUpperCase().padEnd(8)} ${p[t].percentualFormatado.padStart(8)}  →  ${_fmtBRL(p[t].valor).padStart(14)}`);
-    }
-  }
-  console.log(`  ${'TOTAL'.padEnd(8)} ${''.padStart(8)}     ${_fmtBRL(dasResult.dasValor).padStart(14)}`);
-  console.log('');
-
-  // ▸ 6. CONSOLIDAÇÃO ANUAL
-  console.log('▸ 6. CONSOLIDAÇÃO ANUAL');
-  console.log(sep2);
-  // Gerar 12 meses uniformes
-  const mesesUniformes = Array.from({ length: 12 }, () => ({
-    receitaBrutaMensal: AGROGEO.receitaBrutaMensal,
-    rbt12: AGROGEO.receitaBrutaAnual,
-    folhaSalarios12Meses: AGROGEO.folhaAnual,
-    anexo: fatorResult.anexoResultante,
-    folhaMensal: AGROGEO.folhaMensal,
-    issRetidoFonte: 0
-  }));
-
-  const anualResult = calcularAnualConsolidado({
-    meses: mesesUniformes,
-    socios: AGROGEO.socios,
-    aliquotaRAT: ALIQUOTA_RAT_PADRAO
-  });
-
-  console.log(`  Receita Bruta Anual:     ${_fmtBRL(anualResult.receitaBrutaAnual)}`);
-  console.log(`  DAS Anual:               ${_fmtBRL(anualResult.dasAnual)}`);
-  console.log(`  INSS Patronal Fora:      ${_fmtBRL(anualResult.inssPatronalAnualFora)}`);
-  console.log(`  FGTS Anual:              ${_fmtBRL(anualResult.fgtsAnual)}`);
-  console.log(`  Carga Tributária Total:  ${_fmtBRL(anualResult.cargaTributariaTotal)}`);
-  console.log(`  Percentual sobre Receita: ${anualResult.percentualCargaFormatado}`);
-  console.log('');
-  console.log('  Partilha Anual de Tributos:');
-  for (const [tributo, valor] of Object.entries(anualResult.partilhaAnual)) {
-    if (valor > 0) {
-      console.log(`    ${tributo.toUpperCase().padEnd(8)} ${_fmtBRL(valor).padStart(14)}`);
-    }
-  }
-  console.log('');
-
-  // ▸ 7. DISTRIBUIÇÃO DE LUCROS
-  console.log('▸ 7. DISTRIBUIÇÃO DE LUCROS');
-  console.log(sep2);
-  const distLucros = anualResult.distribuicaoLucros;
-  console.log(`  Modalidade:          ${distLucros.modalidadeUtilizada}`);
-  console.log(`  Presunção (32%):     ${_fmtBRL(distLucros.basePresumida)}`);
-  console.log(`  DAS Anual:           ${_fmtBRL(distLucros.dasAnual)}`);
-  console.log(`  Lucro Distribuível:  ${_fmtBRL(distLucros.lucroDistribuivelFinal)}`);
-  console.log('');
-  console.log('  Por Sócio:');
-  for (const socio of distLucros.porSocio) {
-    console.log(`    ${socio.nome} (${socio.percentualFormatado}): ${socio.valorIsentoFormatado}`);
-  }
-  console.log('');
-
-  // ▸ 8. COMPARATIVO DE REGIMES
-  console.log('▸ 8. COMPARATIVO DE REGIMES');
-  console.log(sep2);
-  const comparativo = compararComOutrosRegimes({
-    receitaBrutaAnual: AGROGEO.receitaBrutaAnual,
-    folhaAnual: AGROGEO.folhaAnual,
-    cnae: AGROGEO.cnae,
-    fatorR: fatorResult.fatorR,
-    anexo: fatorResult.anexoResultante,
-    despesasOperacionais: AGROGEO.despesasOperacionais,
-    temSUDAM: true
-  });
-
-  for (const r of comparativo.regimes) {
-    const marker = r.melhorOpcao ? '🏆' : '  ';
-    console.log(`  ${marker} #${r.ranking} ${r.regime.padEnd(28)} Carga: ${_fmtBRL(r.cargaTotal).padStart(14)} (${r.percentualCargaFormatado})`);
-  }
-  console.log('');
-  console.log(`  📊 ${comparativo.recomendacao}`);
-  console.log('');
-
-  // ▸ 9. VANTAGENS E DESVANTAGENS
-  console.log('▸ 9. VANTAGENS E DESVANTAGENS');
-  console.log(sep2);
-  const vd = analisarVantagensDesvantagens({
-    receitaBrutaAnual: AGROGEO.receitaBrutaAnual,
-    anexo: fatorResult.anexoResultante,
-    fatorR: fatorResult.fatorR,
-    localizacaoSUDAM: true,
-    vendeParaPJ: true,
-    folhaAnual: AGROGEO.folhaAnual
-  });
-
-  console.log('  VANTAGENS APLICÁVEIS:');
-  vd.vantagens.filter(v => v.aplicavel).forEach((v, i) => {
-    console.log(`    ${i + 1}. [${v.impacto.toUpperCase()}] ${v.titulo}`);
-  });
-  console.log('');
-  console.log('  DESVANTAGENS APLICÁVEIS:');
-  vd.desvantagens.filter(d => d.aplicavel).forEach((d, i) => {
-    console.log(`    ${i + 1}. [${d.impacto.toUpperCase()}] ${d.titulo}`);
-  });
-  console.log('');
-
-  // ▸ 10. RISCOS FISCAIS
-  console.log('▸ 10. RISCOS FISCAIS (Alta e Crítica Gravidade)');
-  console.log(sep2);
-  RISCOS_FISCAIS
-    .filter(r => ['critica', 'alta'].includes(r.gravidade))
-    .forEach((r, i) => {
-      console.log(`    ${i + 1}. [${r.gravidade.toUpperCase()}] ${r.titulo}`);
-      console.log(`       ${r.descricao}`);
-      console.log(`       Prevenção: ${r.prevencao}`);
-      console.log('');
+  // ▸ 6. DAS MENSAL — COM OTIMIZAÇÃO ★
+  log('▸ 6. DAS MENSAL — COM OTIMIZAÇÃO ★ (IMPOST.)');
+  log(sep2);
+  try {
+    const dasOtim = calcularDASMensalOtimizado({
+      receitaBrutaMensal: empresa.receitaBrutaMensal,
+      rbt12: empresa.receitaBrutaAnual,
+      anexo,
+      cnae: empresa.cnae,
+      uf: empresa.uf,
+      municipio: empresa.municipio,
+      receitaMonofasica: empresa.receitaMonofasica || 0,
+      receitaICMS_ST: empresa.receitaICMS_ST || 0,
+      receitaExportacao: empresa.receitaExportacao || 0,
+      receitaLocacaoBensMoveis: empresa.receitaLocacaoBensMoveis || 0,
+      issRetidoFonte: empresa.issRetidoFonte || 0,
+      folhaMensal: empresa.folhaMensal
     });
 
-  // ▸ 11. RECOMENDAÇÃO
-  console.log('▸ 11. RECOMENDAÇÃO FINAL');
-  console.log(sep2);
-  console.log('');
-  console.log('  ╔══════════════════════════════════════════════════════════╗');
-  console.log('  ║  RECOMENDAÇÃO: PERMANECER NO SIMPLES NACIONAL          ║');
-  console.log('  ╚══════════════════════════════════════════════════════════╝');
-  console.log('');
-  console.log(`  O Simples Nacional (Anexo III) é o regime mais vantajoso para a`);
-  console.log(`  AGROGEO BRASIL nas condições atuais:`);
-  console.log(`    • Alíquota efetiva: ${dasResult.aliquotaEfetivaFormatada}`);
-  console.log(`    • Carga anual: ${_fmtBRL(anualResult.cargaTributariaTotal)} (${anualResult.percentualCargaFormatado})`);
-  console.log(`    • Economia vs Lucro Presumido: ${comparativo.economiaFormatada}`);
-  console.log('');
-  console.log('  PONTOS DE ATENÇÃO:');
-  console.log('    1. Monitorar Fator "r" mensalmente (manter acima de 28%)');
-  console.log('    2. Se faturamento se aproximar de R$ 4,8M, planejar transição');
-  console.log('    3. Considerar Lucro Real + SUDAM se receita crescer acima de R$ 4,4M');
-  console.log('    4. Manter escrituração contábil para otimizar distribuição de lucros');
-  console.log('');
-  console.log(sep);
-  console.log(' FIM DA DEMONSTRAÇÃO — Simples Nacional v2.0');
-  console.log(sep);
-  console.log('');
+    log(`  DAS sem Otimização:  ${_fmtBRL(dasOtim.dasSemOtimizacao)}`);
+    log(`  DAS Otimizado:       ${_fmtBRL(dasOtim.dasOtimizado)}`);
+    log(`  Total a Pagar:       ${_fmtBRL(dasOtim.totalAPagar)}`);
+    log('');
+
+    // ▸ 7. ECONOMIA IMEDIATA ★
+    log('▸ 7. ECONOMIA IMEDIATA ★');
+    log(sep2);
+    log(`  Economia Mensal: ${_fmtBRL(dasOtim.economiaTotal)}`);
+    log(`  Economia Anual:  ${_fmtBRL(dasOtim.economiaTotal * 12)}`);
+    if (dasOtim.deducoes.length > 0) {
+      log('  Deduções aplicadas:');
+      dasOtim.deducoes.forEach((d, i) => {
+        log(`    ${i + 1}. ${d.descricao}: ${_fmtBRL(d.economia)}`);
+        log(`       Base legal: ${d.baseLegal}`);
+      });
+    } else {
+      log('  Nenhuma dedução aplicável neste cenário.');
+    }
+    if (dasOtim.alertas.length > 0) {
+      log('  Alertas:');
+      dasOtim.alertas.forEach(a => log(`    ${a.mensagem}`));
+    }
+    log('');
+
+    // ▸ 8. PARTILHA DE TRIBUTOS (otimizada)
+    log('▸ 8. PARTILHA DE TRIBUTOS (otimizada)');
+    log(sep2);
+    const pOtim = dasOtim.partilha;
+    const tributosList = ['irpj', 'csll', 'cofins', 'pis', 'cpp', 'iss', 'icms', 'ipi'];
+    for (const t of tributosList) {
+      if (pOtim[t] && pOtim[t].valor > 0) {
+        log(`  ${t.toUpperCase().padEnd(8)} ${pOtim[t].percentualFormatado.padStart(8)}  →  ${_fmtBRL(pOtim[t].valor).padStart(14)}`);
+      }
+    }
+    log('');
+  } catch (e) {
+    log(`  ⚠️ Erro na otimização: ${e.message}`);
+    log('');
+  }
+
+  // ▸ 9. OTIMIZAÇÃO FATOR "r" ★ (se aplicável)
+  if (anexo === 'V') {
+    log('▸ 9. OTIMIZAÇÃO FATOR "r" ★');
+    log(sep2);
+    try {
+      const otimFR = otimizarFatorR({
+        rbt12: empresa.receitaBrutaAnual,
+        folhaAtual12Meses: empresa.folhaAnual,
+        receitaMensal: empresa.receitaBrutaMensal,
+        cnae: empresa.cnae
+      });
+      log(`  Fator R Atual:   ${otimFR.fatorRAtualFormatado}`);
+      log(`  Anexo Atual:     ${otimFR.anexoAtual}`);
+      log(`  Aumento Mensal Necessário: ${_fmtBRL(otimFR.aumentoMensalNecessario)}`);
+      log(`  Custo do Aumento Anual:    ${_fmtBRL(otimFR.custoAumentoAnual)}`);
+      log(`  Economia DAS Anual:        ${_fmtBRL(otimFR.economiaDASAnual)}`);
+      log(`  Economia Líquida Anual:    ${_fmtBRL(otimFR.economiaLiquida)}`);
+      log(`  Vale a pena? ${otimFR.vale_a_pena ? '✅ SIM' : '❌ NÃO'}`);
+    } catch (e) {
+      log(`  ⚠️ Erro: ${e.message}`);
+    }
+    log('');
+  } else {
+    log('▸ 9. OTIMIZAÇÃO FATOR "r" — Não aplicável (empresa já no Anexo III)');
+    log('');
+  }
+
+  // ▸ 10. CONSOLIDAÇÃO ANUAL
+  log('▸ 10. CONSOLIDAÇÃO ANUAL');
+  log(sep2);
+  const mesesUniformes = Array.from({ length: 12 }, () => ({
+    receitaBrutaMensal: empresa.receitaBrutaMensal,
+    rbt12: empresa.receitaBrutaAnual,
+    folhaSalarios12Meses: empresa.folhaAnual,
+    anexo,
+    folhaMensal: empresa.folhaMensal,
+    issRetidoFonte: 0
+  }));
+  const anualResult = calcularAnualConsolidado({
+    meses: mesesUniformes,
+    socios: empresa.socios,
+    cnae: empresa.cnae,
+    tipoAtividade: 'servico',
+    aliquotaRAT: ALIQUOTA_RAT_PADRAO
+  });
+  log(`  Receita Bruta Anual:     ${_fmtBRL(anualResult.receitaBrutaAnual)}`);
+  log(`  DAS Anual:               ${_fmtBRL(anualResult.dasAnual)}`);
+  log(`  Carga Tributária Total:  ${_fmtBRL(anualResult.cargaTributariaTotal)}`);
+  log(`  % sobre Receita:         ${anualResult.percentualCargaFormatado}`);
+  log('');
+
+  // ▸ 11. DISTRIBUIÇÃO DE LUCROS
+  log('▸ 11. DISTRIBUIÇÃO DE LUCROS');
+  log(sep2);
+  const distLucros = anualResult.distribuicaoLucros;
+  if (distLucros) {
+    log(`  Modalidade:         ${distLucros.modalidadeUtilizada}`);
+    log(`  Lucro Distribuível: ${_fmtBRL(distLucros.lucroDistribuivelFinal)}`);
+    if (distLucros.porSocio) {
+      log('  Por Sócio:');
+      for (const socio of distLucros.porSocio) {
+        log(`    ${socio.nome} (${socio.percentualFormatado}): ${socio.valorIsentoFormatado}`);
+      }
+    }
+  }
+  log('');
+
+  // ▸ 12. COMPARATIVO DE REGIMES ★ (completo com dados reais)
+  log('▸ 12. COMPARATIVO DE REGIMES ★');
+  log(sep2);
+  try {
+    const comp = compararRegimesCompleto({
+      receitaBrutaAnual: empresa.receitaBrutaAnual,
+      folhaAnual: empresa.folhaAnual,
+      cnae: empresa.cnae,
+      uf: empresa.uf,
+      municipio: empresa.municipio,
+      fatorR: fatorResult.fatorR,
+      despesasOperacionais: empresa.despesasOperacionais,
+      socios: empresa.socios
+    });
+    if (comp.regimes) {
+      for (const r of comp.regimes) {
+        const marker = r.melhorOpcao ? '🏆' : '  ';
+        log(`  ${marker} #${r.ranking} ${r.regime.padEnd(28)} Carga: ${_fmtBRL(r.cargaTotal).padStart(14)} (${r.percentualCargaFormatado})`);
+      }
+      log('');
+      log(`  Presunção IRPJ: ${((comp.presuncaoIRPJ || 0.32) * 100).toFixed(0)}% | CSLL: ${((comp.presuncaoCSLL || 0.32) * 100).toFixed(0)}%`);
+      if (comp.incentivos && (comp.incentivos.sudam || comp.incentivos.sudene || comp.incentivos.zfm)) {
+        log(`  🌿 Incentivos: ${comp.incentivos.sudam ? 'SUDAM' : ''} ${comp.incentivos.sudene ? 'SUDENE' : ''} ${comp.incentivos.zfm ? 'ZFM' : ''} — Redução IRPJ: ${(comp.incentivos.reducaoIRPJ * 100).toFixed(0)}%`);
+      }
+      log(`  📊 ${comp.recomendacao}`);
+    }
+  } catch (e) {
+    log(`  ⚠️ Erro: ${e.message}`);
+  }
+  log('');
+
+  // ▸ 13. ESTRATÉGIAS DE ECONOMIA ★
+  log('▸ 13. ESTRATÉGIAS DE ECONOMIA');
+  log(sep2);
+  const estrategiasTop = ESTRATEGIAS_MENOR_IMPOSTO.slice(0, 5);
+  estrategiasTop.forEach((e, i) => {
+    log(`  ${i + 1}. [${(e.impacto || 'médio').toUpperCase()}] ${e.titulo || e.nome || e.descricao}`);
+  });
+  log('');
+
+  // ▸ 14. RISCOS FISCAIS
+  log('▸ 14. RISCOS FISCAIS (Alta/Crítica)');
+  log(sep2);
+  RISCOS_FISCAIS
+    .filter(r => ['critica', 'alta'].includes(r.gravidade))
+    .slice(0, 5)
+    .forEach((r, i) => {
+      log(`  ${i + 1}. [${r.gravidade.toUpperCase()}] ${r.titulo}`);
+    });
+  log('');
+
+  // ▸ 15. RECOMENDAÇÃO FINAL
+  log('▸ 15. RECOMENDAÇÃO FINAL');
+  log(sep2);
+  log('');
+  log('  ╔══════════════════════════════════════════════════════════════════╗');
+  log('  ║  IMPOST. — Relatório de Otimização Tributária Concluído         ║');
+  log('  ╚══════════════════════════════════════════════════════════════════╝');
+  log('');
+  log(`  Empresa:           ${empresa.nome}`);
+  log(`  Receita Anual:     ${_fmtBRL(empresa.receitaBrutaAnual)}`);
+  log(`  Regime Atual:      Simples Nacional — Anexo ${anexo}`);
+  log(`  Alíquota Efetiva:  ${dasSemOtim.aliquotaEfetivaFormatada}`);
+  log(`  Carga Anual:       ${_fmtBRL(anualResult.cargaTributariaTotal)} (${anualResult.percentualCargaFormatado})`);
+  log('');
+  log('  Use gerarRelatorioOtimizacao() para o relatório completo SaaS.');
+  log('');
+  log(sep);
+  log(' IMPOST. v4.0 — Porque pagar imposto certo é direito.');
+  log('                 Pagar menos, legalmente, é inteligência.');
+  log(sep);
+  log('');
 }
 
 // Executar demonstração se chamado diretamente
