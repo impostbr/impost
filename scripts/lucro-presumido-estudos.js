@@ -9,10 +9,17 @@
  * Arquitetura:
  *   HTML (UI/render) → lucro-presumido-estudos.js (análise) → lucro_presumido.js (motor)
  *
- * Versão: 2.4.0
+ * Versão: 2.5.0
  * Data: Fevereiro/2026
  *
  * Changelog:
+ *   v2.5.0 (Fevereiro/2026):
+ *     - FIX AUDITORIA: ISS não incide sobre comércio — Dica de ICMS adicionada
+ *       para atividades de comércio/indústria, alertando que ICMS não está incluso.
+ *     - FIX AUDITORIA: Elegibilidade — receita string com formatação BR agora aceita
+ *     - FIX AUDITORIA: DEFAULTS.aliquotaISS ajustado para 0.03 (3%) como padrão mais razoável
+ *     - FIX AUDITORIA: Propagação de receitas[] no gerarCalendarioTributario via consolidado
+ *     - MELHORIA: Dica explícita quando atividade é comércio e ISS não se aplica
  *   v2.4.0 (Fevereiro/2026):
  *     - NOVO: Propagação completa de benefícios fiscais (ZFM, SUFRAMA, exportação, SUDAM/SUDENE, 16%)
  *     - NOVO: Dicas contextuais: SUDENE, ZFM, exportação, percentual 16%, regime caixa, ISS misto
@@ -43,7 +50,7 @@
 
   var DEFAULTS = {
     atividadeId: 'servicos_gerais',
-    aliquotaISS: 0.05,
+    aliquotaISS: 0.03,              // FIX AUDITORIA: 3% como padrão mais razoável (antes 5%)
     aliquotaRAT: 0.03,
     aliquotaTerceiros: 0.005,
     creditosPISCOFINS: 0,
@@ -553,6 +560,24 @@
         tipo: 'info',
         impactoEstimado: null
       });
+    }
+
+    // ── Dica 8e (FIX AUDITORIA): ICMS não incluído para comércio/indústria ──
+    if (percentualPresuncao <= 0.08 || (numReceitas > 1)) {
+      // Atividade é comércio (8%) ou mista — alertar sobre ICMS
+      var atividadeEhComercio = percentualPresuncao <= 0.08;
+      if (atividadeEhComercio) {
+        dicas.push({
+          titulo: '🏪 ICMS NÃO incluído — Atividade de comércio/indústria',
+          descricao: 'Este cálculo NÃO inclui ICMS nem IPI. Sua atividade principal é comércio/indústria (presunção '
+            + _arredondar(percentualPresuncao * 100, 1) + '%), sujeita ao ICMS estadual. '
+            + 'A alíquota de ICMS varia de 7% a 25% conforme UF e produto (LC 87/1996). '
+            + 'ISS NÃO se aplica a vendas de mercadorias — o ISS é tributo sobre serviços (LC 116/2003). '
+            + 'A carga tributária real é MAIOR do que a apresentada. Consulte seu contador para o cálculo completo.',
+          tipo: 'alerta',
+          impactoEstimado: null
+        });
+      }
     }
 
     // ── Dica existente 6: Adicional IRPJ ──
@@ -1677,7 +1702,7 @@
     _testarEstudo: _testarEstudo,
 
     // Versão
-    VERSION: '2.4.0'  // v2.4.0: benefícios fiscais completos, dicas ZFM/SUDENE/16%, comparativo SUDAM
+    VERSION: '2.5.0'  // v2.5.0: fix auditoria ISS comércio, ICMS alert, elegibilidade parsing
   };
 
   if (typeof module !== 'undefined' && module.exports) {
