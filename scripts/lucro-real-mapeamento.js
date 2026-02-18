@@ -1,19 +1,9 @@
 /**
  * ╔══════════════════════════════════════════════════════════════════════════════╗
- * ║  LUCRO REAL — MAPEAMENTO UNIFICADO DE DADOS  v3.4 (CORREÇÕES ECONOMIA JCP) ║
+ * ║  LUCRO REAL — MAPEAMENTO UNIFICADO DE DADOS  v3.3 (CORREÇÕES FISCAIS)    ║
  * ║  Fonte única de verdade para alimentar qualquer HTML ou JS                 ║
  * ║  Base Legal: RIR/2018 (Decreto 9.580/2018) + Lei 12.973/2014              ║
  * ║  Ano-Base: 2026                                                           ║
- * ╠══════════════════════════════════════════════════════════════════════════════╣
- * ║  CORREÇÕES v3.4 (alinhamento economia JCP):                               ║
- * ║                                                                            ║
- * ║  [FIX BUG 1 — CRÍTICO] Economia JCP zerava compensação de prejuízo       ║
- * ║    - simulacaoCompleta fallback: irpjSem não passava prejuizoFiscal,      ║
- * ║      zerando compensação no cenário base. Economia JCP usava flat-rate    ║
- * ║      (jcp.economiaLiquida) sem recalcular trava 30% sobre base reduzida. ║
- * ║    - Agora: 3 cenários isolam efeitos (RAW / SEM JCP+COM comp / COM JCP) ║
- * ║    - Ref: Art. 580 RIR/2018 — trava 30% sobre lucro ajustado             ║
- * ║                                                                            ║
  * ╠══════════════════════════════════════════════════════════════════════════════╣
  * ║  CORREÇÕES v3.3 (alinhamento com Motor v5.0 — riscos fiscais):            ║
  * ║                                                                            ║
@@ -142,7 +132,7 @@
       artigoBase: 'Lei 10.637/02 (PIS) + Lei 10.833/03 (COFINS)'
     },
     jcp: {
-      irrfAliquota: 0.15,               // 15% IRRF na fonte
+      irrfAliquota: 0.175,              // 17,5% IRRF na fonte (LC 224/2025)
       limiteLucroLiquido: 0.50,          // 50% do lucro líquido
       limiteLucrosAcumulados: 0.50,      // 50% de lucros acumulados + reservas
       artigoBase: 'Art. 355-358 do RIR/2018',
@@ -244,7 +234,7 @@
     INSTITUICOES_FINANCEIRAS: {
       label: 'Instituições Financeiras',
       irpj: 0.16, csll: 0.12,
-      aliquotaEfetivaIRPJ: 0.024, aliquotaEfetivaCSLL: 0.0108,
+      aliquotaEfetivaIRPJ: 0.024, aliquotaEfetivaCSLL: 0.018,
       artigo: 'Art. 220, §1º, II, b + Art. 223'
     },
     SERVICOS_GERAL: {
@@ -517,7 +507,7 @@
     csrfCsll:              { codigo: '5987', tributo: 'CSLL Retido', descricao: 'CSLL Retido — CSRF', periodicidade: 'Quinzenal', prazo: 'Até o último dia útil da quinzena subsequente' },
     csrfUnificado:         { codigo: '5952', tributo: 'CSRF', descricao: 'CSRF Unificado — Adm. Pública', periodicidade: 'Por evento', prazo: 'Até o 3º dia útil após o decêndio da retenção' },
     // JCP
-    jcpIrrf:               { codigo: '5706', tributo: 'IRRF s/ JCP', descricao: 'IRRF — JCP (15%)', periodicidade: 'Por evento', prazo: 'Até o 3º dia útil após o pagamento ou crédito' },
+    jcpIrrf:               { codigo: '5706', tributo: 'IRRF s/ JCP', descricao: 'IRRF — JCP (17,5% — LC 224/2025)', periodicidade: 'Por evento', prazo: 'Até o 3º dia útil após o pagamento ou crédito' },
     // Outros
     beneficiarioNaoId:     { codigo: '2063', tributo: 'IRRF', descricao: 'IRRF — Beneficiário Não Identificado (35%)', periodicidade: 'Por evento', prazo: 'Data do pagamento' }
   };
@@ -565,8 +555,8 @@
       formulaBruto: 'Bruto = Líquido / 0,65'
     },
     jcp: {
-      artigo: 'Art. 726 + Art. 355-358',
-      aliquota: 0.15,
+      artigo: 'Art. 726 + Art. 355-358 + LC 224/2025',
+      aliquota: 0.175,
       tratamento: 'ANTECIPAÇÃO (compensável com IRPJ devido)'
     },
     dividendos: {
@@ -852,7 +842,7 @@
   // ═══════════════════════════════════════════════════════════════════════════
 
   LR.estrategiasEconomia = [
-    { id: 1, nome: 'JCP — Juros sobre Capital Próprio', tipo: 'Dedução', complexidade: 'Baixa', risco: 'Baixo', impacto: '19% líquido do JCP pago', artigo: 'Art. 355-358' },
+    { id: 1, nome: 'JCP — Juros sobre Capital Próprio', tipo: 'Dedução', complexidade: 'Baixa', risco: 'Baixo', impacto: '16,5% líquido do JCP pago (LC 224/2025)', artigo: 'Art. 355-358' },
     { id: 2, nome: 'Compensação de Prejuízos Fiscais', tipo: 'Compensação', complexidade: 'Baixa', risco: 'Baixo', impacto: 'Até 30% do lucro ajustado', artigo: 'Art. 580-590' },
     { id: 3, nome: 'Incentivos Fiscais (PAT, FIA, Rouanet)', tipo: 'Dedução IRPJ', complexidade: 'Média', risco: 'Baixo', impacto: '~10% do IRPJ normal', artigo: 'Art. 226/228' },
     { id: 4, nome: 'Balanço de Suspensão/Redução', tipo: 'Timing', complexidade: 'Média', risco: 'Baixo', impacto: 'Até 100% da estimativa mensal', artigo: 'Art. 227-230' },
@@ -928,16 +918,20 @@
   // ═══════════════════════════════════════════════════════════════════════════
 
   LR.tabelaIRPF = {
-    anoBase: 2025,
+    anoBase: 2026,
     faixas: [
-      { ate: 2259.20, aliquota: 0, deducao: 0, descricao: 'Isento' },
-      { ate: 2826.65, aliquota: 0.075, deducao: 169.44 },
-      { ate: 3751.05, aliquota: 0.15, deducao: 381.44 },
-      { ate: 4664.68, aliquota: 0.225, deducao: 662.77 },
-      { acima: 4664.68, aliquota: 0.275, deducao: 896.00 }
+      { ate: 2428.80, aliquota: 0, deducao: 0, descricao: 'Isento' },
+      { ate: 2826.65, aliquota: 0.075, deducao: 182.16 },
+      { ate: 3751.05, aliquota: 0.15, deducao: 394.16 },
+      { ate: 4664.68, aliquota: 0.225, deducao: 675.49 },
+      { acima: 4664.68, aliquota: 0.275, deducao: 908.73 }
     ],
     deducaoDependente: 189.59,
-    nota: 'Verificar tabela atualizada para 2026'
+    descontoSimplificado: 607.20,
+    redutorMaximo: 312.89,
+    faixaIsencaoRedutor: 5000.00,
+    faixaReducaoParcial: 7350.00,
+    nota: 'MP 1.294/2025 (faixas) + Lei 15.270/2025 (redutor até R$5.000 isento)'
   };
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -1314,9 +1308,14 @@
       var lim2 = d.lucrosAcumulados * 0.50;
       var limiteLegal = Math.max(lim1, lim2);
       var jcpDedutivel = Math.max(0, Math.min(maxTJLP, limiteLegal));
-      var economiaIRPJ = jcpDedutivel * 0.25;
-      var economiaCSLL = jcpDedutivel * 0.09;
-      var custoIRRF = jcpDedutivel * 0.15;
+      var limAdicPeriodo = LR.aliquotas.irpj.limiteAdicionalMes * (d.numMeses || 12);
+      var baseAntes = Math.max(d.lucroLiquidoAntes || 0, 0);
+      var baseApos = Math.max(baseAntes - jcpDedutivel, 0);
+      var irpjAntes = baseAntes * LR.aliquotas.irpj.normal + Math.max(0, baseAntes - limAdicPeriodo) * LR.aliquotas.irpj.adicional;
+      var irpjApos = baseApos * LR.aliquotas.irpj.normal + Math.max(0, baseApos - limAdicPeriodo) * LR.aliquotas.irpj.adicional;
+      var economiaIRPJ = irpjAntes - irpjApos;
+      var economiaCSLL = jcpDedutivel * (LR.aliquotas.csll.geral || 0.09);
+      var custoIRRF = jcpDedutivel * LR.aliquotas.jcp.irrfAliquota;
 
       return {
         jcpMaximoTJLP: _r(maxTJLP),
@@ -1393,7 +1392,7 @@
       var irpjAdicional = Math.max(baseIRPJ - 20000, 0) * 0.10;
       var irpjDevido = irpjNormal + irpjAdicional;
       var deducoes = Math.min(d.incentivosDedutiveis || 0, irpjNormal);
-      var irpjAPagar = irpjDevido - deducoes - (d.irrfCompensavel || 0);
+      var irpjAPagar = Math.max(irpjDevido - deducoes - (d.irrfCompensavel || 0), 0);
       // CORREÇÃO: Usar alíquota correta de CSLL (15% para inst. financeiras, 9% demais)
       var aliqCSLL = (d.financeira === true || d.financeira === 'true') ? 0.15 : 0.09;
       var csllDevida = baseCSLL * aliqCSLL;
@@ -1759,7 +1758,7 @@
       }, dados);
 
       var exclusoes = d.receitasFinanceirasLiquidas + Math.max(d.resultadoMEP, 0) +
-        d.resultadoNaoOperacional + d.receitasAnteriores;
+        Math.max(d.resultadoNaoOperacional, 0) + d.receitasAnteriores;
       var adicoes = d.csllDevida + d.despFinLiquidas + Math.abs(Math.min(d.resultadoMEP, 0));
       var lucroExploracao = d.lucroLiquido - exclusoes + adicoes;
       var reducao75 = Math.max(lucroExploracao, 0) * LR.aliquotas.irpj.normal * 0.75;
@@ -1874,11 +1873,12 @@
       var lucroRealCorrente = lucroAjustado;
       var baseCSLLCorrente = lucroAjustado;
 
-      // Helper local para IRPJ (fallback apenas)
+      // Helper local para IRPJ (fallback — usa limiar correto por período)
+      var _limAdicFallback = d.trimestral ? LR.aliquotas.irpj.limiteAdicionalTrimestre : LR.aliquotas.irpj.limiteAdicionalAno;
       function _calcIRPJFallback(lr) {
         if (lr <= 0) return 0;
         var n = lr * LR.aliquotas.irpj.normal;
-        var a = Math.max(0, lr - LR.aliquotas.irpj.limiteAdicionalAno) * LR.aliquotas.irpj.adicional;
+        var a = Math.max(0, lr - _limAdicFallback) * LR.aliquotas.irpj.adicional;
         return n + a;
       }
 
@@ -2360,12 +2360,32 @@
         totalDeducao += deducaoFinal;
       }
 
+      // Art. 625, RIR/2018: limite global de 4% do IRPJ normal para incentivos sujeitos
+      var IDS_SUJEITOS_TETO = ['PAT','FIA','FUNDO_IDOSO','ROUANET','AUDIOVISUAL','ESPORTE'];
+      var limiteGlobal4 = irpjNormal * 0.04;
+      var totalSujeito = 0;
+      for (var j = 0; j < resultado.length; j++) {
+        if (IDS_SUJEITOS_TETO.indexOf(resultado[j].incentivo) >= 0) totalSujeito += resultado[j].deducaoFinal;
+      }
+      if (totalSujeito > limiteGlobal4 && limiteGlobal4 > 0) {
+        var fatorCorte = limiteGlobal4 / totalSujeito;
+        totalDeducao = 0;
+        for (var k = 0; k < resultado.length; k++) {
+          if (IDS_SUJEITOS_TETO.indexOf(resultado[k].incentivo) >= 0) {
+            resultado[k].deducaoFinal = _r(resultado[k].deducaoFinal * fatorCorte);
+          }
+          totalDeducao += resultado[k].deducaoFinal;
+        }
+      }
+
       var totalFinal = Math.min(totalDeducao, irpjNormal);
 
       return {
         incentivos: resultado,
         totalDeducaoCalculada: _r(totalDeducao),
         totalDeducaoFinal: _r(totalFinal),
+        limiteGlobal4Pct: _r(limiteGlobal4),
+        tetoGlobalAplicado: totalSujeito > limiteGlobal4,
         irpjNormal: irpjNormal,
         percentualUtilizado: irpjNormal > 0
           ? _r(totalFinal / irpjNormal * 100) + '%'
@@ -2835,26 +2855,7 @@
       var jcpDedutivel = jcpValido ? jcp.jcpDedutivel : 0;
       var lucroAjustado = e.lucroLiquido - jcpDedutivel;
 
-      // ── v3.4 FIX BUG 1 (CRÍTICO): Economia JCP com compensação de prejuízo ativa ──
-      // Antes: irpjSem não passava prejuizoFiscal, zerando a compensação no cenário
-      // base, e economiaJCP usava flat-rate (jcp.economiaLiquida) ignorando trava 30%.
-      // Agora: 3 cenários isolam cada efeito corretamente.
-
-      // (A) Cenário RAW — sem nenhuma otimização (para exibição em semOtimizacao)
-      var irpjRaw = LR.calcular.irpj({ lucroLiquido: e.lucroLiquido, adicoes: e.adicoes, exclusoes: e.exclusoes, numMeses: e.numMeses });
-
-      // (B) Cenário SEM JCP, COM compensação de prejuízo (baseline para isolar economia JCP)
-      var irpjSemJCP = LR.calcular.irpj({
-        lucroLiquido: e.lucroLiquido, adicoes: e.adicoes, exclusoes: e.exclusoes,
-        prejuizoFiscal: e.prejuizoFiscal, numMeses: e.numMeses,
-        retencoesFonte: e.retencoesFonte, estimativasPagas: e.estimativasPagas
-      });
-      var csllSemJCP = LR.calcular.csll({
-        lucroLiquido: e.lucroLiquido, adicoes: e.adicoes, exclusoes: e.exclusoes,
-        baseNegativa: e.baseNegativaCSLL
-      });
-
-      // (C) Cenário COM JCP, COM compensação recalculada (trava 30% sobre base reduzida)
+      var irpjSem = LR.calcular.irpj({ lucroLiquido: e.lucroLiquido, adicoes: e.adicoes, exclusoes: e.exclusoes, numMeses: e.numMeses });
       var irpjCom = LR.calcular.irpj({
         lucroLiquido: lucroAjustado, adicoes: e.adicoes, exclusoes: e.exclusoes,
         prejuizoFiscal: e.prejuizoFiscal, numMeses: e.numMeses,
@@ -2862,18 +2863,12 @@
       });
       var csll = LR.calcular.csll({ lucroLiquido: lucroAjustado, adicoes: e.adicoes, exclusoes: e.exclusoes, baseNegativa: e.baseNegativaCSLL });
 
-      // Economia JCP isolada: (B) - (C) - custo IRRF
-      var custoIRRFJCP = jcpValido ? jcp.custoIRRF : 0;
-      var economiaJCP = jcpValido
-        ? _r((irpjSemJCP.irpjDevido - irpjCom.irpjDevido) + (csllSemJCP.csllDevida - csll.csllDevida) - custoIRRFJCP)
-        : 0;
+      // v3.3 FIX E2#1: Calcular economia CSLL (comparando cenário sem vs com base negativa)
+      var csllSem = LR.calcular.csll({ lucroLiquido: lucroAjustado, adicoes: e.adicoes, exclusoes: e.exclusoes, baseNegativa: 0 });
+      var economiaCSLL = _r(csllSem.csllDevida - csll.csllDevida);
 
-      // Economia compensação IRPJ isolada: (A) - (B)
-      var economiaIRPJ = _r(irpjRaw.irpjDevido - irpjSemJCP.irpjDevido);
-
-      // Economia compensação CSLL isolada: CSLL sem compensação - CSLL com compensação (sobre base sem JCP)
-      var csllSemComp = LR.calcular.csll({ lucroLiquido: e.lucroLiquido, adicoes: e.adicoes, exclusoes: e.exclusoes, baseNegativa: 0 });
-      var economiaCSLL = _r(csllSemComp.csllDevida - csllSemJCP.csllDevida);
+      var economiaJCP = jcpValido ? jcp.economiaLiquida : 0;
+      var economiaIRPJ = irpjSem.irpjDevido - irpjCom.irpjDevido;
 
       // v3.3 FIX #6: PIS/COFINS integrado no fallback
       var pisCofins = null;
@@ -2947,7 +2942,7 @@
         : (pisCofinsBruto - pisCofinsLiquido)) : 0;
 
       return {
-        semOtimizacao: { irpjDevido: irpjRaw.irpjDevido, aliquotaEfetiva: irpjRaw.aliquotaEfetiva },
+        semOtimizacao: { irpjDevido: irpjSem.irpjDevido, aliquotaEfetiva: irpjSem.aliquotaEfetiva },
         comOtimizacao: { irpj: irpjCom, csll: csll, jcp: jcp, pisCofins: pisCofins },
         economia: { jcp: economiaJCP, irpj: _r(economiaIRPJ), csll: economiaCSLL, pisCofins: _r(economiaPisCofins), total: _r(economiaIRPJ + economiaJCP + economiaCSLL + economiaPisCofins) },
         totalAPagar: {
