@@ -198,7 +198,7 @@ const PRESUNCOES = {
     artigo: 'Art. 220, §1º, II, b + Art. 223',
     descricao: 'Bancos, financeiras, seguradoras, etc.',
     aliquotaEfetivaIRPJ: 0.16 * 0.15,
-    aliquotaEfetivaCSLL: 0.12 * 0.09,
+    aliquotaEfetivaCSLL: 0.12 * 0.15,
   },
   SERVICOS_GERAL: {
     irpj: 0.32,
@@ -1125,7 +1125,8 @@ function calcularEstimativaMensal(dados) {
   // CSLL estimada (mesma lógica mas com presunção CSLL)
   // CORREÇÃO: Usar alíquota correta de CSLL (15% para inst. financeiras, 9% demais)
   const baseCSLL = receitaBrutaMensal * presuncao.csll + ganhosCapital + demaisReceitas;
-  const aliqCSLLEstimativa = (dados.financeira === true) ? CONSTANTES.CSLL_ALIQUOTA_FINANCEIRAS : CONSTANTES.CSLL_ALIQUOTA_GERAL;
+  const ehFinanceira = dados.financeira === true || tipoAtividade === 'INSTITUICOES_FINANCEIRAS';
+  const aliqCSLLEstimativa = ehFinanceira ? CONSTANTES.CSLL_ALIQUOTA_FINANCEIRAS : CONSTANTES.CSLL_ALIQUOTA_GERAL;
   const csllDevida = baseCSLL * aliqCSLLEstimativa;
 
   return {
@@ -1352,12 +1353,19 @@ function calcularJCP(dados) {
   const limiteLegal = Math.max(limite1, limite2);
   const jcpDedutivel = Math.max(0, Math.min(jcpMaximoTJLP, limiteLegal));
 
-  // Economia tributária
-  const economiaIRPJ = jcpDedutivel * 0.25;    // 15% + 10% adicional
-  const economiaCSLL = jcpDedutivel * 0.09;
-  const economiaTotal = economiaIRPJ + economiaCSLL;  // 34% da base
+  // Economia tributária — diferença incremental de IRPJ (respeita faixa do adicional)
+  const limiteAdicionalPeriodo = CONSTANTES.IRPJ_LIMITE_ADICIONAL_MES * numMeses;
+  const lucroBaseAntesJCP = Math.max(0, lucroLiquidoAntes);
+  const lucroBaseAposJCP = Math.max(0, lucroLiquidoAntes - jcpDedutivel);
+  const irpjAntesJCP = lucroBaseAntesJCP * CONSTANTES.IRPJ_ALIQUOTA_NORMAL
+    + Math.max(0, lucroBaseAntesJCP - limiteAdicionalPeriodo) * CONSTANTES.IRPJ_ALIQUOTA_ADICIONAL;
+  const irpjAposJCP = lucroBaseAposJCP * CONSTANTES.IRPJ_ALIQUOTA_NORMAL
+    + Math.max(0, lucroBaseAposJCP - limiteAdicionalPeriodo) * CONSTANTES.IRPJ_ALIQUOTA_ADICIONAL;
+  const economiaIRPJ = irpjAntesJCP - irpjAposJCP;
+  const economiaCSLL = jcpDedutivel * CONSTANTES.CSLL_ALIQUOTA_GERAL;
+  const economiaTotal = economiaIRPJ + economiaCSLL;
 
-  // Custo do JCP (IRRF 15% retido do beneficiário)
+  // Custo do JCP (IRRF 17,5% retido do beneficiário — LC 224/2025)
   const custoIRRF = jcpDedutivel * CONSTANTES.JCP_IRRF_ALIQUOTA;
 
   // Economia líquida
@@ -1450,8 +1458,10 @@ function calcularDepreciacao(bem) {
     depreciacaoAno,
     novaDepAcumulada: depAcumulada + depreciacaoAno,
     totalmenteDepreciado: (depAcumulada + depreciacaoAno) >= custoAquisicao,
-    economiaIRPJ: depreciacaoAno * 0.25,
-    economiaCSLL: depreciacaoAno * 0.09,
+    economiaIRPJ: bem.lucroReal != null
+      ? _calcularIRPJ(bem.lucroReal) - _calcularIRPJ(bem.lucroReal - depreciacaoAno)
+      : depreciacaoAno * CONSTANTES.IRPJ_ALIQUOTA_NORMAL,
+    economiaCSLL: depreciacaoAno * CONSTANTES.CSLL_ALIQUOTA_GERAL,
     artigos: 'Art. 311-330',
   };
 }
@@ -3153,7 +3163,8 @@ function compensarPrejuizoNaoOperacional(dados) {
   resultado.ajusteLalur.valor = resultado.compensacaoEfetiva;
 
   // Economia
-  resultado.economia.irpj = resultado.compensacaoEfetiva * ALIQUOTAS.irpj.normal;
+  resultado.economia.irpj = _calcularIRPJ(lucroNaoOperacional)
+    - _calcularIRPJ(lucroNaoOperacional - resultado.compensacaoEfetiva);
   resultado.economia.total = resultado.economia.irpj;
 
   resultado.observacoes.push(
@@ -3360,9 +3371,7 @@ function compensarIntegrado(dados) {
     });
     resultado.etapa2_compensacaoNaoOperacional = compNaoOp;
 
-    // O valor compensado do prejuízo não-operacional reduz o lucro real geral
     lucroRealCorrente -= compNaoOp.compensacaoEfetiva;
-    baseCSLLCorrente -= compNaoOp.compensacaoEfetiva;
     resultado.resumo.totalCompensado += compNaoOp.compensacaoEfetiva;
     resultado.resumo.saldosPosCompensacao.prejuizoNaoOperacional = compNaoOp.saldoPrejuizoRemanescente;
   }
@@ -8061,7 +8070,7 @@ const LEI_12973 = {
       paragrafo12: 'Inclui todas as espécies de ações do Art. 15 da Lei 6.404/76, ainda que classificadas em conta de passivo na escrituração comercial (§12)'
     },
     aplicaCSLL: 'Art. 9º, §11 — o disposto aplica-se também à CSLL',
-    impactoRetencao: 'IRRF 15% sobre JCP calculado com base nestas contas do PL (Art. 726 RIR). Se PL inclui passivo reclassificado como ação, a base de JCP é maior → maior IRRF retido.',
+    impactoRetencao: 'IRRF 17,5% sobre JCP calculado com base nestas contas do PL (Art. 726 RIR + LC 224/2025). Se PL inclui passivo reclassificado como ação, a base de JCP é maior → maior IRRF retido.',
   },
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -9408,7 +9417,7 @@ function calcularJCPLei12973(params) {
 
   // JCP = PL × TJLP (limitado a 50% do lucro líquido do exercício ou 50% dos lucros acumulados)
   const jcpCalculado = Math.round(basePL * taxaTJLP * 100) / 100;
-  const irrfRetido = Math.round(jcpCalculado * 0.15 * 100) / 100;
+  const irrfRetido = Math.round(jcpCalculado * CONSTANTES.JCP_IRRF_ALIQUOTA * 100) / 100;
 
   let tratamento;
   switch (tipoBeneficiario) {
@@ -9419,6 +9428,10 @@ function calcularJCPLei12973(params) {
     default:
       tratamento = 'Tributação definitiva (Art. 726 §1º, II)';
   }
+
+  const economiaIRPJ = Math.round(jcpCalculado * (CONSTANTES.IRPJ_ALIQUOTA_NORMAL + CONSTANTES.IRPJ_ALIQUOTA_ADICIONAL) * 100) / 100;
+  const economiaCSLL = Math.round(jcpCalculado * CONSTANTES.CSLL_ALIQUOTA_GERAL * 100) / 100;
+  const economiaTotal = Math.round((economiaIRPJ + economiaCSLL) * 100) / 100;
 
   return {
     artigo: 'Art. 9º da Lei 9.249/1995 c/c Lei 12.973/2014, art. 9º (§§8º-12)',
@@ -9437,7 +9450,7 @@ function calcularJCPLei12973(params) {
       referencia: 'Art. 9º, §1º da Lei 9.249/1995'
     },
     irrfRetido,
-    aliquotaIRRF: '15%',
+    aliquotaIRRF: `${(CONSTANTES.JCP_IRRF_ALIQUOTA * 100).toFixed(1)}%`,
     jcpLiquido: Math.round((jcpCalculado - irrfRetido) * 100) / 100,
     tipoBeneficiario,
     tratamento,
@@ -9445,12 +9458,12 @@ function calcularJCPLei12973(params) {
     codigoDARF: '5706',
     impactoFiscal: {
       deducaoLucroReal: jcpCalculado,
-      economiaIRPJ: Math.round(jcpCalculado * 0.25 * 100) / 100,  // 15% + 10% adicional (simplificado)
-      economiaCSLL: Math.round(jcpCalculado * 0.09 * 100) / 100,
-      economiaTotal: Math.round(jcpCalculado * 0.34 * 100) / 100,
+      economiaIRPJ,
+      economiaCSLL,
+      economiaTotal,
       custoIRRF: irrfRetido,
-      beneficioLiquido: Math.round((jcpCalculado * 0.34 - irrfRetido) * 100) / 100,
-      nota: 'Benefício líquido = economia tributária (34%) - custo IRRF retido (15%)'
+      beneficioLiquido: Math.round((economiaTotal - irrfRetido) * 100) / 100,
+      nota: `Benefício líquido = economia tributária (${((CONSTANTES.IRPJ_ALIQUOTA_NORMAL + CONSTANTES.IRPJ_ALIQUOTA_ADICIONAL + CONSTANTES.CSLL_ALIQUOTA_GERAL) * 100).toFixed(0)}%) - custo IRRF retido (${(CONSTANTES.JCP_IRRF_ALIQUOTA * 100).toFixed(1)}%) — LC 224/2025`
     }
   };
 }
