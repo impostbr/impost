@@ -5,8 +5,25 @@
  *
  * AGROGEO BRASIL - Geotecnologia e Consultoria Ambiental
  * Autor: Luis Fernando | Proprietário AGROGEO BRASIL
- * Versão: 3.7.2
+ * Versão: 3.8.0
  * Data: Fevereiro/2026
+ *
+ * Changelog v3.8.0:
+ *   - FIX AUDITORIA 1: gerarCalendarioTributario() — ISS agora incide APENAS sobre
+ *     receitas de serviços (presunção IRPJ >= 16%), NÃO sobre comércio/indústria.
+ *     Novo param receitas[] permite segregar atividades. (LC 116/2003)
+ *   - FIX AUDITORIA 2: calcularAnualConsolidado() — Adicionado alerta explícito sobre
+ *     ausência de ICMS/IPI no cálculo. Receitas de comércio/indústria agora geram
+ *     campo alertaICMS com estimativa e referência legal.
+ *   - FIX AUDITORIA 3: verificarElegibilidade() — Validação defensiva contra valores
+ *     formatados com separadores BR (ex: "4.000.000,00" lido como 400M). Novo campo
+ *     valorRecebido no retorno para debug. Mensagem de erro mais clara.
+ *   - FIX AUDITORIA 4: LC 224/2025 CSLL — Adicionado campo transparenciaLC224 no
+ *     retorno trimestral para deixar explícito que T1/2026 usa percentuais ANTIGOS
+ *     (12% CSLL) e T2-T4 usam majorados (13,2% CSLL) quando exceder R$ 5M.
+ *   - MELHORIA AUDITORIA 5: Novo alerta de persistência de dados no disclaimerLegal.
+ *   - MELHORIA AUDITORIA 6: gerarCalendarioTributario() — Alerta ICMS para atividades
+ *     de comércio, indicando que o tributo não está incluso.
  *
  * Changelog v3.7.2:
  *   - BUG 2 FIX (DEFINITIVO): INSS Sócio — calcularINSSSocio() agora usa tabela
@@ -1205,15 +1222,41 @@ function verificarElegibilidade(dados) {
     dados.receitaBrutaAnualAnterior = dados.receitaBrutaAnual;
   }
 
-  if (typeof dados.receitaBrutaAnualAnterior !== 'number') {
+  // FIX AUDITORIA 3: Validação defensiva contra valores formatados com separadores BR.
+  // Problema detectado: "4.000.000,00" digitado no input → parseFloat lê "4" → multiplica por 100
+  // ou lê "4000000.00" como 4 bilhões se separadores não forem tratados.
+  // Solução: se receber string, tentar converter; se receber número, validar faixa de sanidade.
+  if (typeof dados.receitaBrutaAnualAnterior === 'string') {
+    // Converter formato BR (1.234.567,89) para número
+    let valorStr = dados.receitaBrutaAnualAnterior
+      .replace(/\s/g, '')          // remover espaços
+      .replace(/R\$/g, '')         // remover símbolo R$
+      .replace(/\./g, '')          // remover separador de milhar
+      .replace(/,/g, '.');         // trocar vírgula decimal por ponto
+    const valorConvertido = parseFloat(valorStr);
+    if (isNaN(valorConvertido)) {
+      throw new Error('verificarElegibilidade: receitaBrutaAnualAnterior não é um valor numérico válido. Valor recebido: "' + dados.receitaBrutaAnualAnterior + '".');
+    }
+    dados.receitaBrutaAnualAnterior = valorConvertido;
+  }
+
+  if (typeof dados.receitaBrutaAnualAnterior !== 'number' || isNaN(dados.receitaBrutaAnualAnterior)) {
     throw new Error('verificarElegibilidade: receitaBrutaAnualAnterior é obrigatório e deve ser numérico.');
+  }
+
+  // FIX AUDITORIA 3: Validação de sanidade — se valor parece absurdamente alto,
+  // pode ser um erro de parsing (ex: 4.000.000 lido como 4000000000)
+  if (dados.receitaBrutaAnualAnterior > 10_000_000_000) {
+    console.warn('verificarElegibilidade: ATENÇÃO — Receita informada R$ ' + _formatarMoeda(dados.receitaBrutaAnualAnterior)
+      + ' parece muito alta (> R$ 10 bilhões). Verifique se o valor foi formatado corretamente.');
   }
 
   const resultado = {
     elegivel: true,
     impedimentos: [],
     alertas: [],
-    limiteAplicavel: LIMITE_RECEITA_BRUTA_ANUAL
+    limiteAplicavel: LIMITE_RECEITA_BRUTA_ANUAL,
+    valorRecebido: dados.receitaBrutaAnualAnterior  // FIX AUDITORIA 3: campo para debug
   };
 
   // Ajuste de limite proporcional se atividade < 12 meses
@@ -1555,7 +1598,19 @@ function calcularLucroPresumidoTrimestral(params) {
       impactoBaseCSLL: _arredondar(impactoLC224TotalCSLL),
       impactoIRPJ: _arredondar(impactoLC224TotalIRPJ * ALIQUOTA_IRPJ),
       impactoCSLL: _arredondar(impactoLC224TotalCSLL * ALIQUOTA_CSLL),
-      baseLegal: 'LC 224/2025, Art. 4º, §4º, VII; §5º'
+      baseLegal: 'LC 224/2025, Art. 4º, §4º, VII; §5º',
+      // FIX AUDITORIA 4: Transparência sobre vigência da majoração
+      transparencia: {
+        trimestreAtual: trimestreAtual,
+        anoCalendario: anoCalendario,
+        vigenciaIRPJ: trimestreAtual >= 2 && anoCalendario >= 2026
+          ? 'ATIVA — Acréscimo 10% aplicável a partir do 2º trimestre 2026'
+          : 'INATIVA — 1º trimestre 2026 usa percentuais ANTIGOS (anterioridade nonagesimal CF Art. 150, III, "c")',
+        vigenciaCSLL: trimestreAtual >= 2 && anoCalendario >= 2026
+          ? 'ATIVA — CSLL majorada (ex: 12% → 13,2%) aplicável a partir do 2º trimestre 2026'
+          : 'INATIVA — 1º trimestre 2026 usa CSLL percentual ANTIGO (ex: 12% para comércio)',
+        nota: 'A LC 224/2025 entra em vigor em 01/04/2026 para IRPJ e CSLL. No 1º trimestre, os percentuais de presunção são os originais.'
+      }
     },
 
     // Percentual Reduzido 16% (IN RFB 1.700/2017, Art. 215, §10)
@@ -1975,6 +2030,22 @@ function calcularAnualConsolidado(params) {
     + beneficiosAplicados.exclusoesPISCOFINS.economiaTotalPISCOFINS
   );
 
+  // ── FIX AUDITORIA 2: Alerta ICMS/IPI para atividades de comércio/indústria ──
+  const receitaComercioIndustriaTotal = _arredondar(receitaBrutaAnual - receitaServicosAnual);
+  let alertaICMS = null;
+  if (receitaComercioIndustriaTotal > 0) {
+    alertaICMS = {
+      aplicavel: true,
+      receitaComercio: receitaComercioIndustriaTotal,
+      descricao: 'ATENÇÃO: ICMS e IPI NÃO estão incluídos neste cálculo. '
+        + 'Receitas de comércio/indústria (R$ ' + _formatarMoeda(receitaComercioIndustriaTotal) + '/ano) '
+        + 'estão sujeitas ao ICMS estadual (alíquota varia de 7% a 25% conforme UF e produto). '
+        + 'A carga tributária TOTAL real é maior que a apresentada aqui.',
+      baseLegal: 'LC 87/1996 (ICMS); Decreto 7.212/2010 (IPI)',
+      nota: 'Consulte seu contador para calcular ICMS/IPI conforme legislação do seu estado.'
+    };
+  }
+
   return {
     anoCalendario: params.anoCalendario || new Date().getFullYear(),
     regime: 'Lucro Presumido',
@@ -1997,6 +2068,7 @@ function calcularAnualConsolidado(params) {
         receitaComercioIndustria: _arredondar(receitaBrutaAnual - receitaServicosAnual),
         nota: 'ISS incide apenas sobre receitas de serviços (LC 116/2003). Receitas de comércio/indústria recolhem ICMS, não ISS.'
       },
+      alertaICMS: alertaICMS,
       inssPatronal: {
         anual: inssPatronalAnual,
         folhaCLT: folhaCLTAnual,
@@ -5040,8 +5112,30 @@ function gerarCalendarioTributario(params) {
     aliquotaINSSTotal = 0.235,
     diaVencimentoISS = 15,
     parcelarIRPJCSLL = false,
-    taxaSelicMensal = 0.01
+    taxaSelicMensal = 0.01,
+    receitas = [],                   // FIX AUDITORIA 1: Array de { atividadeId, valor } para segregar ISS
+    receitaBrutaAnual = 0            // FIX AUDITORIA 1: Receita total para fallback
   } = params;
+
+  // FIX AUDITORIA 1: Calcular fração de receita que é serviço (ISS) vs comércio (ICMS)
+  let fracaoServicos = 1; // fallback: tudo é serviço se não houver detalhamento
+  const receitaAnualEfetiva = receitaBrutaAnual || (anualConsolidado ? anualConsolidado.receitaBrutaAnual : 0) || 0;
+  if (receitas && receitas.length > 0 && receitaAnualEfetiva > 0) {
+    let receitaServicos = 0;
+    for (const rec of receitas) {
+      const ativIRPJ = PERCENTUAIS_PRESUNCAO_IRPJ.find(a => a.id === rec.atividadeId);
+      if (ativIRPJ && ativIRPJ.percentual >= 0.16) {
+        receitaServicos += (rec.valor || 0);
+      }
+    }
+    fracaoServicos = receitaServicos / receitaAnualEfetiva;
+  } else if (anualConsolidado && anualConsolidado.tributos && anualConsolidado.tributos.iss) {
+    // Usar dados do consolidado se disponível
+    const recServ = anualConsolidado.tributos.iss.receitaBaseServicos || 0;
+    if (receitaAnualEfetiva > 0) {
+      fracaoServicos = recServ / receitaAnualEfetiva;
+    }
+  }
 
   const mesesNomes = ['Janeiro','Fevereiro','Marco','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 
@@ -5143,13 +5237,15 @@ function gerarCalendarioTributario(params) {
     mesInfo.tributos.irpj.valor = _arredondar(mesInfo.tributos.irpj.valor);
     mesInfo.tributos.csll.valor = _arredondar(mesInfo.tributos.csll.valor);
 
-    // ISS — mensal
+    // ISS — mensal, APENAS sobre receitas de serviços (FIX AUDITORIA 1)
     const receitaMensal = detalhesMensais[m] ? (detalhesMensais[m].receitaBrutaMensal || 0) : 0;
-    const issValor = _arredondar(receitaMensal * aliquotaISS);
+    const receitaServicosMensal = _arredondar(receitaMensal * fracaoServicos);
+    const issValor = _arredondar(receitaServicosMensal * aliquotaISS);
     mesInfo.tributos.iss = {
       valor: issValor,
       vencimento: `Dia ${diaVencimentoISS}/${String(m + 1).padStart(2, '0')}`,
-      referencia: mesesNomes[m]
+      referencia: mesesNomes[m],
+      nota: fracaoServicos < 1 ? 'ISS calculado apenas sobre receitas de serviços (LC 116/2003).' : undefined
     };
 
     // INSS Patronal — GPS, dia 20 do mês seguinte (competência mês anterior)
@@ -5211,9 +5307,14 @@ function gerarCalendarioTributario(params) {
       'Vencimentos aproximados — verificar calendario de feriados do municipio.',
       'IRPJ/CSLL: quotas 2 e 3 acrescidas de SELIC acumulada + 1%.',
       'Quotas minimas de R$ 1.000,00. Abaixo disso: quota unica obrigatoria.',
-      'ISS: vencimento conforme legislacao municipal (padrao dia ' + diaVencimentoISS + ').',
-      'INSS Patronal: GPS, competencia do mes anterior.'
-    ],
+      fracaoServicos < 1
+        ? 'ISS: incide apenas sobre receitas de servicos (' + _arredondar(fracaoServicos * 100, 1) + '% da receita). Vencimento dia ' + diaVencimentoISS + '.'
+        : 'ISS: vencimento conforme legislacao municipal (padrao dia ' + diaVencimentoISS + ').',
+      'INSS Patronal: GPS, competencia do mes anterior.',
+      fracaoServicos < 1
+        ? 'ICMS/IPI: NAO incluidos neste calendario. Receitas de comercio/industria (' + _arredondar((1 - fracaoServicos) * 100, 1) + '% da receita) estao sujeitas ao ICMS estadual. Consulte seu contador.'
+        : null
+    ].filter(Boolean),
     baseLegal: 'Lei 9.430/96, Arts. 5o e 6o (quotas); RIR/2018, Art. 856 (vencimentos); Lei 9.718/98 (PIS/COFINS).'
   };
 }
@@ -6559,6 +6660,7 @@ function _executarDemonstracao() {
   const cal = gerarCalendarioTributario({
     anoCalendario: 2026,
     receitaBrutaAnual: 2350000,
+    receitas: [{ atividadeId: 'servicos_gerais', valor: 2350000 }],  // FIX AUDITORIA: segregar ISS
     irpjTrimestral: [28200, 28200, 28200, 28200],
     csllTrimestral: [16920, 16920, 16920, 16920],
     folhaPagamentoAnual: 1000000,
@@ -6572,7 +6674,7 @@ function _executarDemonstracao() {
   cal.picosCaixa.forEach(p => console.log(`    ${p.mes}: R$ ${_formatarMoeda(p.valor)}`));
 
   console.log('\n\n═══════════════════════════════════════════════════════');
-  console.log('  Demonstração concluída. Motor v3.6.1 — Todas as etapas (1-4) + Seções 17-32.');
+  console.log('  Demonstração concluída. Motor v3.8.0 — Todas as etapas (1-4) + Seções 17-32 + Correções Auditoria.');
   console.log('═══════════════════════════════════════════════════════\n');
 }
 
