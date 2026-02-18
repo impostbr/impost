@@ -1,6 +1,6 @@
 /**
  * ══════════════════════════════════════════════════════════════════════════════
- * MOTOR DE ANÁLISE E ESTUDO — LUCRO PRESUMIDO
+ * MOTOR DE ANÁLISE E ESTUDO — LUCRO PRESUMIDO  v3.0.0
  * ══════════════════════════════════════════════════════════════════════════════
  *
  * Camada intermediária entre o motor de cálculos (lucro_presumido.js) e o HTML.
@@ -8,34 +8,42 @@
  *
  * Arquitetura:
  *   HTML (UI/render) → lucro-presumido-estudos.js (análise) → lucro_presumido.js (motor)
+ *                                                            → estados.js (incentivos dinâmicos)
  *
- * Versão: 2.5.0
+ * Versão: 3.0.0
  * Data: Fevereiro/2026
  *
  * Changelog:
- *   v2.5.0 (Fevereiro/2026):
- *     - FIX AUDITORIA: ISS não incide sobre comércio — Dica de ICMS adicionada
- *       para atividades de comércio/indústria, alertando que ICMS não está incluso.
- *     - FIX AUDITORIA: Elegibilidade — receita string com formatação BR agora aceita
- *     - FIX AUDITORIA: DEFAULTS.aliquotaISS ajustado para 0.03 (3%) como padrão mais razoável
- *     - FIX AUDITORIA: Propagação de receitas[] no gerarCalendarioTributario via consolidado
- *     - MELHORIA: Dica explícita quando atividade é comércio e ISS não se aplica
- *   v2.4.0 (Fevereiro/2026):
- *     - NOVO: Propagação completa de benefícios fiscais (ZFM, SUFRAMA, exportação, SUDAM/SUDENE, 16%)
- *     - NOVO: Dicas contextuais: SUDENE, ZFM, exportação, percentual 16%, regime caixa, ISS misto
- *     - NOVO: Comparativo SUDAM/SUDENE (LP vs LR com benefício 75%)
- *     - NOVO: Economia potencial inclui ISS, INSS, ZFM, SUFRAMA, exportação, SUDAM
- *     - NOVO: Resumo executivo com seção benefícios fiscais
- *     - MELHORIA: calcularEstudoCompleto() aceita e propaga todos os novos parâmetros
- *   v2.3.1 (Fevereiro/2026):
- *     - FIX: _normalizeAliquota() — detecção inteligente de formato (inteiro vs decimal)
- *     - FIX: DEFAULTS.socios padronizado para usar "participacao" (consistência com motor v3.6.1)
- *     - FIX: _testarEstudo() usa "participacao" nos sócios de exemplo
- *     - FIX: Versão do cabeçalho sincronizada com VERSION exportado
- *   v2.3.0: Bug 8 alerta margem 100%, Melhoria 2 premissas break-even
- *   v2.0.0: Versão inicial com break-even, dicas, economia, LC 224, resumo executivo
+ *   v3.0.0 (Fevereiro/2026):
+ *     - REFACTOR: Integração com Estados.js — incentivos (SUDAM, SUDENE, ZFM, ALC, SUDECO)
+ *       são lidos dinamicamente de Estados.getIncentivosNormalizado(uf) e utils do estado.
+ *       Eliminado hardcoding de benefícios regionais. Cada estado define seus próprios
+ *       incentivos e o estudo lê de lá.
+ *     - FIX C1: "Margem Real" renomeada para "margemOperacionalBruta" em ambas as funções.
+ *       Adicionada margemLiquidaPosTributos opcional. Tooltip com fórmula.
+ *     - FIX C2: Economia Potencial separada em 3 categorias mutuamente exclusivas:
+ *       (1) Otimizações dentro do LP, (2) Economia por migração p/ LR, (3) Benefícios já aplicados.
+ *       totalEconomiaAnual = MAX(otimizacoesLP, migracaoLR), não soma.
+ *     - FIX C3: Break-even com premissas documentadas, fórmula exportada.
+ *     - FIX C4: _normalizeAliquota() eliminada. Alíquotas SEMPRE em percentual inteiro,
+ *       divididas por 100 internamente. Warning se valor parece decimal.
+ *     - FIX I1: ISS e INSS no break-even agora idênticos em ambos os lados (cancelam).
+ *     - FIX I2: aliqEfetivaIRPJCSLL calculada com precisão (adicional só sobre excedente).
+ *     - FIX I3: Dica SUDAM/SUDENE estima economia com base no lucro operacional, não presunção.
+ *     - FIX I4: receitaSazonal gera dica de regime de caixa quando true.
+ *     - FIX I5: ECD estimado quando lucroContabil === 0 usando margem operacional.
+ *     - FIX M1: Economia retorna decomposicao detalhada.
+ *     - FIX M2: Percentual 16% usa Math.abs para comparação float.
+ *     - FIX M3: Dica 16% descreve "Economia de IRPJ".
+ *     - FIX M4: regimeRecomendado usa margem de 5pp (não 10pp).
+ *     - FIX M5: receitasPorTrimestre distribui PIS/COFINS mensal proporcionalmente.
+ *     - FIX M6: Dados de teste com nomes genéricos.
+ *     - NOVO P3: Resumo executivo com "Próximos Passos" priorizados.
  *
- * Dependência: lucro_presumido.js deve ser carregado ANTES deste arquivo.
+ * Dependências:
+ *   - lucro_presumido.js deve ser carregado ANTES deste arquivo.
+ *   - estados.js (opcional mas recomendado) — se carregado, incentivos são dinâmicos.
+ *
  * Expõe: objeto global EstudoLP (window.EstudoLP / globalThis.EstudoLP)
  *
  * ══════════════════════════════════════════════════════════════════════════════
@@ -45,23 +53,24 @@
   'use strict';
 
   // ─────────────────────────────────────────────────────────────────────────
-  // CONSTANTES INTERNAS (DEFAULTS E LIMITES)
+  // CONSTANTES INTERNAS
   // ─────────────────────────────────────────────────────────────────────────
+
+  var VERSION = '3.0.0';
 
   var DEFAULTS = {
     atividadeId: 'servicos_gerais',
-    aliquotaISS: 0.03,              // FIX AUDITORIA: 3% como padrão mais razoável (antes 5%)
-    aliquotaRAT: 0.03,
-    aliquotaTerceiros: 0.005,
+    aliquotaISS: 5,       // Percentual INTEIRO (5 = 5%)
+    aliquotaRAT: 3,       // Percentual INTEIRO (3 = 3%)
+    aliquotaTerceiros: 0.5, // Percentual INTEIRO (0.5 = 0.5%)
     creditosPISCOFINS: 0,
-    aliquotaSimples: 0.15,
+    aliquotaSimples: 15,
     socios: [{ nome: 'Sócio Único', participacao: 1.0 }]
   };
 
-  /** Limite anual para aplicação da LC 224/2025 */
   var LC224_LIMITE_ANUAL = 5000000;
 
-  /** Alíquotas fixas do Lucro Real usadas na estimativa simplificada */
+  /** Alíquotas do Lucro Real para estimativa simplificada */
   var LR = {
     IRPJ: 0.15,
     ADICIONAL_IRPJ: 0.10,
@@ -73,10 +82,7 @@
     INSS_PATRONAL: 0.20
   };
 
-  /** Alíquotas PIS/COFINS cumulativo (LP) */
   var PIS_COFINS_CUMULATIVO = 0.0365;
-
-  /** Margem máxima para iteração do break-even */
   var MARGEM_MAXIMA = 95;
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -85,9 +91,6 @@
 
   /**
    * Arredonda valor monetário para N casas decimais.
-   * @param {number} valor
-   * @param {number} [casas=2]
-   * @returns {number}
    */
   function _arredondar(valor, casas) {
     if (casas === undefined) casas = 2;
@@ -97,12 +100,7 @@
   }
 
   /**
-   * Valida parâmetros obrigatórios e aplica defaults.
-   * @param {Object} params - Parâmetros recebidos
-   * @param {Array<string>} obrigatorios - Nomes dos campos obrigatórios
-   * @param {string} nomeFuncao - Nome da função chamadora (para mensagens de erro)
-   * @returns {Object} params com defaults aplicados
-   * @throws {Error} Se LucroPresumido não estiver carregado ou faltar campo obrigatório
+   * Valida parâmetros obrigatórios.
    */
   function _validarParams(params, obrigatorios, nomeFuncao) {
     if (typeof LucroPresumido === 'undefined') {
@@ -113,9 +111,8 @@
     }
     if (obrigatorios && obrigatorios.length) {
       for (var i = 0; i < obrigatorios.length; i++) {
-        var campo = obrigatorios[i];
-        if (params[campo] === undefined || params[campo] === null) {
-          throw new Error(nomeFuncao + ': campo obrigatório "' + campo + '" não informado.');
+        if (params[obrigatorios[i]] === undefined || params[obrigatorios[i]] === null) {
+          throw new Error(nomeFuncao + ': campo obrigatório "' + obrigatorios[i] + '" não informado.');
         }
       }
     }
@@ -123,52 +120,194 @@
   }
 
   /**
-   * Normaliza alíquota para decimal.
-   * Aceita tanto formato inteiro (5 = 5%) quanto decimal (0.05 = 5%).
-   * Regra: se valor > 1, divide por 100; se <= 1, usa como está.
-   * Exceção: aliquotaTerceiros pode ser 0.5 (inteiro) — mas 0.5 < 1 já é tratado como decimal (0.5%).
-   * Para aliquotaTerceiros, o DEFAULTS já é 0.005, e o HTML envia 0.5 (inteiro). Portanto usamos
-   * limiar de 0.1: se > 0.1, é inteiro (divide por 100); se <= 0.1, é decimal.
+   * Converte alíquota de percentual inteiro para decimal.
+   * REGRA v3.0: Alíquotas SEMPRE chegam como percentual inteiro (ex: 5 para 5%).
+   * Se o valor parece já ser decimal (< 0.5), emite warning no console.
    *
-   * @private
-   * @param {number|null|undefined} valor - Alíquota informada
-   * @param {number} fallback - Valor padrão (já em decimal)
+   * @param {number|null|undefined} valor - Alíquota em percentual inteiro (ex: 5, 3, 0.5)
+   * @param {number} fallbackPercent - Valor padrão em percentual inteiro
    * @param {string} nome - Nome do campo (para log)
-   * @returns {number} Alíquota em decimal
+   * @returns {number} Alíquota em decimal (ex: 0.05, 0.03, 0.005)
    */
-  function _normalizeAliquota(valor, fallback, nome) {
-    if (valor == null || typeof valor !== 'number') return fallback;
-    // Se é claramente um percentual inteiro (ex: 2, 3, 5, 20)
-    if (valor > 1) return valor / 100;
-    // Se está entre 0.1 e 1 (zona ambígua: pode ser 0.5% ou 50%)
-    // Para ISS/RAT, valores entre 0.1 e 1 são inválidos como decimal (10% a 100% de ISS não existe)
-    // Logo, interpretar como inteiro. Ex: 0.5 → 0.5% → 0.005
-    if (valor > 0.1 && nome !== 'aliquotaISS') return valor / 100;
-    if (valor > 0.1 && nome === 'aliquotaISS') {
-      // ISS entre 0.1 e 1: ambíguo. ISS máximo é 5% (0.05), então 0.1+ é inteiro.
-      return valor / 100;
+  function _aliquotaParaDecimal(valor, fallbackPercent, nome) {
+    if (valor == null || typeof valor !== 'number') return fallbackPercent / 100;
+
+    // Detectar possível entrada já em decimal
+    if (valor > 0 && valor < 0.5 && nome !== 'aliquotaTerceiros') {
+      console.warn('[EstudoLP] Alíquota "' + nome + '" = ' + valor +
+        ' parece já estar em decimal. Esperado valor em percentual inteiro (ex: 5 para 5%). ' +
+        'Será interpretado como ' + valor + '% = ' + (valor / 100) + '. ' +
+        'Se o correto é ' + (valor * 100) + '%, envie ' + (valor * 100) + '.');
     }
-    // Se <= 0.1, já é decimal (ex: 0.05 = 5%, 0.03 = 3%, 0.005 = 0.5%)
-    return valor;
+
+    return valor / 100;
   }
 
   /**
    * Busca informações de uma atividade pelo ID via motor LucroPresumido.
-   * @param {string} atividadeId - ID da atividade (ex: 'servicos_gerais')
-   * @returns {Object|null} { id, descricao, percentualIRPJ, percentualCSLL, irpjMajorado, csllMajorada, ... } ou null
    */
   function _getAtividadeInfo(atividadeId) {
     try {
       var atividades = LucroPresumido.getAtividadesDisponiveis();
       for (var i = 0; i < atividades.length; i++) {
-        if (atividades[i].id === atividadeId) {
-          return atividades[i];
-        }
+        if (atividades[i].id === atividadeId) return atividades[i];
       }
       return null;
-    } catch (e) {
-      return null;
+    } catch (e) { return null; }
+  }
+
+  /**
+   * Calcula alíquota efetiva real de IRPJ+CSLL sobre base presumida.
+   * O adicional de 10% incide APENAS sobre o excedente acima de R$240.000/ano.
+   *
+   * @param {number} basePresumidaAnual
+   * @returns {number} Alíquota efetiva (ex: 0.26 para 26%)
+   */
+  function _calcularAliqEfetivaIRPJCSLL(basePresumidaAnual) {
+    if (basePresumidaAnual <= 0) return 0.24;
+    var irpj = basePresumidaAnual * 0.15;
+    var adicional = Math.max(0, basePresumidaAnual - 240000) * 0.10;
+    var csll = basePresumidaAnual * 0.09;
+    return (irpj + adicional + csll) / basePresumidaAnual;
+  }
+
+  /**
+   * Obtém incentivos fiscais do estado via Estados.js (se disponível).
+   * Retorna objeto normalizado com todos os incentivos ativos.
+   *
+   * @param {string} uf - Sigla do estado (ex: "PA", "AM", "CE")
+   * @returns {Object} Incentivos normalizados ou objeto vazio
+   */
+  function _obterIncentivosEstado(uf) {
+    if (!uf) return { sudam: { ativo: false }, sudene: { ativo: false }, sudeco: { ativo: false }, zona_franca: { ativo: false, existe: false }, suframa: { ativo: false }, alc: { ativo: false }, incentivos_estaduais: {}, _disponivel: false };
+
+    // Tentar usar Estados.js
+    var Estados = (typeof window !== 'undefined' && window.Estados) ||
+                  (typeof globalThis !== 'undefined' && globalThis.Estados) ||
+                  (typeof EstadosBR !== 'undefined' ? EstadosBR : null);
+
+    if (Estados && typeof Estados.getIncentivosNormalizado === 'function') {
+      var inc = Estados.getIncentivosNormalizado(uf);
+      if (inc) {
+        inc._disponivel = true;
+        return inc;
+      }
     }
+
+    // Fallback: sem Estados.js carregado
+    console.warn('[EstudoLP] Estados.js não disponível. Incentivos para UF "' + uf + '" não carregados. ' +
+      'Carregue estados/' + uf.toLowerCase() + '.js + estados.js para incentivos dinâmicos.');
+    return { sudam: { ativo: false }, sudene: { ativo: false }, sudeco: { ativo: false }, zona_franca: { ativo: false, existe: false }, suframa: { ativo: false }, alc: { ativo: false }, incentivos_estaduais: {}, _disponivel: false };
+  }
+
+  /**
+   * Obtém utils do estado para cálculos específicos (getReducaoSUDAM, etc.)
+   */
+  function _obterUtilsEstado(uf) {
+    if (!uf) return null;
+    var Estados = (typeof window !== 'undefined' && window.Estados) ||
+                  (typeof globalThis !== 'undefined' && globalThis.Estados) || null;
+    if (Estados && typeof Estados.getUtils === 'function') {
+      return Estados.getUtils(uf);
+    }
+    return null;
+  }
+
+  /**
+   * Obtém percentual de redução IRPJ do incentivo regional (SUDAM/SUDENE/SUDECO).
+   * Usa utils do estado se disponível, senão usa dados do incentivo.
+   *
+   * @param {string} uf
+   * @param {Object} incentivos - Resultado de _obterIncentivosEstado
+   * @returns {{ tipo: string, percentualReducao: number, ativo: boolean, obs: string }}
+   */
+  function _obterReducaoRegional(uf, incentivos) {
+    var resultado = { tipo: null, percentualReducao: 0, ativo: false, obs: '', requerLucroReal: true };
+
+    var utils = _obterUtilsEstado(uf);
+
+    // SUDAM
+    if (incentivos.sudam && (incentivos.sudam.ativo === true || incentivos.sudam.existe === true)) {
+      resultado.tipo = 'SUDAM';
+      resultado.ativo = true;
+      resultado.obs = incentivos.sudam.obs || 'Área de abrangência SUDAM — MP 2.199-14/2001';
+      // Usar utils se disponível
+      if (utils && typeof utils.getReducaoSUDAM === 'function') {
+        resultado.percentualReducao = utils.getReducaoSUDAM() || 0.75;
+      } else {
+        resultado.percentualReducao = incentivos.sudam.reducao_irpj || incentivos.sudam.percentual_reducao || 0.75;
+      }
+      // Verificar abrangência parcial
+      if (incentivos.sudam.abrangencia_parcial) {
+        resultado.obs += ' (abrangência parcial — verificar municípios elegíveis)';
+      }
+      return resultado;
+    }
+
+    // SUDENE
+    if (incentivos.sudene && (incentivos.sudene.ativo === true || incentivos.sudene.existe === true)) {
+      resultado.tipo = 'SUDENE';
+      resultado.ativo = true;
+      resultado.obs = incentivos.sudene.obs || 'Área de abrangência SUDENE — MP 2.199-14/2001';
+      if (utils && typeof utils.getReducaoSUDENE === 'function') {
+        resultado.percentualReducao = utils.getReducaoSUDENE() || 0.75;
+      } else {
+        resultado.percentualReducao = incentivos.sudene.reducao_irpj || incentivos.sudene.percentual_reducao || 0.75;
+      }
+      if (incentivos.sudene.abrangencia_parcial) {
+        resultado.obs += ' (abrangência parcial — verificar municípios elegíveis)';
+      }
+      return resultado;
+    }
+
+    // SUDECO
+    if (incentivos.sudeco && (incentivos.sudeco.ativo === true || incentivos.sudeco.existe === true)) {
+      resultado.tipo = 'SUDECO';
+      resultado.ativo = true;
+      resultado.obs = incentivos.sudeco.obs || 'Área de abrangência SUDECO';
+      resultado.percentualReducao = incentivos.sudeco.reducao_irpj || incentivos.sudeco.percentual_reducao || 0.75;
+      return resultado;
+    }
+
+    return resultado;
+  }
+
+  /**
+   * Obtém benefícios de ZFM/ALC/SUFRAMA do estado.
+   */
+  function _obterBeneficiosZFM(uf, incentivos) {
+    var resultado = { zonaFranca: false, alc: false, suframa: false, obs: '' };
+
+    if (incentivos.zona_franca && (incentivos.zona_franca.ativo === true || incentivos.zona_franca.existe === true)) {
+      resultado.zonaFranca = true;
+      resultado.obs = incentivos.zona_franca.obs || 'Zona Franca ativa';
+    }
+    if (incentivos.alc && (incentivos.alc.ativo === true || incentivos.alc.existe === true)) {
+      resultado.alc = true;
+      resultado.obs += (resultado.obs ? '; ' : '') + (incentivos.alc.obs || 'Área de Livre Comércio ativa');
+    }
+    if (incentivos.suframa && (incentivos.suframa.ativo === true || incentivos.suframa.existe === true)) {
+      resultado.suframa = true;
+    }
+
+    return resultado;
+  }
+
+  /**
+   * Coleta incentivos estaduais (programas do estado).
+   */
+  function _obterIncentivosEstaduais(incentivos) {
+    var programas = incentivos.incentivos_estaduais || {};
+    var lista = [];
+    if (Array.isArray(programas)) {
+      lista = programas;
+    } else if (typeof programas === 'object') {
+      var keys = Object.keys(programas);
+      for (var i = 0; i < keys.length; i++) {
+        lista.push(programas[keys[i]]);
+      }
+    }
+    return lista;
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -179,15 +318,20 @@
    * Encontra o ponto de cruzamento onde o Lucro Real passa a ser mais
    * vantajoso que o Lucro Presumido.
    *
+   * v3.0 FIX:
+   *   - ISS e INSS REMOVIDOS de ambos os lados (são iguais, cancelam-se)
+   *   - Comparação apenas de tributos federais: IRPJ, CSLL, PIS, COFINS
+   *   - margemRealAtual renomeada para margemOperacionalBruta
+   *   - Premissas documentadas no output
+   *
    * @param {Object} params
    * @param {number} params.receitaBrutaAnual
-   * @param {number} params.cargaTributariaLP - carga total já calculada pelo anual consolidado
+   * @param {number} params.cargaTributariaLP - carga total já calculada pelo consolidado
+   * @param {number} params.tributosFederaisLP - APENAS tributos federais do LP (sem ISS/INSS)
    * @param {number} params.folhaPagamentoAnual
    * @param {number} params.totalDespesasOperacionais
-   * @param {number} params.creditosPISCOFINS - créditos estimados PIS/COFINS não-cumulativo
-   * @param {number} params.aliquotaISS - decimal (ex: 0.05)
-   * @param {number} params.aliquotaRAT - decimal (ex: 0.03)
-   * @param {number} params.aliquotaTerceiros - decimal (ex: 0.005)
+   * @param {number} params.creditosPISCOFINS
+   * @param {number} [params.prejuizosFiscaisAcumulados=0]
    *
    * @returns {Object} Resultado da análise break-even
    */
@@ -199,28 +343,39 @@
     var folha = params.folhaPagamentoAnual || 0;
     var despesasOp = params.totalDespesasOperacionais || 0;
     var creditos = params.creditosPISCOFINS || 0;
-    var aliqISS = params.aliquotaISS != null ? params.aliquotaISS : DEFAULTS.aliquotaISS;
-    var aliqRAT = params.aliquotaRAT != null ? params.aliquotaRAT : DEFAULTS.aliquotaRAT;
-    var aliqTerceiros = params.aliquotaTerceiros != null ? params.aliquotaTerceiros : DEFAULTS.aliquotaTerceiros;
-    // FIX (Erro 10): Considerar prejuízos fiscais acumulados na comparação com Lucro Real
     var prejuizosFiscais = params.prejuizosFiscaisAcumulados || 0;
 
-    // Proteção contra receita zero
+    // FIX I1 v3.0: Para o break-even, comparamos APENAS tributos federais.
+    // ISS e INSS patronal são idênticos em ambos os regimes para a mesma empresa,
+    // portanto não afetam o ponto de cruzamento.
+    // Se tributosFederaisLP fornecido, usar; senão usar cargaLP completa com aviso.
+    var cargaFederalLP;
+    var incluiISSINSS = false;
+    if (typeof params.tributosFederaisLP === 'number' && params.tributosFederaisLP > 0) {
+      cargaFederalLP = _arredondar(params.tributosFederaisLP);
+    } else {
+      // Fallback: usar carga total (inclui ISS/INSS) — menos preciso mas funciona
+      cargaFederalLP = cargaLP;
+      incluiISSINSS = true;
+    }
+
     if (receita <= 0) {
       return {
         cargaTributariaLP: cargaLP,
         breakEvenMargem: null,
         lpSempreVantajoso: false,
         lrSempreVantajoso: false,
-        margemRealAtual: null,
+        margemOperacionalBruta: null,
+        margemOperacionalBruta_formula: '(Receita - Despesas Operacionais - Folha) / Receita × 100',
+        margemOperacionalBruta_nota: 'NÃO inclui tributos. É a margem PRÉ-impostos.',
         margens: [],
         alerta: null,
         recomendacao: 'Receita bruta anual não informada. Impossível calcular break-even.',
-        baseLegal: 'Comparação simplificada LP (base presumida) vs LR (IRPJ 15%+10%, CSLL 9%, PIS 1,65%, COFINS 7,6% não-cumulativo). RIR/2018; Lei 9.249/95, Art. 15; Lei 10.637/2002; Lei 10.833/2003. Para decisão definitiva, consulte seu contador.'
+        premissas: {},
+        baseLegal: 'RIR/2018; Lei 9.249/95, Art. 15; Lei 10.637/2002; Lei 10.833/2003.'
       };
     }
 
-    // B. Para cada margem de 1% a 95%, calcular carga do Lucro Real
     var margens = [];
     var breakEvenMargem = null;
     var lpVantajosoCount = 0;
@@ -228,117 +383,130 @@
 
     for (var m = 1; m <= MARGEM_MAXIMA; m++) {
       var lucroTributavelBruto = receita * (m / 100);
-      // FIX (Erro 10): Compensar prejuízos fiscais acumulados (até 30% do lucro tributável)
-      // Lei 9.065/1995, Art. 15 — compensação limitada a 30% do lucro líquido ajustado
-      var compensacaoPrejuizo = prejuizosFiscais > 0 ? Math.min(prejuizosFiscais, lucroTributavelBruto * 0.30) : 0;
+      var compensacaoPrejuizo = prejuizosFiscais > 0
+        ? Math.min(prejuizosFiscais, lucroTributavelBruto * 0.30)
+        : 0;
       var lucroTributavel = Math.max(0, lucroTributavelBruto - compensacaoPrejuizo);
 
       var irpj = lucroTributavel * LR.IRPJ;
       var adicionalIRPJ = Math.max(0, lucroTributavel - LR.LIMITE_ADICIONAL_ANUAL) * LR.ADICIONAL_IRPJ;
       var csll = lucroTributavel * LR.CSLL;
 
-      // PIS não-cumulativo: receita × 1,65% - créditos proporcionais
       var pisNC = Math.max(0, receita * LR.PIS_NAO_CUMULATIVO - creditos * (LR.PIS_NAO_CUMULATIVO / LR.TOTAL_PIS_COFINS_NC));
-      // COFINS não-cumulativo: receita × 7,6% - créditos proporcionais
       var cofinsNC = Math.max(0, receita * LR.COFINS_NAO_CUMULATIVO - creditos * (LR.COFINS_NAO_CUMULATIVO / LR.TOTAL_PIS_COFINS_NC));
 
-      var issLR = receita * aliqISS;
-      var inssLR = folha * (LR.INSS_PATRONAL + aliqRAT + aliqTerceiros);
+      // FIX I1: Apenas federais. ISS e INSS cancelam.
+      var cargaFederalLR = _arredondar(irpj + adicionalIRPJ + csll + pisNC + cofinsNC);
 
-      var cargaLR = _arredondar(irpj + adicionalIRPJ + csll + pisNC + cofinsNC + issLR + inssLR);
+      // Se LP inclui ISS/INSS (fallback), adicionar ao LR também para manter comparabilidade
+      var cargaLRComparavel = cargaFederalLR;
+      if (incluiISSINSS) {
+        var aliqISS = params.aliquotaISS || 0;
+        var aliqRAT = params.aliquotaRAT || 0;
+        var aliqTerceiros = params.aliquotaTerceiros || 0;
+        cargaLRComparavel += receita * aliqISS + folha * (LR.INSS_PATRONAL + aliqRAT + aliqTerceiros);
+        cargaLRComparavel = _arredondar(cargaLRComparavel);
+      }
 
       margens.push({
         margem: m,
-        cargaLP: cargaLP,
-        cargaLR: cargaLR
+        cargaLP: cargaFederalLP,
+        cargaLR: cargaLRComparavel,
+        diferencaLPvsLR: _arredondar(cargaFederalLP - cargaLRComparavel)
       });
 
-      if (cargaLP < cargaLR) {
+      if (cargaFederalLP < cargaLRComparavel) {
         lpVantajosoCount++;
-      } else if (cargaLR < cargaLP) {
+      } else if (cargaLRComparavel < cargaFederalLP) {
         lrVantajosoCount++;
       }
 
-      // C. Detectar cruzamento: onde cargaLR cruza cargaLP
       if (breakEvenMargem === null && m > 1) {
-        var anterior = margens[m - 2]; // margens[m-2] pois margens é 0-indexed
-        // Cruzamento: anterior LR < LP e agora LR >= LP, ou vice-versa
-        if ((anterior.cargaLR < anterior.cargaLP && cargaLR >= cargaLP) ||
-            (anterior.cargaLR >= anterior.cargaLP && cargaLR < cargaLP)) {
+        var anterior = margens[m - 2];
+        if ((anterior.cargaLR < anterior.cargaLP && cargaLRComparavel >= cargaFederalLP) ||
+            (anterior.cargaLR >= anterior.cargaLP && cargaLRComparavel < cargaFederalLP)) {
           breakEvenMargem = m;
         }
       }
     }
 
-    var totalMargens = MARGEM_MAXIMA;
-    var lpSempreVantajoso = (lpVantajosoCount === totalMargens);
-    var lrSempreVantajoso = (lrVantajosoCount === totalMargens);
+    var lpSempreVantajoso = (lpVantajosoCount === MARGEM_MAXIMA);
+    var lrSempreVantajoso = (lrVantajosoCount === MARGEM_MAXIMA);
 
-    // D. Margem real atual
-    var margemRealAtual = null;
+    // FIX C1: Margem renomeada e documentada
+    var margemOperacionalBruta = null;
     if (receita > 0 && (despesasOp > 0 || folha > 0)) {
-      margemRealAtual = _arredondar((receita - despesasOp - folha) / receita * 100, 1);
+      margemOperacionalBruta = _arredondar((receita - despesasOp - folha) / receita * 100, 1);
     }
 
-    // E. Alerta
+    var margemLiquidaPosTributos = null;
+    if (receita > 0 && cargaLP > 0) {
+      margemLiquidaPosTributos = _arredondar((receita - despesasOp - folha - cargaLP) / receita * 100, 1);
+    }
+
+    // Alerta
     var alerta = null;
-
-    // FIX (Bug 8): Se despesas e folha estão zeradas, alertar o usuário
     if (receita > 0 && despesasOp === 0 && folha === 0) {
-      alerta = 'ATENÇÃO: Nenhuma despesa operacional ou folha de pagamento foi informada. ' +
-               'A análise assume margem de lucro de 100%, o que raramente reflete a realidade. ' +
-               'Para uma análise precisa, preencha as despesas na aba "Complementar".';
-      margemRealAtual = 100;
+      alerta = 'ATENÇÃO: Nenhuma despesa operacional ou folha foi informada. ' +
+               'A análise assume margem de 100%, o que raramente reflete a realidade. ' +
+               'Preencha as despesas na aba "Complementar".';
+      margemOperacionalBruta = 100;
     }
-    if (margemRealAtual !== null && breakEvenMargem !== null) {
-      var distancia = Math.abs(margemRealAtual - breakEvenMargem);
-      if (margemRealAtual < breakEvenMargem) {
-        alerta = 'Sua margem real está ABAIXO do break-even. O Lucro Real pode ser mais vantajoso.';
-      } else if (distancia < 5) {
-        alerta = 'Sua margem real está próxima do break-even. Reavalie anualmente.';
+    if (margemOperacionalBruta !== null && breakEvenMargem !== null) {
+      if (margemOperacionalBruta < breakEvenMargem) {
+        alerta = 'Margem real ABAIXO do break-even. O Lucro Real pode ser mais vantajoso.';
+      } else if (Math.abs(margemOperacionalBruta - breakEvenMargem) < 5) {
+        alerta = 'Margem real próxima do break-even. Reavalie anualmente.';
       }
     }
 
-    // F. Recomendação
+    // Recomendação
     var recomendacao = '';
     if (lpSempreVantajoso) {
-      recomendacao = 'O Lucro Presumido é mais vantajoso em TODAS as margens de lucro simuladas. Mantenha o LP.';
+      recomendacao = 'LP é mais vantajoso em TODAS as margens simuladas. Mantenha o LP.';
     } else if (lrSempreVantajoso) {
-      recomendacao = 'O Lucro Real é mais vantajoso em TODAS as margens simuladas. Considere migrar para LR.';
-    } else if (margemRealAtual !== null && breakEvenMargem !== null) {
-      if (margemRealAtual >= breakEvenMargem) {
-        recomendacao = 'Sua margem real estimada (' + margemRealAtual + '%) está ACIMA do break-even (' + breakEvenMargem + '%). O Lucro Presumido é favorável.';
+      recomendacao = 'LR é mais vantajoso em TODAS as margens simuladas. Considere migrar.';
+    } else if (margemOperacionalBruta !== null && breakEvenMargem !== null) {
+      if (margemOperacionalBruta >= breakEvenMargem) {
+        recomendacao = 'Margem real (' + margemOperacionalBruta + '%) ACIMA do break-even (' + breakEvenMargem + '%). LP é favorável.';
       } else {
-        recomendacao = 'Sua margem real estimada (' + margemRealAtual + '%) está ABAIXO do break-even (' + breakEvenMargem + '%). Avalie o Lucro Real.';
+        recomendacao = 'Margem real (' + margemOperacionalBruta + '%) ABAIXO do break-even (' + breakEvenMargem + '%). Avalie o LR.';
       }
     } else if (breakEvenMargem !== null) {
-      recomendacao = 'O break-even entre LP e LR ocorre na margem de ' + breakEvenMargem + '%. Abaixo: LR é melhor. Acima: LP é melhor.';
+      recomendacao = 'Break-even na margem de ' + breakEvenMargem + '%. Abaixo: LR é melhor. Acima: LP é melhor.';
     } else {
-      recomendacao = 'Não foi possível determinar o break-even. Consulte seu contador para análise detalhada.';
+      recomendacao = 'Não foi possível determinar o break-even. Consulte seu contador.';
     }
 
-    // MELHORIA 2: Premissas transparentes para validação pelo contador
+    // Premissas documentadas (FIX C3)
     var premissas = {
-      descricao: 'Esta análise compara os tributos federais (IRPJ, CSLL, PIS, COFINS) do LP com LR.',
-      pisCofinsLR: 'PIS 1,65% + COFINS 7,6% não-cumulativo',
+      descricao: 'Compara tributos federais (IRPJ, CSLL, PIS, COFINS) do LP com LR.',
+      pisCofinsLR: 'PIS 1,65% + COFINS 7,6% não-cumulativo (com créditos)',
       pisCofinsLP: 'PIS 0,65% + COFINS 3,0% cumulativo',
-      issConsiderado: aliqISS > 0 ? 'ISS de ' + (aliqISS * 100).toFixed(1) + '% incluído em ambos' : 'ISS não incluído',
-      creditosPISCOFINS: creditos > 0 ? 'Créditos PIS/COFINS de R$ ' + creditos.toLocaleString('pt-BR') : 'Sem créditos PIS/COFINS informados',
-      prejuizosFiscais: prejuizosFiscais > 0 ? 'Prejuízos fiscais de R$ ' + prejuizosFiscais.toLocaleString('pt-BR') + ' (compensação até 30%)' : 'Sem prejuízos fiscais informados',
-      nota: 'Para análise definitiva, consulte seu contador.'
+      issConsiderado: incluiISSINSS ? 'ISS incluído em ambos os lados (mesmo valor — não afeta break-even)' : 'ISS REMOVIDO de ambos (cancela)',
+      inssConsiderado: incluiISSINSS ? 'INSS patronal incluído em ambos os lados (mesmo valor)' : 'INSS REMOVIDO de ambos (cancela)',
+      creditosPISCOFINS: creditos > 0 ? 'R$ ' + creditos.toLocaleString('pt-BR') : 'Sem créditos',
+      prejuizosFiscais: prejuizosFiscais > 0 ? 'R$ ' + prejuizosFiscais.toLocaleString('pt-BR') + ' (compensação até 30%)' : 'Sem prejuízos',
+      formulaBreakEven: 'Para cada margem m (1% a 95%): LR = lucro×(15%+10%adicional)+lucro×9%+receita×9,25%-créditos. Onde break-even: cargaLP = cargaLR.',
+      nota: 'Para decisão definitiva, consulte seu contador.'
     };
 
     return {
       cargaTributariaLP: cargaLP,
+      cargaFederalLP: cargaFederalLP,
       breakEvenMargem: breakEvenMargem,
       lpSempreVantajoso: lpSempreVantajoso,
       lrSempreVantajoso: lrSempreVantajoso,
-      margemRealAtual: margemRealAtual,
+      // FIX C1: Nome claro e consistente
+      margemOperacionalBruta: margemOperacionalBruta,
+      margemOperacionalBruta_formula: '(Receita - Despesas Operacionais - Folha) / Receita × 100',
+      margemOperacionalBruta_nota: 'Margem PRÉ-tributos. NÃO inclui impostos.',
+      margemLiquidaPosTributos: margemLiquidaPosTributos,
       margens: margens,
       alerta: alerta,
       recomendacao: recomendacao,
       premissas: premissas,
-      baseLegal: 'Comparação simplificada LP (base presumida) vs LR (IRPJ 15%+10%, CSLL 9%, PIS 1,65%, COFINS 7,6% não-cumulativo). RIR/2018; Lei 9.249/95, Art. 15; Lei 10.637/2002; Lei 10.833/2003. Para decisão definitiva, consulte seu contador.'
+      baseLegal: 'RIR/2018; Lei 9.249/95, Art. 15; Lei 10.637/2002; Lei 10.833/2003.'
     };
   }
 
@@ -347,23 +515,8 @@
   // ─────────────────────────────────────────────────────────────────────────
 
   /**
-   * Gera array de dicas contextuais baseadas na situação específica da empresa.
-   *
-   * @param {Object} params
-   * @param {number} params.receitaBrutaAnual
-   * @param {string} params.atividadeId
-   * @param {number} params.folhaPagamentoAnual
-   * @param {number} params.totalDespesasOperacionais
-   * @param {number} params.creditosPISCOFINS
-   * @param {boolean} params.temEscrituracao
-   * @param {boolean} params.temEquipamentos
-   * @param {boolean} params.temPD
-   * @param {boolean} params.receitaSazonal
-   * @param {boolean} params.areaAtuacaoSUDAM
-   * @param {number} params.numReceitas - quantidade de atividades/receitas distintas
-   * @param {Object|null} params.breakeven - resultado do calcularBreakEven
-   *
-   * @returns {Array<{ titulo: string, descricao: string, tipo: string, impactoEstimado: number|null }>}
+   * Gera array de dicas contextuais baseadas na situação da empresa.
+   * v3.0: Incentivos vêm de Estados.js via params.incentivosEstado.
    */
   function gerarDicasInteligentes(params) {
     _validarParams(params, ['receitaBrutaAnual'], 'gerarDicasInteligentes');
@@ -376,111 +529,146 @@
     var temEscrituracao = !!params.temEscrituracao;
     var temEquipamentos = !!params.temEquipamentos;
     var temPD = !!params.temPD;
-    var areaAtuacaoSUDAM = !!params.areaAtuacaoSUDAM;
+    var receitaSazonal = !!params.receitaSazonal;
     var numReceitas = params.numReceitas || 1;
     var breakeven = params.breakeven || null;
-    var areaAtuacaoSUDENE = !!params.areaAtuacaoSUDENE;
     var receitasVendasZFM = params.receitasVendasZFM || 0;
     var receitasSUFRAMA = params.receitasSUFRAMA || 0;
     var receitasExportacao = params.receitasExportacao || 0;
     var exclusivamenteServicosElegiveis = !!params.exclusivamenteServicosElegiveis;
     var regimeCaixa = !!params.regimeCaixa;
 
-    var dicas = [];
+    // Incentivos dinâmicos do estado
+    var incentivos = params.incentivosEstado || {};
+    var reducaoRegional = params.reducaoRegional || { ativo: false };
+    var beneficiosZFM = params.beneficiosZFM || { zonaFranca: false };
 
-    // Buscar atividade
+    var dicas = [];
     var atividade = _getAtividadeInfo(atividadeId);
     var percentualPresuncao = atividade ? atividade.percentualIRPJ : 0.32;
 
-    // Margem real
-    var margemReal = receita > 0 ? (receita - despesasOp - folha) / receita : 0;
+    // Margem operacional bruta (FIX C1: nome consistente com break-even)
+    var margemOperacionalBruta = receita > 0 ? (receita - despesasOp - folha) / receita : 0;
 
-    // ── Dica 0: Alerta margem 100% (despesas zeradas) ──
-    // FIX (Bug 8): Alerta também visível na aba Vantagens/Dicas
+    // ── Dica 0: Alerta margem 100% ──
     if (receita > 0 && despesasOp === 0 && folha === 0) {
       dicas.push({
         titulo: 'Margem de lucro implícita de 100% — Dados incompletos',
-        descricao: 'Nenhuma despesa operacional ou folha de pagamento foi informada. ' +
-                   'Todas as análises assumem margem de lucro de 100%, o que raramente reflete a realidade. ' +
-                   'Para resultados confiáveis, preencha as despesas na aba "Complementar".',
+        descricao: 'Nenhuma despesa operacional ou folha foi informada. ' +
+                   'Todas as análises assumem margem de 100%. Preencha as despesas.',
         tipo: 'alerta',
-        impactoEstimado: null
+        impactoEstimado: null,
+        categoria: 'geral'
       });
     }
 
     // ── Dica 1: Margem vs Presunção ──
-    // FIX (Erro 16): Calcular alíquota efetiva considerando adicional de IRPJ quando base > R$ 240.000/ano
-    var basePresumidaAnualEstimada = receita * percentualPresuncao;
-    var aliqEfetivaIRPJCSLL = 0.24; // 15% IRPJ + 9% CSLL (padrão)
-    if (basePresumidaAnualEstimada > 240000) {
-      aliqEfetivaIRPJCSLL = 0.34; // 15% IRPJ + 10% adicional + 9% CSLL
-    }
+    // FIX I2: Alíquota efetiva REAL (não binária 24%/34%)
+    var basePresumidaAnual = receita * percentualPresuncao;
+    var aliqEfetiva = _calcularAliqEfetivaIRPJCSLL(basePresumidaAnual);
+
     if (receita > 0 && (despesasOp > 0 || folha > 0)) {
-      if (margemReal > percentualPresuncao) {
-        var diferencaBase = receita * (margemReal - percentualPresuncao);
-        var impactoEconomia = _arredondar(diferencaBase * aliqEfetivaIRPJCSLL);
+      if (margemOperacionalBruta > percentualPresuncao) {
+        var diferencaBase = receita * (margemOperacionalBruta - percentualPresuncao);
+        var impactoEconomia = _arredondar(diferencaBase * aliqEfetiva);
         dicas.push({
           titulo: 'Margem real acima da presunção — LP é vantajoso',
-          descricao: 'Sua margem real (' + _arredondar(margemReal * 100, 1) + '%) é superior ao percentual de presunção (' + _arredondar(percentualPresuncao * 100, 1) + '%). No Lucro Presumido, você tributa sobre uma base menor que o lucro efetivo. Economia estimada de R$ ' + impactoEconomia.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) + '/ano em IRPJ+CSLL.',
+          descricao: 'Margem operacional bruta (' + _arredondar(margemOperacionalBruta * 100, 1) +
+            '%) superior à presunção (' + _arredondar(percentualPresuncao * 100, 1) +
+            '%). No LP, tributa sobre base menor. Economia: R$ ' +
+            impactoEconomia.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) +
+            '/ano em IRPJ+CSLL (alíquota efetiva: ' + _arredondar(aliqEfetiva * 100, 1) + '%).',
           tipo: 'economia',
-          impactoEstimado: impactoEconomia
+          impactoEstimado: impactoEconomia,
+          categoria: 'otimizacao_lp'
         });
       } else {
-        var diferencaBaseAlerta = receita * (percentualPresuncao - margemReal);
-        var impactoExcesso = _arredondar(diferencaBaseAlerta * aliqEfetivaIRPJCSLL);
+        var diferencaBaseAlerta = receita * (percentualPresuncao - margemOperacionalBruta);
+        var impactoExcesso = _arredondar(diferencaBaseAlerta * aliqEfetiva);
         dicas.push({
           titulo: 'Margem real abaixo da presunção — Atenção',
-          descricao: 'Sua margem real (' + _arredondar(margemReal * 100, 1) + '%) é inferior ao percentual de presunção (' + _arredondar(percentualPresuncao * 100, 1) + '%). No LP, você tributa sobre base maior que o lucro efetivo. Custo extra estimado: R$ ' + impactoExcesso.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) + '/ano. Foque em aumentar margem ou avalie o Lucro Real.',
+          descricao: 'Margem operacional bruta (' + _arredondar(margemOperacionalBruta * 100, 1) +
+            '%) inferior à presunção (' + _arredondar(percentualPresuncao * 100, 1) +
+            '%). Custo extra: R$ ' + impactoExcesso.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) +
+            '/ano. Avalie o Lucro Real.',
           tipo: 'alerta',
-          impactoEstimado: impactoExcesso
+          impactoEstimado: impactoExcesso,
+          categoria: 'migracao_lr'
         });
       }
     }
 
-    // ── Dica 2: Área SUDAM — exclusivo LR + valor ──
-    if (areaAtuacaoSUDAM) {
-      var irpjEstimadoAnual = receita * percentualPresuncao * 0.15;
-      var economiaIRPJ75 = _arredondar(irpjEstimadoAnual * 0.75);
+    // ── Dica 2: Incentivo Regional (SUDAM/SUDENE/SUDECO) — dinâmico de Estados.js ──
+    if (reducaoRegional.ativo && reducaoRegional.percentualReducao > 0) {
+      // FIX I3: Estimar economia com base no LUCRO OPERACIONAL, não na presunção
+      var lucroOperacionalEstimado = receita - despesasOp - folha;
+      var irpjLREstimado, economiaRegional;
+      if (lucroOperacionalEstimado > 0 && (despesasOp > 0 || folha > 0)) {
+        irpjLREstimado = lucroOperacionalEstimado * 0.15;
+        economiaRegional = _arredondar(irpjLREstimado * reducaoRegional.percentualReducao);
+      } else {
+        // Fallback: usar base presumida quando não há dados de despesas
+        irpjLREstimado = basePresumidaAnual * 0.15;
+        economiaRegional = _arredondar(irpjLREstimado * reducaoRegional.percentualReducao);
+      }
+
       dicas.push({
-        titulo: '🏛️ SUDAM — Redução 75% IRPJ (exclusivo Lucro Real)',
-        descricao: 'Empresas em área SUDAM com laudo aprovado: 75% de redução do IRPJ normal no LR (MP 2.199-14/2001). '
-          + 'Economia estimada do IRPJ: R$ ' + economiaIRPJ75.toLocaleString('pt-BR', {minimumFractionDigits:2}) + '/ano. '
-          + 'ATENÇÃO: NÃO se aplica no Lucro Presumido — exige migração para o LR e apuração do "lucro da exploração". '
-          + 'Adicional de 10% NÃO é reduzido. Exige laudo constitutivo e atividade elegível. '
-          + 'Veja o comparativo detalhado LP vs LR na aba Anual.',
+        titulo: '🏛️ ' + reducaoRegional.tipo + ' — Redução ' + _arredondar(reducaoRegional.percentualReducao * 100) + '% IRPJ (exclusivo Lucro Real)',
+        descricao: reducaoRegional.obs + '. Economia estimada: R$ ' +
+          economiaRegional.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) + '/ano. ' +
+          ((despesasOp > 0 || folha > 0) ? 'Estimativa baseada no lucro operacional (R$ ' +
+            lucroOperacionalEstimado.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) + ').' :
+            'Estimativa baseada na presunção (sem dados de despesas).') +
+          ' NÃO se aplica no LP — exige migração para LR e "lucro da exploração". ' +
+          'Adicional de 10% NÃO é reduzido. Exige laudo constitutivo e atividade elegível.',
         tipo: 'economia',
-        impactoEstimado: economiaIRPJ75
+        impactoEstimado: economiaRegional,
+        categoria: 'migracao_lr'
       });
     }
 
-    // ── Dica 2b: Área SUDENE ──
-    if (areaAtuacaoSUDENE && !areaAtuacaoSUDAM) {
-      var irpjEstSE = receita * percentualPresuncao * 0.15;
-      var econSE = _arredondar(irpjEstSE * 0.75);
+    // ── Dica 2b: Regime de Caixa — priorizar quando sazonalidade detectada ──
+    // FIX I4: receitaSazonal gera dica específica
+    if (receitaSazonal && !regimeCaixa) {
       dicas.push({
-        titulo: '🏛️ SUDENE — Redução 75% IRPJ (exclusivo Lucro Real)',
-        descricao: 'Mesmo benefício da SUDAM para Nordeste. Economia estimada: R$ '
-          + econSE.toLocaleString('pt-BR', {minimumFractionDigits:2}) + '/ano. Exclusivo do LR.',
-        tipo: 'economia',
-        impactoEstimado: econSE
+        titulo: '📊 Sazonalidade detectada — Regime de Caixa recomendado',
+        descricao: 'Receita sazonal informada. O regime de caixa (IN RFB 1.700/2017, Art. 223) ' +
+          'permite tributar sobre recebimentos em vez de faturamento, reduzindo o impacto ' +
+          'de meses com faturamento alto e recebimento baixo.',
+        tipo: 'acao',
+        impactoEstimado: null,
+        categoria: 'otimizacao_lp'
       });
     }
 
-    // ── Dica 3: Regime de Caixa ──
-    dicas.push({
-      titulo: 'Regime de Caixa disponível no Lucro Presumido',
-      descricao: 'O LP permite optar pelo regime de caixa para reconhecimento de receitas (IN RFB 1.700/2017, Art. 223). O imposto é pago somente quando o cliente efetivamente paga. Benefício especial para empresas com alta inadimplência ou prazos longos de recebimento.',
-      tipo: 'info',
-      impactoEstimado: null
-    });
+    // ── Dica 3: Regime de Caixa geral ──
+    if (!regimeCaixa) {
+      dicas.push({
+        titulo: 'Regime de Caixa disponível no Lucro Presumido',
+        descricao: 'O LP permite regime de caixa (IN RFB 1.700/2017, Art. 223). ' +
+          'Imposto pago quando o cliente efetivamente paga. Benefício para inadimplência ou prazos longos.',
+        tipo: 'info',
+        impactoEstimado: null,
+        categoria: 'otimizacao_lp'
+      });
+    } else {
+      dicas.push({
+        titulo: '💵 Regime de Caixa ativado',
+        descricao: 'Tributação sobre recebimentos ativa. Exige Livro Caixa ou escrituração contábil.',
+        tipo: 'info',
+        impactoEstimado: null,
+        categoria: 'otimizacao_lp'
+      });
+    }
 
     // ── Dica 4: Atividades Mistas ──
     if (numReceitas > 1) {
       dicas.push({
         titulo: 'Atividades mistas — Classificação correta é essencial',
-        descricao: 'Sua empresa possui ' + numReceitas + ' atividades/receitas distintas. Cada receita deve ser classificada no percentual de presunção correto (Lei 9.249/95, Art. 15). Classificação incorreta pode gerar autuação fiscal com multa de 75% + juros SELIC.',
+        descricao: numReceitas + ' atividades distintas. Cada receita com percentual de presunção correto (Lei 9.249/95, Art. 15). Erro = autuação 75% + SELIC.',
         tipo: 'alerta',
-        impactoEstimado: null
+        impactoEstimado: null,
+        categoria: 'geral'
       });
     }
 
@@ -492,178 +680,175 @@
         var economiaPISCOFINS = _arredondar(cumulativo - naoCumulativo);
         dicas.push({
           titulo: 'PIS/COFINS — Não-cumulativo pode ser mais vantajoso',
-          descricao: 'Com seus créditos de R$ ' + creditos.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) + ', o PIS/COFINS não-cumulativo (Lucro Real) custaria R$ ' + naoCumulativo.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) + ' vs R$ ' + cumulativo.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) + ' no cumulativo (LP). Economia potencial: R$ ' + economiaPISCOFINS.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) + '/ano.',
+          descricao: 'Créditos de R$ ' + creditos.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) +
+            ': PIS/COFINS NC = R$ ' + naoCumulativo.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) +
+            ' vs cumulativo = R$ ' + cumulativo.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) +
+            '. Economia: R$ ' + economiaPISCOFINS.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) + '/ano.',
           tipo: 'economia',
-          impactoEstimado: economiaPISCOFINS
+          impactoEstimado: economiaPISCOFINS,
+          categoria: 'migracao_lr'
         });
       }
     }
 
-    // ── Dica 6: Zona Franca — PIS/COFINS (se ativo) ──
+    // ── Dica 6: ZFM/SUFRAMA — dinâmico de Estados.js ──
     var totalZFM = receitasVendasZFM + receitasSUFRAMA;
-    if (totalZFM > 0) {
-      var economiaZFM = _arredondar(totalZFM * 0.0365);
-      dicas.push({
-        titulo: '🏭 Zona Franca / SUFRAMA — Isenção PIS/COFINS aplicada',
-        descricao: 'Receitas ZFM/SUFRAMA: R$ ' + totalZFM.toLocaleString('pt-BR', {minimumFractionDigits:2})
-          + '/ano. Economia PIS/COFINS: R$ ' + economiaZFM.toLocaleString('pt-BR', {minimumFractionDigits:2})
-          + '/ano. JÁ incluída no cálculo. Base: Lei 10.996/2004; Decreto 288/67.',
-        tipo: 'economia',
-        impactoEstimado: economiaZFM
-      });
+    if (totalZFM > 0 || beneficiosZFM.zonaFranca || beneficiosZFM.alc) {
+      if (totalZFM > 0) {
+        var economiaZFM = _arredondar(totalZFM * 0.0365);
+        dicas.push({
+          titulo: '🏭 Zona Franca / SUFRAMA — Isenção PIS/COFINS aplicada',
+          descricao: 'Receitas ZFM/SUFRAMA: R$ ' + totalZFM.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) +
+            '. Economia PIS/COFINS: R$ ' + economiaZFM.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) +
+            '/ano. JÁ incluída no cálculo. Base: Lei 10.996/2004; Decreto 288/67.',
+          tipo: 'economia',
+          impactoEstimado: economiaZFM,
+          categoria: 'ja_aplicado'
+        });
+      }
+      if (beneficiosZFM.zonaFranca && totalZFM === 0) {
+        dicas.push({
+          titulo: '🏭 Zona Franca disponível no seu estado',
+          descricao: beneficiosZFM.obs + '. Informe receitas de vendas para ZFM para calcular a isenção de PIS/COFINS.',
+          tipo: 'acao',
+          impactoEstimado: null,
+          categoria: 'geral'
+        });
+      }
     }
 
-    // ── Dica 7: Exportação — imunidade PIS/COFINS ──
+    // ── Dica 7: Exportação ──
     if (receitasExportacao > 0) {
       var econExport = _arredondar(receitasExportacao * 0.0365);
       dicas.push({
         titulo: '🌎 Exportações — Imunidade PIS/COFINS aplicada',
-        descricao: 'Receitas de exportação: R$ ' + receitasExportacao.toLocaleString('pt-BR', {minimumFractionDigits:2})
-          + '/ano. Economia: R$ ' + econExport.toLocaleString('pt-BR', {minimumFractionDigits:2})
-          + '/ano. Base: CF/88, Art. 149, §2º, I.',
+        descricao: 'Exportação: R$ ' + receitasExportacao.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) +
+          '. Economia: R$ ' + econExport.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) +
+          '/ano. CF/88, Art. 149, §2º, I.',
         tipo: 'economia',
-        impactoEstimado: econExport
+        impactoEstimado: econExport,
+        categoria: 'ja_aplicado'
       });
     }
 
-    // ── Dica 8b: Percentual Reduzido 16% ──
-    if (percentualPresuncao === 0.32 && receita <= 120000 && receita > 0) {
+    // ── Dica 8: Percentual Reduzido 16% ──
+    // FIX M2: Usar Math.abs para comparação float
+    if (Math.abs(percentualPresuncao - 0.32) < 0.001 && receita <= 120000 && receita > 0) {
+      // FIX M3: Descrição correta "Economia de IRPJ"
       var econReduzido = _arredondar(receita * 0.16 * 0.15);
       dicas.push({
         titulo: '📉 Percentual Reduzido 16% disponível',
-        descricao: 'Receita ≤ R$ 120.000/ano e serviços gerais (32%). Se prestar EXCLUSIVAMENTE '
-          + 'serviços elegíveis (intermediação, locação, factoring, limpeza, coleta), pode usar 16% no IRPJ. '
-          + 'Economia: R$ ' + econReduzido.toLocaleString('pt-BR', {minimumFractionDigits:2}) + '/ano. '
-          + 'Marque a opção no painel de benefícios. CSLL permanece 32%. Base: IN RFB 1.700/2017, Art. 215, §10.',
+        descricao: 'Receita ≤ R$ 120.000/ano e serviços (32%). Se prestar EXCLUSIVAMENTE ' +
+          'serviços elegíveis, pode usar 16% no IRPJ. Economia de IRPJ: R$ ' +
+          econReduzido.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) +
+          '/ano. CSLL permanece 32%. Base: IN RFB 1.700/2017, Art. 215, §10.',
         tipo: 'economia',
-        impactoEstimado: econReduzido
+        impactoEstimado: econReduzido,
+        categoria: 'otimizacao_lp'
       });
     }
 
-    // ── Dica 8c: Regime de Caixa ativo ──
-    if (regimeCaixa) {
-      dicas.push({
-        titulo: '💵 Regime de Caixa ativado',
-        descricao: 'Tributação sobre recebimentos (não faturamento). O diferimento fiscal é proporcional à inadimplência. '
-          + 'Exige Livro Caixa ou escrituração contábil. Base: IN RFB 1.700/2017, Art. 223.',
-        tipo: 'info',
-        impactoEstimado: null
-      });
-    }
-
-    // ── Dica 8d: ISS sobre atividades mistas ──
+    // ── Dica 8d: ISS misto ──
     if (numReceitas > 1) {
       dicas.push({
         titulo: '⚖️ ISS aplicado apenas sobre serviços',
-        descricao: 'Empresa com atividades mistas: o ISS incide APENAS sobre receitas de serviços (LC 116/2003). '
-          + 'Receitas de comércio/indústria pagam ICMS, não ISS. Esta separação já está no cálculo.',
+        descricao: 'Empresa com atividades mistas: ISS incide APENAS sobre serviços (LC 116/2003).',
         tipo: 'info',
-        impactoEstimado: null
+        impactoEstimado: null,
+        categoria: 'geral'
       });
     }
 
-    // ── Dica 8e (FIX AUDITORIA): ICMS não incluído para comércio/indústria ──
-    if (percentualPresuncao <= 0.08 || (numReceitas > 1)) {
-      // Atividade é comércio (8%) ou mista — alertar sobre ICMS
-      var atividadeEhComercio = percentualPresuncao <= 0.08;
-      if (atividadeEhComercio) {
-        dicas.push({
-          titulo: '🏪 ICMS NÃO incluído — Atividade de comércio/indústria',
-          descricao: 'Este cálculo NÃO inclui ICMS nem IPI. Sua atividade principal é comércio/indústria (presunção '
-            + _arredondar(percentualPresuncao * 100, 1) + '%), sujeita ao ICMS estadual. '
-            + 'A alíquota de ICMS varia de 7% a 25% conforme UF e produto (LC 87/1996). '
-            + 'ISS NÃO se aplica a vendas de mercadorias — o ISS é tributo sobre serviços (LC 116/2003). '
-            + 'A carga tributária real é MAIOR do que a apresentada. Consulte seu contador para o cálculo completo.',
-          tipo: 'alerta',
-          impactoEstimado: null
-        });
-      }
+    // ── Dica 9: Adicional IRPJ ──
+    if (receita > 0 && basePresumidaAnual > 240000) {
+      var adicionalEstimado = _arredondar((basePresumidaAnual - 240000) * 0.10);
+      dicas.push({
+        titulo: 'Adicional de IRPJ de 10% incide sobre sua empresa',
+        descricao: 'Base presumida R$ ' + basePresumidaAnual.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) +
+          ' > R$ 240.000. Adicional: R$ ' + adicionalEstimado.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) +
+          '/ano (RIR/2018, Art. 624).',
+        tipo: 'alerta',
+        impactoEstimado: adicionalEstimado,
+        categoria: 'geral'
+      });
     }
 
-    // ── Dica existente 6: Adicional IRPJ ──
-    if (receita > 0 && atividade) {
-      var basePresumidaAnual = receita * percentualPresuncao;
-      if (basePresumidaAnual > 240000) {
-        var adicionalEstimado = _arredondar((basePresumidaAnual - 240000) * 0.10);
-        dicas.push({
-          titulo: 'Adicional de IRPJ de 10% incide sobre sua empresa',
-          descricao: 'Base presumida anual estimada de R$ ' + basePresumidaAnual.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) + ' excede o limite de R$ 240.000 (R$ 60.000/trimestre). Adicional de 10% sobre o excedente: R$ ' + adicionalEstimado.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) + '/ano (RIR/2018, Art. 624).',
-          tipo: 'alerta',
-          impactoEstimado: adicionalEstimado
-        });
-      }
+    // ── Dica 10: Incentivos estaduais (dinâmico de Estados.js) ──
+    var programasEstaduais = _obterIncentivosEstaduais(incentivos);
+    if (programasEstaduais.length > 0) {
+      var descProgramas = programasEstaduais.map(function(p) {
+        return (p.programa || p.nome || 'Programa') + ': ' + (p.beneficio || p.descricao || '');
+      }).join('; ');
+      dicas.push({
+        titulo: '🏗️ Incentivos Estaduais disponíveis',
+        descricao: 'Programas identificados: ' + descProgramas.substring(0, 500) +
+          '. Verifique elegibilidade com a SEFAZ.',
+        tipo: 'info',
+        impactoEstimado: null,
+        categoria: 'geral'
+      });
     }
 
-    // ── Dica 7: Reforma Tributária 2026-2033 ──
+    // ── Dica 11: Reforma Tributária ──
     dicas.push({
       titulo: 'Reforma Tributária — CBS e IBS (2026-2033)',
-      descricao: 'A Reforma Tributária (EC 132/2023) inicia a transição em 2026: CBS (federal) substituirá PIS/COFINS e IBS (estadual/municipal) substituirá ICMS/ISS. A transição é gradual até 2033. Impacto no LP: PIS/COFINS cumulativo será gradualmente substituído pela CBS. Acompanhe a regulamentação (LC 214/2025) e planeje a adaptação.',
+      descricao: 'EC 132/2023: CBS substituirá PIS/COFINS, IBS substituirá ICMS/ISS. Transição gradual até 2033. ' +
+        'Acompanhe LC 214/2025.',
       tipo: 'info',
-      impactoEstimado: null
+      impactoEstimado: null,
+      categoria: 'geral'
     });
 
-    // ── Dica 8: Escrituração Contábil ──
+    // ── Dica 12: Escrituração Contábil ──
     if (!temEscrituracao) {
       dicas.push({
         titulo: 'Escrituração completa amplia distribuição de lucros',
-        descricao: 'Sem escrituração contábil completa (ECD), a distribuição isenta de lucros fica limitada à base presumida menos impostos (IN RFB 1.700/2017, Art. 238). Com ECD, pode distribuir o lucro contábil efetivo (se maior). Investimento em ECD pode gerar retorno significativo.',
+        descricao: 'Sem ECD, distribuição isenta limitada à base presumida menos impostos ' +
+          '(IN RFB 1.700/2017, Art. 238). Com ECD, pode distribuir lucro contábil efetivo.',
         tipo: 'acao',
-        impactoEstimado: null
+        impactoEstimado: null,
+        categoria: 'otimizacao_lp'
       });
     }
 
-    // ── Dica 9: Break-Even próximo ──
+    // ── Dica 13: Break-even próximo ──
     if (breakeven && breakeven.alerta) {
       dicas.push({
         titulo: 'Break-even LP vs LR requer atenção',
-        descricao: breakeven.alerta + ' ' + breakeven.recomendacao + ' Reavalie o regime tributário anualmente com base em dados atualizados.',
+        descricao: breakeven.alerta + ' ' + breakeven.recomendacao,
         tipo: 'alerta',
-        impactoEstimado: null
+        impactoEstimado: null,
+        categoria: 'geral'
       });
     }
 
-    // ── Dica 10: Investimentos/P&D ──
+    // ── Dica 14: P&D / Equipamentos ──
     if (temEquipamentos || temPD) {
       var descricaoPD = [];
-      if (temEquipamentos) {
-        descricaoPD.push('depreciação acelerada de equipamentos (Lei 11.196/2005, Art. 17)');
-      }
-      if (temPD) {
-        descricaoPD.push('incentivos da Lei do Bem para P&D (Lei 11.196/2005, Cap. III)');
-      }
+      if (temEquipamentos) descricaoPD.push('depreciação acelerada (Lei 11.196/2005, Art. 17)');
+      if (temPD) descricaoPD.push('incentivos Lei do Bem (Lei 11.196/2005, Cap. III)');
       dicas.push({
         titulo: 'Investimentos/P&D — Benefícios exclusivos do Lucro Real',
-        descricao: 'Sua empresa possui investimentos que podem gerar benefícios tributários no Lucro Real: ' + descricaoPD.join('; ') + '. Esses incentivos NÃO estão disponíveis no Lucro Presumido. Avalie se o volume de investimentos justifica a migração.',
+        descricao: 'Benefícios possíveis no LR: ' + descricaoPD.join('; ') + '. NÃO disponíveis no LP.',
         tipo: 'economia',
-        impactoEstimado: null
+        impactoEstimado: null,
+        categoria: 'migracao_lr'
       });
     }
 
-    // ── Ordenar: alertas → economia → ação → info ──
+    // Ordenar por prioridade
     var ordemTipo = { alerta: 0, economia: 1, acao: 2, info: 3 };
     dicas.sort(function (a, b) {
-      var oa = ordemTipo[a.tipo] !== undefined ? ordemTipo[a.tipo] : 9;
-      var ob = ordemTipo[b.tipo] !== undefined ? ordemTipo[b.tipo] : 9;
-      return oa - ob;
+      return (ordemTipo[a.tipo] || 9) - (ordemTipo[b.tipo] || 9);
     });
 
     return dicas;
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // FUNÇÃO 3: calcularImpactoLC224 — Wrapper LC 224/2025
+  // FUNÇÃO 3: calcularImpactoLC224
   // ─────────────────────────────────────────────────────────────────────────
 
-  /**
-   * Calcula o impacto anual da LC 224/2025 (receita > R$ 5M).
-   *
-   * @param {Object} params
-   * @param {number} params.receitaBrutaAnual
-   * @param {string} params.atividadeId
-   * @param {number} [params.anoCalendario=2026]
-   *
-   * @returns {Object|null} null se receita <= 5M ou LC 224 não aplicável
-   */
   function calcularImpactoLC224(params) {
     _validarParams(params, ['receitaBrutaAnual'], 'calcularImpactoLC224');
 
@@ -671,16 +856,10 @@
     var atividadeId = params.atividadeId || DEFAULTS.atividadeId;
     var anoCalendario = params.anoCalendario || 2026;
 
-    // Se receita <= 5M, LC 224 não se aplica
-    if (receita <= LC224_LIMITE_ANUAL) {
-      return null;
-    }
+    if (receita <= LC224_LIMITE_ANUAL) return null;
 
-    // Buscar percentual de presunção da atividade
     var atividade = _getAtividadeInfo(atividadeId);
-    if (!atividade) {
-      return null;
-    }
+    if (!atividade) return null;
 
     var percentualPresuncao = atividade.percentualIRPJ;
     var receitaTrimestral = receita / 4;
@@ -689,7 +868,6 @@
 
     for (var q = 1; q <= 4; q++) {
       var receitaAcumulada = receitaTrimestral * q;
-
       try {
         var resultadoLC224 = LucroPresumido.calcularBasePresumidaLC224({
           receitaBrutaTrimestral: receitaTrimestral,
@@ -698,45 +876,18 @@
           trimestreAtual: q,
           anoCalendario: anoCalendario
         });
-
         var baseSemLC224 = receitaTrimestral * percentualPresuncao;
         var baseComLC224 = resultadoLC224.basePresumida;
         var impacto = _arredondar(baseComLC224 - baseSemLC224);
-
-        trimestres.push({
-          trimestre: q,
-          baseSemLC224: _arredondar(baseSemLC224),
-          baseComLC224: _arredondar(baseComLC224),
-          impacto: impacto
-        });
-
+        trimestres.push({ trimestre: q, baseSemLC224: _arredondar(baseSemLC224), baseComLC224: _arredondar(baseComLC224), impacto: impacto });
         impactoTotalBase += impacto;
       } catch (e) {
-        trimestres.push({
-          trimestre: q,
-          baseSemLC224: _arredondar(receitaTrimestral * percentualPresuncao),
-          baseComLC224: _arredondar(receitaTrimestral * percentualPresuncao),
-          impacto: 0
-        });
+        trimestres.push({ trimestre: q, erro: e.message });
       }
     }
 
     impactoTotalBase = _arredondar(impactoTotalBase);
-    // FIX (Erro 15): Usar 0.34 (15% IRPJ + 10% adicional + 9% CSLL) em vez de 0.24.
-    // Empresas com receita > R$ 5M (caso da LC 224) quase certamente excedem R$ 60.000/trim de base,
-    // portanto o adicional de 10% do IRPJ incide sobre o impacto na base.
-    var impostoExtraEstimado = _arredondar(impactoTotalBase * 0.34); // 15% IRPJ + 10% adicional + 9% CSLL
-
-    // Se não houve impacto (todos trimestres sem aplicação), retornar null
-    if (impactoTotalBase === 0) {
-      return null;
-    }
-
-    var alertaMsg = 'A LC 224/2025 aumenta a base presumida em R$ ' +
-      impactoTotalBase.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) +
-      '/ano, gerando imposto extra estimado de R$ ' +
-      impostoExtraEstimado.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) +
-      '. Vigência a partir de 01/04/2026 (2º trimestre). Receitas até R$ 5M/ano permanecem sem acréscimo.';
+    var impostoExtraEstimado = _arredondar(impactoTotalBase * 0.34);
 
     return {
       aplicavel: true,
@@ -745,25 +896,25 @@
       impactoTotalBase: impactoTotalBase,
       impostoExtraEstimado: impostoExtraEstimado,
       baseLegal: 'LC 224/2025, Art. 14. Vigência a partir de 01/04/2026.',
-      alerta: alertaMsg
+      alerta: 'LC 224/2025 aumenta base presumida em R$ ' + impactoTotalBase.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) +
+        '/ano. Imposto extra: R$ ' + impostoExtraEstimado.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) + '.'
     };
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // FUNÇÃO 4: calcularEconomiaPotencial — Resumo de Economias
+  // FUNÇÃO 4: calcularEconomiaPotencial — v3.0 com 3 categorias
   // ─────────────────────────────────────────────────────────────────────────
 
   /**
-   * Consolida todas as oportunidades de economia identificadas.
+   * Consolida oportunidades de economia em 3 categorias MUTUAMENTE EXCLUSIVAS:
    *
-   * @param {Object} params
-   * @param {Object|null} params.proLabore - resultado do LucroPresumido.simularProLaboreOtimo()
-   * @param {Object|null} params.ecd - resultado do LucroPresumido.calcularBeneficioECD()
-   * @param {Object|null} params.caixaComp - resultado do LucroPresumido.simularRegimeCaixa()
-   * @param {Object|null} params.breakeven - resultado do calcularBreakEven()
-   * @param {Array} params.dicas - resultado do gerarDicasInteligentes()
+   *   1. otimizacoesLP — Economias possíveis MANTENDO o LP (pró-labore, ECD, caixa)
+   *   2. migracaoLR    — Economia se MIGRAR para LR (break-even, incentivos regionais)
+   *   3. jaAplicados   — Benefícios JÁ incluídos no cálculo (ZFM, exportação, ISS misto)
    *
-   * @returns {Object} Resumo consolidado de economias
+   * O totalEconomiaAnual = MAX(otimizacoesLP, migracaoLR) — NUNCA soma os dois.
+   *
+   * FIX C2: Eliminado double counting. SUDAM/SUDENE aparece UMA VEZ em migracaoLR.
    */
   function calcularEconomiaPotencial(params) {
     _validarParams(params, [], 'calcularEconomiaPotencial');
@@ -773,217 +924,191 @@
     var caixaComp = params.caixaComp || null;
     var breakeven = params.breakeven || null;
     var dicas = params.dicas || [];
+    var comparativoRegional = params.comparativoRegional || null;
 
-    var totalEconomiaAnual = 0;
-    var totalDiferimento = 0;
-    var fontes = [];
+    // ═══ CATEGORIA 1: Otimizações dentro do LP ═══
+    var otimizacoesLP = [];
+    var totalOtimizacoesLP = 0;
 
-    // 1. Pró-labore ótimo
+    // 1a. Pró-labore ótimo
     if (proLabore && typeof proLabore.economiaAnual === 'number' && proLabore.economiaAnual > 0) {
       var valPL = _arredondar(proLabore.economiaAnual);
-      totalEconomiaAnual += valPL;
-      fontes.push({
+      totalOtimizacoesLP += valPL;
+      otimizacoesLP.push({
         fonte: 'Otimização Pró-Labore',
         valor: valPL,
-        tipo: 'economia',
-        descricao: 'Ajuste do pró-labore para o ponto ótimo tributário.' + (proLabore.recomendacao ? ' ' + proLabore.recomendacao : '')
+        descricao: 'Ajuste do pró-labore para ponto ótimo tributário.' + (proLabore.recomendacao ? ' ' + proLabore.recomendacao : '')
       });
     }
 
-    // 2. ECD (Escrituração Contábil Digital)
+    // 1b. ECD
     if (ecd && ecd.valeAPena && typeof ecd.beneficioLiquido === 'number' && ecd.beneficioLiquido > 0) {
       var valECD = _arredondar(ecd.beneficioLiquido);
-      totalEconomiaAnual += valECD;
-      fontes.push({
+      totalOtimizacoesLP += valECD;
+      otimizacoesLP.push({
         fonte: 'Escrituração Contábil (ECD)',
         valor: valECD,
-        tipo: 'economia',
-        descricao: 'Ampliação da distribuição isenta de lucros via escrituração contábil completa.'
+        descricao: 'Ampliação da distribuição isenta via escrituração completa.'
       });
     }
 
-    // 3. Regime Caixa (diferimento, não economia real)
-    if (caixaComp && typeof caixaComp.totalDiferido === 'number' && caixaComp.totalDiferido > 0) {
-      var valCaixa = _arredondar(caixaComp.totalDiferido);
-      totalDiferimento += valCaixa;
-      fontes.push({
-        fonte: 'Regime de Caixa',
-        valor: valCaixa,
-        tipo: 'diferimento',
-        descricao: 'Diferimento de tributos pela adoção do regime de caixa. Não é economia definitiva — tributo é postergado.'
-      });
+    // 1c. Dicas tipo economia que são otimizações LP
+    for (var d = 0; d < dicas.length; d++) {
+      if (dicas[d].tipo === 'economia' && dicas[d].impactoEstimado > 0 && dicas[d].categoria === 'otimizacao_lp') {
+        var tituloLP = (dicas[d].titulo || '').toLowerCase().trim();
+        var jaDuplicadoLP = false;
+        for (var f = 0; f < otimizacoesLP.length; f++) {
+          if ((otimizacoesLP[f].fonte || '').toLowerCase().trim() === tituloLP) { jaDuplicadoLP = true; break; }
+        }
+        if (!jaDuplicadoLP) {
+          var valDicaLP = _arredondar(dicas[d].impactoEstimado);
+          totalOtimizacoesLP += valDicaLP;
+          otimizacoesLP.push({ fonte: dicas[d].titulo, valor: valDicaLP, descricao: dicas[d].descricao });
+        }
+      }
     }
 
-    // 4. Break-even: se LR for melhor na margem real, calcular diferença
-    if (breakeven && breakeven.margemRealAtual !== null && breakeven.breakEvenMargem !== null &&
-        breakeven.margemRealAtual < breakeven.breakEvenMargem && breakeven.margens && breakeven.margens.length > 0) {
-      var margemIdx = Math.max(0, Math.min(Math.round(breakeven.margemRealAtual) - 1, breakeven.margens.length - 1));
+    // ═══ CATEGORIA 2: Economia por migração para LR ═══
+    var migracaoLR = [];
+    var totalMigracaoLR = 0;
+
+    // 2a. Break-even: diferença LP vs LR na margem real
+    if (breakeven && breakeven.margemOperacionalBruta !== null && breakeven.breakEvenMargem !== null &&
+        breakeven.margemOperacionalBruta < breakeven.breakEvenMargem && breakeven.margens && breakeven.margens.length > 0) {
+      var margemIdx = Math.max(0, Math.min(Math.round(breakeven.margemOperacionalBruta) - 1, breakeven.margens.length - 1));
       var entradaMargem = breakeven.margens[margemIdx];
       if (entradaMargem) {
-        var diffLR = _arredondar(breakeven.cargaTributariaLP - entradaMargem.cargaLR);
+        var diffLR = _arredondar(entradaMargem.cargaLP - entradaMargem.cargaLR);
         if (diffLR > 0) {
-          totalEconomiaAnual += diffLR;
-          fontes.push({
+          totalMigracaoLR += diffLR;
+          migracaoLR.push({
             fonte: 'Migração para Lucro Real',
             valor: diffLR,
-            tipo: 'economia',
-            descricao: 'Economia estimada se migrar para Lucro Real, considerando margem real atual de ' + breakeven.margemRealAtual + '%.'
+            descricao: 'Economia tributária na margem real de ' + breakeven.margemOperacionalBruta + '%.'
           });
         }
       }
     }
 
-    // 5. Dicas do tipo 'economia' com impactoEstimado > 0
-    for (var d = 0; d < dicas.length; d++) {
-      if (dicas[d].tipo === 'economia' && dicas[d].impactoEstimado && dicas[d].impactoEstimado > 0) {
-        var jaDuplicado = false;
-        var tituloNormalizado = (dicas[d].titulo || '').toLowerCase().trim();
-        for (var f = 0; f < fontes.length; f++) {
-          if ((fontes[f].fonte || '').toLowerCase().trim() === tituloNormalizado) {
-            jaDuplicado = true;
-            break;
-          }
+    // 2b. Incentivo Regional (UMA VEZ SÓ — FIX C2: sem duplicação)
+    if (comparativoRegional && comparativoRegional.aplicavel && comparativoRegional.economiaEstimada > 0) {
+      var valRegional = _arredondar(comparativoRegional.economiaEstimada);
+      totalMigracaoLR += valRegional;
+      migracaoLR.push({
+        fonte: (comparativoRegional.tipo || 'Incentivo Regional') + ' — Redução IRPJ no LR',
+        valor: valRegional,
+        descricao: 'Redução IRPJ no Lucro Real. Requer migração + laudo aprovado.'
+      });
+    }
+
+    // 2c. Dicas tipo economia que são migração LR (EXCETO as que são do incentivo regional, para evitar duplicação)
+    for (var d2 = 0; d2 < dicas.length; d2++) {
+      if (dicas[d2].tipo === 'economia' && dicas[d2].impactoEstimado > 0 && dicas[d2].categoria === 'migracao_lr') {
+        var tituloLR = (dicas[d2].titulo || '').toLowerCase().trim();
+        // Evitar duplicar SUDAM/SUDENE/SUDECO que já está no comparativoRegional
+        if (tituloLR.indexOf('sudam') !== -1 || tituloLR.indexOf('sudene') !== -1 || tituloLR.indexOf('sudeco') !== -1) continue;
+        var jaDuplicadoLR = false;
+        for (var f2 = 0; f2 < migracaoLR.length; f2++) {
+          if ((migracaoLR[f2].fonte || '').toLowerCase().trim() === tituloLR) { jaDuplicadoLR = true; break; }
         }
-        if (!jaDuplicado) {
-          var valDica = _arredondar(dicas[d].impactoEstimado);
-          totalEconomiaAnual += valDica;
-          fontes.push({
-            fonte: dicas[d].titulo,
-            valor: valDica,
-            tipo: 'economia',
-            descricao: dicas[d].descricao
-          });
+        if (!jaDuplicadoLR) {
+          var valDicaLR = _arredondar(dicas[d2].impactoEstimado);
+          totalMigracaoLR += valDicaLR;
+          migracaoLR.push({ fonte: dicas[d2].titulo, valor: valDicaLR, descricao: dicas[d2].descricao });
         }
       }
     }
 
-    // ── Economias de benefícios fiscais (já aplicadas) ──
+    // ═══ CATEGORIA 3: Benefícios já aplicados (NÃO soma — apenas referência) ═══
+    var jaAplicados = [];
+    var totalJaAplicados = 0;
+
     if (params.beneficiosDetalhados) {
       var bd = params.beneficiosDetalhados;
-
-      if (bd.issApenasServicos && bd.issApenasServicos.economiaISS > 0) {
-        fontes.push({
-          fonte: 'ISS apenas sobre serviços',
-          valor: _arredondar(bd.issApenasServicos.economiaISS),
-          tipo: 'economia',
-          descricao: 'ISS não incide sobre comércio/indústria (LC 116/2003).',
-          jaAplicada: true
-        });
-        totalEconomiaAnual += _arredondar(bd.issApenasServicos.economiaISS);
-      }
-      if (bd.inssSeparado && bd.inssSeparado.economiaRAT > 0) {
-        fontes.push({
-          fonte: 'INSS: RAT/Terceiros excluídos do pró-labore',
-          valor: _arredondar(bd.inssSeparado.economiaRAT),
-          tipo: 'economia',
-          descricao: 'Pró-labore: apenas 20% patronal (Lei 8.212/91, Art. 22, III).',
-          jaAplicada: true
-        });
-        totalEconomiaAnual += _arredondar(bd.inssSeparado.economiaRAT);
-      }
-      if (bd.zonFrancaVendas && bd.zonFrancaVendas.economiaPISCOFINS > 0) {
-        fontes.push({
-          fonte: 'Vendas para ZFM — PIS/COFINS',
-          valor: _arredondar(bd.zonFrancaVendas.economiaPISCOFINS),
-          tipo: 'economia',
-          descricao: 'Isenção PIS/COFINS (Lei 10.996/2004, Art. 2º).',
-          jaAplicada: true
-        });
-        totalEconomiaAnual += _arredondar(bd.zonFrancaVendas.economiaPISCOFINS);
-      }
-      if (bd.suframaSediada && bd.suframaSediada.economiaPISCOFINS > 0) {
-        fontes.push({
-          fonte: 'SUFRAMA — PIS/COFINS',
-          valor: _arredondar(bd.suframaSediada.economiaPISCOFINS),
-          tipo: 'economia',
-          descricao: 'Projeto SUFRAMA aprovado (Decreto 288/67).',
-          jaAplicada: true
-        });
-        totalEconomiaAnual += _arredondar(bd.suframaSediada.economiaPISCOFINS);
-      }
-      if (bd.exportacao && bd.exportacao.economiaPISCOFINS > 0) {
-        fontes.push({
-          fonte: 'Exportações — PIS/COFINS',
-          valor: _arredondar(bd.exportacao.economiaPISCOFINS),
-          tipo: 'economia',
-          descricao: 'Imunidade constitucional (CF/88, Art. 149, §2º, I).',
-          jaAplicada: true
-        });
-        totalEconomiaAnual += _arredondar(bd.exportacao.economiaPISCOFINS);
+      var items = [
+        { cond: bd.issApenasServicos && bd.issApenasServicos.economiaISS > 0, fonte: 'ISS apenas sobre serviços', valor: bd.issApenasServicos ? bd.issApenasServicos.economiaISS : 0, desc: 'LC 116/2003' },
+        { cond: bd.inssSeparado && bd.inssSeparado.economiaRAT > 0, fonte: 'INSS: RAT/Terceiros excluídos do pró-labore', valor: bd.inssSeparado ? bd.inssSeparado.economiaRAT : 0, desc: 'Lei 8.212/91, Art. 22, III' },
+        { cond: bd.zonFrancaVendas && bd.zonFrancaVendas.economiaPISCOFINS > 0, fonte: 'Vendas ZFM — PIS/COFINS', valor: bd.zonFrancaVendas ? bd.zonFrancaVendas.economiaPISCOFINS : 0, desc: 'Lei 10.996/2004' },
+        { cond: bd.suframaSediada && bd.suframaSediada.economiaPISCOFINS > 0, fonte: 'SUFRAMA — PIS/COFINS', valor: bd.suframaSediada ? bd.suframaSediada.economiaPISCOFINS : 0, desc: 'Decreto 288/67' },
+        { cond: bd.exportacao && bd.exportacao.economiaPISCOFINS > 0, fonte: 'Exportações — PIS/COFINS', valor: bd.exportacao ? bd.exportacao.economiaPISCOFINS : 0, desc: 'CF/88, Art. 149, §2º, I' }
+      ];
+      for (var bi = 0; bi < items.length; bi++) {
+        if (items[bi].cond) {
+          var v = _arredondar(items[bi].valor);
+          totalJaAplicados += v;
+          jaAplicados.push({ fonte: items[bi].fonte, valor: v, descricao: items[bi].desc, jaAplicada: true });
+        }
       }
     }
 
-    // Comparativo SUDAM/SUDENE (economia potencial no LR, não aplicada)
-    if (params.comparativoSUDAM && params.comparativoSUDAM.aplicavel && params.comparativoSUDAM.economiaEstimada > 0) {
-      fontes.push({
-        fonte: params.comparativoSUDAM.tipo + ' — Economia no Lucro Real',
-        valor: _arredondar(params.comparativoSUDAM.economiaEstimada),
-        tipo: 'economia',
-        descricao: 'Redução 75% IRPJ no LR. Requer migração + laudo aprovado.',
-        jaAplicada: false,
-        requerMigracao: true
-      });
-      totalEconomiaAnual += _arredondar(params.comparativoSUDAM.economiaEstimada);
+    // ═══ DIFERIMENTO (separado) ═══
+    var totalDiferimento = 0;
+    var diferimentos = [];
+    if (caixaComp && typeof caixaComp.totalDiferido === 'number' && caixaComp.totalDiferido > 0) {
+      totalDiferimento = _arredondar(caixaComp.totalDiferido);
+      diferimentos.push({ fonte: 'Regime de Caixa', valor: totalDiferimento, descricao: 'Postergação de tributos (não economia definitiva).' });
     }
 
-    totalEconomiaAnual = _arredondar(totalEconomiaAnual);
-    totalDiferimento = _arredondar(totalDiferimento);
+    // ═══ TOTAL: MAX(otimizacoesLP, migracaoLR) — FIX C2 ═══
+    totalOtimizacoesLP = _arredondar(totalOtimizacoesLP);
+    totalMigracaoLR = _arredondar(totalMigracaoLR);
+    totalJaAplicados = _arredondar(totalJaAplicados);
+
+    var totalEconomiaAnual = Math.max(totalOtimizacoesLP, totalMigracaoLR);
+    var melhorCenario = totalMigracaoLR > totalOtimizacoesLP ? 'Migração para Lucro Real' : 'Otimizações no LP';
+    if (totalOtimizacoesLP === 0 && totalMigracaoLR === 0) melhorCenario = 'Nenhuma economia identificada';
 
     // Recomendação principal
     var recomendacaoPrincipal = '';
-    var fontesEconomia = [];
-    for (var fe = 0; fe < fontes.length; fe++) {
-      if (fontes[fe].tipo === 'economia') fontesEconomia.push(fontes[fe]);
-    }
-    if (fontes.length === 0) {
-      recomendacaoPrincipal = 'Nenhuma oportunidade de economia significativa identificada com os dados informados.';
-    } else if (totalEconomiaAnual > 0) {
-      recomendacaoPrincipal = 'Economia potencial de R$ ' + totalEconomiaAnual.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) + '/ano identificada em ' + fontesEconomia.length + ' fonte(s). Priorize as ações recomendadas.';
+    if (totalEconomiaAnual > 0) {
+      recomendacaoPrincipal = 'Economia potencial: R$ ' + totalEconomiaAnual.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) +
+        '/ano (' + melhorCenario + ').';
     } else if (totalDiferimento > 0) {
-      recomendacaoPrincipal = 'Diferimento tributário de R$ ' + totalDiferimento.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) + ' possível via regime de caixa.';
+      recomendacaoPrincipal = 'Diferimento tributário de R$ ' + totalDiferimento.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) + ' via regime de caixa.';
+    } else {
+      recomendacaoPrincipal = 'Nenhuma oportunidade significativa identificada com os dados informados.';
     }
 
-    // Nível de oportunidade: alto > 15%, médio 5-15%, baixo < 5%
+    // Nível de oportunidade
     var cargaTotal = breakeven ? breakeven.cargaTributariaLP : 0;
     var nivelOportunidade = 'baixo';
     if (cargaTotal > 0) {
-      var percentEconomia = totalEconomiaAnual / cargaTotal;
-      if (percentEconomia > 0.15) {
-        nivelOportunidade = 'alto';
-      } else if (percentEconomia >= 0.05) {
-        nivelOportunidade = 'medio';
-      }
+      var pctEcon = totalEconomiaAnual / cargaTotal;
+      if (pctEcon > 0.15) nivelOportunidade = 'alto';
+      else if (pctEcon >= 0.05) nivelOportunidade = 'medio';
     } else if (totalEconomiaAnual > 0) {
       nivelOportunidade = 'medio';
     }
 
     return {
+      // FIX C2: 3 categorias mutuamente exclusivas
       totalEconomiaAnual: totalEconomiaAnual,
+      melhorCenario: melhorCenario,
+
+      totalOtimizacoesLP: totalOtimizacoesLP,
+      otimizacoesLP: otimizacoesLP,
+
+      totalMigracaoLR: totalMigracaoLR,
+      migracaoLR: migracaoLR,
+
+      totalJaAplicados: totalJaAplicados,
+      jaAplicados: jaAplicados,
+
       totalDiferimento: totalDiferimento,
-      fontes: fontes,
+      diferimentos: diferimentos,
+
+      // Compatibilidade: fontes = todas (para renderização legada)
+      fontes: otimizacoesLP.concat(migracaoLR).concat(jaAplicados.map(function(j) { j.tipo = 'ja_aplicado'; return j; })).concat(diferimentos.map(function(df) { df.tipo = 'diferimento'; return df; })),
+
       recomendacaoPrincipal: recomendacaoPrincipal,
       nivelOportunidade: nivelOportunidade
     };
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // FUNÇÃO 5: gerarResumoExecutivo — Síntese para PDF/Sidebar
+  // FUNÇÃO 5: gerarResumoExecutivo
   // ─────────────────────────────────────────────────────────────────────────
 
-  /**
-   * Gera um objeto com todos os KPIs e textos prontos para exibição.
-   *
-   * @param {Object} params
-   * @param {Object} params.anual - resultado calcularAnualConsolidado
-   * @param {Object} params.breakeven - resultado calcularBreakEven
-   * @param {Object} params.economia - resultado calcularEconomiaPotencial
-   * @param {Array}  params.dicas - resultado gerarDicasInteligentes
-   * @param {string} params.razaoSocial
-   * @param {string} params.cnpj
-   * @param {string} params.atividadeId
-   *
-   * @returns {Object} Resumo executivo com KPIs prontos para renderização
-   */
   function gerarResumoExecutivo(params) {
     _validarParams(params, ['anual', 'breakeven', 'economia'], 'gerarResumoExecutivo');
 
@@ -994,87 +1119,85 @@
     var razaoSocial = params.razaoSocial || '';
     var cnpj = params.cnpj || '';
     var atividadeId = params.atividadeId || DEFAULTS.atividadeId;
+    var ufEmpresa = params.ufEmpresa || '';
 
-    // Buscar informações da atividade
     var atividade = _getAtividadeInfo(atividadeId);
     var descricaoAtividade = atividade ? atividade.descricao : atividadeId;
     var percentualPresuncao = atividade ? _arredondar(atividade.percentualIRPJ * 100, 1) + '%' : 'N/A';
 
-    // KPIs do anual consolidado
     var receitaBrutaAnual = anual.receitaBrutaAnual || 0;
     var cargaTotal = anual.consolidacao ? anual.consolidacao.cargaTributariaTotal : 0;
     var percentCarga = anual.consolidacao ? anual.consolidacao.percentualCargaTributaria : '0%';
     var lucroDistribuivel = anual.distribuicaoLucros ? anual.distribuicaoLucros.lucroDistribuivelFinal : 0;
 
-    // Break-even
-    var breakEvenMargem = breakeven.breakEvenMargem !== null && breakeven.breakEvenMargem !== undefined
-      ? breakeven.breakEvenMargem + '%' : null;
-    var margemReal = breakeven.margemRealAtual !== null && breakeven.margemRealAtual !== undefined
-      ? breakeven.margemRealAtual + '%' : null;
+    var breakEvenMargem = breakeven.breakEvenMargem != null ? breakeven.breakEvenMargem + '%' : null;
+    var margemReal = breakeven.margemOperacionalBruta != null ? breakeven.margemOperacionalBruta + '%' : null;
 
-    // Top 3 dicas (já ordenadas por prioridade)
     var top3 = [];
-    for (var d = 0; d < Math.min(3, dicas.length); d++) {
-      top3.push(dicas[d].titulo);
-    }
+    for (var d = 0; d < Math.min(3, dicas.length); d++) top3.push(dicas[d].titulo);
 
-    // Regime recomendado
+    // FIX M4: Margem de 5pp (não 10pp)
     var regimeRecomendado = 'Avaliar com contador';
     if (breakeven.lpSempreVantajoso) {
       regimeRecomendado = 'Lucro Presumido';
     } else if (breakeven.lrSempreVantajoso) {
       regimeRecomendado = 'Lucro Real';
-    } else if (breakeven.margemRealAtual !== null && breakeven.margemRealAtual !== undefined &&
-               breakeven.breakEvenMargem !== null && breakeven.breakEvenMargem !== undefined) {
-      if (breakeven.margemRealAtual > breakeven.breakEvenMargem + 10) {
+    } else if (breakeven.margemOperacionalBruta != null && breakeven.breakEvenMargem != null) {
+      if (breakeven.margemOperacionalBruta > breakeven.breakEvenMargem + 5) {
         regimeRecomendado = 'Lucro Presumido';
-      } else if (breakeven.margemRealAtual < breakeven.breakEvenMargem - 10) {
+      } else if (breakeven.margemOperacionalBruta < breakeven.breakEvenMargem - 5) {
         regimeRecomendado = 'Lucro Real';
       }
     }
 
-    // Data formatada pt-BR
+    // Data formatada
     var agora = new Date();
-    var dia = ('0' + agora.getDate()).slice(-2);
-    var mes = ('0' + (agora.getMonth() + 1)).slice(-2);
-    var ano = agora.getFullYear();
-    var dataFormatada = dia + '/' + mes + '/' + ano;
+    var dataFormatada = ('0' + agora.getDate()).slice(-2) + '/' + ('0' + (agora.getMonth() + 1)).slice(-2) + '/' + agora.getFullYear();
 
-    // Ações de economia rankeadas por valor
+    // Ações de economia rankeadas
     var acoesEconomia = [];
     if (economia.fontes && economia.fontes.length > 0) {
-      var fontesOrdenadas = economia.fontes.slice().sort(function(a, b) {
-        return (b.valor || 0) - (a.valor || 0);
-      });
-      for (var ae = 0; ae < Math.min(5, fontesOrdenadas.length); ae++) {
+      var fontesOrd = economia.fontes.slice().sort(function(a, b) { return (b.valor || 0) - (a.valor || 0); });
+      for (var ae = 0; ae < Math.min(5, fontesOrd.length); ae++) {
         acoesEconomia.push({
-          acao: fontesOrdenadas[ae].fonte,
-          valor: fontesOrdenadas[ae].valor,
-          tipo: fontesOrdenadas[ae].tipo,
-          jaAplicada: fontesOrdenadas[ae].jaAplicada || false
+          acao: fontesOrd[ae].fonte,
+          valor: fontesOrd[ae].valor,
+          tipo: fontesOrd[ae].tipo || 'economia',
+          jaAplicada: fontesOrd[ae].jaAplicada || false
         });
       }
     }
 
-    // ── Benefícios fiscais ativos ──
+    // Benefícios fiscais (dinâmicos)
     var beneficiosResumo = [];
-    if (params.beneficiosDetalhados) {
-      var bd = params.beneficiosDetalhados;
-      if (bd.economiaTotal > 0) {
-        beneficiosResumo.push('Economia total com benefícios aplicados: R$ '
-          + bd.economiaTotal.toLocaleString('pt-BR', {minimumFractionDigits:2}) + '/ano.');
-      }
-      if (bd.sudamSudene && bd.sudamSudene.ativo) {
-        beneficiosResumo.push('⚠️ ' + bd.sudamSudene.tipo
-          + ' detectado — economia de ~R$ '
-          + (params.comparativoSUDAM ? params.comparativoSUDAM.economiaEstimada : 0).toLocaleString('pt-BR', {minimumFractionDigits:2})
-          + '/ano disponível no Lucro Real.');
-      }
+    if (params.beneficiosDetalhados && params.beneficiosDetalhados.economiaTotal > 0) {
+      beneficiosResumo.push('Economia com benefícios aplicados: R$ ' +
+        params.beneficiosDetalhados.economiaTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) + '/ano.');
+    }
+    if (params.reducaoRegional && params.reducaoRegional.ativo) {
+      beneficiosResumo.push('⚠️ ' + params.reducaoRegional.tipo + ' disponível — economia estimada de R$ ' +
+        (params.comparativoRegional ? params.comparativoRegional.economiaEstimada : 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) +
+        '/ano no Lucro Real.');
+    }
+
+    // NOVO P3: Próximos Passos priorizados
+    var proximosPassos = [];
+    if (economia.otimizacoesLP && economia.otimizacoesLP.length > 0) {
+      var topOtim = economia.otimizacoesLP.slice().sort(function(a,b) { return (b.valor||0) - (a.valor||0); });
+      proximosPassos.push({ prioridade: 'urgente', acao: topOtim[0].fonte, valor: topOtim[0].valor, descricao: topOtim[0].descricao });
+    }
+    if (!params.temEscrituracao) {
+      var ecdEstimado = economia.otimizacoesLP ? economia.otimizacoesLP.filter(function(o) { return o.fonte.indexOf('ECD') !== -1; }) : [];
+      proximosPassos.push({ prioridade: 'medio_prazo', acao: 'Implementar escrituração contábil completa (ECD)', valor: ecdEstimado.length > 0 ? ecdEstimado[0].valor : null, descricao: 'Amplia distribuição isenta de lucros.' });
+    }
+    if (params.reducaoRegional && params.reducaoRegional.ativo) {
+      proximosPassos.push({ prioridade: 'estrategico', acao: 'Avaliar migração para LR com ' + params.reducaoRegional.tipo, valor: params.comparativoRegional ? params.comparativoRegional.economiaEstimada : null, descricao: 'Redução de ' + _arredondar((params.reducaoRegional.percentualReducao || 0) * 100) + '% no IRPJ.' });
     }
 
     return {
       empresa: razaoSocial,
       cnpj: cnpj,
+      ufEmpresa: ufEmpresa,
       atividade: descricaoAtividade,
       percentualPresuncao: percentualPresuncao,
       receitaBrutaAnual: receitaBrutaAnual,
@@ -1084,12 +1207,17 @@
       breakEvenMargem: breakEvenMargem,
       margemRealAtual: margemReal,
       economiaPotencial: economia.totalEconomiaAnual,
+      melhorCenario: economia.melhorCenario,
+      economiaMantendoLP: economia.totalOtimizacoesLP,
+      economiaMigrandoLR: economia.totalMigracaoLR,
+      beneficiosJaAplicados: economia.totalJaAplicados,
       nivelOportunidade: economia.nivelOportunidade,
       recomendacaoPrincipal: economia.recomendacaoPrincipal,
       top3Dicas: top3,
       acoesEconomia: acoesEconomia,
       beneficiosFiscais: beneficiosResumo,
       regimeRecomendado: regimeRecomendado,
+      proximosPassos: proximosPassos,
       dataEstudo: dataFormatada
     };
   }
@@ -1099,73 +1227,15 @@
   // ─────────────────────────────────────────────────────────────────────────
 
   /**
-   * Recebe todos os dados do formulário e executa TODOS os cálculos de uma
-   * vez. O HTML chama esta função quando o usuário avança para Resultados.
+   * Recebe todos os dados do formulário e executa TODOS os cálculos.
    *
-   * @param {Object} params
-   * @param {Array}  params.receitas - [{ atividadeId: string, valor: number }]
-   * @param {number} params.receitaBrutaAnual
-   * @param {string} params.atividadeId - atividade principal (default 'servicos_gerais')
-   * @param {number} params.folhaPagamentoAnual
-   * @param {number} params.totalDespesasOperacionais
-   * @param {number} params.aliquotaISS - em percentual (ex: 5 = 5%)
-   * @param {number} params.aliquotaRAT - em percentual (ex: 3 = 3%)
-   * @param {number} params.aliquotaTerceiros - em percentual (ex: 0.5 = 0.5%)
-   * @param {number} params.creditosPISCOFINS
-   * @param {number} params.aliquotaSimples - em percentual
-   * @param {number} params.lucroContabil
-   * @param {number} params.prejuizosFiscais
-   * @param {boolean} params.temEscrituracao
-   * @param {boolean} params.temEquipamentos
-   * @param {boolean} params.temPD
-   * @param {boolean} params.receitaSazonal
-   * @param {boolean} params.areaAtuacaoSUDAM
-   * @param {number} params.devolucoes
-   * @param {number} params.cancelamentos
-   * @param {number} params.descontos
-   * @param {number} params.ganhosCapital
-   * @param {number} params.rendFinanceiros
-   * @param {number} params.jcpRecebido
-   * @param {number} params.multasContratuais
-   * @param {number} params.recFinDiversas
-   * @param {number} params.valoresRecuperados
-   * @param {number} params.demaisReceitas
-   * @param {number} params.irrfRetido
-   * @param {number} params.csllRetida
-   * @param {number} params.pisRetido
-   * @param {number} params.cofinsRetida
-   * @param {Array}  params.socios - [{ nome: string, percentual: number (0-1) }]
-   * @param {boolean} params.elegivelSimples
-   * @param {string} params.razaoSocial
-   * @param {string} params.cnpj
+   * v3.0: Novo parâmetro `ufEmpresa` (sigla do estado) permite
+   * integração automática com Estados.js para incentivos dinâmicos.
    *
-   * // ── Pró-Labore (para simularProLaboreOtimo) ──
-   * @param {Array} [params.sociosDetalhados] - [{nome, participacao, isAdministrador, proLaboreAtual, temOutroVinculoCLT, dependentesIRPF}]
-   *
-   * // ── JCP (para simularJCP) ──
-   * @param {number} [params.patrimonioLiquido] - PL da empresa
-   * @param {number} [params.taxaTJLP] - Taxa TJLP vigente (decimal, ex: 0.0612)
-   * @param {number} [params.lucroLiquidoOuReservas] - Lucro líquido ou lucros acumulados
-   *
-   * // ── Regime de Caixa (para simularRegimeCaixa) ──
-   * @param {number[]} [params.faturamentoMensal] - Array de 12 valores faturados (R$)
-   * @param {number[]} [params.recebimentoMensal] - Array de 12 valores recebidos (R$)
-   *
-   * // ── ECD (para calcularBeneficioECD) ──
-   * @param {number} [params.custoAnualECD] - Custo anual do contador pela escrituração completa
-   *
-   * // ── Exclusões PIS/COFINS (FIX Erros 13+17) ──
-   * @param {number} [params.receitasExportacao] - Receitas de exportação anuais (excluídas da base PIS/COFINS)
-   * @param {number} [params.receitasIsentas] - Receitas isentas anuais (excluídas da base PIS/COFINS)
-   * @param {number} [params.icmsST] - ICMS-ST anual destacado (excluído da base PIS/COFINS)
-   * @param {number} [params.ipiDestacado] - IPI anual destacado (excluído da base PIS/COFINS)
-   *
-   * // ── Break-Even (FIX Erro 10) ──
-   * @param {number} [params.prejuizosFiscaisAcumulados] - Prejuízos fiscais acumulados para compensação no LR (até 30%)
-   *
-   * // ── Ano-Calendário (FIX Erro 12) ──
-   * @param {number} [params.anoCalendario] - Ano-calendário (default: ano corrente)
-   *
+   * @param {Object} params - Todos os parâmetros do formulário
+   * @param {string} [params.ufEmpresa] - Sigla do estado (ex: "PA", "AM", "CE", "RJ")
+   *   Se informada, incentivos são lidos de Estados.getIncentivosNormalizado(uf).
+   *   Se não informada, usa flags booleanos legados (areaAtuacaoSUDAM, etc.)
    * @returns {Object} Resultado completo com todas as análises
    */
   function calcularEstudoCompleto(params) {
@@ -1175,23 +1245,22 @@
     if (typeof receitaBrutaAnual !== 'number' || receitaBrutaAnual <= 0) {
       throw new Error('calcularEstudoCompleto: receitaBrutaAnual deve ser um numero positivo.');
     }
+
     var atividadeId = params.atividadeId || DEFAULTS.atividadeId;
     var receitas = params.receitas || [{ atividadeId: atividadeId, valor: receitaBrutaAnual }];
     var folha = params.folhaPagamentoAnual || 0;
     var despesasOp = params.totalDespesasOperacionais || 0;
+    var ufEmpresa = (params.ufEmpresa || '').toUpperCase().trim();
 
-    // Converter percentuais para decimais com detecção inteligente:
-    // Se valor > 1, interpreta como percentual inteiro (ex: 5 → 0.05)
-    // Se valor <= 1, interpreta como decimal já convertido (ex: 0.05 → 0.05)
-    var aliqISS = _normalizeAliquota(params.aliquotaISS, DEFAULTS.aliquotaISS, 'aliquotaISS');
-    var aliqRAT = _normalizeAliquota(params.aliquotaRAT, DEFAULTS.aliquotaRAT, 'aliquotaRAT');
-    var aliqTerceiros = _normalizeAliquota(params.aliquotaTerceiros, DEFAULTS.aliquotaTerceiros, 'aliquotaTerceiros');
+    // FIX C4: Alíquotas SEMPRE em percentual inteiro, divididas por 100
+    var aliqISS = _aliquotaParaDecimal(params.aliquotaISS, DEFAULTS.aliquotaISS, 'aliquotaISS');
+    var aliqRAT = _aliquotaParaDecimal(params.aliquotaRAT, DEFAULTS.aliquotaRAT, 'aliquotaRAT');
+    var aliqTerceiros = _aliquotaParaDecimal(params.aliquotaTerceiros, DEFAULTS.aliquotaTerceiros, 'aliquotaTerceiros');
 
     var creditos = params.creditosPISCOFINS || 0;
     var lucroContabil = params.lucroContabil || 0;
     var socios = params.socios || DEFAULTS.socios;
 
-    // Valores anuais a dividir por 4 (trimestral) ou 12 (mensal)
     var devolucoes = params.devolucoes || 0;
     var cancelamentos = params.cancelamentos || 0;
     var descontos = params.descontos || 0;
@@ -1207,7 +1276,6 @@
     var pisRetido = params.pisRetido || 0;
     var cofinsRetida = params.cofinsRetida || 0;
 
-    // ── Novos: Benefícios fiscais estaduais e exclusões ──
     var receitasVendasZFM = params.receitasVendasZFM || 0;
     var receitasSUFRAMA = params.receitasSUFRAMA || 0;
     var receitasExportacao = params.receitasExportacao || 0;
@@ -1217,38 +1285,52 @@
     var exclusivamenteServicosElegiveis = !!params.exclusivamenteServicosElegiveis;
     var regimeCaixa = !!params.regimeCaixa;
     var inadimplencia = params.inadimplencia || 0;
-    var areaAtuacaoSUDAM = !!params.areaAtuacaoSUDAM;
-    var areaAtuacaoSUDENE = !!params.areaAtuacaoSUDENE;
     var beneficiosAtivos = params.beneficiosAtivos || {};
+
+    // ═══ INTEGRAÇÃO COM ESTADOS.JS ═══
+    var incentivosEstado = {};
+    var reducaoRegional = { tipo: null, percentualReducao: 0, ativo: false, obs: '', requerLucroReal: true };
+    var beneficiosZFM = { zonaFranca: false, alc: false, suframa: false, obs: '' };
+
+    if (ufEmpresa) {
+      // v3.0: Usar Estados.js para incentivos dinâmicos
+      incentivosEstado = _obterIncentivosEstado(ufEmpresa);
+      reducaoRegional = _obterReducaoRegional(ufEmpresa, incentivosEstado);
+      beneficiosZFM = _obterBeneficiosZFM(ufEmpresa, incentivosEstado);
+
+      // Propagar para beneficiosAtivos (compatibilidade com motor)
+      if (reducaoRegional.ativo && reducaoRegional.tipo === 'SUDAM') beneficiosAtivos.sudam = true;
+      if (reducaoRegional.ativo && reducaoRegional.tipo === 'SUDENE') beneficiosAtivos.sudene = true;
+      if (beneficiosZFM.zonaFranca) beneficiosAtivos.zonaFranca = true;
+    } else {
+      // Fallback: flags booleanos legados
+      if (params.areaAtuacaoSUDAM) {
+        reducaoRegional = { tipo: 'SUDAM', percentualReducao: 0.75, ativo: true, obs: 'MP 2.199-14/2001', requerLucroReal: true };
+      } else if (params.areaAtuacaoSUDENE) {
+        reducaoRegional = { tipo: 'SUDENE', percentualReducao: 0.75, ativo: true, obs: 'MP 2.199-14/2001', requerLucroReal: true };
+      }
+    }
 
     // ── 1. Simulação rápida ──
     var simulacao = null;
-    try {
-      simulacao = LucroPresumido.simulacaoRapida(receitaBrutaAnual / 4, atividadeId);
-    } catch (e) {
-      simulacao = { erro: e.message };
-    }
+    try { simulacao = LucroPresumido.simulacaoRapida(receitaBrutaAnual / 4, atividadeId); }
+    catch (e) { simulacao = { erro: e.message }; }
 
     // ── 2. Quatro trimestres ──
-    // Suporte a receita sazonal: se params.receitasPorTrimestre existir (array de 4),
-    // usa valores individuais; caso contrario, divide por 4.
+    // FIX M5: Receita sazonal distribui PIS/COFINS mensal proporcionalmente
     var receitasPorTrim = params.receitasPorTrimestre || null;
     var trimestral = [];
     var trimestresData = [];
-    // FIX (Erro 12): Usar anoCalendario dinâmico em vez de hardcoded 2026
     var anoCalendario = params.anoCalendario || new Date().getFullYear();
     var acumuladoAte = 0;
+
     for (var q = 1; q <= 4; q++) {
       var fatorTrim = receitasPorTrim ? (receitasPorTrim[q - 1] || 0) : null;
-      // FIX (Erro 11): Separar lógica de acumulação do cálculo do parâmetro (eliminar side-effect no ternário)
-      if (fatorTrim !== null) {
-        acumuladoAte += fatorTrim;
-      }
+      if (fatorTrim !== null) acumuladoAte += fatorTrim;
       var receitaAcumuladaCalc = _arredondar(fatorTrim !== null ? acumuladoAte : (receitaBrutaAnual / 4 * q));
       var dadosTri = {
         receitas: receitas.map(function (r) {
           if (fatorTrim !== null) {
-            // Distribuir proporcionalmente ao fator do trimestre
             var proporcao = receitaBrutaAnual > 0 ? r.valor / receitaBrutaAnual : 0;
             return { atividadeId: r.atividadeId, valor: _arredondar(fatorTrim * proporcao) };
           }
@@ -1272,42 +1354,40 @@
         exclusivamenteServicosElegiveis: exclusivamenteServicosElegiveis
       };
       trimestresData.push(dadosTri);
-      try {
-        trimestral.push(LucroPresumido.calcularLucroPresumidoTrimestral(dadosTri));
-      } catch (e) {
-        trimestral.push({ erro: e.message, trimestre: q });
-      }
+      try { trimestral.push(LucroPresumido.calcularLucroPresumidoTrimestral(dadosTri)); }
+      catch (e) { trimestral.push({ erro: e.message, trimestre: q }); }
     }
 
     // ── 3. Doze meses PIS/COFINS ──
+    // FIX M5: Se receita sazonal, distribuir PIS/COFINS mensal proporcionalmente
     var piscofins = [];
     var mesesData = [];
-    var receitaMensal = _arredondar(receitaBrutaAnual / 12);
-    // FIX (Erros 13+17): Passar cancelamentos, descontos e exclusões para PIS/COFINS mensal
-    var receitasExportacaoAnual = params.receitasExportacao || 0;
-    var receitasIsentasAnual = params.receitasIsentas || 0;
-    var icmsSTAnual = params.icmsST || 0;
-    var ipiDestacadoAnual = params.ipiDestacado || 0;
-    // Incluir ZFM/SUFRAMA como receitas isentas de PIS/COFINS
-    var receitasIsentasComZFM = receitasIsentasAnual + receitasVendasZFM + receitasSUFRAMA;
-    for (var m = 0; m < 12; m++) {
+    var receitasIsentasComZFM = receitasIsentas + receitasVendasZFM + receitasSUFRAMA;
+
+    for (var mes = 0; mes < 12; mes++) {
+      var receitaMensal;
+      if (receitasPorTrim) {
+        // FIX M5: Distribuir meses proporcionalmente ao trimestre
+        var trimIdx = Math.floor(mes / 3);
+        receitaMensal = _arredondar((receitasPorTrim[trimIdx] || 0) / 3);
+      } else {
+        receitaMensal = _arredondar(receitaBrutaAnual / 12);
+      }
+
       var dadosMes = {
         receitaBrutaMensal: receitaMensal,
         vendasCanceladas: _arredondar(cancelamentos / 12),
         descontosIncondicionais: _arredondar(descontos / 12),
-        receitasExportacao: _arredondar(receitasExportacaoAnual / 12),
+        receitasExportacao: _arredondar(receitasExportacao / 12),
         receitasIsentas: _arredondar(receitasIsentasComZFM / 12),
-        icmsST: _arredondar(icmsSTAnual / 12),
-        ipiDestacado: _arredondar(ipiDestacadoAnual / 12),
+        icmsST: _arredondar(icmsST / 12),
+        ipiDestacado: _arredondar(ipiDestacado / 12),
         pisRetidoFonte: _arredondar(pisRetido / 12),
         cofinsRetidaFonte: _arredondar(cofinsRetida / 12)
       };
       mesesData.push(dadosMes);
-      try {
-        piscofins.push(LucroPresumido.calcularPISCOFINSMensal(dadosMes));
-      } catch (e) {
-        piscofins.push({ erro: e.message, mes: m + 1 });
-      }
+      try { piscofins.push(LucroPresumido.calcularPISCOFINSMensal(dadosMes)); }
+      catch (e) { piscofins.push({ erro: e.message, mes: mes + 1 }); }
     }
 
     // ── 4. Anual consolidado ──
@@ -1316,7 +1396,7 @@
       anual = LucroPresumido.calcularAnualConsolidado({
         trimestres: trimestresData,
         meses: mesesData,
-        receitas: receitas,                              // ← NOVO: para ISS
+        receitas: receitas,
         aliquotaISS: aliqISS,
         folhaPagamentoAnual: folha,
         aliquotaRAT: aliqRAT,
@@ -1324,80 +1404,56 @@
         lucroContabilEfetivo: lucroContabil > 0 ? lucroContabil : null,
         socios: socios,
         anoCalendario: anoCalendario,
-        beneficiosAtivos: beneficiosAtivos,              // ← NOVO
-        receitasVendasZFM: receitasVendasZFM,            // ← NOVO
-        receitasSUFRAMA: receitasSUFRAMA,                // ← NOVO
-        receitasExportacao: receitasExportacaoAnual,      // ← NOVO
-        receitasIsenta: receitasIsentasAnual,             // ← NOVO
-        icmsST: icmsSTAnual,                             // ← NOVO
-        ipiDestacado: ipiDestacadoAnual,                 // ← NOVO
-        exclusivamenteServicosElegiveis: exclusivamenteServicosElegiveis,  // ← NOVO
-        regimeCaixa: regimeCaixa,                        // ← NOVO
-        inadimplencia: inadimplencia                     // ← NOVO
+        beneficiosAtivos: beneficiosAtivos,
+        receitasVendasZFM: receitasVendasZFM,
+        receitasSUFRAMA: receitasSUFRAMA,
+        receitasExportacao: receitasExportacao,
+        receitasIsenta: receitasIsentas,
+        icmsST: icmsST,
+        ipiDestacado: ipiDestacado,
+        exclusivamenteServicosElegiveis: exclusivamenteServicosElegiveis,
+        regimeCaixa: regimeCaixa,
+        inadimplencia: inadimplencia
       });
     } catch (e) {
       anual = { erro: e.message, receitaBrutaAnual: receitaBrutaAnual, consolidacao: null, distribuicaoLucros: null };
     }
 
-    // ── 4A. Pró-labore ótimo (por sócio) ──
+    // ── 4A. Pró-labore ótimo ──
     var resultProLabore = [];
     if (params.sociosDetalhados && params.sociosDetalhados.length > 0) {
-      var lucroDistribuivel = (anual && anual.distribuicaoLucros)
-        ? anual.distribuicaoLucros.lucroDistribuivelFinal
-        : 0;
-
+      var lucroDist = (anual && anual.distribuicaoLucros) ? anual.distribuicaoLucros.lucroDistribuivelFinal : 0;
       for (var s = 0; s < params.sociosDetalhados.length; s++) {
-        try {
-          var simPL = LucroPresumido.simularProLaboreOtimo(
-            params.sociosDetalhados[s],
-            lucroDistribuivel
-          );
-          resultProLabore.push(simPL);
-        } catch (e) {
-          resultProLabore.push({ erro: e.message, socio: params.sociosDetalhados[s].nome });
-        }
+        try { resultProLabore.push(LucroPresumido.simularProLaboreOtimo(params.sociosDetalhados[s], lucroDist)); }
+        catch (e) { resultProLabore.push({ erro: e.message, socio: params.sociosDetalhados[s].nome }); }
       }
     }
-
     var proLaboreConsolidado = null;
     var economiaProLaboreTotal = 0;
     for (var p = 0; p < resultProLabore.length; p++) {
-      if (resultProLabore[p].economiaAnual) {
-        economiaProLaboreTotal += resultProLabore[p].economiaAnual;
-      }
+      if (resultProLabore[p].economiaAnual) economiaProLaboreTotal += resultProLabore[p].economiaAnual;
     }
     if (economiaProLaboreTotal > 0) {
       proLaboreConsolidado = {
         economiaAnual: economiaProLaboreTotal,
-        recomendacao: resultProLabore.length === 1
-          ? resultProLabore[0].recomendacao
-          : 'Otimização do pró-labore de ' + resultProLabore.length + ' sócios.'
+        recomendacao: resultProLabore.length === 1 ? resultProLabore[0].recomendacao : 'Otimização do pró-labore de ' + resultProLabore.length + ' sócios.'
       };
     }
 
     // ── 4B. JCP ──
     var resultJCP = null;
     if (params.patrimonioLiquido > 0 && params.lucroLiquidoOuReservas > 0) {
-      var lucroDistribuivelIsentoRestante = (anual && anual.distribuicaoLucros)
-        ? anual.distribuicaoLucros.lucroDistribuivelFinal
-        : 0;
-
-      // Descontar economia do pró-labore já alocada (se houver)
-      if (economiaProLaboreTotal > 0) {
-        lucroDistribuivelIsentoRestante = Math.max(0, lucroDistribuivelIsentoRestante - economiaProLaboreTotal);
-      }
-
+      var lucroDistRest = (anual && anual.distribuicaoLucros) ? anual.distribuicaoLucros.lucroDistribuivelFinal : 0;
+      if (economiaProLaboreTotal > 0) lucroDistRest = Math.max(0, lucroDistRest - economiaProLaboreTotal);
       try {
         resultJCP = LucroPresumido.simularJCP({
           patrimonioLiquido: params.patrimonioLiquido,
           taxaTJLP: params.taxaTJLP || 0.0612,
           lucroLiquidoOuReservas: params.lucroLiquidoOuReservas,
-          lucroDistribuivelIsentoRestante: lucroDistribuivelIsentoRestante,
+          lucroDistribuivelIsentoRestante: lucroDistRest,
           dataReferencia: new Date()
         });
-      } catch (e) {
-        resultJCP = { erro: e.message };
-      }
+      } catch (e) { resultJCP = { erro: e.message }; }
     }
 
     // ── 4C. Regime Caixa vs Competência ──
@@ -1410,50 +1466,59 @@
           recebimentoMensal: params.recebimentoMensal,
           atividadeId: atividadeId
         });
-      } catch (e) {
-        resultCaixa = { erro: e.message };
-      }
+      } catch (e) { resultCaixa = { erro: e.message }; }
     }
 
-    // ── 4D. ECD (Escrituração Contábil Digital) ──
+    // ── 4D. ECD ──
+    // FIX I5: Se lucroContabil === 0, estimar com base na margem operacional
     var resultECD = null;
-    if (lucroContabil > 0) {
-      var basePresumidaAnual = (anual && anual.distribuicaoLucros)
-        ? anual.distribuicaoLucros.basePresumidaAnual
-        : 0;
-      var tributosFederaisAnuais = (anual && anual.consolidacao)
-        ? anual.consolidacao.tributosFederais
-        : 0;
-
+    var lucroContabilParaECD = lucroContabil;
+    var ecdEstimativa = false;
+    if (lucroContabil === 0 && receitas.length > 0 && (despesasOp > 0 || folha > 0)) {
+      var cargaLPEstimada = (anual && anual.consolidacao) ? anual.consolidacao.cargaTributariaTotal : 0;
+      lucroContabilParaECD = receitaBrutaAnual - despesasOp - folha - cargaLPEstimada;
+      if (lucroContabilParaECD > 0) ecdEstimativa = true;
+    }
+    if (lucroContabilParaECD > 0) {
+      var basePresAnual = (anual && anual.distribuicaoLucros) ? anual.distribuicaoLucros.basePresumidaAnual : 0;
+      var tribFedAnuais = (anual && anual.consolidacao) ? anual.consolidacao.tributosFederais : 0;
       try {
         resultECD = LucroPresumido.calcularBeneficioECD({
-          basePresumidaAnual: basePresumidaAnual,
-          lucroContabilReal: lucroContabil,
-          tributosFederaisAnuais: tributosFederaisAnuais,
+          basePresumidaAnual: basePresAnual,
+          lucroContabilReal: lucroContabilParaECD,
+          tributosFederaisAnuais: tribFedAnuais,
           custoAnualECD: params.custoAnualECD || 0
         });
-      } catch (e) {
-        resultECD = { erro: e.message };
-      }
+        if (resultECD && ecdEstimativa) {
+          resultECD.estimativa = true;
+          resultECD.notaEstimativa = 'Lucro contábil estimado com base na margem operacional. Valor real depende de escrituração completa.';
+        }
+      } catch (e) { resultECD = { erro: e.message }; }
     }
 
-    // ── 4E. Comparativo SUDAM/SUDENE ──
-    var resultSUDAM = null;
-    if ((areaAtuacaoSUDAM || areaAtuacaoSUDENE) && anual && anual.detalhamentoTrimestral) {
+    // ── 4E. Comparativo Regional (dinâmico) ──
+    var resultRegional = null;
+    if (reducaoRegional.ativo && anual && anual.detalhamentoTrimestral) {
       try {
-        var irpjNormalAnual = anual.detalhamentoTrimestral.reduce(function(s,t) { return s + (t.irpjNormal || 0); }, 0);
-        var irpjAdicionalAnual = anual.detalhamentoTrimestral.reduce(function(s,t) { return s + (t.irpjAdicional || 0); }, 0);
-        resultSUDAM = LucroPresumido.calcularEconomiaLRComSUDAM({
+        var irpjNormalAnual = anual.detalhamentoTrimestral.reduce(function(s, t) { return s + (t.irpjNormal || 0); }, 0);
+        var irpjAdicionalAnual = anual.detalhamentoTrimestral.reduce(function(s, t) { return s + (t.irpjAdicional || 0); }, 0);
+        resultRegional = LucroPresumido.calcularEconomiaLRComSUDAM({
           irpjNormalAnualLP: irpjNormalAnual,
           irpjAdicionalAnualLP: irpjAdicionalAnual,
           csllAnualLP: anual.tributos ? anual.tributos.csll.anual : 0,
           receitaBrutaAnual: receitaBrutaAnual,
           despesasOperacionaisAnuais: despesasOp,
           folhaPagamentoAnual: folha,
-          temBeneficioSUDAM: areaAtuacaoSUDAM,
-          temBeneficioSUDENE: areaAtuacaoSUDENE
+          temBeneficioSUDAM: reducaoRegional.tipo === 'SUDAM',
+          temBeneficioSUDENE: reducaoRegional.tipo === 'SUDENE'
         });
-      } catch (e) { resultSUDAM = { erro: e.message }; }
+        // Enriquecer com dados do estado
+        if (resultRegional) {
+          resultRegional.tipo = reducaoRegional.tipo;
+          resultRegional.percentualReducao = reducaoRegional.percentualReducao;
+          resultRegional.obs = reducaoRegional.obs;
+        }
+      } catch (e) { resultRegional = { erro: e.message }; }
     }
 
     // ── 5. Vantagens/Desvantagens ──
@@ -1465,38 +1530,34 @@
         atividadeId: atividadeId,
         temReceitasSazonais: !!params.receitaSazonal
       });
-    } catch (e) {
-      vantagens = { erro: e.message };
-    }
+    } catch (e) { vantagens = { erro: e.message }; }
 
-    // FIX (Bug 8): Injetar alerta de margem 100% no resultado de vantagens
     if (vantagens && !vantagens.erro && despesasOp === 0 && folha === 0 && receitaBrutaAnual > 0) {
-      vantagens.alertaMargem100 = 'ATENÇÃO: Nenhuma despesa operacional ou folha de pagamento foi informada. ' +
-        'A análise de vantagens/desvantagens assume margem de lucro de 100%, o que raramente reflete a realidade. ' +
-        'Para uma análise precisa, preencha as despesas na aba "Complementar".';
+      vantagens.alertaMargem100 = 'ATENÇÃO: Sem despesas/folha informadas. Margem assumida: 100%.';
     }
 
-    // ── 6. Break-Even LP vs Lucro Real ──
+    // ── 6. Break-Even ──
     var cargaLP = anual && anual.consolidacao ? anual.consolidacao.cargaTributariaTotal : 0;
+    var tributosFederaisLP = anual && anual.consolidacao ? (anual.consolidacao.tributosFederais || cargaLP) : cargaLP;
     var resultBreakeven = null;
     try {
       resultBreakeven = calcularBreakEven({
         receitaBrutaAnual: receitaBrutaAnual,
         cargaTributariaLP: cargaLP,
+        tributosFederaisLP: tributosFederaisLP,
         folhaPagamentoAnual: folha,
         totalDespesasOperacionais: despesasOp,
         creditosPISCOFINS: creditos,
         aliquotaISS: aliqISS,
         aliquotaRAT: aliqRAT,
         aliquotaTerceiros: aliqTerceiros,
-        // FIX (Erro 10): Repassar prejuízos fiscais para break-even
         prejuizosFiscaisAcumulados: params.prejuizosFiscaisAcumulados || 0
       });
     } catch (e) {
-      resultBreakeven = { erro: e.message, cargaTributariaLP: cargaLP, breakEvenMargem: null, lpSempreVantajoso: false, lrSempreVantajoso: false, margemRealAtual: null, margens: [], alerta: null, recomendacao: '' };
+      resultBreakeven = { erro: e.message, cargaTributariaLP: cargaLP, breakEvenMargem: null, lpSempreVantajoso: false, lrSempreVantajoso: false, margemOperacionalBruta: null, margens: [], alerta: null, recomendacao: '' };
     }
 
-    // ── 7. Dicas inteligentes ──
+    // ── 7. Dicas inteligentes (com incentivos dinâmicos) ──
     var resultDicas = [];
     try {
       resultDicas = gerarDicasInteligentes({
@@ -1509,21 +1570,21 @@
         temEquipamentos: !!params.temEquipamentos,
         temPD: !!params.temPD,
         receitaSazonal: !!params.receitaSazonal,
-        areaAtuacaoSUDAM: areaAtuacaoSUDAM,
-        areaAtuacaoSUDENE: areaAtuacaoSUDENE,             // ← NOVO
-        receitasVendasZFM: receitasVendasZFM,              // ← NOVO
-        receitasSUFRAMA: receitasSUFRAMA,                  // ← NOVO
-        receitasExportacao: receitasExportacaoAnual,        // ← NOVO
-        exclusivamenteServicosElegiveis: exclusivamenteServicosElegiveis, // ← NOVO
-        regimeCaixa: regimeCaixa,                          // ← NOVO
+        receitasVendasZFM: receitasVendasZFM,
+        receitasSUFRAMA: receitasSUFRAMA,
+        receitasExportacao: receitasExportacao,
+        exclusivamenteServicosElegiveis: exclusivamenteServicosElegiveis,
+        regimeCaixa: regimeCaixa,
         numReceitas: receitas.length,
-        breakeven: resultBreakeven
+        breakeven: resultBreakeven,
+        // v3.0: Incentivos dinâmicos do estado
+        incentivosEstado: incentivosEstado,
+        reducaoRegional: reducaoRegional,
+        beneficiosZFM: beneficiosZFM
       });
-    } catch (e) {
-      resultDicas = [];
-    }
+    } catch (e) { resultDicas = []; }
 
-    // ── 8. Economia potencial ──
+    // ── 8. Economia potencial (3 categorias — FIX C2) ──
     var economiaPotencial = null;
     try {
       economiaPotencial = calcularEconomiaPotencial({
@@ -1532,25 +1593,18 @@
         caixaComp: resultCaixa,
         breakeven: resultBreakeven,
         dicas: resultDicas,
-        beneficiosDetalhados: anual ? anual.beneficiosAplicados : null,  // ← NOVO
-        comparativoSUDAM: resultSUDAM                                    // ← NOVO
+        beneficiosDetalhados: anual ? anual.beneficiosAplicados : null,
+        comparativoRegional: resultRegional
       });
     } catch (e) {
-      economiaPotencial = { totalEconomiaAnual: 0, totalDiferimento: 0, fontes: [], recomendacaoPrincipal: '', nivelOportunidade: 'baixo' };
+      economiaPotencial = { totalEconomiaAnual: 0, totalDiferimento: 0, fontes: [], otimizacoesLP: [], migracaoLR: [], jaAplicados: [], recomendacaoPrincipal: '', nivelOportunidade: 'baixo' };
     }
 
     // ── 9. LC 224/2025 ──
     var lc224 = null;
     if (receitaBrutaAnual > LC224_LIMITE_ANUAL) {
-      try {
-        lc224 = calcularImpactoLC224({
-          receitaBrutaAnual: receitaBrutaAnual,
-          atividadeId: atividadeId,
-          anoCalendario: anoCalendario
-        });
-      } catch (e) {
-        lc224 = null;
-      }
+      try { lc224 = calcularImpactoLC224({ receitaBrutaAnual: receitaBrutaAnual, atividadeId: atividadeId, anoCalendario: anoCalendario }); }
+      catch (e) { lc224 = null; }
     }
 
     // ── 10. Resumo executivo ──
@@ -1559,17 +1613,18 @@
       resumoExecutivo = gerarResumoExecutivo({
         anual: anual || { receitaBrutaAnual: receitaBrutaAnual, consolidacao: null, distribuicaoLucros: null },
         breakeven: resultBreakeven || {},
-        economia: economiaPotencial || { totalEconomiaAnual: 0, nivelOportunidade: 'baixo', recomendacaoPrincipal: '' },
+        economia: economiaPotencial || { totalEconomiaAnual: 0, nivelOportunidade: 'baixo', recomendacaoPrincipal: '', otimizacoesLP: [], migracaoLR: [], totalOtimizacoesLP: 0, totalMigracaoLR: 0, totalJaAplicados: 0 },
         dicas: resultDicas,
         razaoSocial: params.razaoSocial || '',
         cnpj: params.cnpj || '',
         atividadeId: atividadeId,
-        beneficiosDetalhados: anual ? anual.beneficiosAplicados : null,  // ← NOVO
-        comparativoSUDAM: resultSUDAM                                    // ← NOVO
+        ufEmpresa: ufEmpresa,
+        beneficiosDetalhados: anual ? anual.beneficiosAplicados : null,
+        reducaoRegional: reducaoRegional,
+        comparativoRegional: resultRegional,
+        temEscrituracao: !!params.temEscrituracao
       });
-    } catch (e) {
-      resumoExecutivo = { erro: e.message };
-    }
+    } catch (e) { resumoExecutivo = { erro: e.message }; }
 
     return {
       simulacao: simulacao,
@@ -1580,7 +1635,6 @@
       breakeven: resultBreakeven,
       dicas: resultDicas,
 
-      // Resultados individuais dos simuladores
       proLabore: resultProLabore,
       jcp: resultJCP,
       regimeCaixa: resultCaixa,
@@ -1589,33 +1643,37 @@
       economiaPotencial: economiaPotencial,
       lc224: lc224,
       resumoExecutivo: resumoExecutivo,
-      comparativoSUDAM: resultSUDAM,
+
+      // v3.0: Dados de incentivos dinâmicos do estado
+      incentivosEstado: incentivosEstado,
+      reducaoRegional: reducaoRegional,
+      beneficiosZFM: beneficiosZFM,
+      comparativoRegional: resultRegional,
       beneficiosDetalhados: anual ? anual.beneficiosAplicados : null,
+
+      // Meta
+      ufEmpresa: ufEmpresa,
+      versao: VERSION,
       timestamp: new Date().toISOString()
     };
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // TESTE DE VERIFICAÇÃO
+  // TESTE DE VERIFICAÇÃO — FIX M6: Nomes genéricos
   // ─────────────────────────────────────────────────────────────────────────
 
-  /**
-   * Função de teste que pode ser chamada no console do navegador.
-   * Executa um estudo completo com dados de exemplo e imprime os resultados.
-   * Uso: EstudoLP._testarEstudo()
-   */
   function _testarEstudo() {
-    console.log('═══ TESTE EstudoLP v' + EstudoLP.VERSION + ' ═══');
+    console.log('═══ TESTE EstudoLP v' + VERSION + ' ═══');
 
-    var resultado = EstudoLP.calcularEstudoCompleto({
+    var resultado = calcularEstudoCompleto({
       receitas: [{ atividadeId: 'servicos_gerais', valor: 2350000 }],
       receitaBrutaAnual: 2350000,
       atividadeId: 'servicos_gerais',
       folhaPagamentoAnual: 1000000,
       totalDespesasOperacionais: 800000,
-      aliquotaISS: 3,
-      aliquotaRAT: 3,
-      aliquotaTerceiros: 0.5,
+      aliquotaISS: 3,       // 3% (percentual inteiro)
+      aliquotaRAT: 3,       // 3%
+      aliquotaTerceiros: 0.5, // 0.5%
       creditosPISCOFINS: 50000,
       lucroContabil: 0,
       prejuizosFiscais: 0,
@@ -1623,8 +1681,10 @@
       temEquipamentos: false,
       temPD: false,
       receitaSazonal: false,
-      areaAtuacaoSUDAM: true,
-      areaAtuacaoSUDENE: false,
+
+      // v3.0: Estado no lugar de flags booleanos
+      ufEmpresa: 'PA',      // Pará — SUDAM será detectado automaticamente
+
       receitasVendasZFM: 100000,
       receitasSUFRAMA: 0,
       receitasExportacao: 0,
@@ -1634,23 +1694,22 @@
       exclusivamenteServicosElegiveis: false,
       regimeCaixa: false,
       inadimplencia: 0,
-      beneficiosAtivos: { sudam: true },
+      beneficiosAtivos: {},
       devolucoes: 0, cancelamentos: 0, descontos: 0,
       ganhosCapital: 0, rendFinanceiros: 0, jcpRecebido: 0,
       multasContratuais: 0, recFinDiversas: 0,
       valoresRecuperados: 0, demaisReceitas: 0,
       irrfRetido: 0, csllRetida: 0, pisRetido: 0, cofinsRetida: 0,
+      // FIX M6: Nomes genéricos
       socios: [
-        { nome: 'Luis Fernando', participacao: 0.65 },
-        { nome: 'Elton Oderdenge', participacao: 0.35 }
+        { nome: 'Sócio A', participacao: 0.65 },
+        { nome: 'Sócio B', participacao: 0.35 }
       ],
       elegivelSimples: false,
-
-      // Novos parâmetros — simuladores de economia
       sociosDetalhados: [
-        { nome: 'Luis Fernando', participacao: 0.65, isAdministrador: true,
+        { nome: 'Sócio A', participacao: 0.65, isAdministrador: true,
           proLaboreAtual: 5000, temOutroVinculoCLT: false, dependentesIRPF: 0 },
-        { nome: 'Elton Oderdenge', participacao: 0.35, isAdministrador: true,
+        { nome: 'Sócio B', participacao: 0.35, isAdministrador: true,
           proLaboreAtual: 3000, temOutroVinculoCLT: false, dependentesIRPF: 0 }
       ],
       patrimonioLiquido: 500000,
@@ -1661,48 +1720,58 @@
       custoAnualECD: 12000
     });
 
-    console.log('Receita:', resultado.anual.receitaBrutaAnual);
-    console.log('Carga Total LP:', resultado.anual.consolidacao.cargaTributariaTotal);
-    console.log('% Carga:', resultado.anual.consolidacao.percentualCargaTributaria);
-    console.log('Break-Even:', resultado.breakeven.breakEvenMargem || 'N/A');
-    console.log('Margem Real:', resultado.breakeven.margemRealAtual || 'N/A');
-    console.log('Recomendação:', resultado.breakeven.recomendacao);
+    console.log('─── Resultados ───');
+    console.log('Receita:', resultado.anual ? resultado.anual.receitaBrutaAnual : 'N/A');
+    console.log('Carga Total LP:', resultado.anual && resultado.anual.consolidacao ? resultado.anual.consolidacao.cargaTributariaTotal : 'N/A');
+    console.log('Break-Even:', resultado.breakeven ? resultado.breakeven.breakEvenMargem || 'N/A' : 'N/A');
+    console.log('Margem Operacional Bruta:', resultado.breakeven ? resultado.breakeven.margemOperacionalBruta || 'N/A' : 'N/A');
+    console.log('Margem Líquida Pós-Tributos:', resultado.breakeven ? resultado.breakeven.margemLiquidaPosTributos || 'N/A' : 'N/A');
+    console.log('Recomendação:', resultado.breakeven ? resultado.breakeven.recomendacao : 'N/A');
     console.log('Dicas:', resultado.dicas.length);
-    console.log('Economia Potencial:', resultado.economiaPotencial.totalEconomiaAnual);
-    console.log('Pró-Labore Economia:', resultado.economiaPotencial.totalEconomiaAnual);
-    console.log('Regime Caixa Diferimento:', resultado.regimeCaixa ? resultado.regimeCaixa.totalDiferido : 'N/A');
-    console.log('ECD Benefício:', resultado.ecd ? resultado.ecd.beneficioLiquido : 'N/A');
-    console.log('JCP Bruto:', resultado.jcp ? resultado.jcp.jcpBruto : 'N/A');
-    console.log('Ações Economia:', resultado.resumoExecutivo.acoesEconomia || []);
-    console.log('Regime Recomendado:', resultado.resumoExecutivo.regimeRecomendado);
-    console.log('LC 224:', resultado.lc224 ? 'Aplicável' : 'N/A');
-    console.log('Comparativo SUDAM:', resultado.comparativoSUDAM ? (resultado.comparativoSUDAM.aplicavel ? 'Aplicável' : 'Não aplicável') : 'N/A');
-    console.log('Benefícios Detalhados:', resultado.beneficiosDetalhados ? 'Sim' : 'N/A');
-    console.log('Benefícios Resumo:', resultado.resumoExecutivo.beneficiosFiscais || []);
-    console.log('═══ FIM TESTE ═══');
+    console.log('─── Economia (3 categorias) ───');
+    console.log('Otimizações LP:', resultado.economiaPotencial ? resultado.economiaPotencial.totalOtimizacoesLP : 0);
+    console.log('Migração LR:', resultado.economiaPotencial ? resultado.economiaPotencial.totalMigracaoLR : 0);
+    console.log('Já Aplicados:', resultado.economiaPotencial ? resultado.economiaPotencial.totalJaAplicados : 0);
+    console.log('Total (MAX):', resultado.economiaPotencial ? resultado.economiaPotencial.totalEconomiaAnual : 0);
+    console.log('Melhor Cenário:', resultado.economiaPotencial ? resultado.economiaPotencial.melhorCenario : 'N/A');
+    console.log('─── Incentivos do Estado ───');
+    console.log('UF:', resultado.ufEmpresa || 'N/A');
+    console.log('Incentivos disponíveis:', resultado.incentivosEstado && resultado.incentivosEstado._disponivel ? 'Sim (Estados.js)' : 'Não (fallback)');
+    console.log('Redução Regional:', resultado.reducaoRegional && resultado.reducaoRegional.ativo ? resultado.reducaoRegional.tipo + ' (' + _arredondar(resultado.reducaoRegional.percentualReducao * 100) + '%)' : 'Nenhuma');
+    console.log('ZFM:', resultado.beneficiosZFM && resultado.beneficiosZFM.zonaFranca ? 'Ativa' : 'Não');
+    console.log('─── Resumo ───');
+    console.log('Regime Recomendado:', resultado.resumoExecutivo ? resultado.resumoExecutivo.regimeRecomendado : 'N/A');
+    console.log('Próximos Passos:', resultado.resumoExecutivo ? resultado.resumoExecutivo.proximosPassos : []);
+    console.log('ECD Estimativa:', resultado.ecd ? (resultado.ecd.estimativa ? 'Sim' : 'Lucro real informado') : 'N/A');
+    console.log('═══ FIM TESTE v' + VERSION + ' ═══');
     return resultado;
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // EXPORTS — Objeto Global EstudoLP
+  // EXPORTS
   // ─────────────────────────────────────────────────────────────────────────
 
   var EstudoLP = {
     // Orquestrador
     calcularEstudoCompleto: calcularEstudoCompleto,
 
-    // Análises individuais (para recálculos parciais no HTML)
+    // Análises individuais
     calcularBreakEven: calcularBreakEven,
     gerarDicasInteligentes: gerarDicasInteligentes,
     calcularEconomiaPotencial: calcularEconomiaPotencial,
     gerarResumoExecutivo: gerarResumoExecutivo,
     calcularImpactoLC224: calcularImpactoLC224,
 
+    // Helpers de incentivos (para uso direto)
+    obterIncentivosEstado: _obterIncentivosEstado,
+    obterReducaoRegional: _obterReducaoRegional,
+    obterBeneficiosZFM: _obterBeneficiosZFM,
+
     // Teste
     _testarEstudo: _testarEstudo,
 
     // Versão
-    VERSION: '2.5.0'  // v2.5.0: fix auditoria ISS comércio, ICMS alert, elegibilidade parsing
+    VERSION: VERSION
   };
 
   if (typeof module !== 'undefined' && module.exports) {
