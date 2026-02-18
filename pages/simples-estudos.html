@@ -423,13 +423,9 @@ input,select,textarea,button{font-family:inherit;font-size:inherit}
       </select>
     </div>
     <div class="form-group">
-      <label>Regime atual</label>
-      <select id="regimeAtual">
-        <option value="simples" selected>Simples Nacional</option>
-        <option value="presumido">Lucro Presumido</option>
-        <option value="real">Lucro Real</option>
-        <option value="mei">MEI</option>
-      </select>
+      <label>Regime</label>
+      <input type="text" value="Simples Nacional" disabled style="background:var(--pri-bg);color:var(--pri);font-weight:600">
+      <input type="hidden" id="regimeAtual" value="simples">
     </div>
   </div>
 </div>
@@ -935,7 +931,7 @@ function validateStep(step) {
     }
     html += '</div>';
     if (item.vedado) {
-      html += '<div class="info-card danger" style="margin-top:10px"><div class="ic-title">Atividade Vedada</div><div class="ic-text">Este CNAE nao pode optar pelo Simples Nacional (LC 123/2006, Art. 17). Considere Lucro Presumido ou Real.</div></div>';
+      html += '<div class="info-card danger" style="margin-top:10px"><div class="ic-title">⛔ Atividade Vedada</div><div class="ic-text">Este CNAE não pode optar pelo Simples Nacional (LC 123/2006, Art. 17).</div></div>';
     }
     if (item.fatorR) {
       html += '<div class="info-card warn" style="margin-top:10px"><div class="ic-title">Fator R determina o Anexo</div><div class="ic-text">Se folha >= 28% da receita: Anexo III (menor aliquota). Se < 28%: Anexo V (maior). Informe a folha no Step 4.</div></div>';
@@ -1290,7 +1286,7 @@ async function gerarEstudo() {
   const steps = [
     'Verificando elegibilidade...', 'Calculando Fator R...',
     'Determinando anexo...', 'Otimizando DAS...',
-    'Comparando regimes tributários...', 'Gerando diagnóstico...',
+    'Analisando oportunidades de economia...', 'Gerando diagnóstico...',
     'Calculando score tributário...', 'Montando relatório...'
   ];
   let i = 0;
@@ -1375,21 +1371,6 @@ async function gerarEstudo() {
         cnae: params.cnae
       });
     } catch (e) { resultado.otimFatorR = null; }
-
-    // 7. Comparativo regimes
-    try {
-      resultado.comparativo = IMPOST.compararRegimesCompleto({
-        receitaBrutaAnual: params.receitaBrutaAnual,
-        folhaAnual: params.folhaAnual,
-        cnae: params.cnae,
-        uf: params.uf,
-        municipio: params.municipio,
-        fatorR: resultado.fatorR.fatorR,
-        despesasOperacionais: params.despesasOperacionais,
-        lucroContabilEfetivo: params.lucroContabilEfetivo,
-        socios: params.socios
-      });
-    } catch (e) { resultado.comparativo = null; }
 
     await new Promise(r => setTimeout(r, 300));
 
@@ -1514,15 +1495,6 @@ function renderResults(params, R) {
   const scoreColor = score >= 86 ? 'var(--ok)' : score >= 71 ? 'var(--pri)' : score >= 51 ? 'var(--accent)' : score >= 31 ? 'var(--warn)' : 'var(--danger)';
 
   // Best regime
-  let melhorRegime = 'Simples Nacional';
-  let economiaMelhor = 0;
-  if (R.comparativo) {
-    const comp = R.comparativo;
-    if (comp.melhorRegime) melhorRegime = comp.melhorRegime;
-    else if (comp.ranking && comp.ranking[0]) melhorRegime = comp.ranking[0].regime || comp.ranking[0].nome;
-    economiaMelhor = comp.economiaMelhorVsPior || comp.economiaAnual || 0;
-  }
-
   let html = '';
 
   // ─── HERO CARD ───
@@ -1533,18 +1505,19 @@ function renderResults(params, R) {
   html += '<div class="hero-metric"><div class="hm-label">DAS Otimizado IMPOST.</div><div class="hm-value green">' + fmtBRL(dasOtim) + '</div></div>';
   html += '<div class="hero-metric"><div class="hm-label">Economia Mensal</div><div class="hm-value gold">' + fmtBRL(economiaMensal) + '</div></div>';
   html += '</div>';
-  html += '<div class="hero-economia"><div class="he-icon">&#9733;</div><div><div class="he-value">' + fmtBRL(economiaAnual) + '</div><div class="he-label">Economia anual estimada</div></div></div>';
+  html += '<div class="hero-economia"><div class="he-icon">★</div><div><div class="he-value">' + fmtBRL(economiaAnual) + '</div><div class="he-label">Economia anual estimada</div></div></div>';
   html += '<div class="hero-badges"><span class="hero-badge">Anexo ' + anexo + '</span>';
-  html += '<span class="hero-badge">Aliquota ' + aliqEfetiva + '</span>';
+  html += '<span class="hero-badge">Alíquota ' + aliqEfetiva + '</span>';
   html += '<span class="hero-badge">Fator R: ' + fmtPct(fatorR) + '</span></div>';
   html += '</div>';
 
   // ─── KPIs ───
+  const classificacao = R.elegibilidade ? (R.elegibilidade.classificacao || 'EPP') : 'EPP';
   html += '<div class="kpi-grid" data-section="kpis">';
   html += kpiCard('Carga Tributária Anual', fmtBRL(dasAtual * 12), fmtPct(dasAtual * 12 / params.receitaBrutaAnual) + ' da receita', 'blue');
-  html += kpiCard('Fator R', fmtPct(fatorR), fatorR >= 0.28 ? 'Anexo III' : 'Anexo V', fatorR >= 0.28 ? 'green' : 'red');
-  html += kpiCard('Economia Potencial', fmtBRL(economiaAnual), economiaMensal > 0 ? fmtBRL(economiaMensal) + '/mes' : 'DAS ja otimizado', 'gold');
-  html += kpiCard('Regime Recomendado', melhorRegime, economiaMelhor > 0 ? 'Economia: ' + fmtBRL(economiaMelhor) : '', 'green');
+  html += kpiCard('Fator R', fmtPct(fatorR), fatorR >= 0.28 ? 'Anexo III ✅' : 'Anexo V ⚠️', fatorR >= 0.28 ? 'green' : 'red');
+  html += kpiCard('Economia Potencial', fmtBRL(economiaAnual), economiaMensal > 0 ? fmtBRL(economiaMensal) + '/mês' : 'DAS já otimizado', 'gold');
+  html += kpiCard('Classificação', classificacao, 'Anexo ' + anexo + ' — Simples Nacional', 'green');
   html += '</div>';
 
   // ─── SCORE ───
@@ -1571,35 +1544,8 @@ function renderResults(params, R) {
   html += '</div></div>';
   html += '</div></div>';
 
-  // ─── COMPARATIVO ───
-  html += '<div class="section-card" data-section="comparativo"><div class="sc-header"><span class="sc-num">02</span><span class="sc-title">Comparativo de Regimes Tributários</span></div><div class="sc-body">';
-  if (R.comparativo) {
-    const c = R.comparativo;
-    const sn = c.simplesNacional || c.simples || {};
-    const lp = c.lucroPresumido || c.presumido || {};
-    const lr = c.lucroReal || c.real || {};
-    const best = melhorRegime.toLowerCase();
-
-    html += '<table class="comp-table"><thead><tr><th>Indicador</th>';
-    html += '<th' + (best.includes('simples') ? ' class="col-best"' : '') + '>Simples Nacional' + (best.includes('simples') ? '<span class="comp-badge-best">Recomendado</span>' : '') + '</th>';
-    html += '<th' + (best.includes('presumido') ? ' class="col-best"' : '') + '>Lucro Presumido' + (best.includes('presumido') ? '<span class="comp-badge-best">Recomendado</span>' : '') + '</th>';
-    html += '<th' + (best.includes('real') ? ' class="col-best"' : '') + '>Lucro Real' + (best.includes('real') ? '<span class="comp-badge-best">Recomendado</span>' : '') + '</th>';
-    html += '</tr></thead><tbody>';
-
-    const snCarga = sn.cargaTotal || sn.cargaTributariaAnual || 0;
-    const lpCarga = lp.cargaTotal || lp.cargaTributariaAnual || 0;
-    const lrCarga = lr.cargaTotal || lr.cargaTributariaAnual || 0;
-    html += compRow('Carga Tributária Anual', fmtBRL(snCarga), fmtBRL(lpCarga), fmtBRL(lrCarga));
-    html += compRow('Alíquota Efetiva', fmtPct(sn.aliquotaEfetiva || 0), fmtPct(lp.aliquotaEfetiva || 0), fmtPct(lr.aliquotaEfetiva || 0));
-    html += compRow('Complexidade', '&#9733;', '&#9733;&#9733;', '&#9733;&#9733;&#9733;');
-    html += '</tbody></table>';
-  } else {
-    html += '<p style="color:var(--txt2)">Comparativo não disponível. Informe UF e município para comparação completa.</p>';
-  }
-  html += '</div></div>';
-
   // ─── OPORTUNIDADES ───
-  html += '<div class="section-card" data-section="oportunidades"><div class="sc-header"><span class="sc-num">03</span><span class="sc-title">Oportunidades de Economia</span></div><div class="sc-body">';
+  html += '<div class="section-card" data-section="oportunidades"><div class="sc-header"><span class="sc-num">02</span><span class="sc-title">Oportunidades de Economia</span></div><div class="sc-body">';
   html += '<div class="opp-list">';
   const dicas = R.dicas && R.dicas.dicas ? R.dicas.dicas : [];
   const diagOps = R.diagnostico && R.diagnostico.oportunidades ? R.diagnostico.oportunidades : [];
@@ -1632,13 +1578,13 @@ function renderResults(params, R) {
   html += '</div></div></div>';
 
   // ─── PARTILHA TRIBUTOS (Charts) ───
-  html += '<div class="section-card" data-section="partilha"><div class="sc-header"><span class="sc-num">04</span><span class="sc-title">Composição do DAS — Partilha de Tributos</span></div><div class="sc-body">';
+  html += '<div class="section-card" data-section="partilha"><div class="sc-header"><span class="sc-num">03</span><span class="sc-title">Composição do DAS — Partilha de Tributos</span></div><div class="sc-body">';
   html += '<div class="chart-row"><div class="chart-container"><canvas id="chartPartilha"></canvas></div>';
   html += '<div id="partilhaLegend"></div></div>';
   html += '</div></div>';
 
   // ─── DISTRIBUICAO LUCROS ───
-  html += '<div class="section-card" data-section="distribuicao"><div class="sc-header"><span class="sc-num">05</span><span class="sc-title">Distribuição de Lucros</span></div><div class="sc-body">';
+  html += '<div class="section-card" data-section="distribuicao"><div class="sc-header"><span class="sc-num">04</span><span class="sc-title">Distribuição de Lucros</span></div><div class="sc-body">';
   if (R.distribuicao) {
     const dist = R.distribuicao;
     html += '<div class="info-card"><div class="ic-title">Modalidade: ' + (dist.comEscrituracaoContabil ? 'Escrituração Contábil' : 'Presuncao') + '</div>';
@@ -1656,7 +1602,7 @@ function renderResults(params, R) {
   html += '</div></div>';
 
   // ─── SIMULADOR E SE? ───
-  html += '<div class="section-card" data-section="simulador"><div class="sc-header"><span class="sc-num">06</span><span class="sc-title">Simulador "E se?"</span></div><div class="sc-body">';
+  html += '<div class="section-card" data-section="simulador"><div class="sc-header"><span class="sc-num">05</span><span class="sc-title">Simulador "E se?"</span></div><div class="sc-body">';
   html += '<div class="sim-slider-group"><label>E se minha receita mudar? <span id="simReceitaVal">' + fmtBRL(params.receitaBrutaMensal) + '</span></label>';
   html += '<input type="range" class="sim-slider" id="simReceita" min="' + Math.round(params.receitaBrutaMensal * 0.5) + '" max="' + Math.round(params.receitaBrutaMensal * 2) + '" value="' + Math.round(params.receitaBrutaMensal) + '" step="1000"></div>';
   html += '<div class="sim-slider-group"><label>E se eu mudar a folha? <span id="simFolhaVal">' + fmtBRL(params.folhaMensal) + '</span></label>';
@@ -1665,7 +1611,7 @@ function renderResults(params, R) {
   html += '</div></div>';
 
   // ─── PLANO DE ACAO ───
-  html += '<div class="section-card" data-section="plano"><div class="sc-header"><span class="sc-num">07</span><span class="sc-title">Plano de Ação Priorizado</span></div><div class="sc-body">';
+  html += '<div class="section-card" data-section="plano"><div class="sc-header"><span class="sc-num">06</span><span class="sc-title">Plano de Ação Priorizado</span></div><div class="sc-body">';
   html += '<div class="timeline" id="timelinePlano">';
   const acoes = (R.diagnostico && R.diagnostico.oportunidades) ? R.diagnostico.oportunidades.slice(0, 6) : allOps.slice(0, 6);
   if (acoes.length === 0) html += '<p style="color:var(--txt2)">Nenhuma ação necessária.</p>';
@@ -1679,7 +1625,7 @@ function renderResults(params, R) {
   html += '</div></div></div>';
 
   // ─── CALENDARIO ───
-  html += '<div class="section-card" data-section="calendario"><div class="sc-header"><span class="sc-num">08</span><span class="sc-title">Calendário Fiscal 2026</span></div><div class="sc-body">';
+  html += '<div class="section-card" data-section="calendario"><div class="sc-header"><span class="sc-num">07</span><span class="sc-title">Calendário Fiscal 2026</span></div><div class="sc-body">';
   html += '<div class="cal-grid">';
   const cal = R.calendario || [];
   cal.forEach(item => {
@@ -1730,9 +1676,6 @@ function fmtCNPJ(c) {
 }
 function kpiCard(label, value, sub, color) {
   return '<div class="kpi-card ' + color + '"><div class="kpi-label">' + label + '</div><div class="kpi-value">' + value + '</div><div class="kpi-sub">' + sub + '</div></div>';
-}
-function compRow(label, v1, v2, v3) {
-  return '<tr><td>' + label + '</td><td class="val">' + v1 + '</td><td class="val">' + v2 + '</td><td class="val">' + v3 + '</td></tr>';
 }
 function planCard(name, price, currency, period, desc, popular) {
   return '<div class="plan-card' + (popular ? ' popular' : '') + '">' +
