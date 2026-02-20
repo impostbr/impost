@@ -4,6 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Estudo Lucro Presumido v3.7.1 | IMPOST.</title>
+<meta name="description" content="Ferramenta completa para estudo e simulação do Lucro Presumido: cálculo de IRPJ, CSLL, PIS/COFINS, distribuição de lucros, break-even e calendário tributário.">
+<meta property="og:title" content="Estudo Lucro Presumido | IMPOST.">
+<meta property="og:description" content="Simulador tributário para Lucro Presumido com cálculos detalhados, comparativos e recomendações.">
+<meta name="robots" content="noindex, nofollow">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='28' font-size='28'>📊</text></svg>" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
@@ -294,7 +299,7 @@ select.fm-input{cursor:pointer;appearance:none;background-image:url("data:image/
 <div id="loadingOverlay">
   <div class="ld-brand">IMPOST<span>.</span></div>
   <div class="ld-spinner"></div>
-  <div class="ld-text">Carregando motores de calculo...</div>
+  <div class="ld-text">Carregando motores de cálculo...</div>
 </div>
 
 <!-- TOPBAR -->
@@ -334,7 +339,7 @@ select.fm-input{cursor:pointer;appearance:none;background-image:url("data:image/
     <div class="sb-value success" id="sbRegime" style="font-size:13px">--</div>
   </div>
   <div class="sb-card">
-    <div class="sb-label">Carga Tributaria Total</div>
+    <div class="sb-label">Carga Tributária Total</div>
     <div class="sb-value" id="sbCarga">--</div>
     <div class="sb-label" id="sbCargaPct" style="margin-top:4px">--</div>
   </div>
@@ -400,7 +405,7 @@ select.fm-input{cursor:pointer;appearance:none;background-image:url("data:image/
 
   <div class="sec-title">CNAEs Secundários</div>
   <div id="cnaesSecContainer">
-    <div class="fm-tip" style="margin-bottom:8px">Adicione CNAEs secundários se a empresa possui atividades mistas com percentuais de presuncao diferentes.</div>
+    <div class="fm-tip" style="margin-bottom:8px">Adicione CNAEs secundários se a empresa possui atividades mistas com percentuais de presunção diferentes.</div>
   </div>
   <button class="btn-add-row" onclick="addCnaeSecundario()">+ Adicionar CNAE Secundário</button>
 
@@ -412,14 +417,14 @@ select.fm-input{cursor:pointer;appearance:none;background-image:url("data:image/
       <div id="estadoInfo"></div>
     </div>
     <div class="fm-group">
-      <label>Municipio</label>
+      <label>Município</label>
       <select class="fm-input" id="municipio" disabled><option value="">Selecione o estado primeiro...</option></select>
       <div id="municipioInfo"></div>
     </div>
   </div>
   <div class="fm-grid fm-2" style="margin-top:12px">
     <div class="fm-group">
-      <label>Aliquota ISS (%) <span class="tt" data-tip="Minimo 2%, maximo 5% (LC 116/2003). Ajustavel manualmente.">?</span></label>
+      <label>Alíquota ISS (%) <span class="tt" data-tip="Mínimo 2%, máximo 5% (LC 116/2003). Ajustável manualmente.">?</span></label>
       <div class="fm-prefix"><span>%</span><input class="fm-input" id="aliquotaISS" type="number" min="2" max="5" step="0.1" value="5"></div>
     </div>
   </div>
@@ -431,7 +436,7 @@ select.fm-input{cursor:pointer;appearance:none;background-image:url("data:image/
       <input class="fm-input" id="dataConstituicao" type="date">
     </div>
     <div class="fm-group">
-      <label>Porte da Empresa <span class="tt" data-tip="ME: Receita ate R$ 360.000/ano. EPP: ate R$ 4.800.000/ano. Demais: acima.">?</span></label>
+      <label>Porte da Empresa <span class="tt" data-tip="ME: Receita até R$ 360.000/ano. EPP: até R$ 4.800.000/ano. Demais: acima.">?</span></label>
       <select class="fm-input" id="porte">
         <option value="ME">ME - Microempresa</option>
         <option value="EPP">EPP - Empresa de Pequeno Porte</option>
@@ -454,7 +459,7 @@ select.fm-input{cursor:pointer;appearance:none;background-image:url("data:image/
 
   <div class="fm-grid fm-2">
     <div class="fm-group">
-      <label>Receita bruta do ano anterior <span class="tt" data-tip="Receita bruta total no ano-calendario anterior. Limite: R$ 78.000.000,00 (Lei 9.718/1998, Art. 13)">?</span></label>
+      <label>Receita bruta do ano anterior <span class="tt" data-tip="Receita bruta total no ano-calendário anterior. Limite: R$ 78.000.000,00 (Lei 9.718/1998, Art. 13)">?</span></label>
       <div class="fm-prefix"><span>R$</span><input class="fm-input money" id="receitaAnterior" placeholder="0,00"></div>
     </div>
     <div class="fm-group">
@@ -472,7 +477,7 @@ select.fm-input{cursor:pointer;appearance:none;background-image:url("data:image/
   </div>
 
   <div class="sec-title">Impedimentos Legais (RIR/2018, Art. 257)</div>
-  <div class="fm-tip" style="margin-bottom:10px">Marque SIM apenas se a situacao se aplica a empresa. Qualquer marcacao pode impedir o Lucro Presumido.</div>
+  <div class="fm-tip" style="margin-bottom:10px">Marque SIM apenas se a situação se aplica à empresa. Qualquer marcação pode impedir o Lucro Presumido.</div>
   <div class="fm-grid" style="gap:8px">
     <label class="chk-card"><input type="checkbox" id="impInstFinanceira"><span class="chk-mark"></span> É instituição financeira? (bancos, corretoras)</label>
     <label class="chk-card"><input type="checkbox" id="impFactoring"><span class="chk-mark"></span> É empresa de factoring?</label>
@@ -503,7 +508,7 @@ select.fm-input{cursor:pointer;appearance:none;background-image:url("data:image/
   <!-- MODO SIMPLIFICADO -->
   <div id="modoSimplificado">
     <div class="sec-title">Receita Bruta Anual por Atividade</div>
-    <div class="fm-tip" style="margin-bottom:10px">Informe a receita anual estimada para cada atividade. O percentual de presuncao sera aplicado automaticamente.</div>
+    <div class="fm-tip" style="margin-bottom:10px">Informe a receita anual estimada para cada atividade. O percentual de presunção será aplicado automaticamente.</div>
     <table class="dyn-table" id="tblReceitasSimp">
       <thead><tr><th>Atividade</th><th>% IRPJ</th><th>% CSLL</th><th style="width:180px">Receita Anual (R$)</th><th></th></tr></thead>
       <tbody id="tbodyReceitasSimp"></tbody>
@@ -563,21 +568,21 @@ select.fm-input{cursor:pointer;appearance:none;background-image:url("data:image/
 
   <div class="sec-title">Folha de Pagamento e Encargos</div>
   <div class="fm-grid fm-3">
-    <div class="fm-group"><label>Folha de pagamento anual <span class="tt" data-tip="Total bruto anual (salarios + pro-labore). Usado para calcular INSS patronal e Fator R do Simples.">?</span></label><div class="fm-prefix"><span>R$</span><input class="fm-input money" id="folhaPagamento" placeholder="0,00"></div></div>
-    <div class="fm-group"><label>Aliquota RAT (%)</label><div class="fm-prefix"><span>%</span><input class="fm-input" id="aliquotaRAT" type="number" min="1" max="3" step="0.1" value="3"></div></div>
-    <div class="fm-group"><label>Contribuicao a terceiros (%)</label><div class="fm-prefix"><span>%</span><input class="fm-input" id="aliquotaTerceiros" type="number" min="0" max="5.8" step="0.1" value="0.5"></div></div>
+    <div class="fm-group"><label>Folha de pagamento anual <span class="tt" data-tip="Total bruto anual (salários + pró-labore). Usado para calcular INSS patronal e Fator R do Simples.">?</span></label><div class="fm-prefix"><span>R$</span><input class="fm-input money" id="folhaPagamento" placeholder="0,00"></div></div>
+    <div class="fm-group"><label>Alíquota RAT (%)</label><div class="fm-prefix"><span>%</span><input class="fm-input" id="aliquotaRAT" type="number" min="1" max="3" step="0.1" value="3"></div></div>
+    <div class="fm-group"><label>Contribuição a terceiros (%)</label><div class="fm-prefix"><span>%</span><input class="fm-input" id="aliquotaTerceiros" type="number" min="0" max="5.8" step="0.1" value="0.5"></div></div>
   </div>
 
   <div class="sec-title">Despesas Operacionais Anuais</div>
-  <div class="fm-tip" style="margin-bottom:10px">Detalhamento para estimativa de lucro real. Total sera calculado automaticamente.</div>
+  <div class="fm-tip" style="margin-bottom:10px">Detalhamento para estimativa de lucro real. Total será calculado automaticamente.</div>
   <div class="desp-grid">
     <div class="fm-group"><label>Aluguel</label><div class="fm-prefix"><span>R$</span><input class="fm-input money desp" id="despAluguel" placeholder="0,00"></div></div>
-    <div class="fm-group"><label>Energia / Agua / Telefone</label><div class="fm-prefix"><span>R$</span><input class="fm-input money desp" id="despUtilidades" placeholder="0,00"></div></div>
-    <div class="fm-group"><label>Combustivel e manutencao</label><div class="fm-prefix"><span>R$</span><input class="fm-input money desp" id="despCombustivel" placeholder="0,00"></div></div>
+    <div class="fm-group"><label>Energia / Água / Telefone</label><div class="fm-prefix"><span>R$</span><input class="fm-input money desp" id="despUtilidades" placeholder="0,00"></div></div>
+    <div class="fm-group"><label>Combustível e manutenção</label><div class="fm-prefix"><span>R$</span><input class="fm-input money desp" id="despCombustivel" placeholder="0,00"></div></div>
     <div class="fm-group"><label>Material de consumo</label><div class="fm-prefix"><span>R$</span><input class="fm-input money desp" id="despMaterial" placeholder="0,00"></div></div>
-    <div class="fm-group"><label>Servicos de terceiros</label><div class="fm-prefix"><span>R$</span><input class="fm-input money desp" id="despServicos" placeholder="0,00"></div></div>
+    <div class="fm-group"><label>Serviços de terceiros</label><div class="fm-prefix"><span>R$</span><input class="fm-input money desp" id="despServicos" placeholder="0,00"></div></div>
     <div class="fm-group"><label>Pro-labore</label><div class="fm-prefix"><span>R$</span><input class="fm-input money desp" id="despProlabore" placeholder="0,00"></div></div>
-    <div class="fm-group"><label>Salarios e encargos</label><div class="fm-prefix"><span>R$</span><input class="fm-input money desp" id="despSalarios" placeholder="0,00"></div></div>
+    <div class="fm-group"><label>Salários e encargos</label><div class="fm-prefix"><span>R$</span><input class="fm-input money desp" id="despSalarios" placeholder="0,00"></div></div>
     <div class="fm-group"><label>Depreciação</label><div class="fm-prefix"><span>R$</span><input class="fm-input money desp" id="despDepreciacao" placeholder="0,00"></div></div>
     <div class="fm-group"><label>Outras despesas</label><div class="fm-prefix"><span>R$</span><input class="fm-input money desp" id="despOutras" placeholder="0,00"></div></div>
   </div>
@@ -586,25 +591,25 @@ select.fm-input{cursor:pointer;appearance:none;background-image:url("data:image/
     <div class="fm-prefix"><span>R$</span><input class="fm-input" id="totalDespesas" readonly style="font-weight:700;color:var(--accent)"></div>
   </div>
 
-  <div class="sec-title">Dados para Comparacao de Regimes</div>
+  <div class="sec-title">Dados para Comparação de Regimes</div>
   <div class="fm-grid fm-2">
-    <div class="fm-group"><label>Creditos PIS/COFINS estimados (Lucro Real) <span class="tt" data-tip="Estimativa de creditos sobre insumos no regime nao-cumulativo. Reduz o PIS/COFINS no Lucro Real.">?</span></label><div class="fm-prefix"><span>R$</span><input class="fm-input money" id="creditosPISCOFINS" placeholder="0,00"></div></div>
-    <div class="fm-group"><label>Aliquota efetiva Simples Nacional (%) <span class="tt" data-tip="Se a empresa for elegivel ao Simples, informe a aliquota efetiva estimada para comparacao.">?</span></label><div class="fm-prefix"><span>%</span><input class="fm-input" id="aliquotaSimples" type="number" min="4" max="33" step="0.1" value="15"></div></div>
-    <div class="fm-group"><label>Lucro contábil efetivo (R$) <span class="tt" data-tip="Lucro apurado pela contabilidade. Se informado e houver escrituracao completa, permite distribuir lucros acima da base presumida.">?</span></label><div class="fm-prefix"><span>R$</span><input class="fm-input money" id="lucroContabil" placeholder="0,00 (opcional)"></div></div>
-    <div class="fm-group"><label>Prejuizos fiscais acumulados (R$)</label><div class="fm-prefix"><span>R$</span><input class="fm-input money" id="prejuizosFiscais" placeholder="0,00"></div></div>
+    <div class="fm-group"><label>Créditos PIS/COFINS estimados (Lucro Real) <span class="tt" data-tip="Estimativa de créditos sobre insumos no regime não-cumulativo. Reduz o PIS/COFINS no Lucro Real.">?</span></label><div class="fm-prefix"><span>R$</span><input class="fm-input money" id="creditosPISCOFINS" placeholder="0,00"></div></div>
+    <div class="fm-group"><label>Alíquota efetiva Simples Nacional (%) <span class="tt" data-tip="Se a empresa for elegível ao Simples, informe a alíquota efetiva estimada para comparação.">?</span></label><div class="fm-prefix"><span>%</span><input class="fm-input" id="aliquotaSimples" type="number" min="4" max="33" step="0.1" value="15"></div></div>
+    <div class="fm-group"><label>Lucro contábil efetivo (R$) <span class="tt" data-tip="Lucro apurado pela contabilidade. Se informado e houver escrituração completa, permite distribuir lucros acima da base presumida.">?</span></label><div class="fm-prefix"><span>R$</span><input class="fm-input money" id="lucroContabil" placeholder="0,00 (opcional)"></div></div>
+    <div class="fm-group"><label>Prejuízos fiscais acumulados (R$)</label><div class="fm-prefix"><span>R$</span><input class="fm-input money" id="prejuizosFiscais" placeholder="0,00"></div></div>
   </div>
 
-  <div class="sec-title">Caracteristicas da Empresa</div>
+  <div class="sec-title">Características da Empresa</div>
   <div class="fm-grid" style="gap:8px">
-    <label class="chk-card" style="border-color:var(--success-b)"><input type="checkbox" id="temEscrituracao"><span class="chk-mark" style="border-color:var(--success)"></span> Possui escrituracao contabil completa (ECD)</label>
-    <label class="chk-card" style="border-color:var(--success-b)"><input type="checkbox" id="temEquipamentos"><span class="chk-mark" style="border-color:var(--success)"></span> Tem investimentos em equipamentos (depreciacao acelerada)</label>
+    <label class="chk-card" style="border-color:var(--success-b)"><input type="checkbox" id="temEscrituracao"><span class="chk-mark" style="border-color:var(--success)"></span> Possui escrituração contábil completa (ECD)</label>
+    <label class="chk-card" style="border-color:var(--success-b)"><input type="checkbox" id="temEquipamentos"><span class="chk-mark" style="border-color:var(--success)"></span> Tem investimentos em equipamentos (depreciação acelerada)</label>
     <label class="chk-card" style="border-color:var(--success-b)"><input type="checkbox" id="temPD"><span class="chk-mark" style="border-color:var(--success)"></span> Faz pesquisa e desenvolvimento (Lei do Bem)</label>
-    <label class="chk-card" style="border-color:var(--success-b)"><input type="checkbox" id="receitaSazonal"><span class="chk-mark" style="border-color:var(--success)"></span> Receitas sao sazonais</label>
+    <label class="chk-card" style="border-color:var(--success-b)"><input type="checkbox" id="receitaSazonal"><span class="chk-mark" style="border-color:var(--success)"></span> Receitas são sazonais</label>
   </div>
 
-  <div class="sec-title">Composicao Societaria</div>
+  <div class="sec-title">Composição Societária</div>
   <div id="sociosContainer"></div>
-  <button class="btn-add-row" onclick="addSocio()">+ Adicionar Socio</button>
+  <button class="btn-add-row" onclick="addSocio()">+ Adicionar Sócio</button>
 </div>
 </section>
 
@@ -615,28 +620,28 @@ select.fm-input{cursor:pointer;appearance:none;background-image:url("data:image/
 <div class="wz-card" style="padding:20px">
   <div class="wz-header" style="margin-bottom:16px;padding-bottom:12px">
     <div class="wz-icon">&#128640;</div>
-    <div><div class="wz-title">Resultados e Analise Completa</div><div class="wz-sub">Calculos detalhados, comparativos e recomendacoes</div></div>
+    <div><div class="wz-title">Resultados e Análise Completa</div><div class="wz-sub">Cálculos detalhados, comparativos e recomendações</div></div>
   </div>
 
   <div class="res-tabs" id="resTabs">
-    <button class="res-tab active" data-tab="sim" onclick="showTab('sim')">Simulacao</button>
+    <button class="res-tab active" data-tab="sim" onclick="showTab('sim')">Simulação</button>
     <button class="res-tab" data-tab="trim" onclick="showTab('trim')">Trimestral</button>
     <button class="res-tab" data-tab="piscofins" onclick="showTab('piscofins')">PIS/COFINS</button>
     <button class="res-tab" data-tab="anual" onclick="showTab('anual')">Anual</button>
     <!-- Aba Comparativo removida na v3.0.0 — ferramenta exclusiva LP -->
     <button class="res-tab" data-tab="vantagens" onclick="showTab('vantagens')">Vantagens</button>
-    <button class="res-tab" data-tab="distribuicao" onclick="showTab('distribuicao')">Distribuicao</button>
+    <button class="res-tab" data-tab="distribuicao" onclick="showTab('distribuicao')">Distribuição</button>
     <button class="res-tab" data-tab="riscos" onclick="showTab('riscos')">Riscos</button>
-    <button class="res-tab" data-tab="obrigacoes" onclick="showTab('obrigacoes')">Obrigacoes</button>
-    <button class="res-tab" data-tab="transicao" onclick="showTab('transicao')">Transicao</button>
+    <button class="res-tab" data-tab="obrigacoes" onclick="showTab('obrigacoes')">Obrigações</button>
+    <button class="res-tab" data-tab="transicao" onclick="showTab('transicao')">Transição</button>
     <button class="res-tab" data-tab="dicas" onclick="showTab('dicas')">Dicas</button>
-    <!-- Etapa 3: Otimizacao -->
+    <!-- Etapa 3: Otimização -->
     <button class="res-tab" data-tab="prolabore" onclick="showTab('prolabore')" style="border-left:2px solid var(--accent);margin-left:4px">Pro-Labore</button>
     <button class="res-tab" data-tab="jcpEcd" onclick="showTab('jcpEcd')">JCP / ECD</button>
     <button class="res-tab" data-tab="caixaComp" onclick="showTab('caixaComp')">Caixa vs Comp.</button>
     <!-- Etapa 4: Break-Even e Calendario -->
     <button class="res-tab" data-tab="breakeven" onclick="showTab('breakeven')" style="border-left:2px solid var(--success);margin-left:4px">Break-Even</button>
-    <button class="res-tab" data-tab="calendario" onclick="showTab('calendario')">Calendario</button>
+    <button class="res-tab" data-tab="calendario" onclick="showTab('calendario')">Calendário</button>
   </div>
 
   <div class="tab-panel active" id="tabSim"></div>
@@ -667,23 +672,23 @@ select.fm-input{cursor:pointer;appearance:none;background-image:url("data:image/
 <div class="wz-card">
   <div class="wz-header">
     <div class="wz-icon">&#128230;</div>
-    <div><div class="wz-title">Exportacao e Relatorio</div><div class="wz-sub">Salve, exporte ou imprima seu estudo tributario</div></div>
+    <div><div class="wz-title">Exportação e Relatório</div><div class="wz-sub">Salve, exporte ou imprima seu estudo tributário</div></div>
   </div>
   <div class="export-grid">
     <div class="export-card" id="btnExportPDF" onclick="exportPDF()">
       <div class="export-icon">&#128196;</div>
       <div class="export-label">Exportar PDF</div>
-      <div class="export-desc">Relatorio profissional completo</div>
+      <div class="export-desc">Relatório profissional completo</div>
     </div>
-    <div class="export-card" onclick="exportExcel()">
+    <div class="export-card" onclick="exportCSV()">
       <div class="export-icon">&#128202;</div>
       <div class="export-label">Exportar CSV</div>
-      <div class="export-desc">Planilha CSV compativel com Excel</div>
+      <div class="export-desc">Planilha CSV compatível com Excel</div>
     </div>
     <div class="export-card" onclick="window.print()">
       <div class="export-icon">&#128424;</div>
       <div class="export-label">Imprimir</div>
-      <div class="export-desc">Layout otimizado para impressao</div>
+      <div class="export-desc">Layout otimizado para impressão</div>
     </div>
     <div class="export-card" onclick="salvarEstudo()">
       <div class="export-icon">&#128190;</div>
@@ -693,7 +698,7 @@ select.fm-input{cursor:pointer;appearance:none;background-image:url("data:image/
     <div class="export-card" onclick="novoEstudo()">
       <div class="export-icon">&#128260;</div>
       <div class="export-label">Novo Estudo</div>
-      <div class="export-desc">Limpar tudo e recomecar</div>
+      <div class="export-desc">Limpar tudo e recomeçar</div>
     </div>
   </div>
 </div>
@@ -784,6 +789,11 @@ const UFS = ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','P
 // ─────────────────────────────────────────────────────────────────────────
 // 2. UTILITY FUNCTIONS
 // ─────────────────────────────────────────────────────────────────────────
+function escapeHtml(str) {
+  if (str == null) return '';
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
 function formatMoney(value) {
   if (value == null || isNaN(value)) return 'R$ 0,00';
   return 'R$ ' + Number(value).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -792,16 +802,68 @@ function formatMoney(value) {
 function parseMoney(str) {
   if (typeof str === 'number') return str;
   if (!str) return 0;
-  return parseFloat(String(str).replace(/[R$\s.]/g, '').replace(',', '.')) || 0;
+  var s = String(str).replace(/[R$\s]/g, '');
+  // Detectar formato: se tem vírgula, é BR (ponto = milhar, vírgula = decimal)
+  // Se NÃO tem vírgula e tem ponto com 1-2 dígitos depois, é formato americano (ponto = decimal)
+  if (s.indexOf(',') >= 0) {
+    // Formato brasileiro: 1.200.300,50
+    return parseFloat(s.replace(/\./g, '').replace(',', '.')) || 0;
+  }
+  // Sem vírgula: verificar se último ponto parece decimal (1-2 dígitos após)
+  var lastDot = s.lastIndexOf('.');
+  if (lastDot >= 0 && s.length - lastDot <= 3) {
+    // Ponto decimal americano: 1000.00 ou 1000.5
+    return parseFloat(s) || 0;
+  }
+  // Sem vírgula e ponto não parece decimal (ex: "1.200.300"): pontos = milhar
+  return parseFloat(s.replace(/\./g, '')) || 0;
 }
 
 function maskCNPJ(input) {
+  if (!input || !input.value) return;
   let v = input.value.replace(/\D/g, '').slice(0, 14);
   if (v.length > 12) v = v.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{0,2})/, '$1.$2.$3/$4-$5');
   else if (v.length > 8) v = v.replace(/^(\d{2})(\d{3})(\d{3})(\d{0,4})/, '$1.$2.$3/$4');
   else if (v.length > 5) v = v.replace(/^(\d{2})(\d{3})(\d{0,3})/, '$1.$2.$3');
   else if (v.length > 2) v = v.replace(/^(\d{2})(\d{0,3})/, '$1.$2');
   input.value = v;
+  // Validar quando completo (14 dígitos)
+  var digits = v.replace(/\D/g, '');
+  var errEl = input.parentElement && input.parentElement.querySelector('.fm-error');
+  if (digits.length === 14) {
+    if (!validateCNPJ(digits)) {
+      if (!errEl) { errEl = document.createElement('div'); errEl.className = 'fm-error'; input.parentElement.appendChild(errEl); }
+      errEl.textContent = 'CNPJ inválido — dígitos verificadores não conferem';
+      input.style.borderColor = 'var(--danger)';
+    } else {
+      if (errEl) errEl.remove();
+      input.style.borderColor = '';
+    }
+  } else {
+    if (errEl) errEl.remove();
+    input.style.borderColor = '';
+  }
+}
+
+function validateCNPJ(cnpj) {
+  var d = (cnpj || '').replace(/\D/g, '');
+  if (d.length !== 14) return false;
+  // Rejeitar CNPJs com todos os dígitos iguais
+  if (/^(\d)\1{13}$/.test(d)) return false;
+  // Calcular 1o dígito verificador
+  var pesos1 = [5,4,3,2,9,8,7,6,5,4,3,2];
+  var soma = 0;
+  for (var i = 0; i < 12; i++) soma += parseInt(d[i]) * pesos1[i];
+  var resto = soma % 11;
+  var dig1 = resto < 2 ? 0 : 11 - resto;
+  if (parseInt(d[12]) !== dig1) return false;
+  // Calcular 2o dígito verificador
+  var pesos2 = [6,5,4,3,2,9,8,7,6,5,4,3,2];
+  soma = 0;
+  for (var j = 0; j < 13; j++) soma += parseInt(d[j]) * pesos2[j];
+  resto = soma % 11;
+  var dig2 = resto < 2 ? 0 : 11 - resto;
+  return parseInt(d[13]) === dig2;
 }
 
 function maskMoney(input) {
@@ -987,7 +1049,7 @@ function addCnaeSecundario() {
   const row = document.createElement('div');
   row.id = 'cnaeSec' + id;
   row.style.cssText = 'display:flex;gap:8px;align-items:center;margin-bottom:8px;';
-  row.innerHTML = `<input class="fm-input" placeholder="Buscar CNAE secundario..." style="flex:1" id="cnaeSecBusca${id}" autocomplete="off"><button class="btn-rm" onclick="document.getElementById('cnaeSec${id}').remove()" style="background:none;border:none;color:var(--danger);font-size:18px;cursor:pointer">&times;</button><div class="search-results" id="cnaeSecResults${id}" style="position:absolute;z-index:50;width:400px;margin-top:40px"></div>`;
+  row.innerHTML = `<input class="fm-input" placeholder="Buscar CNAE secundário..." style="flex:1" id="cnaeSecBusca${id}" autocomplete="off"><button class="btn-rm" onclick="document.getElementById('cnaeSec${id}').remove()" style="background:none;border:none;color:var(--danger);font-size:18px;cursor:pointer">&times;</button><div class="search-results" id="cnaeSecResults${id}" style="position:absolute;z-index:50;width:400px;margin-top:40px"></div>`;
   container.appendChild(row);
   const inp = $('cnaeSecBusca' + id);
   const res = $('cnaeSecResults' + id);
@@ -1002,6 +1064,7 @@ function addCnaeSecundario() {
     res.querySelectorAll('.sr-item').forEach(el => el.addEventListener('click', () => { inp.value = el.dataset.codigo + ' - ' + el.dataset.desc; res.classList.remove('open'); }));
   }, 300);
   inp.addEventListener('input', searchSec);
+  document.addEventListener('click', function(e) { if (!inp.contains(e.target) && !res.contains(e.target)) res.classList.remove('open'); });
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -1089,7 +1152,7 @@ async function onEstadoChange() {
   const estado = getEstadoData(uf);
   // Show state info
   if (estado) {
-    let info = `<div class="info-box info">ICMS padrao: <strong>${(estado.icms.padrao * 100).toFixed(1)}%</strong>`;
+    let info = `<div class="info-box info">ICMS padrão: <strong>${estado.icms && estado.icms.padrao != null ? (estado.icms.padrao * 100).toFixed(1) + '%' : 'N/D'}</strong>`;
     if (estado.beneficios) {
       if (estado.beneficios.tem_sudam) info += ' | <strong style="color:var(--success)">Area SUDAM</strong>';
       if (estado.beneficios.tem_sudene) info += ' | <strong style="color:var(--success)">Area SUDENE</strong>';
@@ -1099,7 +1162,7 @@ async function onEstadoChange() {
     estadoInfo.innerHTML = info;
   }
   // Load municipalities
-  munSel.innerHTML = '<option value="">Carregando municipios...</option>';
+  munSel.innerHTML = '<option value="">Carregando municípios...</option>';
   munSel.disabled = true;
   // Adapter: MunicipiosIBGE espera estadosRef[uf] (dicionário), não API de métodos
   var _estadoRef = null;
@@ -1121,11 +1184,11 @@ async function onEstadoChange() {
       if (fallback.length) {
         MunicipiosIBGE.renderizarSelect(munSel, fallback);
       } else {
-        munSel.innerHTML = '<option value="">Nenhum municipio encontrado</option>';
+        munSel.innerHTML = '<option value="">Nenhum município encontrado</option>';
         munSel.disabled = false;
       }
     } catch(e2) {
-      munSel.innerHTML = '<option value="">Erro ao carregar municipios</option>';
+      munSel.innerHTML = '<option value="">Erro ao carregar municípios</option>';
       munSel.disabled = false;
     }
   }
@@ -1162,17 +1225,17 @@ function checkElegibilidade() {
     const div = $('elegibilidadeResult');
     const alertas = result.alertas || [];
     if (result.elegivel) {
-      let html = '<div class="info-box success"><strong>ELEGIVEL ao Lucro Presumido</strong>';
-      html += `<br>Limite aplicavel: ${formatMoney(result.limiteAplicavel)}`;
+      let html = '<div class="info-box success"><strong>ELEGÍVEL ao Lucro Presumido</strong>';
+      html += `<br>Limite aplicável: ${formatMoney(result.limiteAplicavel)}`;
       if (alertas.length) {
         html += '<br><br>';
         alertas.forEach(a => { html += `<div style="margin-top:4px"><span class="badge badge-warn">${a.tipo}</span> ${a.mensagem}</div>`; });
       }
       html += '</div>';
       div.innerHTML = html;
-      $('sbElegibilidade').innerHTML = '<span class="badge badge-success">Elegivel</span>';
+      $('sbElegibilidade').innerHTML = '<span class="badge badge-success">Elegível</span>';
     } else {
-      let html = '<div class="info-box danger"><strong>NAO ELEGIVEL ao Lucro Presumido</strong><br><br>';
+      let html = '<div class="info-box danger"><strong>NÃO ELEGÍVEL ao Lucro Presumido</strong><br><br>';
       (result.impedimentos || []).forEach(imp => {
         html += `<div style="margin-top:6px"><strong>${imp.descricao}</strong><br><span style="opacity:.7">${imp.baseLegal}</span></div>`;
       });
@@ -1182,13 +1245,13 @@ function checkElegibilidade() {
       }
       html += '</div>';
       div.innerHTML = html;
-      $('sbElegibilidade').innerHTML = '<span class="badge badge-danger">Inelegivel</span>';
+      $('sbElegibilidade').innerHTML = '<span class="badge badge-danger">Inelegível</span>';
     }
     if (alertas.length && result.elegivel) {
-      $('sbElegibilidade').innerHTML = '<span class="badge badge-warn">Elegivel (alertas)</span>';
+      $('sbElegibilidade').innerHTML = '<span class="badge badge-warn">Elegível (alertas)</span>';
     }
   } catch(e) {
-    $('elegibilidadeResult').innerHTML = `<div class="info-box danger">Erro: ${e.message}</div>`;
+    $('elegibilidadeResult').innerHTML = `<div class="info-box danger">Erro: ${escapeHtml(e.message)}</div>`;
   }
 }
 
@@ -1285,7 +1348,7 @@ function addSocio() {
   const row = document.createElement('div');
   row.className = 'soc-row';
   row.id = 'socRow' + id;
-  row.innerHTML = `<input class="fm-input" id="socNome${id}" placeholder="Nome do socio"><input class="fm-input" id="socPct${id}" type="number" min="0" max="100" step="0.1" placeholder="%" style="text-align:center"><button class="btn-rm" onclick="document.getElementById('socRow${id}').remove()">&times;</button>`;
+  row.innerHTML = `<input class="fm-input" id="socNome${id}" placeholder="Nome do sócio"><input class="fm-input" id="socPct${id}" type="number" min="0" max="100" step="0.1" placeholder="%" style="text-align:center"><button class="btn-rm" onclick="document.getElementById('socRow${id}').remove()">&times;</button>`;
   container.appendChild(row);
 }
 
@@ -1306,6 +1369,10 @@ function gatherFormData() {
   d.folhaPagamento = parseMoney($('folhaPagamento').value);
   d.aliquotaRAT = Math.max(1, Math.min(3, parseFloat($('aliquotaRAT').value) || 3));
   d.aliquotaTerceiros = Math.max(0, Math.min(5.8, parseFloat($('aliquotaTerceiros').value) || 0.5));
+  // Versões decimais das alíquotas (convertidas UMA VEZ aqui)
+  d.aliquotaISSDecimal = d.aliquotaISS / 100;
+  d.aliquotaRATDecimal = d.aliquotaRAT / 100;
+  d.aliquotaTerceirosDecimal = d.aliquotaTerceiros / 100;
   d.creditosPISCOFINS = parseMoney($('creditosPISCOFINS').value);
   d.aliquotaSimples = parseFloat($('aliquotaSimples').value) || 15;
   d.lucroContabil = parseMoney($('lucroContabil').value);
@@ -1314,6 +1381,12 @@ function gatherFormData() {
   d.temEquipamentos = $('temEquipamentos').checked;
   d.temPD = $('temPD').checked;
   d.receitaSazonal = $('receitaSazonal').checked;
+  // Impedimentos legais (para restauração via autoSave)
+  d.impInstFinanceira = $('impInstFinanceira').checked;
+  d.impFactoring = $('impFactoring').checked;
+  d.impExterior = $('impExterior').checked;
+  d.impIsencao = $('impIsencao').checked;
+  d.impSCP = $('impSCP').checked;
   // Deductions (annual)
   d.devolucoes = parseMoney($('devolucoes').value);
   d.cancelamentos = parseMoney($('cancelamentos').value);
@@ -1380,6 +1453,45 @@ function gatherFormData() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
+// 9A. HELPERS — Distribuição uniforme de dados anuais
+// ─────────────────────────────────────────────────────────────────────────
+
+/**
+ * Distribui dados anuais uniformemente em dados trimestrais.
+ * Transformação de dados de entrada (não é cálculo tributário).
+ */
+function distribuirAnualParaTrimestral(d) {
+  return {
+    receitas: d.receitas.map(r => ({ atividadeId: r.atividadeId, valor: r.valor / 4 })),
+    devolucoes: (d.devolucoes || 0) / 4,
+    cancelamentos: (d.cancelamentos || 0) / 4,
+    descontosIncondicionais: (d.descontos || 0) / 4,
+    ganhosCapital: (d.ganhosCapital || 0) / 4,
+    rendimentosFinanceiros: (d.rendFinanceiros || 0) / 4,
+    jcpRecebidos: (d.jcpRecebido || 0) / 4,
+    multasContratuais: (d.multasContratuais || 0) / 4,
+    receitasFinanceirasDiversas: (d.recFinDiversas || 0) / 4,
+    valoresRecuperados: (d.valoresRecuperados || 0) / 4,
+    demaisReceitas: (d.demaisReceitas || 0) / 4,
+    irrfRetidoFonte: (d.irrfRetido || 0) / 4,
+    csllRetidaFonte: (d.csllRetida || 0) / 4
+  };
+}
+
+/**
+ * Distribui dados anuais uniformemente em dados mensais para PIS/COFINS.
+ */
+function distribuirAnualParaMensal(d) {
+  return {
+    receitaBrutaMensal: (d.receitaBrutaAnual || 0) / 12,
+    vendasCanceladas: ((d.devolucoes || 0) + (d.cancelamentos || 0)) / 12,
+    descontosIncondicionais: (d.descontos || 0) / 12,
+    pisRetidoFonte: (d.pisRetido || 0) / 12,
+    cofinsRetidaFonte: (d.cofinsRetida || 0) / 12
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────
 // 10. RESULTS — RUN ALL CALCULATIONS
 // ─────────────────────────────────────────────────────────────────────────
 function runAllCalculations() {
@@ -1393,7 +1505,7 @@ function runAllCalculations() {
   if (d.receitaBrutaAnual > 78000000) {
     if (!confirm('A receita bruta anual de ' + formatMoney(d.receitaBrutaAnual) + ' excede o limite de R$ 78.000.000 para o Lucro Presumido (Lei 10.637/2002, Art. 46). A empresa seria OBRIGADA ao Lucro Real. Deseja continuar a simulação mesmo assim?')) return;
   }
-  // Validar composicao societaria
+  // Validar composição societária
   if (d.socios.length > 0) {
     const totalPct = d.socios.reduce((s, sc) => s + sc.percentual, 0);
     if (Math.abs(totalPct - 1) > 0.01) {
@@ -1401,6 +1513,8 @@ function runAllCalculations() {
       if (!confirm(`A composição societária soma ${pctFmt}% (deveria ser 100%). Deseja continuar mesmo assim?`)) return;
     }
   }
+  // Atualizar elegibilidade na sidebar (H07)
+  try { checkElegibilidade(); } catch(e) { /* silencioso */ }
   try {
     renderSimulacao(d);
     renderTrimestral(d);
@@ -1450,7 +1564,7 @@ function runAllCalculations() {
     updateSidebar();
   } catch(e) {
     console.error('Erro nos calculos:', e);
-    $('tabSim').innerHTML = `<div class="info-box danger">Erro ao calcular: ${e.message}. Verifique os dados informados.</div>`;
+    $('tabSim').innerHTML = `<div class="info-box danger">Erro ao calcular: ${escapeHtml(e.message)}. Verifique os dados informados.</div>`;
   }
 }
 
@@ -1479,7 +1593,7 @@ function renderSimulacao(d) {
         <p style="font-size:10px;color:var(--text3);line-height:1.5;margin:0"><strong>AVISO LEGAL:</strong> Os cálculos apresentados são estimativas baseadas na legislação vigente (RIR/2018, IN RFB 1.700/2017, LC 224/2025) e nos dados informados pelo usuário. Este sistema NÃO substitui a orientação de um contador ou advogado tributarista. Os resultados devem ser validados por profissional habilitado antes de qualquer tomada de decisão fiscal. O IMPOST não se responsabiliza por decisões tomadas com base exclusivamente nesta simulação.</p>
       </div>`;
   } catch(e) {
-    $('tabSim').innerHTML = `<div class="info-box danger">Erro: ${e.message}</div>`;
+    $('tabSim').innerHTML = `<div class="info-box danger">Erro: ${escapeHtml(e.message)}</div>`;
   }
 }
 
@@ -1490,23 +1604,9 @@ function renderTrimestral(d) {
   if (d.receitaBrutaAnual <= 0) { $('tabTrim').innerHTML = '<div class="info-box warn">Informe receitas na etapa financeira.</div>'; return; }
   try {
     const trimResults = [];
+    const dadosTrim = distribuirAnualParaTrimestral(d);
     for (let q = 0; q < 4; q++) {
-      const receitasTrim = d.receitas.map(r => ({ atividadeId: r.atividadeId, valor: r.valor / 4 }));
-      const result = LucroPresumido.calcularLucroPresumidoTrimestral({
-        receitas: receitasTrim,
-        devolucoes: d.devolucoes / 4,
-        cancelamentos: d.cancelamentos / 4,
-        descontosIncondicionais: d.descontos / 4,
-        ganhosCapital: d.ganhosCapital / 4,
-        rendimentosFinanceiros: d.rendFinanceiros / 4,
-        jcpRecebidos: d.jcpRecebido / 4,
-        multasContratuais: d.multasContratuais / 4,
-        receitasFinanceirasDiversas: d.recFinDiversas / 4,
-        valoresRecuperados: d.valoresRecuperados / 4,
-        demaisReceitas: d.demaisReceitas / 4,
-        irrfRetidoFonte: d.irrfRetido / 4,
-        csllRetidaFonte: d.csllRetida / 4
-      });
+      const result = LucroPresumido.calcularLucroPresumidoTrimestral(dadosTrim);
       trimResults.push(result);
     }
     App.results.trimestral = trimResults;
@@ -1518,8 +1618,8 @@ function renderTrimestral(d) {
       ['Base Presumida IRPJ', 'basePresumidaIRPJ'],
       ['Base Presumida CSLL', 'basePresumidaCSLL'],
       ['(+) Adições Obrigatórias', 'adicoesObrigatorias'],
-      ['Base Calculo IRPJ', 'baseCalculoIRPJ'],
-      ['Base Calculo CSLL', 'baseCalculoCSLL'],
+      ['Base Cálculo IRPJ', 'baseCalculoIRPJ'],
+      ['Base Cálculo CSLL', 'baseCalculoCSLL'],
       ['IRPJ Normal (15%)', 'irpjNormal'],
       ['IRPJ Adicional (10%)', 'irpjAdicional'],
       ['(-) IRRF Retido', 'irrfRetidoFonte'],
@@ -1540,7 +1640,7 @@ function renderTrimestral(d) {
       html += `<td class="right mono" style="font-weight:700">${formatMoney(total)}</td></tr>`;
     });
     html += '</tbody></table>';
-    html += `<div class="info-box info" style="margin-top:12px"><strong>DARF IRPJ:</strong> Codigo ${trimResults[0].resumo.codigoDARF_IRPJ} | <strong>DARF CSLL:</strong> Codigo ${trimResults[0].resumo.codigoDARF_CSLL}<br>Aliquota efetiva sobre receita: ${trimResults[0].resumo.aliquotaEfetivaReceita}</div>`;
+    html += `<div class="info-box info" style="margin-top:12px"><strong>DARF IRPJ:</strong> Código ${trimResults[0].resumo.codigoDARF_IRPJ} | <strong>DARF CSLL:</strong> Código ${trimResults[0].resumo.codigoDARF_CSLL}<br>Alíquota efetiva sobre receita: ${trimResults[0].resumo.aliquotaEfetivaReceita}</div>`;
 
     // LC 224/2025 — Impacto na base presumida (só se receita > R$5M/ano)
     if (d.receitaBrutaAnual > 5000000 && typeof LucroPresumido.calcularBasePresumidaLC224 === 'function') {
@@ -1548,7 +1648,7 @@ function renderTrimestral(d) {
       const ativPrincipal = atividades.find(a => a.id === d.atividadeId) || atividades[0];
       let lc224Html = '<div class="sec-title" style="margin-top:20px">Impacto LC 224/2025 (Receita > R$ 5M)</div>';
       lc224Html += '<table class="dyn-table"><thead><tr><th>Trimestre</th><th class="right">Base sem LC 224</th><th class="right">Base com LC 224</th><th class="right">Impacto (+)</th></tr></thead><tbody>';
-      let totalSem = 0, totalCom = 0, totalImpacto = 0;
+      let totalSem = 0, totalCom = 0, totalImpacto = 0, totalImpostoExtra = 0;
       for (let q = 1; q <= 4; q++) {
         const recTrim = d.receitaBrutaAnual / 4;
         const acumulado = recTrim * q;
@@ -1563,14 +1663,14 @@ function renderTrimestral(d) {
         totalSem += baseSem;
         totalCom += lc224.basePresumida;
         totalImpacto += lc224.impactoLC224;
+        totalImpostoExtra += lc224.impostoEstimadoExtra || 0;
         const impColor = lc224.impactoLC224 > 0 ? 'color:var(--danger)' : '';
         lc224Html += `<tr><td>${q}o Trim</td><td class="right mono">${formatMoney(baseSem)}</td><td class="right mono">${formatMoney(lc224.basePresumida)}</td><td class="right mono" style="${impColor};font-weight:600">${lc224.impactoLC224 > 0 ? '+' : ''}${formatMoney(lc224.impactoLC224)}</td></tr>`;
       }
       lc224Html += `<tr style="background:var(--bg);font-weight:700"><td>TOTAL</td><td class="right mono">${formatMoney(totalSem)}</td><td class="right mono">${formatMoney(totalCom)}</td><td class="right mono" style="color:var(--danger)">${totalImpacto > 0 ? '+' : ''}${formatMoney(totalImpacto)}</td></tr>`;
       lc224Html += '</tbody></table>';
       if (totalImpacto > 0) {
-        const impostoExtra = totalImpacto * 0.24; // ~15% IRPJ + 9% CSLL
-        lc224Html += `<div class="info-box warn" style="margin-top:8px"><strong>LC 224/2025:</strong> A receita anual de ${formatMoney(d.receitaBrutaAnual)} excede o limite de R$ 5.000.000. A base presumida IRPJ aumenta em ${formatMoney(totalImpacto)}, gerando ~${formatMoney(impostoExtra)} a mais em IRPJ+CSLL.<br><small>Vigencia: A partir do 2o trimestre de 2026 (01/04/2026). LC 224/2025, Art. 14.</small></div>`;
+        lc224Html += `<div class="info-box warn" style="margin-top:8px"><strong>LC 224/2025:</strong> A receita anual de ${formatMoney(d.receitaBrutaAnual)} excede o limite de R$ 5.000.000. A base presumida IRPJ aumenta em ${formatMoney(totalImpacto)}, gerando ~${formatMoney(totalImpostoExtra)} a mais em IRPJ+CSLL.<br><small>Vigencia: A partir do 2o trimestre de 2026 (01/04/2026). LC 224/2025, Art. 14.</small></div>`;
         lc224Html += `<div class="info-box danger" style="margin-top:8px"><strong>INSEGURANCA JURIDICA:</strong> A majoracao da base de calculo do lucro presumido pela LC 224/2025 e objeto de questionamentos judiciais. Ha liminares concedidas suspendendo a aplicacao do acrescimo de 10% para empresas com receita acima de R$ 5M. Consulte seu advogado tributarista sobre a viabilidade de medida judicial para sua empresa.<br><small>Referencia: Acoes judiciais contra Art. 14 da LC 224/2025. Situacao sujeita a alteracao.</small></div>`;
       } else {
         lc224Html += `<div class="info-box info" style="margin-top:8px">A LC 224/2025 so se aplica a partir do 2o trimestre de 2026 (vigencia 01/04/2026). Nos trimestres anteriores, nao ha impacto.</div>`;
@@ -1580,7 +1680,7 @@ function renderTrimestral(d) {
 
     $('tabTrim').innerHTML = html;
   } catch(e) {
-    $('tabTrim').innerHTML = `<div class="info-box danger">Erro: ${e.message}</div>`;
+    $('tabTrim').innerHTML = `<div class="info-box danger">Erro: ${escapeHtml(e.message)}</div>`;
   }
 }
 
@@ -1590,18 +1690,14 @@ function renderTrimestral(d) {
 function renderPISCOFINS(d) {
   if (d.receitaBrutaAnual <= 0) { $('tabPiscofins').innerHTML = '<div class="info-box warn">Informe receitas.</div>'; return; }
   try {
-    const receitaMensal = d.receitaBrutaAnual / 12;
+    const dadosMensal = distribuirAnualParaMensal(d);
     const csllRetidaMensal = (d.csllRetida || 0) / 12;
     const irrfRetidoMensal = (d.irrfRetido || 0) / 12;
     const mesesResults = [];
     const mesesNomes = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
     for (let m = 0; m < 12; m++) {
       const result = LucroPresumido.calcularPISCOFINSMensal({
-        receitaBrutaMensal: receitaMensal,
-        vendasCanceladas: ((d.devolucoes || 0) + (d.cancelamentos || 0)) / 12,
-        descontosIncondicionais: (d.descontos || 0) / 12,
-        pisRetidoFonte: (d.pisRetido || 0) / 12,
-        cofinsRetidaFonte: (d.cofinsRetida || 0) / 12,
+        ...dadosMensal,
         csllRetidaFonteMensal: csllRetidaMensal,
         irrfRetidoFonteMensal: irrfRetidoMensal
       });
@@ -1669,7 +1765,7 @@ function renderPISCOFINS(d) {
 
     $('tabPiscofins').innerHTML = html;
   } catch(e) {
-    $('tabPiscofins').innerHTML = `<div class="info-box danger">Erro: ${e.message}</div>`;
+    $('tabPiscofins').innerHTML = `<div class="info-box danger">Erro: ${escapeHtml(e.message)}</div>`;
   }
 }
 
@@ -1679,42 +1775,24 @@ function renderPISCOFINS(d) {
 function renderAnual(d) {
   if (d.receitaBrutaAnual <= 0) { $('tabAnual').innerHTML = '<div class="info-box warn">Informe receitas.</div>'; return; }
   try {
+    const dadosTrim = distribuirAnualParaTrimestral(d);
+    const dadosMensal = distribuirAnualParaMensal(d);
     const trimestres = [];
     for (let q = 0; q < 4; q++) {
-      trimestres.push({
-        receitas: d.receitas.map(r => ({ atividadeId: r.atividadeId, valor: r.valor / 4 })),
-        devolucoes: d.devolucoes / 4,
-        cancelamentos: d.cancelamentos / 4,
-        descontosIncondicionais: d.descontos / 4,
-        ganhosCapital: d.ganhosCapital / 4,
-        rendimentosFinanceiros: d.rendFinanceiros / 4,
-        jcpRecebidos: d.jcpRecebido / 4,
-        multasContratuais: d.multasContratuais / 4,
-        receitasFinanceirasDiversas: d.recFinDiversas / 4,
-        valoresRecuperados: d.valoresRecuperados / 4,
-        demaisReceitas: d.demaisReceitas / 4,
-        irrfRetidoFonte: d.irrfRetido / 4,
-        csllRetidaFonte: d.csllRetida / 4
-      });
+      trimestres.push(dadosTrim);
     }
     const meses = [];
     for (let m = 0; m < 12; m++) {
-      meses.push({
-        receitaBrutaMensal: d.receitaBrutaAnual / 12,
-        vendasCanceladas: ((d.devolucoes || 0) + (d.cancelamentos || 0)) / 12,
-        descontosIncondicionais: (d.descontos || 0) / 12,
-        pisRetidoFonte: (d.pisRetido || 0) / 12,
-        cofinsRetidaFonte: (d.cofinsRetida || 0) / 12
-      });
+      meses.push(dadosMensal);
     }
-    const socios = d.socios.length ? d.socios : [{ nome: 'Socio Unico', participacao: 1 }];
+    const socios = d.socios.length ? d.socios : [{ nome: 'Sócio Único', participacao: 1 }];
     const anual = LucroPresumido.calcularAnualConsolidado({
       trimestres,
       meses,
-      aliquotaISS: d.aliquotaISS / 100,
+      aliquotaISS: d.aliquotaISSDecimal,
       folhaPagamentoAnual: d.folhaPagamento,
-      aliquotaRAT: d.aliquotaRAT / 100,
-      aliquotaTerceiros: d.aliquotaTerceiros / 100,
+      aliquotaRAT: d.aliquotaRATDecimal,
+      aliquotaTerceiros: d.aliquotaTerceirosDecimal,
       lucroContabilEfetivo: d.lucroContabil || null,
       socios
     });
@@ -1723,7 +1801,7 @@ function renderAnual(d) {
     let html = `<div class="kpi-grid">
       <div class="kpi"><div class="kpi-label">Receita Bruta Informada</div><div class="kpi-value" style="color:var(--accent)">${formatMoney(d.receitaBrutaAnual)}</div></div>
       <div class="kpi"><div class="kpi-label">Receita Líquida (Base)</div><div class="kpi-value" style="color:var(--accent)">${formatMoney(anual.receitaBrutaAnual)}</div><div class="kpi-sub">Após deduções (devoluções, cancelamentos, descontos)</div></div>
-      <div class="kpi"><div class="kpi-label">Carga Tributaria Total</div><div class="kpi-value" style="color:var(--danger)">${formatMoney(anual.consolidacao.cargaTributariaTotal)}</div></div>
+      <div class="kpi"><div class="kpi-label">Carga Tributária Total</div><div class="kpi-value" style="color:var(--danger)">${formatMoney(anual.consolidacao.cargaTributariaTotal)}</div></div>
       <div class="kpi"><div class="kpi-label">% sobre Receita</div><div class="kpi-value" style="color:var(--warn)">${anual.consolidacao.percentualCargaTributaria}</div></div>
       <div class="kpi"><div class="kpi-label">Lucro Distribuível Isento</div><div class="kpi-value" style="color:var(--success)">${formatMoney(anual.distribuicaoLucros.lucroDistribuivelFinal)}</div></div>
     </div>`;
@@ -1741,7 +1819,7 @@ function renderAnual(d) {
     if (d.receitaBrutaAnual > 5000000 && typeof LucroPresumido.calcularBasePresumidaLC224 === 'function') {
       const atividades = LucroPresumido.getAtividadesDisponiveis();
       const ativP = atividades.find(a => a.id === d.atividadeId) || atividades[0];
-      let impactoTotal = 0;
+      let impactoTotal = 0, impostoExtraTotal = 0;
       for (let q = 1; q <= 4; q++) {
         const recTrim = d.receitaBrutaAnual / 4;
         const lc224 = LucroPresumido.calcularBasePresumidaLC224({
@@ -1752,10 +1830,10 @@ function renderAnual(d) {
           anoCalendario: 2026
         });
         impactoTotal += lc224.impactoLC224;
+        impostoExtraTotal += lc224.impostoEstimadoExtra || 0;
       }
       if (impactoTotal > 0) {
-        const impostoExtra = impactoTotal * 0.24;
-        html += `<div class="info-box warn" style="margin-top:16px"><strong>LC 224/2025:</strong> Receita acima de R$ 5M gera acrescimo de 10% na base presumida. Impacto anual na base: <strong>+${formatMoney(impactoTotal)}</strong> | Impacto estimado em IRPJ+CSLL: <strong>+${formatMoney(impostoExtra)}</strong><br><small>Vigencia a partir de 01/04/2026. Veja detalhes na aba Trimestral.</small></div>`;
+        html += `<div class="info-box warn" style="margin-top:16px"><strong>LC 224/2025:</strong> Receita acima de R$ 5M gera acrescimo de 10% na base presumida. Impacto anual na base: <strong>+${formatMoney(impactoTotal)}</strong> | Impacto estimado em IRPJ+CSLL: <strong>+${formatMoney(impostoExtraTotal)}</strong><br><small>Vigencia a partir de 01/04/2026. Veja detalhes na aba Trimestral.</small></div>`;
         html += `<div class="info-box danger" style="margin-top:8px"><strong>INSEGURANCA JURIDICA:</strong> A majoracao pela LC 224/2025 e objeto de questionamentos judiciais com liminares concedidas. Consulte advogado tributarista sobre medida judicial para sua empresa.</div>`;
       }
     }
@@ -1770,7 +1848,7 @@ function renderAnual(d) {
     renderQuarterlyChart(anual);
     renderCompositionChart(anual);
   } catch(e) {
-    $('tabAnual').innerHTML = `<div class="info-box danger">Erro: ${e.message}</div>`;
+    $('tabAnual').innerHTML = `<div class="info-box danger">Erro: ${escapeHtml(e.message)}</div>`;
   }
 }
 
@@ -1826,9 +1904,6 @@ function renderCompositionChart(anual) {
 
 // ─────────────────────────────────────────────────────────────────────────
 // TAB: COMPARATIVO — Removido v3.0.0 (ferramenta exclusiva LP)
-// ─────────────────────────────────────────────────────────────────────────
-function renderComparativo(d) { /* desativado v3.0.0 */ }
-function renderRegimeChart(ranking) { /* desativado v3.0.0 */ }
 
 // ─────────────────────────────────────────────────────────────────────────
 // TAB: VANTAGENS
@@ -1845,7 +1920,7 @@ function renderVantagens(d) {
       temReceitasSazonais: d.receitaSazonal
     });
     App.results.vantagens = analise;
-    let html = `<div class="info-box ${analise.analise.startsWith('FAVORAVEL') ? 'success' : 'warn'}" style="margin-bottom:16px"><strong>${analise.analise}</strong><br>Atividade: ${analise.atividade} | Presuncao: ${analise.percentualPresuncao} | Margem Real: ${analise.margemLucroReal}</div>`;
+    let html = `<div class="info-box ${analise.analise.startsWith('FAVORAVEL') ? 'success' : 'warn'}" style="margin-bottom:16px"><strong>${analise.analise}</strong><br>Atividade: ${analise.atividade} | Presunção: ${analise.percentualPresuncao} | Margem Real: ${analise.margemLucroReal}</div>`;
     html += '<div class="adv-grid">';
     // Vantagens
     html += '<div>';
@@ -1863,10 +1938,10 @@ function renderVantagens(d) {
     html += '</div>';
     html += '</div>';
     // Score
-    html += `<div style="margin-top:16px;display:flex;gap:12px"><div class="kpi" style="flex:1"><div class="kpi-label">Vantagens Aplicaveis</div><div class="kpi-value" style="color:var(--success)">${analise.pontuacao.vantagensAplicaveis}</div></div><div class="kpi" style="flex:1"><div class="kpi-label">Desvantagens Aplicaveis</div><div class="kpi-value" style="color:var(--danger)">${analise.pontuacao.desvantagensAplicaveis}</div></div><div class="kpi" style="flex:1"><div class="kpi-label">Desvantagens Criticas</div><div class="kpi-value" style="color:var(--danger)">${analise.pontuacao.desvantagensCriticas}</div></div></div>`;
+    html += `<div style="margin-top:16px;display:flex;gap:12px"><div class="kpi" style="flex:1"><div class="kpi-label">Vantagens Aplicáveis</div><div class="kpi-value" style="color:var(--success)">${analise.pontuacao.vantagensAplicaveis}</div></div><div class="kpi" style="flex:1"><div class="kpi-label">Desvantagens Aplicáveis</div><div class="kpi-value" style="color:var(--danger)">${analise.pontuacao.desvantagensAplicaveis}</div></div><div class="kpi" style="flex:1"><div class="kpi-label">Desvantagens Críticas</div><div class="kpi-value" style="color:var(--danger)">${analise.pontuacao.desvantagensCriticas}</div></div></div>`;
     $('tabVantagens').innerHTML = html;
   } catch(e) {
-    $('tabVantagens').innerHTML = `<div class="info-box danger">Erro: ${e.message}</div>`;
+    $('tabVantagens').innerHTML = `<div class="info-box danger">Erro: ${escapeHtml(e.message)}</div>`;
   }
 }
 
@@ -1880,12 +1955,12 @@ function renderDistribuicao(d) {
   let html = `<div class="kpi-grid">
     <div class="kpi"><div class="kpi-label">Base Presumida IRPJ (Anual)</div><div class="kpi-value mono">${formatMoney(dist.basePresumidaAnual)}</div></div>
     <div class="kpi"><div class="kpi-label">(-) IRPJ + CSLL Devidos</div><div class="kpi-value mono" style="color:var(--danger)">${formatMoney(dist.tributosDescontados)}</div><div class="kpi-sub">Somente IRPJ e CSLL (Art. 725 RIR/2018)</div></div>
-    <div class="kpi"><div class="kpi-label">(=) Lucro Distribuivel Presumido</div><div class="kpi-value mono" style="color:var(--success)">${formatMoney(dist.lucroDistribuivelPresumido)}</div></div>`;
+    <div class="kpi"><div class="kpi-label">(=) Lucro Distribuível Presumido</div><div class="kpi-value mono" style="color:var(--success)">${formatMoney(dist.lucroDistribuivelPresumido)}</div></div>`;
   if (dist.lucroDistribuivelContabil != null) {
-    html += `<div class="kpi"><div class="kpi-label">Lucro Contabil Efetivo</div><div class="kpi-value mono">${formatMoney(dist.lucroContabilEfetivo)}</div></div>`;
-    html += `<div class="kpi"><div class="kpi-label">Lucro Distribuivel Contabil</div><div class="kpi-value mono" style="color:var(--success)">${formatMoney(dist.lucroDistribuivelContabil)}</div></div>`;
+    html += `<div class="kpi"><div class="kpi-label">Lucro Contábil Efetivo</div><div class="kpi-value mono">${formatMoney(dist.lucroContabilEfetivo)}</div></div>`;
+    html += `<div class="kpi"><div class="kpi-label">Lucro Distribuível Contábil</div><div class="kpi-value mono" style="color:var(--success)">${formatMoney(dist.lucroDistribuivelContabil)}</div></div>`;
   }
-  html += `<div class="kpi"><div class="kpi-label">Lucro Distribuivel Final (Isento IR)</div><div class="kpi-value" style="color:var(--success);font-size:20px">${formatMoney(dist.lucroDistribuivelFinal)}</div><div class="kpi-sub">Base: ${dist.tipoBase}</div></div>`;
+  html += `<div class="kpi"><div class="kpi-label">Lucro Distribuível Final (Isento IR)</div><div class="kpi-value" style="color:var(--success);font-size:20px">${formatMoney(dist.lucroDistribuivelFinal)}</div><div class="kpi-sub">Base: ${dist.tipoBase}</div></div>`;
   html += '</div>';
   // Per partner table
   if (dist.porSocio && dist.porSocio.length) {
@@ -1912,7 +1987,7 @@ function renderRiscos() {
   riscos.forEach(r => {
     const sevClass = r.gravidade === 'critica' ? 'critica' : r.gravidade === 'alta' ? 'alta' : 'media';
     const sevColor = r.gravidade === 'critica' ? 'var(--danger)' : r.gravidade === 'alta' ? 'var(--warn)' : 'var(--info)';
-    html += `<div class="risk-card ${sevClass}"><div style="display:flex;justify-content:space-between;align-items:center"><div class="risk-title">${r.titulo}</div><span class="badge badge-${r.gravidade === 'critica' ? 'danger' : r.gravidade === 'alta' ? 'warn' : 'info'}">${r.gravidade.toUpperCase()}</span></div><div class="risk-desc">${r.descricao}</div><div style="font-size:12px;color:${sevColor};margin:4px 0"><strong>Consequencia:</strong> ${r.consequencia}</div><div class="risk-prev"><strong>Prevencao:</strong> ${r.prevencao}</div></div>`;
+    html += `<div class="risk-card ${sevClass}"><div style="display:flex;justify-content:space-between;align-items:center"><div class="risk-title">${r.titulo}</div><span class="badge badge-${r.gravidade === 'critica' ? 'danger' : r.gravidade === 'alta' ? 'warn' : 'info'}">${r.gravidade.toUpperCase()}</span></div><div class="risk-desc">${r.descricao}</div><div style="font-size:12px;color:${sevColor};margin:4px 0"><strong>Consequência:</strong> ${r.consequencia}</div><div class="risk-prev"><strong>Prevenção:</strong> ${r.prevencao}</div></div>`;
   });
   html += '</div>';
   $('tabRiscos').innerHTML = html;
@@ -1923,7 +1998,7 @@ function renderRiscos() {
 // ─────────────────────────────────────────────────────────────────────────
 function renderObrigacoes() {
   const obr = LucroPresumido.OBRIGACOES_ACESSORIAS;
-  if (!obr) { $('tabObrigacoes').innerHTML = '<div class="info-box info">Dados de obrigacoes nao disponiveis.</div>'; return; }
+  if (!obr) { $('tabObrigacoes').innerHTML = '<div class="info-box info">Dados de obrigações não disponíveis.</div>'; return; }
   let html = '<div class="obl-list">';
   Object.entries(obr).forEach(([key, o]) => {
     let alertHtml = '';
@@ -1934,7 +2009,7 @@ function renderObrigacoes() {
   });
   html += '</div>';
   // DARF schedule
-  html += '<div class="sec-title" style="margin-top:20px">Calendario de DARFs</div>';
+  html += '<div class="sec-title" style="margin-top:20px">Calendário de DARFs</div>';
   html += '<table class="dyn-table"><thead><tr><th>Tributo</th><th>Codigo DARF</th><th>Periodicidade</th><th>Vencimento</th></tr></thead><tbody>';
   html += `<tr><td>IRPJ Presumido</td><td class="mono">${LucroPresumido.CODIGOS_DARF.IRPJ_PRESUMIDO}</td><td>Trimestral</td><td>Ultimo dia util do mes seguinte ao trimestre</td></tr>`;
   html += `<tr><td>CSLL Presumido</td><td class="mono">${LucroPresumido.CODIGOS_DARF.CSLL_PRESUMIDO}</td><td>Trimestral</td><td>Ultimo dia util do mes seguinte ao trimestre</td></tr>`;
@@ -1953,27 +2028,10 @@ function renderObrigacoes() {
 // ─────────────────────────────────────────────────────────────────────────
 function renderTransicao(d) {
   const transicoes = LucroPresumido.TRANSICOES;
-  if (!transicoes) { $('tabTransicao').innerHTML = '<div class="info-box info">Dados de transicao nao disponiveis.</div>'; return; }
-  const comp = App.results.comparativo;
+  if (!transicoes) { $('tabTransicao').innerHTML = '<div class="info-box info">Dados de transição não disponíveis.</div>'; return; }
   let html = '';
-  // Determine relevant transitions
-  const relevantKeys = [];
-  if (comp && comp.recomendacao) {
-    const best = comp.recomendacao.melhorRegime;
-    if (best.includes('Real') && best.includes('SUDAM')) {
-      relevantKeys.push('PRESUMIDO_PARA_REAL');
-      relevantKeys.push('SIMPLES_PARA_REAL');
-    } else if (best.includes('Real')) {
-      relevantKeys.push('PRESUMIDO_PARA_REAL');
-    } else if (best.includes('Simples')) {
-      relevantKeys.push('REAL_PARA_PRESUMIDO');
-    } else if (best.includes('Presumido')) {
-      relevantKeys.push('SIMPLES_PARA_PRESUMIDO');
-      relevantKeys.push('REAL_PARA_PRESUMIDO');
-    }
-  }
-  // If no relevant found, show all
-  const keysToShow = relevantKeys.length ? relevantKeys : Object.keys(transicoes);
+  // Show all transitions (comparativo removed in v3.0.0)
+  const keysToShow = Object.keys(transicoes);
   keysToShow.forEach(key => {
     const t = transicoes[key];
     if (!t) return;
@@ -2024,37 +2082,26 @@ function renderDicas(d) {
     }
   }
 
-  // Fallback: se EstudoLP não disponível ou retornou vazio, usar lógica original
+  // Fallback: se EstudoLP não disponível ou retornou vazio, mostrar apenas dicas genéricas (sem cálculos)
   if (tips.length === 0) {
-    const atividadeId = d.atividadeId;
-    const atividades = LucroPresumido.getAtividadesDisponiveis();
-    const ativ = atividades.find(a => a.id === atividadeId);
-    const pctPresuncao = ativ ? ativ.percentualIRPJ : 0.32;
-    const despTotal = d.totalDespesas + d.folhaPagamento;
-    const lucroReal = d.receitaBrutaAnual - despTotal;
-    const margemReal = d.receitaBrutaAnual > 0 ? lucroReal / d.receitaBrutaAnual : 0;
-    if (margemReal > pctPresuncao) {
-      tips.push({ title: 'Margem Real Acima da Presunção', desc: `Sua margem de lucro real (${(margemReal * 100).toFixed(1)}%) é superior ao percentual de presunção (${(pctPresuncao * 100).toFixed(1)}%). O Lucro Presumido tende a ser VANTAJOSO neste caso.` });
-    } else if (d.receitaBrutaAnual > 0) {
-      tips.push({ title: 'Atenção: Margem Abaixo da Presunção', desc: `Sua margem real (${(margemReal * 100).toFixed(1)}%) é INFERIOR à presunção (${(pctPresuncao * 100).toFixed(1)}%). Considere Lucro Real se as despesas forem comprováveis.` });
-    }
     if (d.areaAtuacaoSUDAM) {
-      tips.push({ title: 'Você Está em Área SUDAM', desc: 'Empresas em area SUDAM podem obter reducao de 75% no IRPJ optando pelo Lucro Real.' });
+      tips.push({ title: 'Você Está em Área SUDAM', desc: 'Empresas em área SUDAM podem obter redução de 75% no IRPJ optando pelo Lucro Real.' });
     }
     if (d.areaAtuacaoSUDENE) {
-      tips.push({ title: 'Você Está em Área SUDENE', desc: 'Empresas em area SUDENE podem obter reducao de 75% no IRPJ optando pelo Lucro Real, similar ao beneficio SUDAM.' });
+      tips.push({ title: 'Você Está em Área SUDENE', desc: 'Empresas em área SUDENE podem obter redução de 75% no IRPJ optando pelo Lucro Real, similar ao benefício SUDAM.' });
     }
     if (d.zonaFranca) {
-      tips.push({ title: 'Zona Franca de Manaus', desc: 'Empresas na ZFM possuem beneficios fiscais especificos em ICMS, IPI e PIS/COFINS. Avalie o impacto no planejamento tributario.' });
+      tips.push({ title: 'Zona Franca de Manaus', desc: 'Empresas na ZFM possuem benefícios fiscais específicos em ICMS, IPI e PIS/COFINS. Avalie o impacto no planejamento tributário.' });
     }
-    tips.push({ title: 'Regime de Caixa', desc: 'No LP voce pode optar pelo regime de caixa para reconhecimento de receitas.' });
+    tips.push({ title: 'Regime de Caixa', desc: 'No LP você pode optar pelo regime de caixa para reconhecimento de receitas (IN RFB 1.700/2017, Art. 223).' });
     if (d.receitas.length > 1) {
       tips.push({ title: 'Atividades Mistas', desc: 'Certifique-se de que cada receita está classificada no percentual correto.' });
     }
-    tips.push({ title: 'Reforma Tributaria 2026-2033', desc: 'A CBS começa em 2026 com aliquota teste de 0,9%. Acompanhe as mudancas.' });
+    tips.push({ title: 'Reforma Tributária 2026-2033', desc: 'A CBS começa em 2026 com alíquota teste de 0,9%. Acompanhe as mudanças.' });
     if (!d.temEscrituracao) {
-      tips.push({ title: 'Escrituração Contábil Completa', desc: 'Manter ECD permite distribuir lucros isentos acima da base presumida.' });
+      tips.push({ title: 'Escrituração Contábil Completa', desc: 'Manter a ECD permite distribuir lucros isentos acima da base presumida.' });
     }
+    tips.push({ title: 'Motor de Dicas Indisponível', desc: 'Para análise completa com cálculos personalizados, verifique se o arquivo lucro-presumido-estudos.js está carregado.' });
   }
   // Render
   let html = '';
@@ -2070,16 +2117,16 @@ function renderDicas(d) {
 function renderProLabore(d) {
   const anual = App.results.anual;
   const lucroDistribuivel = anual ? (anual.distribuicaoLucros.lucroDistribuivelFinal || 0) : 0;
-  const socios = d.socios && d.socios.length ? d.socios : [{ nome: 'Socio Unico', participacao: 1 }];
+  const socios = d.socios && d.socios.length ? d.socios : [{ nome: 'Sócio Único', participacao: 1 }];
 
-  let html = `<div class="info-box warn" style="margin-bottom:16px"><strong>ALERTA LEGAL:</strong> Todo socio-administrador DEVE receber pro-labore de pelo menos 1 salario minimo (R$ 1.621,00 em 2026). A ausencia gera risco de autuacao pelo INSS com cobranca retroativa.<br><small>Base: IN RFB 971/2009, Art. 57; Decreto 3.048/99, Art. 201</small></div>`;
+  let html = `<div class="info-box warn" style="margin-bottom:16px"><strong>ALERTA LEGAL:</strong> Todo sócio-administrador DEVE receber pró-labore de pelo menos 1 salário mínimo (R$ 1.621,00 em 2026). A ausência gera risco de autuação pelo INSS com cobrança retroativa.<br><small>Base: IN RFB 971/2009, Art. 57; Decreto 3.048/99, Art. 201</small></div>`;
 
   // Interactive inputs
   html += `<div style="background:var(--surface);border-radius:var(--r);padding:20px;margin-bottom:20px">
     <h3 style="color:var(--accent);margin-bottom:12px;font-size:14px">Dados do Sócio para Simulação</h3>
     <div class="fm-grid fm-3">
       <div><label class="fm-label">Socio</label><select class="fm-input" id="plSocioSelect" onchange="recalcProLabore()">`;
-  socios.forEach((s, i) => { html += `<option value="${i}">${s.nome || ('Socio ' + (i+1))}</option>`; });
+  socios.forEach((s, i) => { html += `<option value="${i}">${s.nome || ('Sócio ' + (i+1))}</option>`; });
   html += `</select></div>
       <div><label class="fm-label">Pro-labore Atual (R$/mes)</label><div class="fm-prefix"><span>R$</span><input class="fm-input money" id="plAtual" value="5.000,00" oninput="maskMoney(this)"></div></div>
       <div><label class="fm-label">Dependentes IRPF</label><input class="fm-input" id="plDependentes" type="number" min="0" max="10" value="0"></div>
@@ -2102,7 +2149,7 @@ function recalcProLabore() {
   const anual = App.results.anual;
   const lucroDistribuivel = anual ? (anual.distribuicaoLucros.lucroDistribuivelFinal || 0) : 0;
   const d = App.formData || {};
-  const socios = d.socios && d.socios.length ? d.socios : [{ nome: 'Socio Unico', participacao: 1 }];
+  const socios = d.socios && d.socios.length ? d.socios : [{ nome: 'Sócio Único', participacao: 1 }];
   const idx = parseInt($('plSocioSelect') ? $('plSocioSelect').value : '0') || 0;
   const socio = socios[idx] || socios[0];
 
@@ -2129,14 +2176,14 @@ function recalcProLabore() {
     </div>`;
 
     // Recomendacao
-    html += `<div class="info-box success" style="margin:16px 0"><strong>Recomendacao:</strong> ${result.recomendacao}</div>`;
+    html += `<div class="info-box success" style="margin:16px 0"><strong>Recomendação:</strong> ${result.recomendacao}</div>`;
 
     // Alerta de riscos do pro-labore minimo
     if (result.otimo && result.otimo.proLaboreMensal <= 1621) {
-      html += `<div class="info-box warn" style="margin:0 0 16px 0"><strong>ATENCAO — RISCOS DO PRO-LABORE MINIMO:</strong><br>
-        1. <strong>Risco previdenciario:</strong> Pro-labore no salario minimo resulta em aposentadoria no piso. Se o socio nao tem outro vinculo CLT ou contribuicao complementar ao INSS, o beneficio previdenciario sera limitado a 1 salario minimo.<br>
-        2. <strong>Risco de autuacao:</strong> A RFB pode questionar pro-labore muito baixo em empresas com alta lucratividade, caracterizando distribuicao disfarçada de lucros (Art. 528 RIR/2018). Recomenda-se manter proporcionalidade entre pro-labore e funcoes exercidas.<br>
-        3. <strong>Contribuicao complementar:</strong> Para garantir beneficios previdenciarios maiores, o socio pode complementar a contribuicao ao INSS como contribuinte individual (aliquota de 20% sobre valor entre o minimo e o teto).<br>
+      html += `<div class="info-box warn" style="margin:0 0 16px 0"><strong>ATENÇÃO — RISCOS DO PRÓ-LABORE MÍNIMO:</strong><br>
+        1. <strong>Risco previdenciário:</strong> Pró-labore no salário mínimo resulta em aposentadoria no piso. Se o sócio não tem outro vínculo CLT ou contribuição complementar ao INSS, o benefício previdenciário será limitado a 1 salário mínimo.<br>
+        2. <strong>Risco de autuação:</strong> A RFB pode questionar pró-labore muito baixo em empresas com alta lucratividade, caracterizando distribuição disfarçada de lucros (Art. 528 RIR/2018). Recomenda-se manter proporcionalidade entre pró-labore e funções exercidas.<br>
+        3. <strong>Contribuição complementar:</strong> Para garantir benefícios previdenciários maiores, o sócio pode complementar a contribuição ao INSS como contribuinte individual (alíquota de 20% sobre valor entre o mínimo e o teto).<br>
         <small>Base: IN RFB 971/2009, Art. 57; RIR/2018, Art. 528; Decreto 3.048/99</small></div>`;
     }
 
@@ -2174,7 +2221,7 @@ function recalcProLabore() {
     // Render chart
     renderProLaboreChart(result);
   } catch(e) {
-    $('plResultados').innerHTML = `<div class="info-box danger">Erro na simulacao: ${e.message}</div>`;
+    $('plResultados').innerHTML = `<div class="info-box danger">Erro na simulação: ${escapeHtml(e.message)}</div>`;
   }
 }
 
@@ -2206,7 +2253,7 @@ function renderProLaboreChart(result) {
           tension: 0.3
         },
         {
-          label: 'Liquido Socio (anual)',
+          label: 'Líquido Sócio (anual)',
           data: sampled.map(c => c.liquidoSocioAnual),
           borderColor: '#10b981',
           backgroundColor: 'rgba(16,185,129,.1)',
@@ -2249,14 +2296,14 @@ function renderJcpEcd(d) {
   html += '<hr style="border:none;border-top:2px solid var(--surface);margin:32px 0">';
 
   // === SECAO ECD ===
-  html += `<h3 style="color:var(--accent);margin-bottom:12px;font-size:16px;border-bottom:1px solid var(--surface);padding-bottom:8px">Escrituracao Completa (ECD) — Distribuicao Ampliada</h3>`;
+  html += `<h3 style="color:var(--accent);margin-bottom:12px;font-size:16px;border-bottom:1px solid var(--surface);padding-bottom:8px">Escrituração Completa (ECD) — Distribuição Ampliada</h3>`;
 
   // Buscar base presumida para pre-preencher
   const basePresumida = anual && anual.distribuicaoLucros ? (anual.distribuicaoLucros.basePresumidaAnual || 0) : 0;
 
   html += `<div style="background:var(--surface);border-radius:var(--r);padding:20px;margin-bottom:20px">
     <div class="fm-grid fm-2">
-      <div><label class="fm-label">Lucro Contabil Real (do balanco)</label><div class="fm-prefix"><span>R$</span><input class="fm-input money" id="ecdLucroContabil" value="${d.lucroContabil > 0 ? Number(d.lucroContabil).toLocaleString('pt-BR', {minimumFractionDigits:2}) : '0,00'}" oninput="maskMoney(this)"></div></div>
+      <div><label class="fm-label">Lucro Contábil Real (do balanço)</label><div class="fm-prefix"><span>R$</span><input class="fm-input money" id="ecdLucroContabil" value="${d.lucroContabil > 0 ? Number(d.lucroContabil).toLocaleString('pt-BR', {minimumFractionDigits:2}) : '0,00'}" oninput="maskMoney(this)"></div></div>
       <div><label class="fm-label">Custo Anual da ECD (honorarios)</label><div class="fm-prefix"><span>R$</span><input class="fm-input money" id="ecdCusto" value="6.000,00" oninput="maskMoney(this)"></div></div>
     </div>
     <div style="margin-top:8px"><button class="btn-calc" onclick="recalcECD()" style="padding:10px 24px;background:var(--accent);color:#000;border:none;border-radius:6px;font-weight:700;cursor:pointer">Calcular Beneficio ECD</button></div>
@@ -2296,7 +2343,7 @@ function recalcJCP() {
     const comp = result.comparativo;
     // Distribuicao isenta
     html += `<tr style="background:rgba(16,185,129,.08)">
-      <td style="font-weight:600">1. Distribuicao Isenta</td>
+      <td style="font-weight:600">1. Distribuição Isenta</td>
       <td class="right mono">${formatMoney(comp.viaDistribuicaoIsenta.valorBruto)}</td>
       <td class="right mono" style="color:var(--success)">${formatMoney(comp.viaDistribuicaoIsenta.custo)}</td>
       <td class="right mono" style="color:var(--success);font-weight:700">${formatMoney(comp.viaDistribuicaoIsenta.liquido)}</td>
@@ -2320,12 +2367,12 @@ function recalcJCP() {
     </tr>`;
     html += '</tbody></table></div>';
 
-    html += `<div class="info-box ${comp.viaDistribuicaoIsenta.liquido > 0 ? 'success' : 'info'}" style="margin-top:12px"><strong>Recomendacao:</strong> ${result.recomendacao}</div>`;
+    html += `<div class="info-box ${comp.viaDistribuicaoIsenta.liquido > 0 ? 'success' : 'info'}" style="margin-top:12px"><strong>Recomendação:</strong> ${result.recomendacao}</div>`;
     html += `<div class="info-box info" style="margin-top:8px"><strong>Base legal:</strong> ${result.baseLegal}<br><small>No Lucro Presumido, o JCP NAO reduz a base do IRPJ/CSLL (a base e presumida). E util apenas quando o lucro distribuivel isento ja se esgotou.</small></div>`;
 
     $('jcpResultados').innerHTML = html;
   } catch(e) {
-    $('jcpResultados').innerHTML = `<div class="info-box danger">Erro: ${e.message}</div>`;
+    $('jcpResultados').innerHTML = `<div class="info-box danger">Erro: ${escapeHtml(e.message)}</div>`;
   }
 }
 
@@ -2349,16 +2396,16 @@ function recalcECD() {
     let html = `<div class="kpi-grid">
       <div class="kpi"><div class="kpi-label">Limite Presumido</div><div class="kpi-value mono">${formatMoney(result.limitePresumido)}</div><div class="kpi-sub">Sem ECD</div></div>
       <div class="kpi"><div class="kpi-label">Limite Contabil</div><div class="kpi-value mono" style="color:var(--accent)">${formatMoney(result.limiteContabil)}</div><div class="kpi-sub">Com ECD</div></div>
-      <div class="kpi"><div class="kpi-label">Distribuicao Extra</div><div class="kpi-value" style="color:${result.distribuicaoExtra > 0 ? 'var(--success)' : 'var(--text3)'}">${formatMoney(result.distribuicaoExtra)}</div><div class="kpi-sub">${result.percentualGanho > 0 ? '+' + result.percentualGanho + '%' : 'Sem ganho'}</div></div>
+      <div class="kpi"><div class="kpi-label">Distribuição Extra</div><div class="kpi-value" style="color:${result.distribuicaoExtra > 0 ? 'var(--success)' : 'var(--text3)'}">${formatMoney(result.distribuicaoExtra)}</div><div class="kpi-sub">${result.percentualGanho > 0 ? '+' + result.percentualGanho + '%' : 'Sem ganho'}</div></div>
       <div class="kpi"><div class="kpi-label">Beneficio Liquido</div><div class="kpi-value" style="color:${result.valeAPena ? 'var(--success)' : 'var(--danger)'}; font-weight:700">${formatMoney(result.beneficioLiquido)}</div><div class="kpi-sub">${result.valeAPena ? 'VALE A PENA' : 'NAO COMPENSA'}</div></div>
     </div>`;
 
     html += `<div class="info-box ${result.valeAPena ? 'success' : 'warn'}" style="margin-top:12px"><strong>Resultado:</strong> ${result.recomendacao}</div>`;
-    html += `<div class="info-box info" style="margin-top:8px"><strong>Base legal:</strong> ${result.baseLegal}<br><small>Sem ECD, a distribuicao isenta fica limitada a base PRESUMIDA. Com ECD (escrituracao contabil completa), o limite passa a ser o lucro CONTABIL REAL — vantajoso quando a margem real supera a presuncao.</small></div>`;
+    html += `<div class="info-box info" style="margin-top:8px"><strong>Base legal:</strong> ${result.baseLegal}<br><small>Sem ECD, a distribuição isenta fica limitada à base PRESUMIDA. Com ECD (escrituração contábil completa), o limite passa a ser o lucro CONTÁBIL REAL — vantajoso quando a margem real supera a presunção.</small></div>`;
 
     $('ecdResultados').innerHTML = html;
   } catch(e) {
-    $('ecdResultados').innerHTML = `<div class="info-box danger">Erro: ${e.message}</div>`;
+    $('ecdResultados').innerHTML = `<div class="info-box danger">Erro: ${escapeHtml(e.message)}</div>`;
   }
 }
 
@@ -2497,7 +2544,7 @@ function recalcCaixaComp() {
     // Render chart
     renderCaixaCompChart(result);
   } catch(e) {
-    $('cxResultados').innerHTML = `<div class="info-box danger">Erro: ${e.message}</div>`;
+    $('cxResultados').innerHTML = `<div class="info-box danger">Erro: ${escapeHtml(e.message)}</div>`;
   }
 }
 
@@ -2527,109 +2574,27 @@ function renderCaixaCompChart(result) {
   });
 }
 
-// ─────────────────────────────────────────────────────────────────────────
-// 9B. BREAK-EVEN LP vs LR — FALLBACK LOCAL
-// Usado APENAS quando EstudoLP.calcularBreakEven nao esta disponivel.
-// A versao do EstudoLP e mais completa (inclui ISS e INSS no calculo).
-// ─────────────────────────────────────────────────────────────────────────
-function calcularBreakEvenLocal(fd, anual) {
-  const receita = fd.receitaBrutaAnual || 0;
-  if (receita <= 0) return null;
-  if (!anual || !anual.consolidacao) return null;
-
-  // Carga LP fixa (já calculada pelo motor)
-  const cargaLP = anual.consolidacao.cargaTributariaTotal || 0;
-  const creditosPISCOFINS = fd.creditosPISCOFINS || 0;
-  const despTotal = (fd.totalDespesas || 0) + (fd.folhaPagamento || 0);
-  const margemRealAtual = receita > 0 ? Math.round(((receita - despTotal) / receita) * 100) : null;
-
-  // Simular LR para margens de 1% a 95%
-  const margens = [];
-  let breakEvenMargem = null;
-  let lpSempreVantajoso = true;
-  let lrSempreVantajoso = true;
-
-  for (let m = 1; m <= 95; m++) {
-    const lucro = receita * (m / 100);
-    // IRPJ: 15% + 10% adicional sobre excedente de R$60k/trim (R$240k/ano)
-    const irpjNormal = lucro * 0.15;
-    const irpjAdicional = Math.max(0, lucro - 240000) * 0.10;
-    const irpj = irpjNormal + irpjAdicional;
-    // CSLL: 9%
-    const csll = lucro * 0.09;
-    // PIS não-cumulativo: 1,65% menos créditos estimados
-    const pisNaoCumulativo = Math.max(0, receita * 0.0165 - creditosPISCOFINS * 0.0165 / 0.0925);
-    // COFINS não-cumulativo: 7,6% menos créditos estimados
-    const cofinsNaoCumulativo = Math.max(0, receita * 0.076 - creditosPISCOFINS * 0.076 / 0.0925);
-    const cargaLR = irpj + csll + pisNaoCumulativo + cofinsNaoCumulativo;
-
-    margens.push({ margem: m, cargaLP, cargaLR: Math.round(cargaLR * 100) / 100 });
-
-    if (cargaLR < cargaLP) lpSempreVantajoso = false;
-    if (cargaLR > cargaLP) lrSempreVantajoso = false;
-
-    // Detectar ponto de cruzamento
-    if (m > 1 && !breakEvenMargem) {
-      const prev = margens[margens.length - 2];
-      if ((prev.cargaLR <= prev.cargaLP && cargaLR > cargaLP) ||
-          (prev.cargaLR >= prev.cargaLP && cargaLR < cargaLP)) {
-        breakEvenMargem = m;
-      }
-    }
-  }
-
-  // Recomendação
-  let recomendacao, alerta = null;
-  if (lpSempreVantajoso) {
-    recomendacao = 'O Lucro Presumido e mais vantajoso em TODAS as margens de lucro simuladas. Mantenha o LP.';
-  } else if (lrSempreVantajoso) {
-    recomendacao = 'O Lucro Real e mais vantajoso em TODAS as margens simuladas. Considere migrar para LR.';
-    alerta = 'O Lucro Presumido e desfavoravel para a sua faixa de faturamento e estrutura de custos.';
-  } else if (breakEvenMargem) {
-    if (margemRealAtual !== null && margemRealAtual >= breakEvenMargem) {
-      recomendacao = `Sua margem real estimada (${margemRealAtual}%) esta ACIMA do break-even (${breakEvenMargem}%). O Lucro Presumido e favoravel.`;
-    } else if (margemRealAtual !== null) {
-      recomendacao = `Sua margem real estimada (${margemRealAtual}%) esta ABAIXO do break-even (${breakEvenMargem}%). Avalie o Lucro Real.`;
-      alerta = 'O Lucro Real pode gerar economia significativa no seu cenário atual.';
-    } else {
-      recomendacao = `O break-even entre LP e LR ocorre na margem de ${breakEvenMargem}%. Abaixo: LR e melhor. Acima: LP e melhor.`;
-    }
-  } else {
-    recomendacao = 'As cargas tributarias dos dois regimes sao muito proximas. Analise caso a caso com seu contador.';
-  }
-
-  return {
-    cargaTributariaLP: cargaLP,
-    breakEvenMargem,
-    lpSempreVantajoso,
-    lrSempreVantajoso,
-    margemRealAtual,
-    margens,
-    alerta,
-    recomendacao,
-    baseLegal: 'Comparacao simplificada LP (base presumida) vs LR (IRPJ 15%+10%, CSLL 9%, PIS 1,65%, COFINS 7,6% nao-cumulativo). Para decisao definitiva, consulte seu contador.'
-  };
-}
-
 function renderBreakeven(d) {
   const fd = App.formData || d || {};
   const anual = App.results.anual;
   if (!anual) { $('tabBreakeven').innerHTML = '<p style="color:var(--text3)">Calcule os resultados primeiro.</p>'; return; }
 
   try {
+    if (typeof EstudoLP === 'undefined' || !EstudoLP.calcularBreakEven) {
+      $('tabBreakeven').innerHTML = '<div class="info-box danger">Motor EstudoLP não disponível. Verifique se o arquivo lucro-presumido-estudos.js está carregado corretamente.</div>';
+      return;
+    }
     const cargaLP = anual.consolidacao ? anual.consolidacao.cargaTributariaTotal : 0;
-    const resultado = (typeof EstudoLP !== 'undefined' && EstudoLP.calcularBreakEven)
-      ? EstudoLP.calcularBreakEven({
-          receitaBrutaAnual: fd.receitaBrutaAnual,
-          cargaTributariaLP: cargaLP,
-          folhaPagamentoAnual: fd.folhaPagamento || 0,
-          totalDespesasOperacionais: fd.totalDespesas || 0,
-          creditosPISCOFINS: fd.creditosPISCOFINS || 0,
-          aliquotaISS: (fd.aliquotaISS || 5) / 100,
-          aliquotaRAT: (fd.aliquotaRAT || 3) / 100,
-          aliquotaTerceiros: (fd.aliquotaTerceiros || 0.5) / 100
-        })
-      : calcularBreakEvenLocal(fd, anual);
+    const resultado = EstudoLP.calcularBreakEven({
+      receitaBrutaAnual: fd.receitaBrutaAnual,
+      cargaTributariaLP: cargaLP,
+      folhaPagamentoAnual: fd.folhaPagamento || 0,
+      totalDespesasOperacionais: fd.totalDespesas || 0,
+      creditosPISCOFINS: fd.creditosPISCOFINS || 0,
+      aliquotaISS: fd.aliquotaISS || 5,
+      aliquotaRAT: fd.aliquotaRAT || 3,
+      aliquotaTerceiros: fd.aliquotaTerceiros || 0.5
+    });
     if (!resultado) { $('tabBreakeven').innerHTML = '<div class="info-box warn">Informe receitas para calcular o break-even.</div>'; return; }
     App.results.breakeven = resultado;
 
@@ -2648,8 +2613,9 @@ function renderBreakeven(d) {
     const beColor = resultado.lpSempreVantajoso ? 'var(--success)' : (resultado.lrSempreVantajoso ? 'var(--danger)' : 'var(--warn)');
     const beFontSize = resultado.breakEvenMargem ? '22px' : '14px';
     // Margem real: verde se acima do break-even (LP OK), vermelho se abaixo
-    const mrColor = resultado.margemRealAtual != null && resultado.breakEvenMargem
-      ? (resultado.margemRealAtual >= resultado.breakEvenMargem ? 'var(--success)' : 'var(--danger)')
+    const margemReal = resultado.margemOperacionalBruta != null ? resultado.margemOperacionalBruta : resultado.margemRealAtual;
+    const mrColor = margemReal != null && resultado.breakEvenMargem
+      ? (margemReal >= resultado.breakEvenMargem ? 'var(--success)' : 'var(--danger)')
       : 'var(--info)';
     html += `<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:20px">
       <div style="background:var(--surface);border-radius:var(--r);padding:16px;text-align:center">
@@ -2663,7 +2629,7 @@ function renderBreakeven(d) {
       </div>
       <div style="background:var(--surface);border-radius:var(--r);padding:16px;text-align:center">
         <div style="font-size:11px;color:var(--text3)">Margem Real Estimada</div>
-        <div style="font-size:22px;font-weight:700;font-family:var(--mono);color:${mrColor}">${resultado.margemRealAtual != null ? resultado.margemRealAtual + '%' : '-'}</div>
+        <div style="font-size:22px;font-weight:700;font-family:var(--mono);color:${mrColor}">${margemReal != null ? margemReal + '%' : '-'}</div>
       </div>
     </div>`;
 
@@ -2680,7 +2646,7 @@ function renderBreakeven(d) {
     $('tabBreakeven').innerHTML = html;
     renderBreakevenChart(resultado);
   } catch(e) {
-    $('tabBreakeven').innerHTML = '<div class="wz-card"><p style="color:var(--danger)">Erro ao calcular break-even: ' + e.message + '</p></div>';
+    $('tabBreakeven').innerHTML = '<div class="wz-card"><p style="color:var(--danger)">Erro ao calcular break-even: ' + escapeHtml(e.message) + '</p></div>';
   }
 }
 
@@ -2744,17 +2710,19 @@ function renderCalendario(d) {
 
   try {
     const folhaMensal = (fd.folhaPagamento || 0) / 12;
-    const aliqINSSTotal = ((fd.aliquotaRAT || 3) + (fd.aliquotaTerceiros || 0.5) + 20) / 100;
+    const inssPatronalDecimal = LucroPresumido.ALIQUOTA_INSS_PATRONAL || 0.20;
+    const aliqINSSTotal = (fd.aliquotaRATDecimal || 0.03) + (fd.aliquotaTerceirosDecimal || 0.005) + inssPatronalDecimal;
+    const taxaSelic = LucroPresumido.TAXA_SELIC_MENSAL_ESTIMADA || 0.01;
 
     const resultado = LucroPresumido.gerarCalendarioTributario({
       anualConsolidado: anual,
       anoCalendario: 2026,
-      aliquotaISS: (fd.aliquotaISS || 3) / 100,
+      aliquotaISS: fd.aliquotaISSDecimal || 0.05,
       folhaPagamentoMensal: folhaMensal,
       aliquotaINSSTotal: aliqINSSTotal,
       diaVencimentoISS: 15,
       parcelarIRPJCSLL: !!$('chkParcelar') && $('chkParcelar').checked,
-      taxaSelicMensal: 0.01
+      taxaSelicMensal: taxaSelic
     });
     App.results.calendario = resultado;
 
@@ -2874,7 +2842,7 @@ function renderCalendario(d) {
     $('tabCalendario').innerHTML = html;
     renderCalendarioChart(resultado);
   } catch(e) {
-    $('tabCalendario').innerHTML = '<div class="wz-card"><p style="color:var(--danger)">Erro ao gerar calendario: ' + e.message + '</p></div>';
+    $('tabCalendario').innerHTML = '<div class="wz-card"><p style="color:var(--danger)">Erro ao gerar calendário: ' + escapeHtml(e.message) + '</p></div>';
   }
 }
 
@@ -2914,6 +2882,7 @@ function chartOptions(title) {
   return {
     responsive: true,
     plugins: {
+      title: title ? { display: true, text: title, color: '#e2e8f0', font: { size: 14, family: 'DM Sans' } } : { display: false },
       legend: { labels: { color: '#94a3b8', font: { size: 11 } } },
       tooltip: { callbacks: { label: ctx => formatMoney(ctx.raw) } }
     },
@@ -3045,7 +3014,62 @@ function loadAutoSave() {
     if (d.temEquipamentos) $('temEquipamentos').checked = d.temEquipamentos;
     if (d.temPD) $('temPD').checked = d.temPD;
     if (d.receitaSazonal) $('receitaSazonal').checked = d.receitaSazonal;
+    // Restaurar CNAE principal (H25)
+    if (d.cnaePrincipal) {
+      $('cnaePrincipal').value = d.cnaePrincipal;
+      if (d.atividadeId) $('atividadeId').value = d.atividadeId;
+      // Restaurar texto de busca do CNAE
+      if (window.BANCO_CNAE) {
+        var cnaeItem = window.BANCO_CNAE.find(function(c) { return c.codigo === d.cnaePrincipal; });
+        if (cnaeItem) {
+          $('cnaeBusca').value = cnaeItem.codigo + ' - ' + cnaeItem.descricao;
+          try { selectCnae(cnaeItem.codigo, cnaeItem.descricao, cnaeItem.categoria || ''); } catch(e2) {}
+        } else {
+          $('cnaeBusca').value = d.cnaePrincipal;
+        }
+      } else {
+        $('cnaeBusca').value = d.cnaePrincipal;
+      }
+    }
+    // Restaurar receitas (H01)
+    if (d.receitas && d.receitas.length > 0) {
+      // Remover a linha de receita padrão criada pelo initApp
+      var existingRows = document.querySelectorAll('#tbodyReceitasSimp tr');
+      existingRows.forEach(function(row) { row.remove(); });
+      d.receitas.forEach(function(rec) {
+        addLinhaReceita('tbodyReceitasSimp', rec.atividadeId);
+        var lastRow = App.receitaRowCount;
+        var valEl = $('recValor' + lastRow);
+        if (valEl && rec.valor > 0) {
+          valEl.value = Number(rec.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+        }
+      });
+    }
+    // Restaurar sócios (H23)
+    if (d.socios && d.socios.length > 0) {
+      // Remover o sócio padrão criado pelo initApp
+      var existingSocios = document.querySelectorAll('.soc-row');
+      existingSocios.forEach(function(row) { row.remove(); });
+      App.socioCount = 0;
+      d.socios.forEach(function(soc) {
+        addSocio();
+        var lastId = App.socioCount;
+        var nomeEl = $('socNome' + lastId);
+        var pctEl = $('socPct' + lastId);
+        if (nomeEl && soc.nome) nomeEl.value = soc.nome;
+        if (pctEl && soc.percentual != null) pctEl.value = (soc.percentual * 100).toFixed(1);
+      });
+    }
+    // Impedimentos legais
+    if (d.impInstFinanceira) $('impInstFinanceira').checked = true;
+    if (d.impFactoring) $('impFactoring').checked = true;
+    if (d.impExterior) $('impExterior').checked = true;
+    if (d.impIsencao) $('impIsencao').checked = true;
+    if (d.impSCP) $('impSCP').checked = true;
     calcTotalDespesas();
+    // Atualizar formData e sidebar após restauração completa (H02)
+    gatherFormData();
+    updateSidebar();
     return true;
   } catch(e) { return false; }
 }
@@ -3056,10 +3080,12 @@ function loadAutoSave() {
 function salvarEstudo() {
   try {
     gatherFormData();
-    const study = { ts: Date.now(), version: '2.1', formData: App.formData, results: {} };
-    // Store only serializable result data
-    if (App.results.simulacao) study.results.simulacao = App.results.simulacao;
-    if (App.results.comparativo) study.results.comparativo = App.results.comparativo;
+    const study = { ts: Date.now(), version: '2.2', formData: App.formData, results: {} };
+    // Store all serializable result data
+    var resultKeys = ['simulacao','trimestral','piscofins','anual','proLabore','jcp','ecd','caixaComp','breakeven','calendario'];
+    resultKeys.forEach(function(key) {
+      if (App.results[key]) study.results[key] = App.results[key];
+    });
     try {
       localStorage.setItem('lp_estudo_salvo', JSON.stringify(study));
       alert('Estudo salvo com sucesso! (' + new Date().toLocaleString('pt-BR') + ')');
@@ -3108,7 +3134,56 @@ function carregarEstudo() {
     if (d.temEquipamentos) $('temEquipamentos').checked = d.temEquipamentos;
     if (d.temPD) $('temPD').checked = d.temPD;
     if (d.receitaSazonal) $('receitaSazonal').checked = d.receitaSazonal;
+    // Impedimentos legais
+    if (d.impInstFinanceira) $('impInstFinanceira').checked = true;
+    if (d.impFactoring) $('impFactoring').checked = true;
+    if (d.impExterior) $('impExterior').checked = true;
+    if (d.impIsencao) $('impIsencao').checked = true;
+    if (d.impSCP) $('impSCP').checked = true;
+    // Restaurar CNAE principal (H25/H26)
+    if (d.cnaePrincipal) {
+      $('cnaePrincipal').value = d.cnaePrincipal;
+      if (d.atividadeId) $('atividadeId').value = d.atividadeId;
+      if (window.BANCO_CNAE) {
+        var cnaeItem = window.BANCO_CNAE.find(function(c) { return c.codigo === d.cnaePrincipal; });
+        if (cnaeItem) {
+          $('cnaeBusca').value = cnaeItem.codigo + ' - ' + cnaeItem.descricao;
+          try { selectCnae(cnaeItem.codigo, cnaeItem.descricao, cnaeItem.categoria || ''); } catch(e2) {}
+        } else {
+          $('cnaeBusca').value = d.cnaePrincipal;
+        }
+      }
+    }
+    // Restaurar receitas (H26)
+    if (d.receitas && d.receitas.length > 0) {
+      var existingRows = document.querySelectorAll('#tbodyReceitasSimp tr');
+      existingRows.forEach(function(row) { row.remove(); });
+      d.receitas.forEach(function(rec) {
+        addLinhaReceita('tbodyReceitasSimp', rec.atividadeId);
+        var lastRow = App.receitaRowCount;
+        var valEl = $('recValor' + lastRow);
+        if (valEl && rec.valor > 0) {
+          valEl.value = Number(rec.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+        }
+      });
+    }
+    // Restaurar sócios (H26)
+    if (d.socios && d.socios.length > 0) {
+      var existingSocios = document.querySelectorAll('.soc-row');
+      existingSocios.forEach(function(row) { row.remove(); });
+      App.socioCount = 0;
+      d.socios.forEach(function(soc) {
+        addSocio();
+        var lastId = App.socioCount;
+        var nomeEl = $('socNome' + lastId);
+        var pctEl = $('socPct' + lastId);
+        if (nomeEl && soc.nome) nomeEl.value = soc.nome;
+        if (pctEl && soc.percentual != null) pctEl.value = (soc.percentual * 100).toFixed(1);
+      });
+    }
     calcTotalDespesas();
+    gatherFormData();
+    updateSidebar();
     alert('Estudo carregado! Salvo em: ' + new Date(study.ts).toLocaleString('pt-BR'));
   } catch(e) {
     alert('Erro ao carregar: ' + e.message);
@@ -3151,27 +3226,33 @@ function exportPDF() {
   }
 }
 
-function exportExcel() {
+function _csvSafe(val) {
+  if (val == null) return '';
+  var s = String(val);
+  if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+  if (s.indexOf(';') !== -1 || s.indexOf('"') !== -1) s = '"' + s.replace(/"/g, '""') + '"';
+  return s;
+}
+
+function exportCSV() {
   try {
     gatherFormData();
     const d = App.formData;
     const anual = App.results.anual;
-    const comp = App.results.comparativo;
     let csv = 'sep=;\n';
     csv += 'ESTUDO LUCRO PRESUMIDO — IMPOST.;;\n';
     csv += `Data do Estudo;${new Date().toLocaleString('pt-BR')}\n`;
-    csv += `Empresa;${d.razaoSocial || ''}\n`;
-    csv += `CNPJ;${d.cnpj || ''}\n`;
-    csv += `CNAE;${d.cnaePrincipal || ''}\n`;
+    csv += `Empresa;${_csvSafe(d.razaoSocial)}\n`;
+    csv += `CNPJ;${_csvSafe(d.cnpj)}\n`;
+    csv += `CNAE;${_csvSafe(d.cnaePrincipal)}\n`;
     const _csvEstado = getEstadoData(d.estado);
-    csv += `Estado;${d.estado || ''}${_csvEstado ? ' - ' + _csvEstado.nome : ''}\n`;
-    csv += `Municipio;${d.municipio || ''}\n`;
+    csv += `Estado;${_csvSafe((d.estado || '') + (_csvEstado ? ' - ' + _csvEstado.nome : ''))}\n`;
+    csv += `Município;${_csvSafe(d.municipio)}\n`;
     csv += `Area SUDAM;${d.areaAtuacaoSUDAM ? 'Sim' : 'Nao'}\n`;
     csv += `Area SUDENE;${d.areaAtuacaoSUDENE ? 'Sim' : 'Nao'}\n`;
     csv += `Zona Franca;${d.zonaFranca ? 'Sim' : 'Nao'}\n`;
     csv += `Receita Bruta Informada;${d.receitaBrutaAnual || 0}\n`;
-    const anualCSV = App.results.anual;
-    csv += `Receita Líquida (Base);${anualCSV ? anualCSV.receitaBrutaAnual : (d.receitaBrutaAnual || 0)}\n`;
+    csv += `Receita Líquida (Base);${anual ? anual.receitaBrutaAnual : (d.receitaBrutaAnual || 0)}\n`;
     csv += `Folha de Pagamento Anual;${d.folhaPagamento || 0}\n`;
     csv += `Total Despesas;${d.totalDespesas || 0}\n`;
     csv += '\n';
@@ -3187,16 +3268,6 @@ function exportExcel() {
       csv += `% Carga;${anual.consolidacao.percentualCargaTributaria}\n`;
       csv += `Lucro Distribuível Isento;${anual.distribuicaoLucros.lucroDistribuivelFinal}\n`;
       csv += '\n';
-    }
-    if (comp && comp.ranking) {
-      csv += 'COMPARATIVO DE REGIMES;;\n';
-      csv += 'Regime;Carga Total;% Carga\n';
-      comp.ranking.forEach(r => {
-        csv += `${r.regime};${r.cargaTotal};${r.percentualCarga}\n`;
-      });
-      csv += '\n';
-      csv += `Recomendacao;${comp.recomendacao.melhorRegime}\n`;
-      csv += `Economia Potencial;${comp.recomendacao.economiaAnual}\n`;
     }
     csv += '\n';
     csv += 'AVISO LEGAL;\n';
@@ -3215,6 +3286,8 @@ function exportExcel() {
   }
 }
 
+var exportExcel = exportCSV; // backward-compatible alias
+
 function novoEstudo() {
   if (!confirm('Tem certeza que deseja limpar todos os dados e iniciar um novo estudo?')) return;
   try {
@@ -3228,6 +3301,8 @@ function novoEstudo() {
 // 15. INITIALIZATION
 // ─────────────────────────────────────────────────────────────────────────
 function initApp() {
+  if (App.initialized) return;
+  App.initialized = true;
   // Populate estados
   populateEstados();
   // Wire state/municipality change
