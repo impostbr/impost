@@ -2243,10 +2243,15 @@
     if (calcPDD) {
       var totalPDD = _n(d.perdasCreditos6Meses) + _n(d.perdasCreditosJudicial) + _n(d.perdasCreditosFalencia);
       if (totalPDD > 0) {
-        var econPDD = _r(totalPDD * 0.34);
+        // Economia marginal: usa _irpj diferencial para adaptar ao porte da empresa
+        var _lucroAjPDD = _calcLucroAjustado();
+        var _econIRPJpdd = _r(_irpj(Math.max(_lucroAjPDD, 0)) - _irpj(Math.max(_lucroAjPDD - totalPDD, 0)));
+        var _aliqCSLLpdd = (d.ehFinanceira === true || d.ehFinanceira === "true") ? 0.15 : 0.09;
+        var econPDD = _r(_econIRPJpdd + totalPDD * _aliqCSLLpdd);
+        var _aliqMargPDD = totalPDD > 0 ? _r(econPDD / totalPDD * 100) : 34;
         calcPDD.innerHTML =
           '<strong>Total PDD Fiscal (exclusão do lucro real): ' + _m(totalPDD) + '</strong><br>' +
-          'Economia potencial (25% IRPJ + 9% CSLL): <span style="color:#2ECC71"><strong>' + _m(econPDD) + '</strong></span>';
+          'Economia potencial (' + _pp(_aliqMargPDD) + ' marginal IRPJ+CSLL): <span style="color:#2ECC71"><strong>' + _m(econPDD) + '</strong></span>';
       } else {
         calcPDD.innerHTML = "";
       }
@@ -2256,9 +2261,15 @@
     var calcTotEx = $("calcTotalExclusoes");
     if (calcTotEx) {
       var totalEx = _calcTotalExclusoes();
+      // Economia marginal: adapta ao porte via _irpj diferencial
+      var _lucroAjEx = _calcLucroAjustado();
+      var _econIRPJex = _r(_irpj(Math.max(_lucroAjEx, 0)) - _irpj(Math.max(_lucroAjEx - totalEx, 0)));
+      var _aliqCSLLex = (d.ehFinanceira === true || d.ehFinanceira === "true") ? 0.15 : 0.09;
+      var _econTotEx = _r(_econIRPJex + totalEx * _aliqCSLLex);
+      var _aliqMargEx = totalEx > 0 ? _r(_econTotEx / totalEx * 100) : 34;
       calcTotEx.innerHTML =
         '<strong>TOTAL DE EXCLUSÕES: ' + _m(totalEx) + '</strong>' +
-        (totalEx > 0 ? '<br>Economia das exclusões: ' + _m(totalEx) + ' × 34% = <strong style="color:#2ECC71">' + _m(totalEx * 0.34) + '</strong>' : '');
+        (totalEx > 0 ? '<br>Economia das exclusões: ' + _m(totalEx) + ' × ' + _pp(_aliqMargEx) + ' = <strong style="color:#2ECC71">' + _m(_econTotEx) + '</strong>' : '');
     }
 
     // ── Prévia LALUR (etapa 2) ──
@@ -2486,7 +2497,14 @@
     var impMultas = $("impactoMultas");
     if (impMultas) impMultas.textContent = _m(_n(d.multasPunitivas) * 0.34);
     var econGrat = $("econGratif");
-    if (econGrat) econGrat.textContent = _m(_n(d.gratificacoesAdm) * 0.34);
+    if (econGrat) {
+      // CORREÇÃO ERRO 3: Usar _irpj diferencial (marginal) em vez de 0.34 fixo
+      var _gratPrev = _n(d.gratificacoesAdm);
+      var _lucroAjGrat = Math.max(_calcLucroAjustado(), 0);
+      var _econIRPJgrat = _r(_irpj(_lucroAjGrat) - _irpj(Math.max(_lucroAjGrat - _gratPrev, 0)));
+      var _aliqCSLLgrat = (d.ehFinanceira === true || d.ehFinanceira === "true") ? 0.15 : 0.09;
+      econGrat.textContent = _m(_r(_econIRPJgrat + _gratPrev * _aliqCSLLgrat));
+    }
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -3815,18 +3833,25 @@
     var economiaIncentivos = _safe(incentivosFiscais, 'economiaTotal');
     var economiaDepreciacao = _safe(depreciacaoResult, 'economiaFiscal');
     var economiaPisCofins = pisCofinsResult.economiaCreditos || 0;
-    // ═══ CORREÇÃO BUG CRÍTICO 5: Usar alíquota efetiva (não fixa 34%) ═══
+    // ═══ CORREÇÃO: Alíquotas efetiva (média) E marginal (incremental) ═══
     var _aliqEfetIRPJ = lucroRealFinal > 0
       ? Math.min((irpjResult.irpjDevido || 0) / lucroRealFinal, 0.25)
       : 0.15;
     var _aliqEfetCSLL = csllResult.aliquota || 0.09;
-    var economiaGratificacao = _n(d.gratificacoesAdm) > 0
-      ? _r(_n(d.gratificacoesAdm) * (_aliqEfetIRPJ + _aliqEfetCSLL))
+    // Alíquota marginal: para exclusões/adições, a economia real é o impacto incremental
+    // Usa _irpj() diferencial para capturar corretamente a faixa do adicional de 10%
+    var _gratAdm = _n(d.gratificacoesAdm);
+    var economiaGratificacao = _gratAdm > 0
+      ? _r((_irpj(lucroRealFinal) - _irpj(lucroRealFinal - _gratAdm)) + _gratAdm * _aliqEfetCSLL)
       : 0;
     var economiaCPRBFinal = cprbResult ? cprbResult.economia : 0;
     // ═══ CORREÇÃO BUG CRÍTICO 1: PDD já reduz IRPJ/CSLL via exclusões LALUR — não contar 2x ═══
     var totalPDDEcon = 0; // Valor zerado para eliminar dupla contagem
-    var totalPDDInfo = _r((_n(d.perdasCreditos6Meses) + _n(d.perdasCreditosJudicial) + _n(d.perdasCreditosFalencia)) * (_aliqEfetIRPJ + _aliqEfetCSLL)); // apenas para exibição
+    // PDD info: economia marginal (quanto IRPJ+CSLL seria MAIOR se não houvesse a exclusão PDD)
+    var _totalPDDBruto = _n(d.perdasCreditos6Meses) + _n(d.perdasCreditosJudicial) + _n(d.perdasCreditosFalencia);
+    var totalPDDInfo = _totalPDDBruto > 0
+      ? _r((_irpj(lucroRealFinal + _totalPDDBruto) - _irpj(lucroRealFinal)) + _totalPDDBruto * _aliqEfetCSLL)
+      : 0;
 
     // ═══ CORREÇÃO ERRO BAIXO #8: Separar economias REALIZADAS vs OPORTUNIDADE ═══
     // Economias realizadas: já refletidas nos cálculos efetivos
@@ -3902,15 +3927,29 @@
         } catch (e) { console.warn('[IMPOST] Erro em projeção:', e.message); projecao = null; }
       }
       // Projeção de carga tributária com crescimento
-      // ═══ CORREÇÃO BUG MÉDIO 3: JCP depende do PL, não escala com receita ═══
+      // ═══ CORREÇÃO ERRO 7: Recalcular IRPJ progressivo por ano (não escalar linearmente) ═══
+      // O adicional de 10% sobre excedente de R$240k é fixo, então a alíquota efetiva sobe com o lucro
       var econSemJCP = _r(totalEconomias - economiaJCP);
       var projecaoCarga = [];
       var receitaProj = receitaBruta;
       var econAcum = 0;
+      // Razão SUDAM: proporção do IRPJ que sobra após redução SUDAM (preservar para anos futuros)
+      var _irpjBrutoAno1 = _irpj(Math.max(lucroRealFinal, 0));
+      var _ratioSUDAM = _irpjBrutoAno1 > 0 ? irpjAposReducao / _irpjBrutoAno1 : 1;
+      var _aliqCSLLProj = _aliqEfetCSLL; // 0.09 ou 0.15 (financeiras)
       for (var aP = 0; aP < horizonte; aP++) {
         if (aP > 0) receitaProj = _r(receitaProj * (1 + taxa));
         var fator = receitaProj / (receitaBruta || 1);
-        var cargaAno = _r((irpjAposReducao + csllResult.csllDevida + pisCofinsLiquido + issAnual) * fator);
+        // IRPJ: recalcular com _irpj() sobre lucro real projetado (captura adicional de 10%)
+        var _lucroRealProj = _r(lucroRealFinal * fator);
+        var _irpjProj = _r(_irpj(Math.max(_lucroRealProj, 0)) * _ratioSUDAM);
+        // CSLL: taxa fixa, escala linearmente com o lucro
+        var _baseCSLLProj = _r((baseCSLLFinal || lucroRealFinal) * fator);
+        var _csllProj = _r(Math.max(_baseCSLLProj, 0) * _aliqCSLLProj);
+        // PIS/COFINS e ISS: lineares com a receita
+        var _pisCofProj = _r(pisCofinsLiquido * fator);
+        var _issProj = _r(issAnual * fator);
+        var cargaAno = _r(_irpjProj + _csllProj + _pisCofProj + _issProj);
         var econAno = _r(econSemJCP * fator + economiaJCP);
         econAcum += econAno;
         projecaoCarga.push({
@@ -4838,12 +4877,18 @@
 
     // #17 — Converter gratificação em pró-labore
     if ((d.temGratificacaoAdm === true || d.temGratificacaoAdm === "true") && _n(d.gratificacoesAdm) > 0) {
-      var econGrat = _r(_n(d.gratificacoesAdm) * 0.34);
+      // CORREÇÃO ERRO 3: Usar _irpj diferencial (marginal) em vez de 0.34 fixo
+      var _gratVal = _n(d.gratificacoesAdm);
+      var _lrCtx = ctx.lucroRealFinal || 0;
+      var _econIRPJGrat = _r(_irpj(Math.max(_lrCtx, 0)) - _irpj(Math.max(_lrCtx - _gratVal, 0)));
+      var _aliqCSLLGrat = ctx.aliqEfetCSLL || 0.09;
+      var econGrat = _r(_econIRPJGrat + _gratVal * _aliqCSLLGrat);
+      var _aliqMargGrat = _gratVal > 0 ? _r(econGrat / _gratVal * 100) : 34;
       ops.push({
         id: "CONVERTER_GRATIFICACAO", titulo: "Converter Gratificação de Administradores em Pró-labore",
         tipo: "Dedução", complexidade: "Baixa", risco: "Baixo",
         economiaAnual: econGrat,
-        descricao: "Gratificação de " + _m(_n(d.gratificacoesAdm)) + " é indedutível. Convertendo em pró-labore, economia de " + _m(econGrat) + " (passa a ser dedutível).",
+        descricao: "Gratificação de " + _m(_gratVal) + " é indedutível. Convertendo em pró-labore, economia de " + _m(econGrat) + " (" + _pp(_aliqMargGrat) + " marginal IRPJ+CSLL — passa a ser dedutível).",
         baseLegal: "Art. 358, §1º do RIR/2018",
         acaoRecomendada: "Alterar contrato social. Formalizar pró-labore mensal com folha de pagamento.",
         prazoImplementacao: "30 dias",
@@ -4915,20 +4960,23 @@
     }
 
     // #22 — PDD Fiscal
-    // ═══ FIX BUG #5: Usar alíquotas efetivas (consistente com pddFiscalInfo) em vez de 34% fixo ═══
+    // ═══ FIX: Usar alíquota MARGINAL (via _irpj diferencial) em vez de efetiva ═══
     var totalPDDOp = _n(d.perdasCreditos6Meses) + _n(d.perdasCreditosJudicial) + _n(d.perdasCreditosFalencia);
     if (totalPDDOp > 0) {
-      // Usar alíquotas efetivas do contexto (se disponíveis), senão fallback 34%
-      var _aliqIRPJCtx = ctx.aliqEfetIRPJ || 0.15;
+      // Economia marginal: _irpj(lucro SEM exclusão PDD) - _irpj(lucro COM exclusão PDD)
+      // Isso captura corretamente a faixa do adicional de 10% conforme o porte da empresa
+      var _lrFinal = ctx.lucroRealFinal || 0;
       var _aliqCSLLCtx = ctx.aliqEfetCSLL || 0.09;
-      var econPDDOp = _r(totalPDDOp * (_aliqIRPJCtx + _aliqCSLLCtx));
-      var aliqPDDUsada = _r((_aliqIRPJCtx + _aliqCSLLCtx) * 100);
+      var econIRPJPDD = _r(_irpj(_lrFinal + totalPDDOp) - _irpj(_lrFinal));
+      var econCSLLPDD = _r(totalPDDOp * _aliqCSLLCtx);
+      var econPDDOp = _r(econIRPJPDD + econCSLLPDD);
+      var aliqPDDUsada = totalPDDOp > 0 ? _r(econPDDOp / totalPDDOp * 100) : 34;
       ops.push({
         id: "PDD_FISCAL", titulo: "PDD Fiscal — Perdas no Recebimento de Créditos",
         tipo: "Exclusão", complexidade: "Baixa", risco: "Baixo",
         economiaAnual: econPDDOp,
         economia: econPDDOp, // alias para compatibilidade (FIX BUG #6)
-        descricao: "Perdas totais de " + _m(totalPDDOp) + " podem ser excluídas do lucro real, gerando economia de " + _m(econPDDOp) + " (" + _pp(aliqPDDUsada) + " alíquota efetiva IRPJ+CSLL).",
+        descricao: "Perdas totais de " + _m(totalPDDOp) + " podem ser excluídas do lucro real, gerando economia de " + _m(econPDDOp) + " (" + _pp(aliqPDDUsada) + " alíquota marginal IRPJ+CSLL).",
         baseLegal: "Art. 340-342 do RIR/2018 (Decreto 9.580/2018)",
         acaoRecomendada: "Manter documentação comprobatória: protestos, ajuizamento de ações, sentença de falência. Controlar na Parte A do LALUR.",
         prazoImplementacao: "Imediato",
@@ -5298,13 +5346,37 @@
         // BUG#4: guarda para evitar exibir número fantasma quando baseline é zero
         if (simCompleta && simCompleta.economia && simCompleta.economia.total > 0
             && simCompleta.semOtimizacao && simCompleta.semOtimizacao.irpjDevido > 0) {
+          // ═══ CORREÇÃO ERRO 8: Documentar composição da Simulação Integrada ═══
+          // Extrair componentes disponíveis para rastreabilidade
+          var _simEcon = simCompleta.economia;
+          var _simDesc = "⚠️ CONSOLIDAÇÃO (não somar com itens acima) — Simulação consolidada indica economia total de " + _m(_simEcon.total) + " vs cenário sem otimizações.";
+          // Montar breakdown dos componentes
+          var _simParts = [];
+          if (_simEcon.jcp > 0) _simParts.push("JCP: " + _m(_simEcon.jcp));
+          if (_simEcon.irpj > 0 || _simEcon.csll > 0) _simParts.push("IRPJ+CSLL: " + _m((_simEcon.irpj || 0) + (_simEcon.csll || 0)));
+          if (_simEcon.compensacao > 0) _simParts.push("Compensação prejuízo: " + _m(_simEcon.compensacao));
+          if (_simEcon.incentivos > 0) _simParts.push("Incentivos: " + _m(_simEcon.incentivos));
+          // Se houver componentes, exibir breakdown; se total não bater, mostrar diferença de interação
+          if (_simParts.length > 0) {
+            var _simSomaParts = (_simEcon.jcp || 0) + (_simEcon.irpj || 0) + (_simEcon.csll || 0) + (_simEcon.compensacao || 0) + (_simEcon.incentivos || 0);
+            _simDesc += " Composição: " + _simParts.join(" + ") + ".";
+            var _simDiff = _r(_simEcon.total - _simSomaParts);
+            if (Math.abs(_simDiff) > 1) {
+              _simDesc += " Efeito de interação entre incentivos: " + _m(_simDiff) + " (JCP reduz base IRPJ/CSLL, compensação interage com adicional 10%).";
+            }
+          }
+          // Informar valores sem/com otimização para transparência
+          if (simCompleta.semOtimizacao && simCompleta.comOtimizacao) {
+            _simDesc += " [Sem otimização: IRPJ " + _m(simCompleta.semOtimizacao.irpjDevido || 0) + " + CSLL " + _m(simCompleta.semOtimizacao.csllDevida || 0);
+            _simDesc += " → Com otimização: IRPJ " + _m(simCompleta.comOtimizacao.irpjDevido || 0) + " + CSLL " + _m(simCompleta.comOtimizacao.csllDevida || 0) + "]";
+          }
           ops.push({
             id: "SIMULACAO_COMPLETA", titulo: "Simulação Integrada — Economia Consolidada",
             tipo: "Dedução", complexidade: "Média", risco: "Baixo",
             // CORREÇÃO FALHA #1: Marcar como consolidação para não somar com itens individuais
             _isConsolidada: true,
             economiaAnual: simCompleta.economia.total,
-            descricao: "⚠️ CONSOLIDAÇÃO (não somar com itens acima) — Simulação consolidada IRPJ+CSLL+JCP+Incentivos indica economia total otimizada de " + _m(simCompleta.economia.total) + " vs cenário sem otimizações.",
+            descricao: _simDesc,
             baseLegal: "Diversos — consolidação de todos os incentivos aplicáveis",
             acaoRecomendada: "Implementar todas as otimizações identificadas na simulação completa para maximizar a economia fiscal.",
             prazoImplementacao: "30-90 dias",
