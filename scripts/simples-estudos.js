@@ -1,7 +1,7 @@
 /**
  * ════════════════════════════════════════════════════════════════════════════════
  * SIMPLES-ESTUDO-COMPLETO.JS — Motor Unificado de Estudo Tributário + Relatório
- * Versão 1.0.0
+ * Versão 5.0.0
  *
  * Arquivo UNIFICADO que combina toda a lógica de:
  *   - Cálculo e otimização do Simples Nacional
@@ -13,8 +13,11 @@
  *   - Relatório HTML profissional (Parte 2)
  *   - Exportação PDF/Excel (Parte 2)
  *
- * PARTE 1: Módulos 1 a 12 — Lógica de cálculo, diagnóstico e otimização
- * PARTE 2: Módulos 13 a 17 — Relatório, renderização HTML e exportação
+ * PARTE 1: Módulos 1 a 14 — Lógica de cálculo, diagnóstico, otimização e comparativo
+ *   - Módulo 11: PlanoAcao v5.0 — Plano de ação priorizado real (7 ações concretas)
+ *   - Módulo 13: SimuladorCenarios — 6 cenários "E se?" (pró-labore, CNAE, segregação, receita, sócio, exportação)
+ *   - Módulo 14: CompararRegimes — SN × LP × LR com cálculo local completo
+ * PARTE 2: Módulos 15 a 19 — Relatório, renderização HTML e exportação
  *
  * Base Legal Principal:
  *   - LC 123/2006 (Estatuto Nacional da ME e EPP)
@@ -31,7 +34,7 @@
  *   - MunicipiosIBGE (municipios.js)
  *
  * @product  IMPOST. — Porque pagar imposto certo é direito. Pagar menos, legalmente, é inteligência.
- * @version  1.0.0
+ * @version  5.0.0
  * @license  Proprietary
  * ════════════════════════════════════════════════════════════════════════════════
  */
@@ -40,6 +43,7 @@
         module.exports = factory();
     } else {
         root.SimplesEstudoCompleto = factory();
+        root.SimplesEstudos = root.SimplesEstudoCompleto; // Alias retrocompatibilidade
     }
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
     'use strict';
@@ -55,6 +59,72 @@
     const _Estados = (typeof Estados !== 'undefined') ? Estados :
                      (typeof EstadosBR !== 'undefined') ? EstadosBR : null;
     const _MunicipiosIBGE = (typeof MunicipiosIBGE !== 'undefined') ? MunicipiosIBGE : null;
+
+
+    // ─── Constantes globais da factory ───
+
+    /** Versão canônica — única fonte de verdade */
+    var _VERSION = '5.1.0';
+
+    /** Salário mínimo 2026 (Lei 15.XXX/2025) */
+    var SALARIO_MINIMO_2026 = 1621;
+
+    /** DAS fixo do MEI 2026: 5% × R$ 1.621 + ISS R$ 5 + ICMS R$ 1 ≈ R$ 87 */
+    var DAS_MEI_2026 = 87;
+
+    /** Nomes amigáveis para as categorias do Score */
+    var NOMES_CATEGORIA_SCORE = {
+        fatorR: 'Fator R',
+        segregacao: 'Segregação de Receitas',
+        iss: 'ISS Otimizado',
+        proLabore: 'Pró-labore',
+        semRiscos: 'Gestão de Riscos'
+    };
+
+    /**
+     * Helper seguro: chama função do IMPOST com try/catch.
+     * Compartilhado por todos os módulos (Calculadora, Diagnostico, Simulador).
+     * @param {string} nome — nome da função
+     * @param {*} params — parâmetros (posicional ou objeto)
+     * @param {string} [contexto] — nome do módulo chamador (para log)
+     * @returns {*} resultado ou null
+     */
+    function _chamarIMPOST(nome, params, contexto) {
+        if (!_IMPOST || typeof _IMPOST[nome] !== 'function') return null;
+        try {
+            return _IMPOST[nome](params);
+        } catch (e) {
+            console.warn('[SimplesEstudoCompleto' + (contexto ? '.' + contexto : '') + '] Erro ao chamar IMPOST.' + nome + ':', e.message);
+            return null;
+        }
+    }
+
+    /**
+     * Versão ESTRITA de _chamarIMPOST: lança erro claro em vez de retornar null.
+     * Usar em cálculos críticos onde fallback inventado é inaceitável.
+     * @param {string} nome — nome da função IMPOST
+     * @param {*} params — parâmetros
+     * @param {string} [contexto] — módulo chamador
+     * @returns {*} resultado (nunca null)
+     * @throws {Error} se IMPOST não estiver carregado, função não existir ou retornar null
+     */
+    function _chamarIMPOSTCritico(nome, params, contexto) {
+        var ctx = contexto ? '.' + contexto : '';
+        if (!_IMPOST) {
+            throw new Error('[IMPOST AUSENTE' + ctx + '] O módulo IMPOST (simples_nacional.js) não está carregado. '
+                + 'Não é possível realizar o cálculo "' + nome + '". Carregue simples_nacional.js antes deste arquivo.');
+        }
+        if (typeof _IMPOST[nome] !== 'function') {
+            throw new Error('[IMPOST.' + nome + ' NÃO ENCONTRADA' + ctx + '] A função IMPOST.' + nome
+                + ' não existe. Verifique se simples_nacional.js v5.0+ está carregado.');
+        }
+        var resultado = _IMPOST[nome](params);
+        if (resultado === null || resultado === undefined) {
+            throw new Error('[IMPOST.' + nome + ' RETORNOU NULL' + ctx + '] Parâmetros fornecidos: '
+                + JSON.stringify(params, null, 0).substring(0, 300));
+        }
+        return resultado;
+    }
 
 
     // ═══════════════════════════════════════════════════════════════
@@ -1652,23 +1722,6 @@
         }
 
         /**
-         * Helper seguro: chama uma função do IMPOST com try/catch.
-         * @param {string} nome — nome da função
-         * @param {Object} params — parâmetros
-         * @returns {*} resultado ou null
-         * @private
-         */
-        function _chamarIMPOST(nome, params) {
-            if (!_IMPOST || typeof _IMPOST[nome] !== 'function') return null;
-            try {
-                return _IMPOST[nome](params);
-            } catch (e) {
-                console.warn(`[SimplesEstudoCompleto.Calculadora] Erro ao chamar IMPOST.${nome}:`, e.message);
-                return null;
-            }
-        }
-
-        /**
          * Cálculo COMPLETO — função principal do sistema.
          * Pega dados do Formulário e executa TODOS os cálculos usando as funções do IMPOST.
          *
@@ -1691,7 +1744,7 @@
             const validacao = estadoForm.validacao;
 
             if (!_IMPOST) {
-                return { erro: 'Módulo IMPOST (simples_nacional.js) não carregado.', _meta: { versao: '1.0.0' } };
+                return { erro: 'Módulo IMPOST (simples_nacional.js) não carregado.', _meta: { versao: _VERSION } };
             }
 
             // ── Dados da Empresa ──
@@ -1901,7 +1954,9 @@
             let otimizacaoFatorR = { aplicavel: false };
             if (d.cnae) {
                 var regrasCnae = _CnaeMapeamento && _CnaeMapeamento.obterRegrasCNAE ? _CnaeMapeamento.obterRegrasCNAE(d.cnae, '') : null;
-                if (regrasCnae && regrasCnae.fatorR) {
+                // Fallback: checar via IMPOST.determinarAnexo se o CNAE depende do Fator R
+                var cnaeUsaFatorR = (regrasCnae && regrasCnae.fatorR) || (anexoRaw && anexoRaw.tipo === 'fator_r');
+                if (cnaeUsaFatorR) {
                     const otimParams = {
                         rbt12: rbt12,
                         folhaAtual12Meses: folha12,
@@ -2099,7 +2154,7 @@
 
             // ── Metadados ──
             var _meta = {
-                versao: '2.0.0',
+                versao: _VERSION,
                 calculadoEm: new Date().toISOString(),
                 modulosUtilizados: [
                     _IMPOST ? 'IMPOST (simples_nacional.js)' : null,
@@ -2284,10 +2339,165 @@
             };
         }
 
+        // ── Métodos individuais de cálculo — chamam IMPOST diretamente, sem fallback ──
+
+        /**
+         * Calcula DAS mensal usando IMPOST real. Sem fallback inventado.
+         * Se IMPOST retornar null, lança erro explicando o que falta.
+         *
+         * @param {Object} dados - { receitaBrutaMensal, rbt12, anexo?, cnae?, fatorR?, issRetidoFonte?, folhaMensal?, aliquotaRAT? }
+         * @returns {Object} Resultado de IMPOST.calcularDASMensal
+         * @throws {Error} se IMPOST ausente ou retornar null
+         *
+         * Base legal: LC 123/2006, Art. 18; Resolução CGSN 140/2018
+         */
+        function calcularDASMensal(dados) {
+            if (!dados || !dados.receitaBrutaMensal || !dados.rbt12) {
+                throw new Error('[Calculadora.calcularDASMensal] Parâmetros obrigatórios: receitaBrutaMensal, rbt12.');
+            }
+            var anexo = dados.anexo;
+            if (!anexo && dados.cnae) {
+                var det = _chamarIMPOSTCritico('determinarAnexo', {
+                    cnae: dados.cnae, fatorR: dados.fatorR || 0
+                }, 'Calculadora.calcularDASMensal');
+                anexo = det.anexo;
+            }
+            if (!anexo) {
+                throw new Error('[Calculadora.calcularDASMensal] Anexo não informado e não foi possível determinar via CNAE. Informe dados.anexo ou dados.cnae.');
+            }
+            return _chamarIMPOSTCritico('calcularDASMensal', {
+                receitaBrutaMensal: dados.receitaBrutaMensal,
+                rbt12: dados.rbt12,
+                anexo: anexo,
+                issRetidoFonte: dados.issRetidoFonte || 0,
+                folhaMensal: dados.folhaMensal || 0,
+                aliquotaRAT: dados.aliquotaRAT || 0.02
+            }, 'Calculadora.calcularDASMensal');
+        }
+
+        /**
+         * Calcula alíquota efetiva usando IMPOST real. Sem fallback.
+         * Fórmula: (RBT12 × alíquotaNominal − parcelaADeduzir) / RBT12
+         *
+         * @param {Object} dados - { rbt12, anexo }
+         * @returns {Object} Resultado de IMPOST.calcularAliquotaEfetiva
+         * @throws {Error} se IMPOST ausente ou retornar null
+         *
+         * Base legal: LC 123/2006, Art. 18, §1º
+         */
+        function calcularAliquotaEfetiva(dados) {
+            if (!dados || !dados.rbt12 || !dados.anexo) {
+                throw new Error('[Calculadora.calcularAliquotaEfetiva] Parâmetros obrigatórios: rbt12, anexo.');
+            }
+            return _chamarIMPOSTCritico('calcularAliquotaEfetiva', {
+                rbt12: dados.rbt12, anexo: dados.anexo
+            }, 'Calculadora.calcularAliquotaEfetiva');
+        }
+
+        /**
+         * Calcula Fator R usando IMPOST real. Sem fallback.
+         * Fator R = folhaSalarios12Meses / receitaBruta12Meses.
+         * Se Fator R ≥ 28%, o anexo resultante é III; caso contrário, V.
+         *
+         * @param {Object} dados - { folhaSalarios12Meses, receitaBruta12Meses }
+         * @returns {Object} Resultado de IMPOST.calcularFatorR
+         * @throws {Error} se IMPOST ausente ou retornar null
+         *
+         * Base legal: LC 123/2006, Art. 18, §24; Resolução CGSN 140/2018, Art. 18, §5º-J
+         */
+        function calcularFatorRDireto(dados) {
+            if (!dados || dados.receitaBruta12Meses == null) {
+                throw new Error('[Calculadora.calcularFatorR] Parâmetro obrigatório: receitaBruta12Meses.');
+            }
+            return _chamarIMPOSTCritico('calcularFatorR', {
+                folhaSalarios12Meses: dados.folhaSalarios12Meses || 0,
+                receitaBruta12Meses: dados.receitaBruta12Meses
+            }, 'Calculadora.calcularFatorR');
+        }
+
+        /**
+         * Determina anexo usando IMPOST real. Sem fallback. Nunca hardcoda o anexo.
+         *
+         * @param {string} cnae — Código CNAE (ex: "62.01-5")
+         * @param {number} [fatorR] — Valor do Fator R (decimal, ex: 0.30)
+         * @returns {Object} Resultado de IMPOST.determinarAnexo
+         * @throws {Error} se IMPOST ausente ou retornar null
+         *
+         * Base legal: Resolução CGSN 140/2018, Anexos VI e VII
+         */
+        function determinarAnexo(cnae, fatorR) {
+            if (!cnae) throw new Error('[Calculadora.determinarAnexo] CNAE é obrigatório.');
+            return _chamarIMPOSTCritico('determinarAnexo', {
+                cnae: cnae, fatorR: fatorR || 0
+            }, 'Calculadora.determinarAnexo');
+        }
+
+        /**
+         * Calcula partilha de tributos usando IMPOST real.
+         * Distribui o DAS entre: IRPJ, CSLL, COFINS, PIS/PASEP, CPP, ICMS/ISS.
+         *
+         * @param {number} dasValor — Valor total do DAS
+         * @param {number} faixa — Faixa (1-6)
+         * @param {string} anexo — Anexo (I a V)
+         * @param {number} [receitaBrutaMensal] — Receita bruta mensal
+         * @param {number} [aliquotaEfetiva] — Alíquota efetiva
+         * @returns {Object} Partilha com { irpj, csll, cofins, pis, cpp, iss, icms, ipi }
+         * @throws {Error} se IMPOST ausente
+         *
+         * Base legal: LC 123/2006, Art. 18; Resolução CGSN 140/2018
+         */
+        function calcularPartilhaTributos(dasValor, faixa, anexo, receitaBrutaMensal, aliquotaEfetiva) {
+            if (!_IMPOST) {
+                throw new Error('[Calculadora.calcularPartilhaTributos] IMPOST (simples_nacional.js) não carregado.');
+            }
+            if (typeof _IMPOST.calcularPartilhaTributos !== 'function') {
+                throw new Error('[Calculadora.calcularPartilhaTributos] Função IMPOST.calcularPartilhaTributos não encontrada.');
+            }
+            var resultado = _IMPOST.calcularPartilhaTributos(dasValor, faixa, anexo, receitaBrutaMensal || 0, aliquotaEfetiva || 0);
+            if (!resultado) {
+                throw new Error('[Calculadora.calcularPartilhaTributos] IMPOST retornou null. Params: dasValor=' + dasValor
+                    + ', faixa=' + faixa + ', anexo=' + anexo);
+            }
+            return resultado;
+        }
+
+        /**
+         * Calcula consolidado anual com RBT12 dinâmico (cada mês recalcula RBT12).
+         * Recebe array com dados dos 12 meses e retorna consolidado anual.
+         *
+         * @param {Array<Object>} meses — Array de objetos mensais (até 12)
+         *   Cada objeto: { receitaBrutaMensal, folhaMensal, issRetidoFonte?, aliquotaRAT?, anexo? }
+         * @param {Object} [opcoes] — { socios?, cnae?, tipoAtividade?, aliquotaRAT? }
+         * @returns {Object} Resultado de IMPOST.calcularAnualConsolidado
+         * @throws {Error} se IMPOST ausente ou retornar null
+         *
+         * Base legal: LC 123/2006; Resolução CGSN 140/2018
+         */
+        function calcularAnualConsolidado(meses, opcoes) {
+            if (!Array.isArray(meses) || meses.length === 0) {
+                throw new Error('[Calculadora.calcularAnualConsolidado] Array de meses é obrigatório (1 a 12 elementos).');
+            }
+            var opts = opcoes || {};
+            return _chamarIMPOSTCritico('calcularAnualConsolidado', {
+                meses: meses,
+                socios: opts.socios,
+                cnae: opts.cnae,
+                tipoAtividade: opts.tipoAtividade,
+                aliquotaRAT: opts.aliquotaRAT || 0.02
+            }, 'Calculadora.calcularAnualConsolidado');
+        }
+
         return {
             calcularTudo: calcularTudo,
             calcularFatorR: calcularFatorR,
-            calcularDASRapido: calcularDASRapido
+            calcularDASRapido: calcularDASRapido,
+            // Métodos individuais — chamam IMPOST diretamente, sem fallback
+            calcularDASMensal: calcularDASMensal,
+            calcularAliquotaEfetiva: calcularAliquotaEfetiva,
+            calcularFatorRDireto: calcularFatorRDireto,
+            determinarAnexo: determinarAnexo,
+            calcularPartilhaTributos: calcularPartilhaTributos,
+            calcularAnualConsolidado: calcularAnualConsolidado
         };
     })();
 
@@ -2305,20 +2515,19 @@
         let _ultimoDiagnostico = null;
 
         /**
-         * Helper seguro: chama uma função do IMPOST com try/catch.
-         * @param {string} nome
-         * @param {Object} params
-         * @returns {*}
+         * Helper: obtém percentuais reais da partilha de tributos do IMPOST.
+         * Retorna os percentuais de cada tributo dentro do DAS para um dado anexo/faixa.
+         * @param {string} anexo — Anexo (I a V)
+         * @param {number} faixa — Faixa (1-6), base 1
+         * @returns {Object|null} { irpj, csll, cofins, pis, cpp, iss, icms, ipi } ou null
          * @private
          */
-        function _chamarIMPOST(nome, params) {
-            if (!_IMPOST || typeof _IMPOST[nome] !== 'function') return null;
-            try {
-                return _IMPOST[nome](params);
-            } catch (e) {
-                console.warn('[SimplesEstudoCompleto.Diagnostico] Erro ao chamar IMPOST.' + nome + ':', e.message);
-                return null;
-            }
+        function _obterPartilhaReal(anexo, faixa) {
+            if (!_IMPOST || !_IMPOST.PARTILHA || !_IMPOST.PARTILHA[anexo]) return null;
+            var faixaIdx = Math.max(0, (faixa || 1) - 1);
+            var partilha = _IMPOST.PARTILHA[anexo];
+            if (faixaIdx >= partilha.length) faixaIdx = partilha.length - 1;
+            return partilha[faixaIdx] || null;
         }
 
         /**
@@ -2350,13 +2559,37 @@
             if (!resultado.otimizacaoFatorR || !resultado.otimizacaoFatorR.aplicavel) return null;
             var otim = resultado.otimizacaoFatorR;
             if (otim.jaOtimizado) return null;
-            if (!otim.valeAPena) return null;
 
-            var custoAnual = otim.custoAumentoAnual || 0;
-            var economiaDAS = otim.economiaDASAnual || 0;
-            var retornoLiq = otim.economiaLiquida || 0;
+            // Calcular EXATAMENTE quanto de pró-labore adicional é necessário para FR = 28%
+            var rbt12 = d.receitaBrutaAnual || (d.receitaBrutaMensal * 12);
+            var folha12Atual = d.folhaAnual || (d.folhaMensal * 12);
+            var folha12Necessaria = rbt12 * 0.28;
+            var aumentoAnual = Math.max(0, folha12Necessaria - folha12Atual);
+            var aumentoMensal = aumentoAnual / 12;
 
-            if (retornoLiq <= 0) return null;
+            // Calcular economia EXATA: DAS com Anexo V (atual) vs DAS com Anexo III (novo)
+            var dasAnexoV = _calcularDASCenario(d.receitaBrutaMensal, rbt12, 'V', d.folhaMensal);
+            var dasAnexoIII = _calcularDASCenario(d.receitaBrutaMensal, rbt12, 'III', d.folhaMensal + aumentoMensal);
+            var economiaDASMensal = dasAnexoV - dasAnexoIII;
+            var economiaDAS = economiaDASMensal * 12;
+
+            // Custo do aumento: encargos sobre o pró-labore adicional
+            var encargos = 0.368; // INSS 11% + patronal 20% + RAT 2% + FGTS 8% ≈ 36.8% (se Anexo IV: +CPP)
+            if (otim && otim.custoAumentoAnual) {
+                // Se IMPOST já calculou, usar
+                encargos = otim.custoAumentoAnual / (aumentoAnual || 1);
+            }
+            var custoAnual = aumentoAnual * (1 + encargos);
+            var retornoLiq = economiaDAS - custoAnual;
+
+            // Se IMPOST.otimizarFatorR forneceu dados melhores, usar esses
+            if (otim.economiaLiquida != null && otim.economiaLiquida > 0) {
+                retornoLiq = otim.economiaLiquida;
+                custoAnual = otim.custoAumentoAnual || custoAnual;
+                economiaDAS = otim.economiaDASAnual || economiaDAS;
+            }
+
+            if (retornoLiq <= 0 && !otim.valeAPena) return null;
 
             return {
                 id: 'fator_r_migracao',
@@ -2371,8 +2604,9 @@
                 dificuldade: 'media',
                 tempoImplementacao: '1 mês',
                 categoria: 'fator_r',
-                acao: 'Aumentar pró-labore de ' + Utils.formatarMoeda(d.proLabore || d.folhaMensal)
-                    + ' para ' + Utils.formatarMoeda((d.folhaMensal || 0) + (otim.aumentoNecessario || 0)) + '/mês',
+                acao: 'Aumentar folha de ' + Utils.formatarMoeda(d.folhaMensal || 0)
+                    + ' para ' + Utils.formatarMoeda((d.folhaMensal || 0) + aumentoMensal)
+                    + '/mês (+' + Utils.formatarMoeda(aumentoMensal) + ')',
                 passoAPasso: [
                     '1. Calcular o valor exato de pró-labore necessário para Fator R ≥ 28%',
                     '2. Formalizar alteração no contrato social ou ata (se pró-labore de sócio)',
@@ -2450,10 +2684,18 @@
 
             var economiaMensal = ecoMono ? (ecoMono.economiaMensal || ecoMono.economia || 0) : 0;
             if (economiaMensal <= 0) {
-                // Estimar PIS+COFINS sobre parcela monofásica como fallback
+                // Calcular PIS+COFINS zerados usando partilha REAL do IMPOST
+                var faixa = resultado.aliquotaEfetiva ? resultado.aliquotaEfetiva.faixa : 1;
                 var aliqEf = resultado.aliquotaEfetiva ? resultado.aliquotaEfetiva.valor : 0;
-                var partilhaPISCOFINS = 0.0365; // Estimativa: PIS ~0,65% + COFINS ~3% dentro do DAS
-                economiaMensal = receitaMono * partilhaPISCOFINS;
+                var partReal = _obterPartilhaReal(anexo, faixa);
+                if (partReal && aliqEf > 0) {
+                    // Economia = receita monofásica × alíquota efetiva × (% PIS + % COFINS na partilha)
+                    var partilhaPISCOFINS = (partReal.pis || 0) + (partReal.cofins || 0);
+                    economiaMensal = receitaMono * aliqEf * partilhaPISCOFINS;
+                } else {
+                    // Último recurso se PARTILHA indisponível — 3,65% é PIS+COFINS cumulativo padrão
+                    economiaMensal = receitaMono * 0.0365;
+                }
             }
 
             if (economiaMensal <= 0) return null;
@@ -2494,9 +2736,20 @@
 
             var rbt12 = d.receitaBrutaAnual || (d.receitaBrutaMensal * 12);
             var aliqEf = resultado.aliquotaEfetiva ? resultado.aliquotaEfetiva.valor : 0;
-            // ICMS (~33,5%) + PIS (~3,65%) + COFINS dentro do DAS zerados na exportação
-            var percentualImune = 0.06; // Estimativa conservadora: ~6% da alíquota efetiva é ICMS+PIS+COFINS
-            var economiaMensal = recExp * Math.min(percentualImune, aliqEf * 0.45);
+            var faixa = resultado.aliquotaEfetiva ? resultado.aliquotaEfetiva.faixa : 1;
+            var anexo = resultado.anexo ? resultado.anexo.anexo : 'III';
+
+            // Usar partilha REAL do IMPOST: exportação zera ICMS, PIS, COFINS, IPI, ISS
+            var economiaMensal = 0;
+            var partReal = _obterPartilhaReal(anexo, faixa);
+            if (partReal && aliqEf > 0) {
+                var percentualImune = (partReal.icms || 0) + (partReal.pis || 0) + (partReal.cofins || 0)
+                    + (partReal.ipi || 0) + (partReal.iss || 0);
+                economiaMensal = recExp * aliqEf * percentualImune;
+            } else {
+                // Fallback conservador somente se PARTILHA indisponível
+                economiaMensal = recExp * aliqEf * 0.45;
+            }
 
             if (economiaMensal <= 0) return null;
 
@@ -2599,9 +2852,17 @@
             if (recST <= 0) return null;
 
             var aliqEf = resultado.aliquotaEfetiva ? resultado.aliquotaEfetiva.valor : 0;
-            // Parcela ICMS dentro do DAS é ~33,5% no Anexo I (comércio)
-            var percentualICMS = aliqEf * 0.335;
-            var economiaMensal = recST * percentualICMS;
+            var faixa = resultado.aliquotaEfetiva ? resultado.aliquotaEfetiva.faixa : 1;
+            var anexo = resultado.anexo ? resultado.anexo.anexo : 'I';
+
+            // Usar partilha REAL do IMPOST para obter percentual de ICMS dentro do DAS
+            var economiaMensal = 0;
+            var partReal = _obterPartilhaReal(anexo, faixa);
+            if (partReal && aliqEf > 0) {
+                economiaMensal = recST * aliqEf * (partReal.icms || 0);
+            } else {
+                economiaMensal = recST * aliqEf * 0.335;
+            }
 
             if (economiaMensal <= 0) return null;
 
@@ -2637,10 +2898,17 @@
             if (recLocacao <= 0) return null;
 
             var aliqEf = resultado.aliquotaEfetiva ? resultado.aliquotaEfetiva.valor : 0;
-            // ISS não incide sobre locação de bens móveis (Súmula Vinculante 31 do STF)
-            // Parcela ISS no DAS varia (~15-33% da alíquota efetiva para serviços)
-            var percentualISS = aliqEf * 0.15; // Conservador
-            var economiaMensal = recLocacao * percentualISS;
+            var faixa = resultado.aliquotaEfetiva ? resultado.aliquotaEfetiva.faixa : 1;
+            var anexo = resultado.anexo ? resultado.anexo.anexo : 'III';
+
+            // Usar partilha REAL do IMPOST para obter percentual de ISS dentro do DAS
+            var economiaMensal = 0;
+            var partReal = _obterPartilhaReal(anexo, faixa);
+            if (partReal && aliqEf > 0) {
+                economiaMensal = recLocacao * aliqEf * (partReal.iss || 0);
+            } else {
+                economiaMensal = recLocacao * aliqEf * 0.15;
+            }
 
             if (economiaMensal <= 0) return null;
 
@@ -2679,14 +2947,33 @@
             var estadoAtual = DadosEstado.getEstadoAtual();
             var nomeEstado = estadoAtual ? estadoAtual.nome : d.uf;
 
+            // Calcular impacto real: quanto de ICMS + ISS sairia do DAS
+            var aliqEf = resultado.aliquotaEfetiva ? resultado.aliquotaEfetiva.valor : 0;
+            var faixa = resultado.aliquotaEfetiva ? resultado.aliquotaEfetiva.faixa : 1;
+            var anexo = resultado.anexo ? resultado.anexo.anexo : 'I';
+            var impactoMensal = 0;
+            var partReal = _obterPartilhaReal(anexo, faixa);
+            if (partReal && aliqEf > 0) {
+                var percICMSISS = (partReal.icms || 0) + (partReal.iss || 0);
+                // A parcela ICMS+ISS sai do DAS mas deve ser paga nas regras normais
+                impactoMensal = d.receitaBrutaMensal * aliqEf * percICMSISS;
+            }
+            // Estimar custo fora do DAS (ICMS normal ~18%, ISS ~5% sobre serviços)
+            var icmsNormal = estadoAtual && estadoAtual.icms ? (estadoAtual.icms.padrao || 0.18) : 0.18;
+            var issNormal = (d.issAliquota || 5) / 100;
+            var custoForaDAS = d.receitaBrutaMensal * Math.max(icmsNormal, issNormal) * 0.3; // Estimativa conservadora
+
             return {
                 id: 'sublimite_estadual',
                 titulo: 'Receita excede sublimite — ICMS e ISS por fora do DAS',
                 descricao: 'A receita bruta anual de ' + Utils.formatarMoeda(rbt12)
                     + ' excede o sublimite de R$ 3.600.000 (' + nomeEstado + '). '
-                    + 'O ICMS e o ISS passam a ser recolhidos por FORA do DAS, nas regras normais.',
+                    + 'O ICMS e o ISS passam a ser recolhidos por FORA do DAS, nas regras normais. '
+                    + 'Parcela ICMS+ISS dentro do DAS era de ~' + Utils.formatarMoeda(impactoMensal) + '/mês.',
                 economiaAnual: 0,
                 economiaMensal: 0,
+                impactoEstimadoMensal: custoForaDAS,
+                impactoEstimadoAnual: custoForaDAS * 12,
                 dificuldade: 'dificil',
                 tempoImplementacao: 'Automático',
                 categoria: 'sublimite',
@@ -2695,7 +2982,7 @@
                 passoAPasso: [
                     '1. Calcular o ICMS e ISS que serão devidos pelas regras normais (fora do DAS)',
                     '2. Verificar se há incentivos estaduais que reduzam o ICMS',
-                    '3. Avaliar se a comparação com Lucro Presumido é vantajosa (use a aba de Comparação)',
+                    '3. Avaliar impactos do recolhimento separado de ICMS/ISS acima do sublimite',
                     '4. Preparar obrigações acessórias adicionais (SPED, EFD, etc.)'
                 ],
                 baseLegal: 'LC 123/2006, Art. 19; Resolução CGSN 140/2018, Art. 9º a 12',
@@ -2712,30 +2999,55 @@
             if (d.socios && d.socios.length > 1) return null;
 
             var dasMensal = resultado.dasMensal ? resultado.dasMensal.semOtimizacao.valor : 0;
-            var meiMensal = 75; // Estimativa: ~R$ 75 fixo/mês
-            var economiaMensal = dasMensal - meiMensal;
 
+            // Calcular DAS MEI real usando IMPOST se disponível
+            var meiMensal = DAS_MEI_2026;
+            var tipoAtivMEI = 'comercio_servicos';
+            var anexoAtual = resultado.anexo ? resultado.anexo.anexo : null;
+            if (anexoAtual === 'I') tipoAtivMEI = 'comercio';
+            else if (anexoAtual === 'II') tipoAtivMEI = 'comercio'; // indústria → comércio no MEI
+            else if (anexoAtual === 'III' || anexoAtual === 'IV' || anexoAtual === 'V') tipoAtivMEI = 'servicos';
+
+            var meiCalc = _chamarIMPOST('calcularDASMEI', tipoAtivMEI);
+            if (!meiCalc && _IMPOST && typeof _IMPOST.calcularDASMEI === 'function') {
+                // Tentar com parâmetros posicionais: (tipoAtividade, salarioMinimo)
+                try { meiCalc = _IMPOST.calcularDASMEI(tipoAtivMEI, SALARIO_MINIMO_2026); } catch (e) {}
+            }
+            if (meiCalc && meiCalc.dasTotal) {
+                meiMensal = meiCalc.dasTotal;
+            } else if (_IMPOST && _IMPOST.MEI && _IMPOST.MEI.recolhimentoFixoMensal) {
+                // Buscar nos dados estáticos do MEI
+                var valMEI = _IMPOST.MEI.recolhimentoFixoMensal.valoresMensais2026;
+                if (valMEI) {
+                    if (tipoAtivMEI === 'comercio' && valMEI.apenasComercioIndustria) meiMensal = valMEI.apenasComercioIndustria.total;
+                    else if (tipoAtivMEI === 'servicos' && valMEI.apenasServicos) meiMensal = valMEI.apenasServicos.total;
+                    else if (valMEI.comercioEServicos) meiMensal = valMEI.comercioEServicos.total;
+                }
+            }
+
+            var economiaMensal = dasMensal - meiMensal;
             if (economiaMensal <= 0) return null;
 
             return {
                 id: 'mei_alternativa',
-                titulo: 'Enquadrar como MEI — custo fixo muito menor',
+                titulo: 'Receita compatível com MEI',
                 descricao: 'Com receita anual de ' + Utils.formatarMoeda(rbt12) + ' e até 1 sócio, '
-                    + 'a empresa pode optar pelo MEI, com custo fixo mensal de ~R$ 75 (vs. DAS de '
-                    + Utils.formatarMoeda(dasMensal) + ').',
+                    + 'sua receita permite enquadramento como MEI, com custo fixo mensal de '
+                    + Utils.formatarMoeda(meiMensal) + ' (vs. DAS de '
+                    + Utils.formatarMoeda(dasMensal) + '). Consulte seu contador sobre esta possibilidade.',
                 economiaAnual: economiaMensal * 12,
                 economiaMensal: economiaMensal,
                 custoImplementacao: 0,
                 retornoLiquido: economiaMensal * 12,
-                dificuldade: 'media',
+                dificuldade: 'informativo',
                 tempoImplementacao: '1-2 meses',
                 categoria: 'mei',
-                acao: 'Migrar para MEI no Portal do Empreendedor',
+                acao: 'Consulte seu contador sobre a possibilidade de enquadramento como MEI',
                 passoAPasso: [
                     '1. Verificar se o CNAE permite enquadramento como MEI (consultar Portal do Empreendedor)',
-                    '2. Solicitar desenquadramento do Simples Nacional e opção pelo MEI',
-                    '3. O DAS fixo será gerado automaticamente (~R$ 75/mês)',
-                    '4. Manter receita abaixo de R$ 81.000/ano e limite de 1 empregado'
+                    '2. Avaliar limitações do MEI: máximo 1 empregado, atividades restritas',
+                    '3. O DAS fixo do MEI em 2026 é de ' + Utils.formatarMoeda(meiMensal) + '/mês',
+                    '4. Limite de receita: R$ 81.000/ano'
                 ],
                 baseLegal: 'LC 123/2006, Art. 18-A; Resolução CGSN 140/2018, Seção V',
                 riscos: 'MEI tem limitações: máximo 1 empregado, atividades restritas, contribuição ao INSS '
@@ -2750,7 +3062,7 @@
             var proLabore = d.proLabore || 0;
             if (proLabore <= 0) return null;
 
-            var salarioMinimo2026 = 1518; // Estimativa 2026
+            var salarioMinimo2026 = SALARIO_MINIMO_2026;
             if (proLabore <= salarioMinimo2026 * 1.1) return null; // Já está otimizado
 
             var dist = resultado.distribuicaoLucros;
@@ -2975,24 +3287,24 @@
                 id: 'incentivos_regionais',
                 titulo: 'Incentivos regionais disponíveis (' + tipo + ')',
                 descricao: 'O estado ' + (estadoAtual.nome || d.uf) + ' está na área de atuação da ' + tipo
-                    + '. Empresas no Lucro Real podem obter redução de até 75% no IRPJ. '
-                    + 'Avalie na aba de Comparação de Regimes se essa opção é mais vantajosa.',
+                    + '. Empresas em outros regimes tributários podem obter redução de até 75% no IRPJ. '
+                    + 'Consulte seu contador para avaliar se essa possibilidade se aplica ao seu caso.',
                 economiaAnual: 0,
                 economiaMensal: 0,
                 dificuldade: 'dificil',
                 tempoImplementacao: '3-6 meses',
                 categoria: 'incentivos',
-                tipo: 'remeter_comparacao',
-                acao: 'Comparar Simples Nacional vs Lucro Real com incentivo ' + tipo,
+                tipo: 'informativo',
+                acao: 'Consultar contador sobre incentivos regionais ' + tipo,
                 passoAPasso: [
-                    '1. Acesse a aba "Comparação de Regimes" neste sistema',
-                    '2. Simule o Lucro Real com incentivo regional',
-                    '3. Compare o custo tributário total (Simples vs Lucro Real com 75% de redução do IRPJ)',
-                    '4. Se vantajoso, consulte o procedimento de habilitação junto à ' + tipo
+                    '1. Verificar se a atividade da empresa se enquadra nos setores incentivados pela ' + tipo,
+                    '2. Consultar contador sobre a viabilidade e requisitos de habilitação',
+                    '3. Avaliar o custo-benefício considerando obrigações acessórias adicionais',
+                    '4. Se vantajoso, iniciar procedimento de habilitação junto à ' + tipo
                 ],
                 baseLegal: inc.baseLegal || 'Lei 12.715/2012, Art. 1°; MP 2.199-14/2001',
-                riscos: 'O Lucro Real exige contabilidade completa, obrigações acessórias mais pesadas (SPED, EFD). '
-                    + 'A habilitação ao incentivo tem requisitos burocráticos.'
+                riscos: 'Incentivos regionais normalmente se aplicam a empresas no Lucro Real, que exige '
+                    + 'contabilidade completa e obrigações acessórias mais pesadas (SPED, EFD).'
             };
         }
 
@@ -3167,23 +3479,45 @@
         var _ultimoScore = null;
 
         /**
-         * Pesos das categorias do score (somam 100)
+         * Pesos das categorias do score (somam 100).
+         * Conforme especificação:
+         *   fatorR: 0-25, segregacao: 0-25, iss: 0-15, proLabore: 0-20, semRiscos: 0-15
          */
         var PESOS = {
             fatorR: 25,
-            segregacao: 20,
+            segregacao: 25,
             iss: 15,
-            proLabore: 15,
-            semRiscos: 15,
-            obrigacoesEmDia: 10
+            proLabore: 20,
+            semRiscos: 15
         };
 
         /**
-         * Calcula o score de saúde tributária.
+         * Faixas do score:
+         *   80-100: Otimizado (verde)
+         *   60-79:  Bom (azul)
+         *   40-59:  Regular (amarelo)
+         *   0-39:   Crítico (vermelho)
+         */
+        var FAIXAS = [
+            { min: 80, max: 100, nome: 'OTIMIZADO', cor: '#10B981', icone: '🏆',
+              descricao: 'Aproveitando todas (ou quase todas) as oportunidades legais de economia.' },
+            { min: 60, max: 79, nome: 'BOM', cor: '#3B82F6', icone: '🟢',
+              descricao: 'Empresa bem otimizada. Pequenos ajustes podem trazer ganhos adicionais.' },
+            { min: 40, max: 59, nome: 'REGULAR', cor: '#EAB308', icone: '🟡',
+              descricao: 'Algumas otimizações importantes não estão sendo aproveitadas.' },
+            { min: 0, max: 39, nome: 'CRÍTICO', cor: '#DC2626', icone: '🔴',
+              descricao: 'Está pagando muito mais do que deveria. Há economias significativas a serem aproveitadas.' }
+        ];
+
+        /**
+         * Calcula o score de saúde tributária com dados reais.
+         * Cada categoria usa lógica específica baseada em dados do IMPOST.
          *
          * @param {Object} [diagnosticoResult] — resultado do Diagnostico.executar (opcional)
          * @param {Object} [calculoResult] — resultado do Calculadora.calcularTudo (opcional)
          * @returns {Object} Score detalhado
+         *
+         * Base legal: LC 123/2006; Resolução CGSN nº 140/2018
          */
         function calcular(diagnosticoResult, calculoResult) {
             var diag = diagnosticoResult || Diagnostico.getUltimoDiagnostico();
@@ -3197,152 +3531,179 @@
             var categorias = {};
             var oportunidades = diag.oportunidades || [];
             var alertas = diag.alertas || [];
+            var rbt12 = d.receitaBrutaAnual || (d.receitaBrutaMensal * 12);
+            var folha12 = d.folhaAnual || (d.folhaMensal * 12);
 
-            // ── Fator R (25 pontos) ──
+            // ══════════════════════════════════════════
+            // FATOR R (0-25 pontos)
+            // Se Fator R ≥ 28% → 25 pts
+            // Se entre 20%-28% → proporcional
+            // Se < 20% → 0 pts
+            // Se CNAE não depende do Fator R → 25 pts (N/A)
+            // ══════════════════════════════════════════
             var scoreFatorR = PESOS.fatorR;
+            var motivoFR = 'N/A — CNAE não depende do Fator R';
             var regrasCnae = _CnaeMapeamento && _CnaeMapeamento.obterRegrasCNAE
                 ? _CnaeMapeamento.obterRegrasCNAE(d.cnae, '') : null;
-            var motivoFR = 'N/A — CNAE não depende do Fator R';
+            // Fallback: checar via resultado do IMPOST.determinarAnexo
+            var cnaeUsaFatorR = (regrasCnae && regrasCnae.fatorR)
+                || (calc.anexo && calc.anexo.motivo && calc.anexo.motivo.indexOf('Fator R') >= 0)
+                || (calc.otimizacaoFatorR && calc.otimizacaoFatorR.aplicavel);
 
-            if (regrasCnae && regrasCnae.fatorR) {
-                var fr = calc.fatorR ? calc.fatorR.valor : 0;
-                var otim = calc.otimizacaoFatorR || {};
-                if (otim.jaOtimizado || fr >= 0.28) {
-                    scoreFatorR = PESOS.fatorR;
-                    motivoFR = 'Fator R otimizado — já tributa pelo Anexo III';
-                } else if (otim.valeAPena) {
-                    // Penalizar proporcionalmente à economia não aproveitada
-                    var retornoLiq = otim.economiaLiquida || 0;
-                    var dasAnual = calc.anual ? calc.anual.dasAnual : 1;
-                    var proporcao = dasAnual > 0 ? Math.min(1, retornoLiq / (dasAnual * 0.15)) : 0;
-                    scoreFatorR = Math.round(PESOS.fatorR * (1 - proporcao * 0.8));
-                    motivoFR = 'Migração V→III viável mas não implementada — perdendo '
-                        + Utils.formatarMoeda(retornoLiq) + '/ano';
+            if (cnaeUsaFatorR) {
+                var fr = calc.fatorR ? calc.fatorR.valor : (rbt12 > 0 ? folha12 / rbt12 : 0);
+                if (fr >= 0.28) {
+                    scoreFatorR = PESOS.fatorR; // 25 pts
+                    motivoFR = 'Fator R = ' + Utils.formatarPercentual(fr) + ' (≥ 28%) — Anexo III, otimizado';
+                } else if (fr >= 0.20) {
+                    // Proporcional entre 20% e 28%: de 0 a 25 pts
+                    scoreFatorR = Math.round(PESOS.fatorR * ((fr - 0.20) / 0.08));
+                    motivoFR = 'Fator R = ' + Utils.formatarPercentual(fr) + ' — entre 20% e 28%, parcialmente otimizado';
                 } else {
-                    scoreFatorR = Math.round(PESOS.fatorR * 0.7);
-                    motivoFR = 'Fator R abaixo de 28% — migração não compensa (custo > economia)';
+                    scoreFatorR = 0;
+                    motivoFR = 'Fator R = ' + Utils.formatarPercentual(fr) + ' (< 20%) — Anexo V, não otimizado';
                 }
             }
             categorias.fatorR = { pontos: scoreFatorR, maximo: PESOS.fatorR, motivo: motivoFR };
 
-            // ── Segregação correta (20 pontos) ──
+            // ══════════════════════════════════════════
+            // SEGREGAÇÃO (0-25 pontos)
+            // Se empresa tem receitas segregadas corretamente → pontos cheios
+            // Se tem receitas especiais mas não segrega → 0 pts
+            // Se não tem receitas especiais → pontos cheios (N/A)
+            // ══════════════════════════════════════════
             var scoreSegregacao = PESOS.segregacao;
             var motivoSeg = 'Nenhuma receita especial informada — segregação N/A';
             var temReceitaEspecial = (d.receitaMonofasica > 0) || (d.receitaExportacao > 0)
                 || (d.receitaICMS_ST > 0) || (d.receitaLocacaoBensMoveis > 0);
 
             if (temReceitaEspecial) {
-                // Se tem receita especial E tem otimização DAS, está segregando
                 var dasOtim = calc.dasMensal ? calc.dasMensal.comOtimizacao : null;
                 if (dasOtim && dasOtim.economia > 0) {
-                    scoreSegregacao = PESOS.segregacao;
-                    motivoSeg = 'Receitas especiais sendo segregadas — economia de '
+                    scoreSegregacao = PESOS.segregacao; // 25 pts
+                    motivoSeg = 'Receitas especiais segregadas — economia de '
                         + Utils.formatarMoeda(dasOtim.economia) + '/mês';
                 } else {
-                    // Tem receita especial mas não está segregando
                     var ecoSegAnual = 0;
                     oportunidades.forEach(function (op) {
                         if (op.categoria === 'segregacao') ecoSegAnual += (op.economiaAnual || 0);
                     });
-                    var propSeg = ecoSegAnual > 0 ? 0.2 : 0.6;
-                    scoreSegregacao = Math.round(PESOS.segregacao * propSeg);
-                    motivoSeg = ecoSegAnual > 0
-                        ? 'Receitas especiais NÃO segregadas — perdendo ' + Utils.formatarMoeda(ecoSegAnual) + '/ano'
-                        : 'Receitas especiais presentes — verificar segregação';
+                    if (ecoSegAnual > 0) {
+                        scoreSegregacao = 0;
+                        motivoSeg = 'Receitas especiais NÃO segregadas — perdendo ' + Utils.formatarMoeda(ecoSegAnual) + '/ano';
+                    } else {
+                        scoreSegregacao = Math.round(PESOS.segregacao * 0.5);
+                        motivoSeg = 'Receitas especiais presentes — verificar segregação no PGDAS-D';
+                    }
                 }
             }
             categorias.segregacao = { pontos: scoreSegregacao, maximo: PESOS.segregacao, motivo: motivoSeg };
 
-            // ── ISS aproveitado (15 pontos) ──
-            var scoreISS = PESOS.iss;
-            var motivoISS = 'ISS configurado corretamente';
+            // ══════════════════════════════════════════
+            // ISS (0-15 pontos)
+            // Se ISS ≤ 2% → 15 pts
+            // Se ISS = 5% → 0 pts
+            // Linear entre 2% e 5%
+            // ══════════════════════════════════════════
+            var scoreISS = 0;
+            var motivoISS = '';
             var issAtual = d.issAliquota || 5.00;
-            var mun = DadosMunicipio.getMunicipioAtual();
 
-            if (issAtual >= 5.00 && (!mun || !mun.iss || !mun.iss.issConhecido)) {
-                scoreISS = Math.round(PESOS.iss * 0.6);
-                motivoISS = 'ISS usando padrão 5% — verificar alíquota real do município';
+            if (issAtual <= 2.00) {
+                scoreISS = PESOS.iss; // 15 pts
+                motivoISS = 'ISS na alíquota mínima legal (2%) — otimizado';
+            } else if (issAtual >= 5.00) {
+                scoreISS = 0;
+                motivoISS = 'ISS na alíquota máxima (5%) — verificar se o município tem alíquota menor';
+            } else {
+                // Linear: 2% → 15 pts, 5% → 0 pts
+                scoreISS = Math.round(PESOS.iss * (5.00 - issAtual) / 3.00);
+                motivoISS = 'ISS em ' + issAtual.toFixed(2).replace('.', ',') + '% — há margem de otimização';
             }
+            // Bônus se ISS retido na fonte está sendo deduzido
             if (d.issRetidoFonte > 0) {
-                scoreISS = Math.min(PESOS.iss, scoreISS + 3);
-                motivoISS += '. ISS retido na fonte sendo deduzido.';
+                scoreISS = Math.min(PESOS.iss, scoreISS + 2);
+                motivoISS += '. ISS retido na fonte deduzido do DAS.';
             }
             categorias.iss = { pontos: scoreISS, maximo: PESOS.iss, motivo: motivoISS };
 
-            // ── Pró-labore otimizado (15 pontos) ──
-            var scorePL = PESOS.proLabore;
-            var motivoPL = 'Pró-labore adequado';
-            var temOpPL = oportunidades.some(function (op) { return op.id === 'prolabore_otimizar'; });
-            if (temOpPL) {
-                var opPL = oportunidades.find(function (op) { return op.id === 'prolabore_otimizar'; });
-                var ecoPL = opPL ? opPL.economiaAnual : 0;
-                scorePL = Math.round(PESOS.proLabore * 0.3);
-                motivoPL = 'Pró-labore acima do necessário — potencial economia de ' + Utils.formatarMoeda(ecoPL) + '/ano';
-            } else if (d.proLabore <= 0 && d.socios && d.socios.length > 0) {
+            // ══════════════════════════════════════════
+            // PRÓ-LABORE (0-20 pontos)
+            // Se pró-labore ≥ 28% da RBT12 → 20 pts
+            // Se < 28% → proporcional
+            // Se não informado → 10 pts (indeterminado)
+            // ══════════════════════════════════════════
+            var scorePL = 0;
+            var motivoPL = '';
+            var proLabore12 = (d.proLabore || 0) * 12;
+
+            if (d.proLabore <= 0 && d.socios && d.socios.length > 0) {
                 scorePL = Math.round(PESOS.proLabore * 0.5);
                 motivoPL = 'Pró-labore não informado — não foi possível avaliar';
+            } else if (rbt12 > 0) {
+                var ratioPL = proLabore12 / rbt12;
+                if (ratioPL >= 0.28) {
+                    scorePL = PESOS.proLabore; // 20 pts
+                    motivoPL = 'Pró-labore representa ' + Utils.formatarPercentual(ratioPL)
+                        + ' da RBT12 (≥ 28%) — otimizado para Fator R';
+                } else {
+                    // Proporcional: 0% → 0 pts, 28% → 20 pts
+                    scorePL = Math.round(PESOS.proLabore * (ratioPL / 0.28));
+                    motivoPL = 'Pró-labore representa ' + Utils.formatarPercentual(ratioPL)
+                        + ' da RBT12 (< 28%) — considerar ajuste';
+                }
+            } else {
+                scorePL = PESOS.proLabore;
+                motivoPL = 'Sem receita informada — N/A';
             }
             categorias.proLabore = { pontos: scorePL, maximo: PESOS.proLabore, motivo: motivoPL };
 
-            // ── Sem riscos/multas (15 pontos) ──
+            // ══════════════════════════════════════════
+            // SEM RISCOS (0-15 pontos)
+            // Cada risco fiscal identificado desconta pontos
+            // Débitos pendentes → 0 pts
+            // ══════════════════════════════════════════
             var scoreRiscos = PESOS.semRiscos;
             var motivoRiscos = 'Nenhum risco identificado';
             if (d.debitosFiscaisPendentes) {
                 scoreRiscos = 0;
                 motivoRiscos = 'DÉBITOS FISCAIS PENDENTES — risco de exclusão do Simples Nacional';
-            } else if (alertas.length > 0) {
-                scoreRiscos = Math.max(0, PESOS.semRiscos - (alertas.length * 5));
-                motivoRiscos = alertas.length + ' alerta(s) encontrado(s)';
+            } else {
+                // Cada alerta do diagnóstico desconta 3 pts
+                var desconto = alertas.length * 3;
+                // Flags de elegibilidade negativas descontam 5 pts cada
+                if (d.socioPessoaJuridica) desconto += 5;
+                if (d.cessaoMaoObra) desconto += 5;
+                if (d.socioDomiciliadoExterior) desconto += 5;
+                scoreRiscos = Math.max(0, PESOS.semRiscos - desconto);
+                if (desconto > 0) {
+                    motivoRiscos = alertas.length + ' alerta(s) identificado(s) (-' + desconto + ' pts)';
+                }
             }
             categorias.semRiscos = { pontos: scoreRiscos, maximo: PESOS.semRiscos, motivo: motivoRiscos };
 
-            // ── Obrigações em dia (10 pontos) ──
-            var scoreObrig = PESOS.obrigacoesEmDia;
-            var motivoObrig = 'Sem pendências identificadas';
-            if (d.debitosFiscaisPendentes) {
-                scoreObrig = 0;
-                motivoObrig = 'Débitos pendentes — obrigações em atraso';
-            }
-            categorias.obrigacoesEmDia = { pontos: scoreObrig, maximo: PESOS.obrigacoesEmDia, motivo: motivoObrig };
-
-            // ── Score total ──
+            // ══════════════════════════════════════════
+            // SCORE TOTAL
+            // ══════════════════════════════════════════
             var total = 0;
             Object.keys(categorias).forEach(function (cat) { total += categorias[cat].pontos; });
             total = Math.max(0, Math.min(100, total));
 
             // Determinar faixa
-            var faixa, corFaixa, iconeFaixa;
-            if (total <= 30) {
-                faixa = 'CRÍTICO'; corFaixa = '#DC2626'; iconeFaixa = '🔴';
-            } else if (total <= 50) {
-                faixa = 'ATENÇÃO'; corFaixa = '#F97316'; iconeFaixa = '🟠';
-            } else if (total <= 70) {
-                faixa = 'REGULAR'; corFaixa = '#EAB308'; iconeFaixa = '🟡';
-            } else if (total <= 85) {
-                faixa = 'BOM'; corFaixa = '#22C55E'; iconeFaixa = '🟢';
-            } else {
-                faixa = 'EXCELENTE'; corFaixa = '#10B981'; iconeFaixa = '🏆';
-            }
-
-            var descricaoFaixa;
-            if (total <= 30) {
-                descricaoFaixa = 'Está pagando muito mais do que deveria. Há economias significativas a serem aproveitadas.';
-            } else if (total <= 50) {
-                descricaoFaixa = 'Há economias significativas não aproveitadas. Ação imediata recomendada.';
-            } else if (total <= 70) {
-                descricaoFaixa = 'Algumas otimizações ainda são possíveis para reduzir a carga tributária.';
-            } else if (total <= 85) {
-                descricaoFaixa = 'Empresa razoavelmente otimizada. Pequenos ajustes podem trazer ganhos adicionais.';
-            } else {
-                descricaoFaixa = 'Aproveitando todas (ou quase todas) as oportunidades legais de economia.';
+            var faixaInfo = FAIXAS[FAIXAS.length - 1]; // Default: CRÍTICO
+            for (var fi = 0; fi < FAIXAS.length; fi++) {
+                if (total >= FAIXAS[fi].min && total <= FAIXAS[fi].max) {
+                    faixaInfo = FAIXAS[fi];
+                    break;
+                }
             }
 
             _ultimoScore = {
                 total: total,
-                faixa: faixa,
-                corFaixa: corFaixa,
-                iconeFaixa: iconeFaixa,
-                descricaoFaixa: descricaoFaixa,
+                faixa: faixaInfo.nome,
+                corFaixa: faixaInfo.cor,
+                iconeFaixa: faixaInfo.icone,
+                descricaoFaixa: faixaInfo.descricao,
                 categorias: categorias,
                 economiaPotencialAnual: diag.economiaTotal ? diag.economiaTotal.anual : 0,
                 economiaPotencialAnualFormatada: diag.economiaTotal ? diag.economiaTotal.anualFormatada : 'R$ 0,00',
@@ -3374,7 +3735,8 @@
             calcular: calcular,
             getDetalhamento: getDetalhamento,
             getUltimoScore: getUltimoScore,
-            PESOS: PESOS
+            PESOS: PESOS,
+            FAIXAS: FAIXAS
         };
     })();
 
@@ -3389,20 +3751,6 @@
 
         /** @type {Array} Histórico de simulações */
         var _historico = [];
-
-        /**
-         * Helper seguro: chama uma função do IMPOST com try/catch.
-         * @private
-         */
-        function _chamarIMPOST(nome, params) {
-            if (!_IMPOST || typeof _IMPOST[nome] !== 'function') return null;
-            try {
-                return _IMPOST[nome](params);
-            } catch (e) {
-                console.warn('[SimplesEstudoCompleto.Simulador] Erro ao chamar IMPOST.' + nome + ':', e.message);
-                return null;
-            }
-        }
 
         /**
          * Calcula cenário base (situação atual) para comparação.
@@ -3518,7 +3866,12 @@
 
             var novoDASValor = novoDAS ? (novoDAS.dasAPagar || novoDAS.dasValor || 0) : base.dasMensal;
             var diferencaMensal = base.dasMensal - novoDASValor;
-            var custoAdicionalFolha = (novaFolha - base.folhaMensal) * 0.11; // INSS sobre o delta
+            var delta = novaFolha - base.folhaMensal;
+            var custoINSSSegurado = delta * 0.11;
+            var custoFGTS = delta * 0.08; // FGTS sobre funcionários CLT
+            var isAnexoIV = (novoAnexo === 'IV');
+            var custoPatronal = isAnexoIV ? (delta * 0.20) : 0; // CPP fora do DAS no Anexo IV
+            var custoAdicionalFolha = custoINSSSegurado + custoFGTS + custoPatronal;
             var economieLiquidaMensal = diferencaMensal - custoAdicionalFolha;
 
             return {
@@ -3718,8 +4071,11 @@
 
             var novoDASValor = novoDAS ? (novoDAS.dasAPagar || novoDAS.dasValor || 0) : base.dasMensal;
             var diferencaDAS = base.dasMensal - novoDASValor;
-            var diferencaINSS = delta * 0.11; // INSS segurado sobre o delta
-            var economieLiquida = diferencaDAS - diferencaINSS;
+            var diferencaINSS = delta * 0.11; // INSS segurado sobre pró-labore
+            var isAnexoIV = (novoAnexo === 'IV');
+            var custoPatronalPL = isAnexoIV ? (delta * 0.20) : 0; // CPP fora do DAS para Anexo IV
+            var diferencaEncargos = diferencaINSS + custoPatronalPL;
+            var economieLiquida = diferencaDAS - diferencaEncargos;
 
             // Lucro distribuível
             var novoLucro = _chamarIMPOST('calcularDistribuicaoLucros', {
@@ -3838,46 +4194,624 @@
         var _nextId = 1;
 
         /**
-         * Gera plano de ação a partir do diagnóstico.
-         *
-         * @param {Object} [diagnosticoResult] — resultado do Diagnostico.executar (opcional)
-         * @returns {Object} Plano de ação completo
+         * Helper: calcula DAS mensal para cenário arbitrário.
+         * @private
          */
-        function gerar(diagnosticoResult) {
-            var diag = diagnosticoResult || Diagnostico.getUltimoDiagnostico();
-            if (!diag) {
-                diag = Diagnostico.executar();
-            }
-
-            var acoes = [];
-
-            // Converter oportunidades em ações
-            (diag.oportunidades || []).forEach(function (op) {
-                acoes.push(_criarAcao(op, 'oportunidade'));
+        function _calcDAS(receitaMensal, rbt12, anexo, folhaMensal) {
+            var das = _chamarIMPOST('calcularDASMensal', {
+                receitaBrutaMensal: receitaMensal,
+                rbt12: rbt12,
+                anexo: anexo,
+                folhaMensal: folhaMensal || 0,
+                issRetidoFonte: 0,
+                aliquotaRAT: 0.02
             });
+            return das ? (das.dasAPagar || das.dasValor || 0) : 0;
+        }
 
-            // Converter alertas urgentes em ações
-            (diag.alertas || []).forEach(function (al) {
-                acoes.push(_criarAcao(al, 'alerta'));
-            });
+        /**
+         * Helper: determina se CNAE é de serviço ou comércio.
+         * @private
+         */
+        function _ehServico(cnae) {
+            if (!cnae) return true;
+            var grupo = parseInt(String(cnae).replace(/\D/g, '').substring(0, 2));
+            // Grupos 01-43 são geralmente comércio/indústria; 44+ serviços
+            // Mas simplificando: se começa com 47 (comércio varejista) → comércio
+            return grupo >= 60; // Heurística: 60+ tende a ser serviço
+        }
 
-            // Converter informativos acionáveis em ações
-            (diag.informativos || []).forEach(function (info) {
-                if (info.tipo === 'investigar' || info.tipo === 'remeter_comparacao') {
-                    acoes.push(_criarAcao(info, 'investigar'));
+        // ──────────────────────────────────────────
+        //  AÇÕES DE OTIMIZAÇÃO CONCRETAS
+        // ──────────────────────────────────────────
+
+        /**
+         * Ação 1: Otimização do Fator R — calcular pró-labore ideal para atingir 28%
+         * @private
+         */
+        function _acaoFatorROtimizacao(resultado, d) {
+            var fr = resultado.fatorR;
+            if (!fr || fr.valor == null || fr.acimaDoLimiar) return null;
+
+            var regrasCnae = _CnaeMapeamento && _CnaeMapeamento.obterRegrasCNAE
+                ? _CnaeMapeamento.obterRegrasCNAE(d.cnae, '') : null;
+            if (!regrasCnae || !regrasCnae.fatorR) return null;
+
+            var rbt12 = d.receitaBrutaAnual || (d.receitaBrutaMensal * 12);
+            var folha12Atual = d.folhaAnual || (d.folhaMensal * 12);
+            var folha12Necessaria = rbt12 * 0.28;
+            var aumentoAnual = Math.max(0, folha12Necessaria - folha12Atual);
+            var aumentoMensal = aumentoAnual / 12;
+            var novaFolhaMensal = (d.folhaMensal || 0) + aumentoMensal;
+
+            // DAS atual (Anexo V) vs DAS novo (Anexo III)
+            var dasAtualMensal = _calcDAS(d.receitaBrutaMensal, rbt12, 'V', d.folhaMensal);
+            var dasNovoMensal = _calcDAS(d.receitaBrutaMensal, rbt12, 'III', novaFolhaMensal);
+            var economiaDASAnual = (dasAtualMensal - dasNovoMensal) * 12;
+
+            // Custo: INSS sócio 11% sobre aumento + encargos
+            var custoINSSSocio = aumentoMensal * 0.11 * 12;
+            var anexoAtual = resultado.anexo ? resultado.anexo.anexo : 'V';
+            var custoPatronal = (anexoAtual === 'IV') ? (aumentoMensal * 0.20 * 12) : 0;
+            var custoTotal = custoINSSSocio + custoPatronal;
+            var economiaLiquida = economiaDASAnual - custoTotal;
+
+            if (economiaLiquida <= 0) return null;
+
+            var proLaboreIdeal = (d.proLabore || 0) + aumentoMensal;
+
+            return {
+                id: 'fator_r_otimizacao',
+                titulo: 'Otimizar Fator R para migrar ao Anexo III',
+                descricao: 'Aumentar pró-labore de ' + Utils.formatarMoeda(d.proLabore || 0)
+                    + ' para ' + Utils.formatarMoeda(proLaboreIdeal) + '/mês para atingir 28% do RBT12',
+                economiaAnual: economiaDASAnual,
+                economiaPercentual: dasAtualMensal > 0
+                    ? ((economiaDASAnual / (dasAtualMensal * 12)) * 100).toFixed(1).replace('.', ',') + '%' : '0%',
+                prazo: '1 mês',
+                dificuldade: 'baixa',
+                baseLegal: 'Art. 18, §5º-M, LC 123/2006; Resolução CGSN 140/2018, Art. 25-A',
+                comoFazer: 'Aumentar o pró-labore registrado em folha de '
+                    + Utils.formatarMoeda(d.proLabore || 0) + ' para ' + Utils.formatarMoeda(proLaboreIdeal)
+                    + '/mês. Atenção: aumenta INSS do sócio em ' + Utils.formatarMoeda(aumentoMensal * 0.11) + '/mês.',
+                riscos: ['Aumento de INSS patronal sobre pró-labore adicional de '
+                    + Utils.formatarMoeda(custoINSSSocio / 12) + '/mês',
+                    'Se receita crescer, o Fator R pode cair abaixo de 28%'
+                ],
+                economiaLiquida: economiaLiquida,
+                custoImplementacao: custoTotal,
+                detalhes: {
+                    proLaboreAtual: d.proLabore || 0,
+                    proLaboreIdeal: proLaboreIdeal,
+                    fatorRAtual: fr.valor,
+                    fatorRNovo: 0.28,
+                    anexoAtual: anexoAtual,
+                    anexoNovo: 'III',
+                    dasAtualMensal: dasAtualMensal,
+                    dasNovoMensal: dasNovoMensal
+                }
+            };
+        }
+
+        /**
+         * Ação 2: Segregação de Receitas mistas — calcular DAS separado por CNAE
+         * @private
+         */
+        function _acaoSegregacaoReceitas(resultado, d) {
+            var ativSecundarias = d.atividadeSecundaria || d.cnaeSecundarios || [];
+            if (ativSecundarias.length === 0) return null;
+
+            var rbt12 = d.receitaBrutaAnual || (d.receitaBrutaMensal * 12);
+            var anexoPrincipal = resultado.anexo ? resultado.anexo.anexo : 'III';
+
+            // Calcular DAS se 100% no anexo principal
+            var dasTudoJuntoMensal = _calcDAS(d.receitaBrutaMensal, rbt12, anexoPrincipal, d.folhaMensal);
+
+            // Verificar se alguma atividade secundária cai em anexo mais barato
+            var economiaEstimada = 0;
+            var receitasSegregaveis = [];
+
+            ativSecundarias.forEach(function (ativ) {
+                var cnaeSecundario = ativ.cnae || ativ;
+                var receitaSecundaria = ativ.receita || (d.receitaBrutaMensal * 0.2); // Estimar 20% se não informado
+
+                var detAnexo = _chamarIMPOST('determinarAnexo', {
+                    cnae: cnaeSecundario,
+                    fatorR: resultado.fatorR ? resultado.fatorR.valor : 0
+                });
+                var anexoSec = detAnexo ? detAnexo.anexo : anexoPrincipal;
+
+                if (anexoSec !== anexoPrincipal && anexoSec !== 'VEDADO') {
+                    var dasSec = _calcDAS(receitaSecundaria, rbt12, anexoSec, 0);
+                    var dasPrincipalProporcional = _calcDAS(receitaSecundaria, rbt12, anexoPrincipal, 0);
+                    var eco = dasPrincipalProporcional - dasSec;
+                    if (eco > 0) {
+                        economiaEstimada += eco;
+                        receitasSegregaveis.push({
+                            cnae: cnaeSecundario,
+                            anexo: anexoSec,
+                            receita: receitaSecundaria,
+                            economia: eco
+                        });
+                    }
                 }
             });
 
-            // Ordenar por prioridade
-            acoes.sort(function (a, b) {
-                var prioMap = { urgente: 0, alta: 1, media: 2, baixa: 3 };
-                return (prioMap[a.prioridadeNivel] || 3) - (prioMap[b.prioridadeNivel] || 3);
+            if (economiaEstimada <= 0) return null;
+
+            return {
+                id: 'segregacao_receitas',
+                titulo: 'Segregar receitas por CNAE (atividades mistas)',
+                descricao: 'Separar faturamento por atividade no PGDAS-D para tributar cada receita no anexo correto. '
+                    + receitasSegregaveis.length + ' atividade(s) em anexo(s) diferente(s) do principal.',
+                economiaAnual: economiaEstimada * 12,
+                economiaPercentual: dasTudoJuntoMensal > 0
+                    ? ((economiaEstimada / dasTudoJuntoMensal) * 100).toFixed(1).replace('.', ',') + '%' : '0%',
+                prazo: 'Próximo PGDAS-D',
+                dificuldade: 'media',
+                baseLegal: 'Resolução CGSN 140/2018, Art. 25, §1º a §3º; LC 123/2006, Art. 18',
+                comoFazer: 'No PGDAS-D, informar cada parcela de receita com o CNAE e anexo correspondentes. '
+                    + 'Receitas segregáveis: ' + receitasSegregaveis.map(function (r) {
+                        return Utils.formatarCNAE(r.cnae) + ' (Anexo ' + r.anexo + ')';
+                    }).join(', '),
+                riscos: ['Segregação incorreta pode gerar autuação',
+                    'Cada receita deve corresponder à atividade efetivamente exercida'],
+                economiaLiquida: economiaEstimada * 12,
+                custoImplementacao: 0,
+                detalhes: { receitasSegregaveis: receitasSegregaveis }
+            };
+        }
+
+        /**
+         * Ação 3: Distribuição de Lucros isenta de IR
+         * @private
+         */
+        function _acaoDistribuicaoLucros(resultado, d) {
+            var rbt12 = d.receitaBrutaAnual || (d.receitaBrutaMensal * 12);
+            var dasAnual = resultado.anual ? resultado.anual.dasAnual : 0;
+
+            // Percentual de presunção conforme Art. 14 LC 123
+            var percPresuncao = _ehServico(d.cnae) ? 0.32 : 0.08;
+            var lucroPresumido = rbt12 * percPresuncao;
+            var lucroDistribuivelIsento = lucroPresumido - dasAnual;
+            if (lucroDistribuivelIsento <= 0) lucroDistribuivelIsento = 0;
+
+            // Se tem escrituração contábil, pode distribuir mais
+            var lucroContabil = rbt12 * 0.20; // Margem estimada de 20%
+            var lucroMaiorContabil = Math.max(lucroDistribuivelIsento, lucroContabil);
+
+            var socios = d.socios || [{ nome: 'Sócio Único', percentual: 1.0 }];
+            var numSocios = socios.length;
+            var proLaboreTotal = (d.proLabore || 0) * numSocios * 12;
+
+            // Economia: diferença entre tributar como pró-labore vs distribuir como lucro isento
+            var inssEconomiaPotencial = 0;
+            if ((d.proLabore || 0) > SALARIO_MINIMO_2026 && lucroDistribuivelIsento > 0) {
+                var reducaoPL = Math.min((d.proLabore || 0) - SALARIO_MINIMO_2026, lucroDistribuivelIsento / 12 / numSocios);
+                inssEconomiaPotencial = reducaoPL * 0.11 * numSocios * 12; // INSS segurado evitado
+            }
+
+            if (lucroDistribuivelIsento <= 0 && inssEconomiaPotencial <= 0) return null;
+
+            return {
+                id: 'distribuicao_lucros',
+                titulo: 'Distribuir lucros isentos de IR (Art. 14, LC 123/2006)',
+                descricao: 'Os sócios podem retirar até ' + Utils.formatarMoeda(lucroDistribuivelIsento)
+                    + '/ano como lucro isento de IR (presunção ' + (percPresuncao * 100).toFixed(0) + '%). '
+                    + 'Com escrituração contábil, o valor pode ser maior.',
+                economiaAnual: inssEconomiaPotencial,
+                economiaPercentual: proLaboreTotal > 0
+                    ? ((inssEconomiaPotencial / proLaboreTotal) * 100).toFixed(1).replace('.', ',') + '%' : '0%',
+                prazo: '1 mês',
+                dificuldade: 'baixa',
+                baseLegal: 'Art. 10, Lei 9.249/95; Art. 14, LC 123/2006; ADI SRF nº 04/2007',
+                comoFazer: 'Manter pró-labore no mínimo legal (1 SM = ' + Utils.formatarMoeda(SALARIO_MINIMO_2026)
+                    + ') e distribuir o restante como lucro isento. Por sócio: até '
+                    + Utils.formatarMoeda(lucroDistribuivelIsento / numSocios) + '/ano.',
+                riscos: ['RFB pode questionar pró-labore incompatível com atividade exercida',
+                    'Distribuição acima do lucro apurado é tributável'],
+                economiaLiquida: inssEconomiaPotencial,
+                custoImplementacao: 0,
+                detalhes: {
+                    lucroDistribuivelIsento: lucroDistribuivelIsento,
+                    percPresuncao: percPresuncao,
+                    porSocio: socios.map(function (s) {
+                        return {
+                            nome: s.nome || 'Sócio',
+                            percentual: s.percentual || (1 / numSocios),
+                            valorIsento: lucroDistribuivelIsento * (s.percentual || (1 / numSocios))
+                        };
+                    })
+                }
+            };
+        }
+
+        /**
+         * Ação 4: Redução de ISS — verificar alíquota mínima do município
+         * @private
+         */
+        function _acaoReducaoISS(resultado, d) {
+            var issAtual = d.issAliquota || 5.00;
+            if (issAtual <= 2) return null;
+
+            var rbt12 = d.receitaBrutaAnual || (d.receitaBrutaMensal * 12);
+            var aliqEf = resultado.aliquotaEfetiva ? resultado.aliquotaEfetiva.valor : 0;
+            var faixa = resultado.aliquotaEfetiva ? resultado.aliquotaEfetiva.faixa : 1;
+            var anexo = resultado.anexo ? resultado.anexo.anexo : 'III';
+
+            // Apenas para serviços
+            if (anexo === 'I' || anexo === 'II') return null;
+
+            // Usar partilha real
+            var partReal = null;
+            if (_IMPOST && _IMPOST.PARTILHA && _IMPOST.PARTILHA[anexo]) {
+                var faixaIdx = Math.max(0, (faixa || 1) - 1);
+                var partArr = _IMPOST.PARTILHA[anexo];
+                if (faixaIdx < partArr.length) partReal = partArr[faixaIdx];
+            }
+            var percISS = partReal ? (partReal.iss || 0) : 0.15;
+
+            // Economia se ISS caísse para 2% (mínimo legal)
+            var issNoDASTaxa = aliqEf * percISS;
+            // A economia real no DAS depende da redução proporcional dentro da partilha
+            // Estimativa conservadora: se município cobrar menos, a parcela ISS no DAS não muda
+            // Mas se ISS é retido na fonte a 2% ao invés de 5%, economia na retenção
+            var economiaMensal = d.receitaBrutaMensal * (issNoDASTaxa) * ((issAtual - 2) / issAtual);
+
+            if (economiaMensal <= 0) return null;
+
+            return {
+                id: 'reducao_iss',
+                titulo: 'Verificar alíquota de ISS municipal (potencial redução)',
+                descricao: 'Alíquota atual: ' + issAtual.toFixed(2).replace('.', ',') + '%. '
+                    + 'Mínimo legal: 2% (LC 116/2003, Art. 8-A). '
+                    + 'Verificar se o município oferece alíquota incentivada.',
+                economiaAnual: economiaMensal * 12,
+                economiaPercentual: '0%',
+                prazo: '1-2 meses',
+                dificuldade: 'media',
+                baseLegal: 'LC 116/2003, Art. 8-A (mínimo 2%); Art. 8, II (máximo 5%)',
+                comoFazer: 'Consultar a legislação tributária municipal no site da prefeitura. '
+                    + 'Verificar se há programa de incentivo, isenção para startups ou alíquota reduzida '
+                    + 'para o código de serviço do CNAE.',
+                riscos: ['Nem todos os municípios oferecem redução',
+                    'Incentivos podem ter contrapartidas (empregos, investimento mínimo)'],
+                economiaLiquida: economiaMensal * 12,
+                custoImplementacao: 0,
+                detalhes: {
+                    issAtual: issAtual,
+                    issMinimo: 2,
+                    percISSNoDAS: percISS
+                }
+            };
+        }
+
+        /**
+         * Ação 5: Sublimite ICMS — avaliar regime normal se RBT12 entre 3,6M e 4,8M
+         * @private
+         */
+        function _acaoSublimiteICMS(resultado, d) {
+            var rbt12 = d.receitaBrutaAnual || (d.receitaBrutaMensal * 12);
+            if (rbt12 <= 3600000 || rbt12 > 4800000) return null;
+
+            var estadoAtual = DadosEstado.getEstadoAtual();
+            var icmsNormal = estadoAtual && estadoAtual.icms ? (estadoAtual.icms.padrao || 0.18) : 0.18;
+            var aliqEf = resultado.aliquotaEfetiva ? resultado.aliquotaEfetiva.valor : 0;
+            var faixa = resultado.aliquotaEfetiva ? resultado.aliquotaEfetiva.faixa : 1;
+            var anexo = resultado.anexo ? resultado.anexo.anexo : 'I';
+
+            var partReal = null;
+            if (_IMPOST && _IMPOST.PARTILHA && _IMPOST.PARTILHA[anexo]) {
+                var faixaIdx = Math.max(0, (faixa || 1) - 1);
+                var partArr = _IMPOST.PARTILHA[anexo];
+                if (faixaIdx < partArr.length) partReal = partArr[faixaIdx];
+            }
+            var percICMS = partReal ? (partReal.icms || 0) : 0.335;
+
+            // Custo ICMS dentro do DAS
+            var icmsNoDASMensal = d.receitaBrutaMensal * aliqEf * percICMS;
+            // Custo ICMS regime normal (estimativa: alíquota estadual × valor agregado 40%)
+            var icmsRegimeNormalMensal = d.receitaBrutaMensal * icmsNormal * 0.40;
+
+            var diferencaMensal = icmsRegimeNormalMensal - icmsNoDASMensal;
+
+            return {
+                id: 'sublimite_icms',
+                titulo: 'Sublimite ICMS — Avaliar impacto do regime normal',
+                descricao: 'RBT12 de ' + Utils.formatarMoeda(rbt12) + ' excede o sublimite de R$ 3,6M. '
+                    + 'ICMS e ISS serão recolhidos POR FORA do DAS. '
+                    + 'Custo adicional estimado: ' + Utils.formatarMoeda(Math.abs(diferencaMensal)) + '/mês.',
+                economiaAnual: 0,
+                economiaPercentual: '0%',
+                prazo: 'Automático',
+                dificuldade: 'alta',
+                baseLegal: 'LC 123/2006, Art. 19; Resolução CGSN 140/2018, Art. 9º a 12',
+                comoFazer: 'Calcular ICMS nas regras normais do estado e comparar com a parcela que sairia do DAS. '
+                    + 'Verificar créditos de ICMS disponíveis. '
+                    + 'Avaliar se vale migrar para Lucro Presumido.',
+                riscos: ['Custo total pode ser significativamente maior',
+                    'Obrigações acessórias adicionais (SPED, EFD)',
+                    'Necessidade de apuração mensal de ICMS fora do Simples'],
+                economiaLiquida: 0,
+                custoImplementacao: Math.abs(diferencaMensal) * 12,
+                detalhes: {
+                    rbt12: rbt12,
+                    icmsNoDAS: icmsNoDASMensal,
+                    icmsRegimeNormal: icmsRegimeNormalMensal,
+                    aliquotaICMSEstadual: icmsNormal
+                }
+            };
+        }
+
+        /**
+         * Ação 6: Monofásico — verificar e calcular exclusão do DAS
+         * @private
+         */
+        function _acaoMonofasico(resultado, d) {
+            var receitaMono = d.receitaMonofasica || 0;
+            if (receitaMono <= 0) {
+                // Se não informado, alertar sobre possibilidade
+                var anexo = resultado.anexo ? resultado.anexo.anexo : 'III';
+                if (anexo !== 'I') return null; // Monofásico é principalmente comércio
+
+                return {
+                    id: 'monofasico_verificar',
+                    titulo: 'Verificar produtos monofásicos (PIS/COFINS zerados no DAS)',
+                    descricao: 'Se a empresa revende produtos de tributação monofásica '
+                        + '(farmácia, combustíveis, autopeças, bebidas, cosméticos), '
+                        + 'PIS e COFINS devem ser ZERADOS no PGDAS-D.',
+                    economiaAnual: 0,
+                    economiaPercentual: '0%',
+                    prazo: 'Próximo PGDAS-D',
+                    dificuldade: 'baixa',
+                    baseLegal: 'Lei 10.147/2000; Lei 10.865/2004; Resolução CGSN 140/2018, Art. 25-A',
+                    comoFazer: 'Levantar NCMs dos produtos vendidos e verificar se estão na lista de tributação monofásica. '
+                        + 'Se sim, segregar no PGDAS-D como "Revenda de mercadorias sujeitas à tributação monofásica".',
+                    riscos: ['Classificação incorreta pode gerar diferença de tributo'],
+                    economiaLiquida: 0,
+                    custoImplementacao: 0,
+                    detalhes: {}
+                };
+            }
+
+            // Calcular economia com dados reais
+            var rbt12 = d.receitaBrutaAnual || (d.receitaBrutaMensal * 12);
+            var anexo = resultado.anexo ? resultado.anexo.anexo : 'I';
+            var aliqEf = resultado.aliquotaEfetiva ? resultado.aliquotaEfetiva.valor : 0;
+            var faixa = resultado.aliquotaEfetiva ? resultado.aliquotaEfetiva.faixa : 1;
+
+            var partReal = null;
+            if (_IMPOST && _IMPOST.PARTILHA && _IMPOST.PARTILHA[anexo]) {
+                var faixaIdx = Math.max(0, (faixa || 1) - 1);
+                var partArr = _IMPOST.PARTILHA[anexo];
+                if (faixaIdx < partArr.length) partReal = partArr[faixaIdx];
+            }
+
+            var economiaMensal = 0;
+            if (partReal && aliqEf > 0) {
+                var percPISCOFINS = (partReal.pis || 0) + (partReal.cofins || 0);
+                economiaMensal = receitaMono * aliqEf * percPISCOFINS;
+            } else {
+                economiaMensal = receitaMono * 0.0365;
+            }
+
+            if (economiaMensal <= 0) return null;
+
+            return {
+                id: 'monofasico_segregacao',
+                titulo: 'Segregar receita monofásica — economia de PIS/COFINS no DAS',
+                descricao: 'Receita monofásica de ' + Utils.formatarMoeda(receitaMono) + '/mês '
+                    + 'gera economia de ' + Utils.formatarMoeda(economiaMensal) + '/mês ao zerar PIS/COFINS no PGDAS-D.',
+                economiaAnual: economiaMensal * 12,
+                economiaPercentual: (d.receitaBrutaMensal > 0)
+                    ? ((economiaMensal / d.receitaBrutaMensal) * 100).toFixed(1).replace('.', ',') + '%' : '0%',
+                prazo: 'Próximo PGDAS-D',
+                dificuldade: 'baixa',
+                baseLegal: 'Lei 10.147/2000; Lei 10.865/2004; Resolução CGSN 140/2018, Art. 25-A',
+                comoFazer: 'No PGDAS-D, marcar receitas de revenda monofásica separadamente. '
+                    + 'O sistema zerará automaticamente PIS e COFINS sobre essa parcela.',
+                riscos: ['NCMs devem corresponder à lista oficial de produtos monofásicos',
+                    'Manter notas fiscais de compra como suporte'],
+                economiaLiquida: economiaMensal * 12,
+                custoImplementacao: 0,
+                detalhes: {
+                    receitaMonofasica: receitaMono,
+                    percPISCOFINS: partReal ? ((partReal.pis || 0) + (partReal.cofins || 0)) : 0.0365,
+                    economiaMensal: economiaMensal
+                }
+            };
+        }
+
+        /**
+         * Ação 7: Comparativo LP vs LR — chamar CompararRegimes e mostrar melhor regime
+         * @private
+         */
+        function _acaoComparativoRegimes(resultado, d) {
+            var rbt12 = d.receitaBrutaAnual || (d.receitaBrutaMensal * 12);
+            var dasAnual = resultado.anual ? resultado.anual.dasAnual : 0;
+
+            // Calcular LP simplificado
+            var percPresIRPJ = _ehServico(d.cnae) ? 0.32 : 0.08;
+            var percPresCSLL = _ehServico(d.cnae) ? 0.32 : 0.12;
+            var baseIRPJ = rbt12 * percPresIRPJ;
+            var baseCSLL = rbt12 * percPresCSLL;
+            var irpjLP = baseIRPJ * 0.15;
+            var adicionalIRPJ = Math.max(0, baseIRPJ - 240000) * 0.10;
+            var csllLP = baseCSLL * 0.09;
+            var pisLP = rbt12 * 0.0065;
+            var cofinsLP = rbt12 * 0.03;
+            var totalLP = irpjLP + adicionalIRPJ + csllLP + pisLP + cofinsLP;
+            var aliqEfetivaLP = rbt12 > 0 ? totalLP / rbt12 : 0;
+
+            // Calcular LR simplificado (margem 20%)
+            var margemEstimada = 0.20;
+            var lucroReal = rbt12 * margemEstimada;
+            var irpjLR = lucroReal * 0.15;
+            var adicionalLR = Math.max(0, lucroReal - 240000) * 0.10;
+            var csllLR = lucroReal * 0.09;
+            var pisLR = rbt12 * 0.0165;
+            var cofinsLR = rbt12 * 0.076;
+            var creditosPISCOFINS = (pisLR + cofinsLR) * 0.40;
+            var totalLR = irpjLR + adicionalLR + csllLR + pisLR + cofinsLR - creditosPISCOFINS;
+            var aliqEfetivaLR = rbt12 > 0 ? totalLR / rbt12 : 0;
+
+            // Simples Nacional
+            var aliqEfetivaSN = resultado.aliquotaEfetiva ? resultado.aliquotaEfetiva.valor : 0;
+
+            // Identificar melhor regime
+            var menorCarga = Math.min(dasAnual, totalLP, totalLR);
+            var melhorRegime = 'Simples Nacional';
+            var economiaRegime = 0;
+            if (menorCarga === totalLP) {
+                melhorRegime = 'Lucro Presumido';
+                economiaRegime = dasAnual - totalLP;
+            } else if (menorCarga === totalLR) {
+                melhorRegime = 'Lucro Real';
+                economiaRegime = dasAnual - totalLR;
+            }
+
+            return {
+                id: 'comparativo_regimes',
+                titulo: 'Comparativo: Simples Nacional × Lucro Presumido × Lucro Real',
+                descricao: economiaRegime > 0
+                    ? 'O regime ' + melhorRegime + ' pode ser mais econômico, '
+                        + 'com economia estimada de ' + Utils.formatarMoeda(economiaRegime) + '/ano.'
+                    : 'O Simples Nacional permanece como regime mais econômico para sua empresa.',
+                economiaAnual: Math.max(0, economiaRegime),
+                economiaPercentual: dasAnual > 0
+                    ? ((Math.max(0, economiaRegime) / dasAnual) * 100).toFixed(1).replace('.', ',') + '%' : '0%',
+                prazo: 'Início do ano-calendário',
+                dificuldade: 'alta',
+                baseLegal: 'LC 123/2006, Art. 16 (opção pelo SN); Lei 9.249/95 (LP); DL 1.598/77 (LR)',
+                comoFazer: 'Solicitar estudo comparativo detalhado ao contador. '
+                    + 'A mudança de regime só pode ser feita no início do ano-calendário (janeiro).',
+                riscos: ['LP e LR exigem contabilidade completa e obrigações acessórias mais pesadas',
+                    'Custos operacionais maiores (honorários contábeis, SPED)',
+                    'Cálculo simplificado — valores reais dependem de análise aprofundada'],
+                economiaLiquida: Math.max(0, economiaRegime),
+                custoImplementacao: 0,
+                detalhes: {
+                    simplesNacional: {
+                        cargaAnual: dasAnual,
+                        aliquotaEfetiva: aliqEfetivaSN,
+                        aliquotaEfetivaFormatada: Utils.formatarPercentual(aliqEfetivaSN)
+                    },
+                    lucroPresumido: {
+                        cargaAnual: totalLP,
+                        aliquotaEfetiva: aliqEfetivaLP,
+                        aliquotaEfetivaFormatada: Utils.formatarPercentual(aliqEfetivaLP),
+                        irpj: irpjLP + adicionalIRPJ,
+                        csll: csllLP,
+                        pis: pisLP,
+                        cofins: cofinsLP
+                    },
+                    lucroReal: {
+                        cargaAnual: totalLR,
+                        aliquotaEfetiva: aliqEfetivaLR,
+                        aliquotaEfetivaFormatada: Utils.formatarPercentual(aliqEfetivaLR),
+                        irpj: irpjLR + adicionalLR,
+                        csll: csllLR,
+                        pisCofinsLiquido: pisLR + cofinsLR - creditosPISCOFINS,
+                        creditosPISCOFINS: creditosPISCOFINS,
+                        margemEstimada: margemEstimada
+                    },
+                    melhorRegime: melhorRegime,
+                    economiaVsSN: economiaRegime
+                }
+            };
+        }
+
+        /**
+         * Gera plano de ação COMPLETO a partir do diagnóstico e cálculo.
+         * Prioriza ações por economia potencial (maior primeiro).
+         *
+         * @param {Object} [diagnosticoResult] — resultado do Diagnostico.executar
+         * @param {Object} [calculoResult] — resultado do Calculadora.calcularTudo
+         * @returns {Object} Plano de ação completo com ações priorizadas
+         */
+        function gerar(diagnosticoResult, calculoResult) {
+            var calculo = calculoResult || Calculadora.calcularTudo();
+            var diag = diagnosticoResult || Diagnostico.getUltimoDiagnostico();
+            if (!diag) {
+                diag = Diagnostico.executar(calculo);
+            }
+
+            var d = Formulario.getDados();
+            var acoes = [];
+
+            // ── Gerar ações de otimização concretas ──
+            var acoesOtimizacao = [
+                _acaoFatorROtimizacao,
+                _acaoSegregacaoReceitas,
+                _acaoDistribuicaoLucros,
+                _acaoReducaoISS,
+                _acaoSublimiteICMS,
+                _acaoMonofasico,
+                _acaoComparativoRegimes
+            ];
+
+            acoesOtimizacao.forEach(function (fn) {
+                try {
+                    var res = fn(calculo, d);
+                    if (res) acoes.push(res);
+                } catch (e) {
+                    console.warn('[PlanoAcao] Erro ao gerar ação:', e.message);
+                }
             });
 
-            // Numerar prioridades
+            // ── Incorporar oportunidades do diagnóstico não cobertas ──
+            (diag.oportunidades || []).forEach(function (op) {
+                var jaExiste = acoes.some(function (a) {
+                    return a.id === op.id || a.id === op.id.replace('_migracao', '_otimizacao');
+                });
+                if (!jaExiste && (op.economiaAnual || 0) > 0) {
+                    acoes.push({
+                        id: op.id,
+                        titulo: op.titulo,
+                        descricao: op.descricao,
+                        economiaAnual: op.economiaAnual || 0,
+                        economiaPercentual: '0%',
+                        prazo: op.tempoImplementacao || 'A definir',
+                        dificuldade: op.dificuldade || 'media',
+                        baseLegal: op.baseLegal || '',
+                        comoFazer: op.acao || '',
+                        riscos: op.riscos ? (typeof op.riscos === 'string' ? [op.riscos] : op.riscos) : [],
+                        economiaLiquida: op.retornoLiquido || op.economiaAnual || 0,
+                        custoImplementacao: op.custoImplementacao || 0
+                    });
+                }
+            });
+
+            // ── Incorporar alertas urgentes ──
+            (diag.alertas || []).forEach(function (al) {
+                acoes.push({
+                    id: al.id,
+                    titulo: 'URGENTE — ' + al.titulo,
+                    descricao: al.descricao,
+                    economiaAnual: al.economiaAnual || 0,
+                    economiaPercentual: '0%',
+                    prazo: al.tempoImplementacao || 'Imediato',
+                    dificuldade: al.dificuldade || 'media',
+                    baseLegal: al.baseLegal || '',
+                    comoFazer: al.acao || '',
+                    riscos: al.riscos ? (typeof al.riscos === 'string' ? [al.riscos] : al.riscos) : [],
+                    economiaLiquida: 0,
+                    custoImplementacao: al.custoAdicionalAnual || 0,
+                    _urgente: true
+                });
+            });
+
+            // ── Ordenar por economia anual (maior primeiro), urgentes no topo ──
+            acoes.sort(function (a, b) {
+                if (a._urgente && !b._urgente) return -1;
+                if (!a._urgente && b._urgente) return 1;
+                return (b.economiaLiquida || b.economiaAnual || 0) - (a.economiaLiquida || a.economiaAnual || 0);
+            });
+
+            // Numerar
             acoes.forEach(function (a, i) { a.prioridade = i + 1; });
 
-            // Classificar por cronograma
+            // ── Classificar por cronograma ──
             var cronograma = {
                 imediato: [],
                 curtoPrazo: [],
@@ -3886,32 +4820,32 @@
             };
 
             acoes.forEach(function (a) {
-                var tempo = a.tempoImplementacao || '';
-                if (tempo.indexOf('Imediato') >= 0 || tempo.indexOf('Próximo') >= 0 || a.prioridadeNivel === 'urgente') {
+                var prazo = (a.prazo || '').toLowerCase();
+                if (a._urgente || prazo.indexOf('imediato') >= 0 || prazo.indexOf('próximo') >= 0) {
                     cronograma.imediato.push(a);
-                } else if (tempo.indexOf('1 mês') >= 0 || tempo.indexOf('30 dias') >= 0 || tempo.indexOf('1-2 meses') >= 0) {
+                } else if (prazo.indexOf('1 mês') >= 0 || prazo.indexOf('baixa') >= 0) {
                     cronograma.curtoPrazo.push(a);
-                } else if (tempo.indexOf('3') >= 0 || tempo.indexOf('6') >= 0 || a.dificuldade === 'dificil') {
+                } else if (prazo.indexOf('início') >= 0 || a.dificuldade === 'alta') {
                     cronograma.medioPrazo.push(a);
                 } else {
-                    cronograma.acompanhamento.push(a);
+                    cronograma.curtoPrazo.push(a);
                 }
             });
 
             var economiaTotal = 0;
-            acoes.forEach(function (a) { economiaTotal += (a.economia || 0); });
+            acoes.forEach(function (a) { economiaTotal += (a.economiaLiquida || a.economiaAnual || 0); });
 
             _ultimoPlano = {
                 resumo: acoes.length > 0
-                    ? 'Identificamos ' + Utils.formatarMoeda(economiaTotal) + '/ano em economia para sua empresa, '
-                        + 'com ' + acoes.length + ' ação(ões) recomendadas.'
+                    ? 'Identificamos ' + Utils.formatarMoeda(economiaTotal) + '/ano em economia potencial, '
+                        + 'com ' + acoes.length + ' ação(ões) recomendadas ordenadas por impacto.'
                     : 'Nenhuma ação de otimização identificada com os dados informados.',
                 economiaTotal: economiaTotal,
                 economiaTotalFormatada: Utils.formatarMoeda(economiaTotal),
                 totalAcoes: acoes.length,
                 acoes: acoes,
                 cronograma: cronograma,
-                _meta: { geradoEm: new Date().toISOString() }
+                _meta: { geradoEm: new Date().toISOString(), versao: _VERSION }
             };
 
             Eventos.emit('planoAcao:gerado', _ultimoPlano);
@@ -3920,59 +4854,13 @@
         }
 
         /**
-         * Cria uma ação a partir de uma oportunidade/alerta.
-         * @private
-         */
-        function _criarAcao(item, tipoOrigem) {
-            var isUrgente = item.tipo === 'urgente' || item.categoria === 'regularizacao';
-            var prioNivel;
-            if (isUrgente) {
-                prioNivel = 'urgente';
-            } else if ((item.economiaAnual || 0) > 10000 || (item.retornoLiquido || 0) > 10000) {
-                prioNivel = 'alta';
-            } else if ((item.economiaAnual || 0) > 3000 || item.dificuldade === 'facil') {
-                prioNivel = 'media';
-            } else {
-                prioNivel = 'baixa';
-            }
-
-            var responsavel = 'Contador';
-            if (item.categoria === 'prolabore' || item.categoria === 'mei') {
-                responsavel = 'Sócio + Contador';
-            } else if (item.categoria === 'reforma' || item.categoria === 'incentivos') {
-                responsavel = 'Contador + Assessoria Jurídica';
-            }
-
-            return {
-                id: _nextId++,
-                idOrigem: item.id,
-                titulo: (isUrgente ? 'URGENTE — ' : '') + (item.titulo || ''),
-                descricao: item.descricao || '',
-                economia: item.retornoLiquido || item.economiaAnual || 0,
-                economiaFormatada: Utils.formatarMoeda(item.retornoLiquido || item.economiaAnual || 0),
-                prioridadeNivel: prioNivel,
-                dificuldade: item.dificuldade || 'media',
-                tempoImplementacao: item.tempoImplementacao || 'A definir',
-                responsavel: responsavel,
-                acao: item.acao || '',
-                passoAPasso: item.passoAPasso || [],
-                baseLegal: item.baseLegal || '',
-                riscos: item.riscos || '',
-                status: 'pendente',
-                tipoOrigem: tipoOrigem
-            };
-        }
-
-        /**
          * Atualiza status de uma ação.
-         *
-         * @param {number} id — ID da ação
+         * @param {string|number} id — ID da ação
          * @param {string} novoStatus — 'pendente' | 'em_andamento' | 'concluido'
          * @returns {Object|null} Ação atualizada
          */
         function atualizarStatus(id, novoStatus) {
             if (!_ultimoPlano || !_ultimoPlano.acoes) return null;
-
             var statusValidos = ['pendente', 'em_andamento', 'concluido'];
             if (statusValidos.indexOf(novoStatus) === -1) return null;
 
@@ -3980,12 +4868,9 @@
             if (!acao) return null;
 
             acao.status = novoStatus;
-            if (novoStatus === 'concluido') {
-                acao.concluidoEm = new Date().toISOString();
-            }
+            if (novoStatus === 'concluido') acao.concluidoEm = new Date().toISOString();
 
             Eventos.emit('planoAcao:statusAtualizado', { id: id, status: novoStatus, acao: acao });
-
             return acao;
         }
 
@@ -3995,11 +4880,9 @@
          */
         function getProgresso() {
             if (!_ultimoPlano || !_ultimoPlano.acoes) return { total: 0, concluidas: 0, percentual: 0 };
-
             var total = _ultimoPlano.acoes.length;
             var concluidas = _ultimoPlano.acoes.filter(function (a) { return a.status === 'concluido'; }).length;
             var emAndamento = _ultimoPlano.acoes.filter(function (a) { return a.status === 'em_andamento'; }).length;
-
             return {
                 total: total,
                 concluidas: concluidas,
@@ -4008,7 +4891,7 @@
                 percentual: total > 0 ? Math.round((concluidas / total) * 100) : 0,
                 economiaImplementada: _ultimoPlano.acoes
                     .filter(function (a) { return a.status === 'concluido'; })
-                    .reduce(function (acc, a) { return acc + (a.economia || 0); }, 0)
+                    .reduce(function (acc, a) { return acc + (a.economiaLiquida || a.economiaAnual || 0); }, 0)
             };
         }
 
@@ -4478,6 +5361,219 @@
             return texto;
         }
 
+        // ──────────────────────────────────────────
+        //  EXPLICAÇÕES DE OTIMIZAÇÃO (Parte 2)
+        //  Cada estratégia: textoLeigo, textoTecnico, baseLegal, exemploNumerico
+        // ──────────────────────────────────────────
+
+        /**
+         * Gera explicação completa de uma estratégia de otimização.
+         * @param {string} estrategia — ID da estratégia
+         * @param {Object} resultado — dados de calcularTudo()
+         * @param {Object} [acaoPlano] — ação do PlanoAcao com detalhes calculados
+         * @returns {Object} { textoLeigo, textoTecnico, baseLegal, exemploNumerico }
+         */
+        function explicarOtimizacao(estrategia, resultado, acaoPlano) {
+            var explicadores = {
+                'fator_r_otimizacao': _explicarOtimFatorR,
+                'segregacao_receitas': _explicarOtimSegregacao,
+                'distribuicao_lucros': _explicarOtimDistribuicao,
+                'reducao_iss': _explicarOtimISS,
+                'sublimite_icms': _explicarOtimSublimite,
+                'monofasico_segregacao': _explicarOtimMonofasico,
+                'comparativo_regimes': _explicarOtimComparativo
+            };
+            var fn = explicadores[estrategia];
+            if (!fn) return {
+                textoLeigo: 'Estratégia não reconhecida: ' + estrategia,
+                textoTecnico: '',
+                baseLegal: '',
+                exemploNumerico: ''
+            };
+            return fn(resultado, acaoPlano);
+        }
+
+        /** @private */
+        function _explicarOtimFatorR(resultado, acao) {
+            var det = (acao && acao.detalhes) || {};
+            var emp = resultado.empresa || {};
+            return {
+                textoLeigo: 'O Fator R é uma conta simples: quanto sua empresa gasta com salários '
+                    + 'dividido pelo faturamento. Se esse número chega a 28%, você paga menos imposto '
+                    + 'porque muda para uma tabela mais barata (Anexo III ao invés do V). '
+                    + 'Na prática, é como se aumentar o salário do dono "devolvesse" dinheiro via redução de imposto.',
+                textoTecnico: 'O Fator R (Art. 18, §24, LC 123/2006) é a razão entre a massa salarial dos últimos 12 meses '
+                    + '(incluindo pró-labore, FGTS, 13º, férias) e a RBT12. Quando FR ≥ 28%, atividades listadas '
+                    + 'no Anexo V migram automaticamente para o Anexo III (Resolução CGSN 140/2018, Art. 18, §5º-J). '
+                    + 'O cálculo deve ser feito mês a mês, considerando a folha acumulada.',
+                baseLegal: 'LC 123/2006, Art. 18, §5º-J, §5º-M e §24; '
+                    + 'Resolução CGSN nº 140/2018, Art. 18, §5º-J e Art. 25-A, §1º, II; '
+                    + 'LC 155/2016 (introduziu o Fator R em substituição ao antigo Anexo VI)',
+                exemploNumerico: 'Dados da empresa: Receita anual ' + _fm(emp.receitaAnual || 0)
+                    + ', folha atual ' + _fm(emp.folhaMensal || 0) + '/mês.\n'
+                    + 'Fator R atual: ' + (resultado.fatorR ? resultado.fatorR.percentual : 'N/D') + '\n'
+                    + (det.proLaboreIdeal ? ('Pró-labore ideal: ' + _fm(det.proLaboreIdeal) + '/mês\n') : '')
+                    + (det.dasAtualMensal ? ('DAS atual (Anexo ' + (det.anexoAtual || 'V') + '): ' + _fm(det.dasAtualMensal) + '/mês\n') : '')
+                    + (det.dasNovoMensal ? ('DAS novo (Anexo III): ' + _fm(det.dasNovoMensal) + '/mês\n') : '')
+                    + (acao ? ('Economia líquida: ' + _fm(acao.economiaLiquida) + '/ano') : '')
+            };
+        }
+
+        /** @private */
+        function _explicarOtimSegregacao(resultado, acao) {
+            return {
+                textoLeigo: 'Se sua empresa faz atividades diferentes (ex: vende produtos E presta serviços), '
+                    + 'cada tipo de receita pode ser tributado numa tabela diferente. '
+                    + 'Separar corretamente pode reduzir o imposto porque comércio (Anexo I) '
+                    + 'geralmente tem alíquota menor que serviço (Anexo III ou V).',
+                textoTecnico: 'A segregação de receitas no PGDAS-D (Resolução CGSN 140/2018, Art. 25, §1º a §3º) '
+                    + 'exige que cada parcela de receita seja classificada conforme o CNAE da atividade efetivamente exercida. '
+                    + 'Atividades de comércio (Anexo I, alíquota inicial 4%) têm carga significativamente menor '
+                    + 'que serviços (Anexo III/V, alíquota inicial 6%/15,5%). '
+                    + 'A receita de cada atividade deve corresponder a notas fiscais segregadas.',
+                baseLegal: 'Resolução CGSN 140/2018, Art. 25, §1º a §3º; LC 123/2006, Art. 18, §4º',
+                exemploNumerico: acao && acao.detalhes && acao.detalhes.receitasSegregaveis
+                    ? 'Receitas segregáveis identificadas:\n' + acao.detalhes.receitasSegregaveis.map(function (r) {
+                        return '  - CNAE ' + Utils.formatarCNAE(r.cnae) + ' → Anexo ' + r.anexo
+                            + ': ' + _fm(r.receita) + '/mês (economia: ' + _fm(r.economia) + '/mês)';
+                    }).join('\n')
+                    + '\nEconomia total: ' + _fm(acao.economiaAnual) + '/ano'
+                    : 'Dados insuficientes para exemplo numérico.'
+            };
+        }
+
+        /** @private */
+        function _explicarOtimDistribuicao(resultado, acao) {
+            var det = (acao && acao.detalhes) || {};
+            return {
+                textoLeigo: 'Os sócios podem retirar dinheiro da empresa de duas formas: como salário (pró-labore) '
+                    + 'ou como lucro. O salário tem desconto de INSS (11%), mas o lucro é ISENTO de imposto de renda. '
+                    + 'Portanto, manter o pró-labore no mínimo (1 salário mínimo) e retirar o restante como lucro '
+                    + 'pode gerar economia significativa.',
+                textoTecnico: 'A distribuição de lucros isenta de IRRF no Simples Nacional está prevista no Art. 14 da LC 123/2006 '
+                    + 'e na ADI SRF nº 04/2007. O limite sem escrituração contábil é calculado pela presunção de lucro '
+                    + '(mesmos percentuais do Lucro Presumido: 8% comércio, 32% serviços), deduzido o DAS. '
+                    + 'Com escrituração contábil completa (livro caixa ou contabilidade formal), '
+                    + 'todo o lucro apurado pode ser distribuído isento.',
+                baseLegal: 'Art. 10, Lei 9.249/1995; Art. 14, LC 123/2006; '
+                    + 'ADI SRF nº 04/2007; IN RFB 1.251/2012, Art. 2º',
+                exemploNumerico: det.lucroDistribuivelIsento
+                    ? 'Lucro distribuível isento (presunção ' + ((det.percPresuncao || 0.32) * 100).toFixed(0) + '%): '
+                        + _fm(det.lucroDistribuivelIsento) + '/ano\n'
+                        + (det.porSocio ? det.porSocio.map(function (s) {
+                            return '  - ' + s.nome + ' (' + _fp(s.percentual) + '): ' + _fm(s.valorIsento) + '/ano';
+                        }).join('\n') : '')
+                        + '\nEconomia de INSS: ' + _fm(acao ? acao.economiaLiquida : 0) + '/ano'
+                    : 'Informe dados dos sócios para cálculo.'
+            };
+        }
+
+        /** @private */
+        function _explicarOtimISS(resultado, acao) {
+            return {
+                textoLeigo: 'O ISS é um imposto municipal sobre serviços. A lei diz que a alíquota mínima é 2% '
+                    + 'e a máxima é 5%. Muitas empresas pagam 5% sem verificar se o município oferece desconto. '
+                    + 'Vale consultar a prefeitura para ver se há incentivo.',
+                textoTecnico: 'O ISS é regido pela LC 116/2003, com alíquota mínima de 2% (Art. 8-A, incluído pela LC 157/2016) '
+                    + 'e máxima de 5% (Art. 8, II). No Simples Nacional, o ISS está dentro do DAS e a partilha '
+                    + 'depende do anexo e faixa de receita. Municípios com leis de incentivo fiscal podem oferecer '
+                    + 'alíquotas de 2% a 3% para determinados CNAEs. '
+                    + 'ISS retido na fonte pelo tomador é dedutível do DAS (Resolução CGSN 140/2018, Art. 27).',
+                baseLegal: 'LC 116/2003, Art. 8-A (mínimo 2%); Art. 8, II (máximo 5%); '
+                    + 'LC 157/2016; Resolução CGSN 140/2018, Art. 27',
+                exemploNumerico: acao && acao.detalhes
+                    ? 'ISS atual: ' + (acao.detalhes.issAtual || 5).toFixed(2).replace('.', ',') + '%\n'
+                        + 'ISS mínimo legal: 2%\n'
+                        + 'Economia potencial (se reduzir para 2%): ' + _fm(acao.economiaAnual) + '/ano'
+                    : 'Consulte a legislação municipal para alíquota real.'
+            };
+        }
+
+        /** @private */
+        function _explicarOtimSublimite(resultado, acao) {
+            var det = (acao && acao.detalhes) || {};
+            return {
+                textoLeigo: 'Quando a empresa fatura mais de R$ 3,6 milhões por ano, o ICMS e o ISS saem do boleto '
+                    + 'único (DAS) e passam a ser pagos separadamente, como empresas de fora do Simples. '
+                    + 'Isso pode aumentar bastante o custo. É importante calcular o impacto.',
+                textoTecnico: 'Acima do sublimite estadual de R$ 3.600.000 (LC 123/2006, Art. 19), '
+                    + 'o ICMS e o ISS passam a ser recolhidos fora do DAS, nas regras normais. '
+                    + 'O contribuinte deve apurar ICMS pela legislação estadual (alíquota + ICMS-ST) '
+                    + 'e ISS pela legislação municipal. Os demais tributos (IRPJ, CSLL, PIS, COFINS, CPP) '
+                    + 'permanecem no DAS. Pode compensar migrar para LP se a carga ICMS fora do DAS for alta.',
+                baseLegal: 'LC 123/2006, Art. 19 e Art. 20; Resolução CGSN 140/2018, Art. 9º a 12',
+                exemploNumerico: det.rbt12
+                    ? 'RBT12: ' + _fm(det.rbt12) + ' (excede sublimite de R$ 3.600.000)\n'
+                        + 'ICMS dentro do DAS (estimado): ' + _fm(det.icmsNoDAS) + '/mês\n'
+                        + 'ICMS regime normal (estimado): ' + _fm(det.icmsRegimeNormal) + '/mês\n'
+                        + 'Alíquota ICMS estadual: ' + ((det.aliquotaICMSEstadual || 0.18) * 100).toFixed(0) + '%'
+                    : 'Receita dentro do sublimite — sem impacto.'
+            };
+        }
+
+        /** @private */
+        function _explicarOtimMonofasico(resultado, acao) {
+            return {
+                textoLeigo: 'Alguns produtos (remédios, combustíveis, bebidas, cosméticos, autopeças) já tiveram '
+                    + 'o PIS e COFINS pagos pelo fabricante. Quando sua empresa REVENDE esses produtos, '
+                    + 'não precisa pagar PIS e COFINS de novo. No boleto do Simples (DAS), esses impostos '
+                    + 'são zerados para essa parte da receita. Muita gente não sabe e paga a mais!',
+                textoTecnico: 'A tributação monofásica (ou concentrada) aplica-se a produtos listados nas Leis '
+                    + '10.147/2000, 10.485/2002, 10.833/2003 e 10.865/2004. O contribuinte substituto '
+                    + '(fabricante/importador) recolhe PIS e COFINS com alíquotas majoradas, e os demais '
+                    + 'da cadeia (distribuidores e varejistas) têm alíquota zero. '
+                    + 'No PGDAS-D, essa receita deve ser segregada como "Revenda de mercadorias sujeitas '
+                    + 'à tributação monofásica de PIS/PASEP e COFINS" (Resolução CGSN 140/2018, Art. 25-A). '
+                    + 'O ICMS e demais tributos continuam sendo calculados normalmente.',
+                baseLegal: 'Lei 10.147/2000; Lei 10.485/2002; Lei 10.865/2004; '
+                    + 'Resolução CGSN 140/2018, Art. 25-A; Solução de Consulta COSIT nº 84/2016',
+                exemploNumerico: acao && acao.detalhes
+                    ? 'Receita monofásica: ' + _fm(acao.detalhes.receitaMonofasica) + '/mês\n'
+                        + 'PIS+COFINS na partilha: ' + _fp(acao.detalhes.percPISCOFINS || 0) + '\n'
+                        + 'Economia mensal: ' + _fm(acao.detalhes.economiaMensal) + '\n'
+                        + 'Economia anual: ' + _fm((acao.detalhes.economiaMensal || 0) * 12)
+                    : 'Informe receita de produtos monofásicos para calcular.'
+            };
+        }
+
+        /** @private */
+        function _explicarOtimComparativo(resultado, acao) {
+            var det = (acao && acao.detalhes) || {};
+            return {
+                textoLeigo: 'Existem 3 formas de pagar imposto: Simples Nacional (boleto único), '
+                    + 'Lucro Presumido (o governo estima quanto você lucra) e Lucro Real (paga sobre o lucro de verdade). '
+                    + 'Cada forma tem vantagens dependendo do tamanho da empresa, do tipo de atividade e da margem de lucro. '
+                    + 'A comparação mostra qual é o mais barato para você.',
+                textoTecnico: 'SN: DAS unificado com alíquota progressiva (LC 123/2006, Anexos I a V). '
+                    + 'LP: IRPJ 15% + adicional 10% sobre base presumida (Lei 9.249/95, Art. 15); '
+                    + 'CSLL 9% sobre base presumida (Art. 20); PIS 0,65% e COFINS 3% cumulativo. '
+                    + 'LR: IRPJ 15% + adicional 10% sobre lucro real (DL 1.598/77); '
+                    + 'CSLL 9%; PIS 1,65% e COFINS 7,6% não cumulativo com creditamento (Lei 10.637/02, 10.833/03). '
+                    + 'LP é vantajoso para margens altas (>20%); LR para margens baixas (<15%) ou com muitos créditos.',
+                baseLegal: 'LC 123/2006, Art. 16 (SN); Lei 9.249/95, Art. 15-16 (LP); '
+                    + 'DL 1.598/77, Lei 10.637/02, Lei 10.833/03 (LR)',
+                exemploNumerico: det.simplesNacional
+                    ? 'SIMPLES NACIONAL:\n  Carga anual: ' + _fm(det.simplesNacional.cargaAnual)
+                        + '\n  Alíquota efetiva: ' + (det.simplesNacional.aliquotaEfetivaFormatada || 'N/D')
+                        + '\n\nLUCRO PRESUMIDO:\n  IRPJ: ' + _fm(det.lucroPresumido.irpj)
+                        + '\n  CSLL: ' + _fm(det.lucroPresumido.csll)
+                        + '\n  PIS: ' + _fm(det.lucroPresumido.pis)
+                        + '\n  COFINS: ' + _fm(det.lucroPresumido.cofins)
+                        + '\n  Total: ' + _fm(det.lucroPresumido.cargaAnual)
+                        + '\n  Alíquota efetiva: ' + (det.lucroPresumido.aliquotaEfetivaFormatada || 'N/D')
+                        + '\n\nLUCRO REAL (margem ' + ((det.lucroReal.margemEstimada || 0.20) * 100).toFixed(0) + '%):\n'
+                        + '  IRPJ: ' + _fm(det.lucroReal.irpj)
+                        + '\n  CSLL: ' + _fm(det.lucroReal.csll)
+                        + '\n  PIS+COFINS líquido: ' + _fm(det.lucroReal.pisCofinsLiquido)
+                        + '\n  Créditos: -' + _fm(det.lucroReal.creditosPISCOFINS)
+                        + '\n  Total: ' + _fm(det.lucroReal.cargaAnual)
+                        + '\n  Alíquota efetiva: ' + (det.lucroReal.aliquotaEfetivaFormatada || 'N/D')
+                        + '\n\n→ MELHOR REGIME: ' + det.melhorRegime
+                        + (det.economiaVsSN > 0 ? ' (economia de ' + _fm(det.economiaVsSN) + '/ano vs SN)' : '')
+                    : 'Dados insuficientes para comparativo.'
+            };
+        }
+
         /**
          * Gera explicação completa combinando todos os módulos.
          *
@@ -4508,13 +5604,756 @@
             explicarVedacao: explicarVedacao,
             explicarMEI: explicarMEI,
             explicarDistribuicaoLucros: explicarDistribuicaoLucros,
+            explicarOtimizacao: explicarOtimizacao,
             gerarExplicacaoCompleta: gerarExplicacaoCompleta
         };
     })();
 
 
     // ═══════════════════════════════════════════════════════════════
-    //  PARTE 2 — MÓDULOS 13 A 17
+    //  MÓDULO 13: SIMULADOR DE CENÁRIOS (SimuladorCenarios)
+    //  Motor avançado de simulação "E se?" com 6 tipos de cenário
+    //  API: simular({ cenario, parametro, empresa }) → { antes, depois, diferenca }
+    //  Base legal: LC 123/2006; Resolução CGSN nº 140/2018
+    // ═══════════════════════════════════════════════════════════════
+
+    const SimuladorCenarios = (function () {
+
+        /** @type {Array} Histórico de simulações */
+        var _historico = [];
+
+        /**
+         * Helper: calcula DAS para cenário.
+         * @private
+         */
+        function _calcDAS(receitaMensal, rbt12, anexo, folhaMensal) {
+            var das = _chamarIMPOST('calcularDASMensal', {
+                receitaBrutaMensal: receitaMensal,
+                rbt12: rbt12,
+                anexo: anexo,
+                folhaMensal: folhaMensal || 0,
+                issRetidoFonte: 0,
+                aliquotaRAT: 0.02
+            });
+            return das ? (das.dasAPagar || das.dasValor || 0) : 0;
+        }
+
+        /**
+         * Helper: determina anexo para CNAE e fatorR.
+         * @private
+         */
+        function _detAnexo(cnae, fatorR) {
+            var res = _chamarIMPOST('determinarAnexo', { cnae: cnae, fatorR: fatorR || 0 });
+            return res ? res.anexo : 'III';
+        }
+
+        /**
+         * Helper: calcula alíquota efetiva.
+         * @private
+         */
+        function _calcAliq(rbt12, anexo) {
+            var res = _chamarIMPOST('calcularAliquotaEfetiva', { rbt12: rbt12, anexo: anexo });
+            return res ? (res.aliquotaEfetiva || 0) : 0;
+        }
+
+        /**
+         * Calcula situação base (antes) a partir dos dados da empresa.
+         * @param {Object} empresa — dados da empresa
+         * @returns {Object} situação atual
+         * @private
+         */
+        function _calcularAntes(empresa) {
+            var e = empresa || Formulario.getDados();
+            var rbt12 = e.receitaBrutaAnual || (e.receitaBrutaMensal * 12);
+            var folha12 = e.folhaAnual || (e.folhaMensal * 12);
+            var fatorR = rbt12 > 0 ? folha12 / rbt12 : 0;
+            var anexo = _detAnexo(e.cnae, fatorR);
+            if (anexo === 'VEDADO') anexo = 'III';
+            var dasMensal = _calcDAS(e.receitaBrutaMensal, rbt12, anexo, e.folhaMensal);
+            var aliqEfetiva = _calcAliq(rbt12, anexo);
+            var inssProLabore = (e.proLabore || 0) * 0.11;
+            var numSocios = Math.max(1, (e.socios || []).length);
+
+            return {
+                receitaMensal: e.receitaBrutaMensal || 0,
+                receitaAnual: rbt12,
+                folhaMensal: e.folhaMensal || 0,
+                proLabore: e.proLabore || 0,
+                fatorR: fatorR,
+                anexo: anexo,
+                DAS: dasMensal,
+                DASAnual: dasMensal * 12,
+                aliquotaEfetiva: aliqEfetiva,
+                INSSsocio: inssProLabore,
+                INSSsocioAnual: inssProLabore * 12,
+                numSocios: numSocios,
+                cnae: e.cnae
+            };
+        }
+
+        /**
+         * Cenário 1: aumentar_proLabore — Recalcula DAS com novo Fator R + INSS adicional
+         * @private
+         */
+        function _simAumentarProLabore(parametro, empresa) {
+            var antes = _calcularAntes(empresa);
+            var novoProLabore = parametro;
+            var delta = novoProLabore - antes.proLabore;
+            var novaFolha = Math.max(0, antes.folhaMensal + delta);
+            var novaFolha12 = novaFolha * 12;
+            var novoFatorR = antes.receitaAnual > 0 ? novaFolha12 / antes.receitaAnual : 0;
+            var novoAnexo = _detAnexo(antes.cnae, novoFatorR);
+            if (novoAnexo === 'VEDADO') novoAnexo = antes.anexo;
+            var novoDAS = _calcDAS(antes.receitaMensal, antes.receitaAnual, novoAnexo, novaFolha);
+            var novoINSS = novoProLabore * 0.11;
+
+            return {
+                antes: antes,
+                depois: {
+                    proLabore: novoProLabore,
+                    folhaMensal: novaFolha,
+                    fatorR: novoFatorR,
+                    anexo: novoAnexo,
+                    DAS: novoDAS,
+                    DASAnual: novoDAS * 12,
+                    INSSsocio: novoINSS,
+                    INSSsocioAnual: novoINSS * 12
+                },
+                diferenca: {
+                    DAS: antes.DAS - novoDAS,
+                    DASAnual: (antes.DAS - novoDAS) * 12,
+                    INSSsocio: novoINSS - antes.INSSsocio,
+                    INSSsocioAnual: (novoINSS - antes.INSSsocio) * 12,
+                    economiaLiquida: (antes.DAS - novoDAS) - (novoINSS - antes.INSSsocio),
+                    economiaLiquidaAnual: ((antes.DAS - novoDAS) - (novoINSS - antes.INSSsocio)) * 12,
+                    mudouAnexo: novoAnexo !== antes.anexo,
+                    resumo: novoAnexo !== antes.anexo
+                        ? 'Migrou de Anexo ' + antes.anexo + ' para ' + novoAnexo
+                        : 'Mesmo anexo'
+                }
+            };
+        }
+
+        /**
+         * Cenário 2: mudar_cnae — Simula DAS se atividade principal fosse outro CNAE
+         * @private
+         */
+        function _simMudarCnae(parametro, empresa) {
+            var antes = _calcularAntes(empresa);
+            var novoCNAE = parametro;
+            var novoAnexo = _detAnexo(novoCNAE, antes.fatorR);
+            if (novoAnexo === 'VEDADO') {
+                return {
+                    antes: antes,
+                    depois: { cnae: novoCNAE, anexo: 'VEDADO', DAS: 0, aviso: 'CNAE vedado no Simples Nacional' },
+                    diferenca: { DAS: 0, economiaLiquida: 0, resumo: 'CNAE vedado' }
+                };
+            }
+            var novoDAS = _calcDAS(antes.receitaMensal, antes.receitaAnual, novoAnexo, antes.folhaMensal);
+
+            return {
+                antes: antes,
+                depois: {
+                    cnae: novoCNAE,
+                    anexo: novoAnexo,
+                    DAS: novoDAS,
+                    DASAnual: novoDAS * 12,
+                    aliquotaEfetiva: _calcAliq(antes.receitaAnual, novoAnexo)
+                },
+                diferenca: {
+                    DAS: antes.DAS - novoDAS,
+                    DASAnual: (antes.DAS - novoDAS) * 12,
+                    economiaLiquida: antes.DAS - novoDAS,
+                    economiaLiquidaAnual: (antes.DAS - novoDAS) * 12,
+                    mudouAnexo: novoAnexo !== antes.anexo,
+                    resumo: 'CNAE ' + novoCNAE + ' → Anexo ' + novoAnexo
+                        + ' (DAS ' + (novoDAS < antes.DAS ? 'menor' : 'maior') + ')'
+                }
+            };
+        }
+
+        /**
+         * Cenário 3: segregar_receitas — Simula separar receitas em 2+ CNAEs
+         * @param {Array} parametro — [{ cnae, percentual }] ex: [{ cnae: '47.12-1', percentual: 0.6 }, { cnae: '62.01-5', percentual: 0.4 }]
+         * @private
+         */
+        function _simSegregarReceitas(parametro, empresa) {
+            var antes = _calcularAntes(empresa);
+            if (!Array.isArray(parametro) || parametro.length < 2) {
+                return { erro: 'Informe array com 2+ objetos { cnae, percentual }' };
+            }
+
+            var totalSegregado = 0;
+            var dasSegregadoMensal = 0;
+            var detalhesCNAEs = [];
+
+            parametro.forEach(function (seg) {
+                var percRec = seg.percentual || 0;
+                totalSegregado += percRec;
+                var recMensal = antes.receitaMensal * percRec;
+                var folhaProporcional = antes.folhaMensal * percRec;
+                var anexoSeg = _detAnexo(seg.cnae, antes.fatorR);
+                if (anexoSeg === 'VEDADO') anexoSeg = antes.anexo;
+                var dasSeg = _calcDAS(recMensal, antes.receitaAnual, anexoSeg, folhaProporcional);
+                dasSegregadoMensal += dasSeg;
+                detalhesCNAEs.push({
+                    cnae: seg.cnae,
+                    percentual: percRec,
+                    receitaMensal: recMensal,
+                    anexo: anexoSeg,
+                    dasMensal: dasSeg
+                });
+            });
+
+            return {
+                antes: antes,
+                depois: {
+                    cnaes: detalhesCNAEs,
+                    DAS: dasSegregadoMensal,
+                    DASAnual: dasSegregadoMensal * 12
+                },
+                diferenca: {
+                    DAS: antes.DAS - dasSegregadoMensal,
+                    DASAnual: (antes.DAS - dasSegregadoMensal) * 12,
+                    economiaLiquida: antes.DAS - dasSegregadoMensal,
+                    economiaLiquidaAnual: (antes.DAS - dasSegregadoMensal) * 12,
+                    resumo: 'DAS segregado: ' + Utils.formatarMoeda(dasSegregadoMensal)
+                        + ' (economia: ' + Utils.formatarMoeda(antes.DAS - dasSegregadoMensal) + '/mês)'
+                }
+            };
+        }
+
+        /**
+         * Cenário 4: reduzir_receita — Simula impacto de reduzir receita abaixo da próxima faixa
+         * @param {number} parametro — nova receita mensal
+         * @private
+         */
+        function _simReduzirReceita(parametro, empresa) {
+            var antes = _calcularAntes(empresa);
+            var novaReceitaMensal = parametro;
+            var novaRBT12 = novaReceitaMensal * 12;
+            var novoFatorR = novaRBT12 > 0 ? (antes.folhaMensal * 12) / novaRBT12 : 0;
+            var novoAnexo = _detAnexo(antes.cnae, novoFatorR);
+            if (novoAnexo === 'VEDADO') novoAnexo = antes.anexo;
+            var novoDAS = _calcDAS(novaReceitaMensal, novaRBT12, novoAnexo, antes.folhaMensal);
+            var novaAliq = _calcAliq(novaRBT12, novoAnexo);
+
+            // Faixas do Simples (limites)
+            var faixas = [180000, 360000, 720000, 1800000, 3600000, 4800000];
+            var faixaAtual = 0;
+            var faixaNova = 0;
+            faixas.forEach(function (f, i) {
+                if (antes.receitaAnual > f) faixaAtual = i + 1;
+                if (novaRBT12 > f) faixaNova = i + 1;
+            });
+
+            return {
+                antes: antes,
+                depois: {
+                    receitaMensal: novaReceitaMensal,
+                    receitaAnual: novaRBT12,
+                    fatorR: novoFatorR,
+                    anexo: novoAnexo,
+                    DAS: novoDAS,
+                    DASAnual: novoDAS * 12,
+                    aliquotaEfetiva: novaAliq,
+                    faixa: faixaNova + 1
+                },
+                diferenca: {
+                    DAS: antes.DAS - novoDAS,
+                    DASAnual: (antes.DAS - novoDAS) * 12,
+                    receitaPerdida: antes.receitaMensal - novaReceitaMensal,
+                    receitaPerdidaAnual: (antes.receitaMensal - novaReceitaMensal) * 12,
+                    economiaLiquida: antes.DAS - novoDAS,
+                    mudouFaixa: faixaNova < faixaAtual,
+                    resumo: 'Receita ' + Utils.formatarMoeda(novaReceitaMensal) + '/mês → '
+                        + 'DAS ' + Utils.formatarMoeda(novoDAS) + '/mês '
+                        + (faixaNova < faixaAtual ? '(caiu de faixa!)' : '(mesma faixa)')
+                }
+            };
+        }
+
+        /**
+         * Cenário 5: incluir_socio — Simula adicionar sócio para divisão de lucros e pró-labore
+         * @param {Object} parametro — { novosSocios: 1, proLaborePorSocio: 1621 }
+         * @private
+         */
+        function _simIncluirSocio(parametro, empresa) {
+            var antes = _calcularAntes(empresa);
+            var novosSocios = parametro.novosSocios || 1;
+            var plPorSocio = parametro.proLaborePorSocio || SALARIO_MINIMO_2026;
+            var totalSociosDepois = antes.numSocios + novosSocios;
+            var novoProLaboreTotal = plPorSocio * totalSociosDepois;
+            var proLaboreAtualTotal = antes.proLabore * antes.numSocios;
+            var deltaFolha = novoProLaboreTotal - proLaboreAtualTotal;
+            var novaFolha = Math.max(0, antes.folhaMensal + deltaFolha);
+            var novaFolha12 = novaFolha * 12;
+            var novoFatorR = antes.receitaAnual > 0 ? novaFolha12 / antes.receitaAnual : 0;
+            var novoAnexo = _detAnexo(antes.cnae, novoFatorR);
+            if (novoAnexo === 'VEDADO') novoAnexo = antes.anexo;
+            var novoDAS = _calcDAS(antes.receitaMensal, antes.receitaAnual, novoAnexo, novaFolha);
+            var novoINSSTotal = novoProLaboreTotal * 0.11;
+            var inssAnteriorTotal = proLaboreAtualTotal * 0.11;
+
+            // Distribuição de lucros por sócio
+            var rbt12 = antes.receitaAnual;
+            var percPresuncao = 0.32; // conservador
+            var lucroDistribuivel = Math.max(0, rbt12 * percPresuncao - novoDAS * 12);
+            var lucroPorSocio = lucroDistribuivel / totalSociosDepois;
+
+            return {
+                antes: antes,
+                depois: {
+                    numSocios: totalSociosDepois,
+                    proLaborePorSocio: plPorSocio,
+                    proLaboreTotal: novoProLaboreTotal,
+                    folhaMensal: novaFolha,
+                    fatorR: novoFatorR,
+                    anexo: novoAnexo,
+                    DAS: novoDAS,
+                    DASAnual: novoDAS * 12,
+                    INSSTotal: novoINSSTotal,
+                    lucroPorSocioAnual: lucroPorSocio
+                },
+                diferenca: {
+                    DAS: antes.DAS - novoDAS,
+                    DASAnual: (antes.DAS - novoDAS) * 12,
+                    INSSsocio: novoINSSTotal - inssAnteriorTotal,
+                    economiaLiquida: (antes.DAS - novoDAS) - (novoINSSTotal - inssAnteriorTotal),
+                    economiaLiquidaAnual: ((antes.DAS - novoDAS) - (novoINSSTotal - inssAnteriorTotal)) * 12,
+                    mudouAnexo: novoAnexo !== antes.anexo,
+                    resumo: totalSociosDepois + ' sócios, PL ' + Utils.formatarMoeda(plPorSocio) + '/cada → '
+                        + 'Anexo ' + novoAnexo + ', DAS ' + Utils.formatarMoeda(novoDAS) + '/mês'
+                }
+            };
+        }
+
+        /**
+         * Cenário 6: exportacao — Simula excluir receitas de exportação do cálculo
+         * @param {number} parametro — valor mensal de receita de exportação
+         * @private
+         */
+        function _simExportacao(parametro, empresa) {
+            var antes = _calcularAntes(empresa);
+            var recExportacao = parametro;
+            // Art. 3º, §4º, LC 123 — exportação não conta para o limite
+            // Mas a receita de exportação AINDA é tributada (com imunidades)
+            var receitaMercInterna = antes.receitaMensal - recExportacao;
+            var rbt12SemExp = receitaMercInterna * 12;
+            // Fator R recalculado com base na receita total (exportação conta na base de cálculo)
+            var rbt12Total = antes.receitaAnual;
+            var fatorR = rbt12Total > 0 ? (antes.folhaMensal * 12) / rbt12Total : 0;
+            var anexo = _detAnexo(antes.cnae, fatorR);
+            if (anexo === 'VEDADO') anexo = antes.anexo;
+
+            // DAS sobre receita interna
+            var dasInterno = _calcDAS(receitaMercInterna, rbt12Total, anexo, antes.folhaMensal);
+            // DAS sobre exportação: zera ICMS, PIS, COFINS, ISS
+            // Estimar economia: ~45% da alíquota efetiva sobre exportação
+            var aliqEf = _calcAliq(rbt12Total, anexo);
+            var dasExportacao = recExportacao * aliqEf * 0.55; // Sobram IRPJ, CSLL, CPP
+            var totalDAS = dasInterno + dasExportacao;
+
+            return {
+                antes: antes,
+                depois: {
+                    receitaInterna: receitaMercInterna,
+                    receitaExportacao: recExportacao,
+                    DAS: totalDAS,
+                    DASAnual: totalDAS * 12,
+                    dasInterno: dasInterno,
+                    dasExportacao: dasExportacao,
+                    nota: 'Exportação não conta para o limite de R$ 4,8M (Art. 3º, §14, LC 123)'
+                },
+                diferenca: {
+                    DAS: antes.DAS - totalDAS,
+                    DASAnual: (antes.DAS - totalDAS) * 12,
+                    economiaLiquida: antes.DAS - totalDAS,
+                    economiaLiquidaAnual: (antes.DAS - totalDAS) * 12,
+                    resumo: 'Exportação de ' + Utils.formatarMoeda(recExportacao) + '/mês → '
+                        + 'economia de ' + Utils.formatarMoeda(antes.DAS - totalDAS) + '/mês '
+                        + '(ICMS+PIS+COFINS+ISS zerados sobre exportação)'
+                }
+            };
+        }
+
+        /**
+         * Simula um cenário e retorna { antes, depois, diferenca }.
+         *
+         * @param {Object} opcoes
+         * @param {string} opcoes.cenario — Tipo: 'aumentar_proLabore' | 'mudar_cnae' | 'segregar_receitas' | 'reduzir_receita' | 'incluir_socio' | 'exportacao'
+         * @param {*} opcoes.parametro — Valor ou objeto de parâmetros
+         * @param {Object} [opcoes.empresa] — Dados da empresa (se omitido, usa Formulario.getDados)
+         * @returns {Object} { antes, depois, diferenca }
+         */
+        function simular(opcoes) {
+            if (!opcoes || !opcoes.cenario) {
+                return { erro: 'Informe { cenario, parametro, empresa }' };
+            }
+
+            var handlers = {
+                'aumentar_proLabore': _simAumentarProLabore,
+                'mudar_cnae': _simMudarCnae,
+                'segregar_receitas': _simSegregarReceitas,
+                'reduzir_receita': _simReduzirReceita,
+                'incluir_socio': _simIncluirSocio,
+                'exportacao': _simExportacao
+            };
+
+            var fn = handlers[opcoes.cenario];
+            if (!fn) {
+                return { erro: 'Cenário não reconhecido: ' + opcoes.cenario
+                    + '. Válidos: ' + Object.keys(handlers).join(', ') };
+            }
+
+            var resultado = fn(opcoes.parametro, opcoes.empresa);
+            if (resultado && !resultado.erro) {
+                resultado.cenario = opcoes.cenario;
+                resultado.simuladoEm = new Date().toISOString();
+                _historico.push(resultado);
+                Eventos.emit('simuladorCenarios:resultado', resultado);
+            }
+
+            return resultado;
+        }
+
+        /**
+         * Retorna histórico de simulações.
+         * @returns {Array}
+         */
+        function getHistorico() { return _historico; }
+
+        /**
+         * Limpa histórico.
+         */
+        function limparHistorico() { _historico = []; }
+
+        return {
+            simular: simular,
+            getHistorico: getHistorico,
+            limparHistorico: limparHistorico
+        };
+    })();
+
+
+    // ═══════════════════════════════════════════════════════════════
+    //  MÓDULO 14: COMPARATIVO DE REGIMES TRIBUTÁRIOS (CompararRegimes)
+    //  Calcula carga tributária completa: Simples Nacional × Lucro Presumido × Lucro Real
+    //  Base legal: LC 123/2006 (SN); Lei 9.249/95 (LP); DL 1.598/77, Lei 10.637/02 (LR)
+    // ═══════════════════════════════════════════════════════════════
+
+    const CompararRegimes = (function () {
+
+        /**
+         * Helper: determina se CNAE é preponderantemente serviço ou comércio/indústria.
+         * @param {string} cnae
+         * @returns {string} 'servico' | 'comercio' | 'industria'
+         * @private
+         */
+        function _tipoAtividade(cnae) {
+            if (!cnae) return 'servico';
+            var grupo = parseInt(String(cnae).replace(/\D/g, '').substring(0, 2));
+            if (grupo >= 1 && grupo <= 9) return 'industria';   // Agropecuária
+            if (grupo >= 10 && grupo <= 33) return 'industria';  // Indústria de transformação
+            if (grupo >= 35 && grupo <= 39) return 'industria';  // Utilidades
+            if (grupo >= 41 && grupo <= 43) return 'industria';  // Construção
+            if (grupo >= 45 && grupo <= 47) return 'comercio';   // Comércio
+            return 'servico'; // 49+ são preponderantemente serviços
+        }
+
+        /**
+         * Calcula carga tributária no Simples Nacional.
+         * @param {Object} params
+         * @returns {Object} Detalhamento SN
+         */
+        function _calcularSimplesNacional(params) {
+            var rbt12 = params.receitaBrutaAnual;
+            var recMensal = params.receitaBrutaMensal;
+            var folhaMensal = params.folhaMensal || 0;
+            var fatorR = rbt12 > 0 ? (folhaMensal * 12) / rbt12 : 0;
+
+            var detAnexo = _chamarIMPOST('determinarAnexo', { cnae: params.cnae, fatorR: fatorR });
+            var anexo = detAnexo ? detAnexo.anexo : 'III';
+            if (anexo === 'VEDADO') return { vedado: true, cargaAnual: Infinity };
+
+            var das = _chamarIMPOST('calcularDASMensal', {
+                receitaBrutaMensal: recMensal,
+                rbt12: rbt12,
+                anexo: anexo,
+                folhaMensal: folhaMensal,
+                issRetidoFonte: 0,
+                aliquotaRAT: 0.02
+            });
+
+            var dasValor = das ? (das.dasAPagar || das.dasValor || 0) : 0;
+            var dasAnual = dasValor * 12;
+
+            // CPP fora do DAS no Anexo IV
+            var cppFora = 0;
+            if (anexo === 'IV') {
+                cppFora = folhaMensal * 0.22 * 12; // 20% patronal + 2% RAT
+            }
+
+            var aliqEf = _chamarIMPOST('calcularAliquotaEfetiva', { rbt12: rbt12, anexo: anexo });
+
+            return {
+                regime: 'Simples Nacional',
+                anexo: anexo,
+                fatorR: fatorR,
+                dasAnual: dasAnual,
+                dasMensal: dasValor,
+                cppForaDAS: cppFora,
+                cargaAnual: dasAnual + cppFora,
+                cargaMensal: dasValor + (cppFora / 12),
+                aliquotaEfetiva: aliqEf ? aliqEf.aliquotaEfetiva : (rbt12 > 0 ? dasAnual / rbt12 : 0),
+                aliquotaEfetivaFormatada: aliqEf ? aliqEf.aliquotaEfetivaFormatada
+                    : Utils.formatarPercentual(rbt12 > 0 ? dasAnual / rbt12 : 0),
+                detalhamento: {
+                    das: dasAnual,
+                    cppFora: cppFora
+                }
+            };
+        }
+
+        /**
+         * Calcula carga tributária no Lucro Presumido.
+         * @param {Object} params
+         * @returns {Object} Detalhamento LP
+         */
+        function _calcularLucroPresumido(params) {
+            var rbt12 = params.receitaBrutaAnual;
+            var tipo = _tipoAtividade(params.cnae);
+
+            // Percentuais de presunção (Lei 9.249/95, Art. 15 e 20)
+            var percIRPJ = (tipo === 'servico') ? 0.32 : 0.08;
+            var percCSLL = (tipo === 'servico') ? 0.32 : 0.12;
+
+            // Base de cálculo
+            var baseIRPJ = rbt12 * percIRPJ;
+            var baseCSLL = rbt12 * percCSLL;
+
+            // IRPJ: 15% + adicional 10% sobre excedente de R$ 20.000/mês (R$ 240.000/ano)
+            var irpj = baseIRPJ * 0.15;
+            var adicionalIRPJ = Math.max(0, baseIRPJ - 240000) * 0.10;
+
+            // CSLL: 9%
+            var csll = baseCSLL * 0.09;
+
+            // PIS cumulativo: 0,65%
+            var pis = rbt12 * 0.0065;
+
+            // COFINS cumulativo: 3%
+            var cofins = rbt12 * 0.03;
+
+            // ISS/ICMS estimado
+            var issOuICMS = 0;
+            if (tipo === 'servico') {
+                var issAliq = (params.issAliquota || 5) / 100;
+                issOuICMS = rbt12 * issAliq;
+            } else {
+                // ICMS: alíquota estadual × margem estimada (simplificação)
+                var estadoData = _Estados && params.uf ? _Estados[params.uf] : null;
+                var icmsAliq = estadoData && estadoData.icms ? (estadoData.icms.padrao || 0.18) : 0.18;
+                // Valor agregado estimado: 30% sobre receita
+                issOuICMS = rbt12 * icmsAliq * 0.30;
+            }
+
+            // CPP: 20% patronal sobre folha + RAT 2% + FGTS 8%
+            var folhaAnual = (params.folhaMensal || 0) * 12;
+            var encargos = folhaAnual * 0.30; // 20% patronal + 2% RAT + 8% FGTS
+
+            var totalFederal = irpj + adicionalIRPJ + csll + pis + cofins;
+            var totalGeral = totalFederal + issOuICMS + encargos;
+
+            return {
+                regime: 'Lucro Presumido',
+                cargaAnual: totalGeral,
+                cargaMensal: totalGeral / 12,
+                aliquotaEfetiva: rbt12 > 0 ? totalGeral / rbt12 : 0,
+                aliquotaEfetivaFormatada: Utils.formatarPercentual(rbt12 > 0 ? totalGeral / rbt12 : 0),
+                detalhamento: {
+                    irpj: irpj,
+                    adicionalIRPJ: adicionalIRPJ,
+                    csll: csll,
+                    pis: pis,
+                    cofins: cofins,
+                    issOuICMS: issOuICMS,
+                    encargos: encargos,
+                    totalFederal: totalFederal,
+                    baseIRPJ: baseIRPJ,
+                    baseCSLL: baseCSLL,
+                    percPresuncaoIRPJ: percIRPJ,
+                    percPresuncaoCSLL: percCSLL
+                }
+            };
+        }
+
+        /**
+         * Calcula carga tributária no Lucro Real (estimativa conservadora).
+         * @param {Object} params
+         * @returns {Object} Detalhamento LR
+         */
+        function _calcularLucroReal(params) {
+            var rbt12 = params.receitaBrutaAnual;
+            var margemEstimada = params.margemLucro || 0.20;
+            var tipo = _tipoAtividade(params.cnae);
+
+            // Lucro real estimado
+            var lucroReal = rbt12 * margemEstimada;
+
+            // IRPJ: 15% sobre lucro + adicional 10% sobre excedente de R$ 240.000/ano
+            var irpj = lucroReal * 0.15;
+            var adicionalIRPJ = Math.max(0, lucroReal - 240000) * 0.10;
+
+            // CSLL: 9%
+            var csll = lucroReal * 0.09;
+
+            // PIS não cumulativo: 1,65%
+            var pisBruto = rbt12 * 0.0165;
+
+            // COFINS não cumulativo: 7,6%
+            var cofinsBruto = rbt12 * 0.076;
+
+            // Créditos PIS/COFINS: estimativa de 40% sobre compras/insumos
+            var creditoPercentual = params.percentualCreditos || 0.40;
+            var creditosPISCOFINS = (pisBruto + cofinsBruto) * creditoPercentual;
+            var pisCofinsLiquido = pisBruto + cofinsBruto - creditosPISCOFINS;
+
+            // ISS/ICMS (similar ao LP)
+            var issOuICMS = 0;
+            if (tipo === 'servico') {
+                var issAliq = (params.issAliquota || 5) / 100;
+                issOuICMS = rbt12 * issAliq;
+            } else {
+                var estadoData = _Estados && params.uf ? _Estados[params.uf] : null;
+                var icmsAliq = estadoData && estadoData.icms ? (estadoData.icms.padrao || 0.18) : 0.18;
+                issOuICMS = rbt12 * icmsAliq * 0.30;
+            }
+
+            // Encargos trabalhistas
+            var folhaAnual = (params.folhaMensal || 0) * 12;
+            var encargos = folhaAnual * 0.30;
+
+            var totalFederal = irpj + adicionalIRPJ + csll + pisCofinsLiquido;
+            var totalGeral = totalFederal + issOuICMS + encargos;
+
+            return {
+                regime: 'Lucro Real',
+                cargaAnual: totalGeral,
+                cargaMensal: totalGeral / 12,
+                aliquotaEfetiva: rbt12 > 0 ? totalGeral / rbt12 : 0,
+                aliquotaEfetivaFormatada: Utils.formatarPercentual(rbt12 > 0 ? totalGeral / rbt12 : 0),
+                margemEstimada: margemEstimada,
+                detalhamento: {
+                    lucroReal: lucroReal,
+                    irpj: irpj,
+                    adicionalIRPJ: adicionalIRPJ,
+                    csll: csll,
+                    pisBruto: pisBruto,
+                    cofinsBruto: cofinsBruto,
+                    creditosPISCOFINS: creditosPISCOFINS,
+                    pisCofinsLiquido: pisCofinsLiquido,
+                    issOuICMS: issOuICMS,
+                    encargos: encargos,
+                    totalFederal: totalFederal,
+                    percentualCreditos: creditoPercentual
+                }
+            };
+        }
+
+        /**
+         * Compara os 3 regimes tributários para a empresa informada.
+         *
+         * @param {Object} params
+         * @param {number} params.receitaBrutaAnual — Receita bruta anual
+         * @param {number} params.receitaBrutaMensal — Receita bruta mensal
+         * @param {number} params.folhaMensal — Folha de pagamento mensal
+         * @param {string} params.cnae — CNAE principal
+         * @param {string} params.uf — UF
+         * @param {number} [params.margemLucro=0.20] — Margem de lucro estimada (para LR)
+         * @param {number} [params.percentualCreditos=0.40] — % de créditos PIS/COFINS (para LR)
+         * @returns {Object} Comparativo completo
+         */
+        function compararRegimesCompleto(params) {
+            if (!params || !params.receitaBrutaAnual) {
+                return { erro: 'Informe receitaBrutaAnual para comparar regimes.' };
+            }
+
+            var sn = _calcularSimplesNacional(params);
+            var lp = _calcularLucroPresumido(params);
+            var lr = _calcularLucroReal(params);
+
+            // Determinar melhor regime
+            var regimes = [
+                { nome: 'Simples Nacional', carga: sn.vedado ? Infinity : sn.cargaAnual, dados: sn },
+                { nome: 'Lucro Presumido', carga: lp.cargaAnual, dados: lp },
+                { nome: 'Lucro Real', carga: lr.cargaAnual, dados: lr }
+            ];
+
+            regimes.sort(function (a, b) { return a.carga - b.carga; });
+            var melhor = regimes[0];
+            var pior = regimes[2];
+
+            // Economia máxima
+            var economiaMaior = pior.carga - melhor.carga;
+
+            // Quando vale mudar
+            var recomendacao = '';
+            if (melhor.nome === 'Simples Nacional') {
+                recomendacao = 'O Simples Nacional é o regime mais econômico. Permaneça nele.';
+            } else if (melhor.nome === 'Lucro Presumido') {
+                recomendacao = 'O Lucro Presumido pode gerar economia de '
+                    + Utils.formatarMoeda(sn.cargaAnual - lp.cargaAnual) + '/ano vs. Simples Nacional. '
+                    + 'Considere migrar no início do próximo ano-calendário. '
+                    + 'Avalie os custos adicionais de contabilidade.';
+            } else {
+                recomendacao = 'O Lucro Real pode gerar economia de '
+                    + Utils.formatarMoeda(sn.cargaAnual - lr.cargaAnual) + '/ano vs. Simples Nacional. '
+                    + 'Exige escrituração contábil completa (SPED). '
+                    + 'Ideal para empresas com margem de lucro baixa ou muitos créditos de PIS/COFINS.';
+            }
+
+            return {
+                simplesNacional: sn,
+                lucroPresumido: lp,
+                lucroReal: lr,
+                ranking: regimes.map(function (r) {
+                    return {
+                        regime: r.nome,
+                        cargaAnual: r.carga,
+                        cargaMensal: r.carga / 12,
+                        aliquotaEfetiva: r.dados.aliquotaEfetivaFormatada,
+                        economia: melhor.carga < Infinity ? (r.carga - melhor.carga) : 0
+                    };
+                }),
+                melhorRegime: melhor.nome,
+                melhorCargaAnual: melhor.carga,
+                economiaMaxima: economiaMaior,
+                recomendacao: recomendacao,
+                _meta: {
+                    calculadoEm: new Date().toISOString(),
+                    parametros: {
+                        receitaAnual: params.receitaBrutaAnual,
+                        cnae: params.cnae,
+                        uf: params.uf,
+                        margemLucro: params.margemLucro || 0.20,
+                        percentualCreditos: params.percentualCreditos || 0.40
+                    }
+                }
+            };
+        }
+
+        return {
+            compararRegimesCompleto: compararRegimesCompleto,
+            calcularSimplesNacional: _calcularSimplesNacional,
+            calcularLucroPresumido: _calcularLucroPresumido,
+            calcularLucroReal: _calcularLucroReal
+        };
+    })();
+
+
+    // ═══════════════════════════════════════════════════════════════
+    //  PARTE 2 — MÓDULOS 15 A 19
     //  Relatório, renderização HTML e exportação PDF/Excel
     // ═══════════════════════════════════════════════════════════════
 
@@ -4542,8 +6381,10 @@
 
     var PRODUTO = {
         nome: 'IMPOST.',
-        slogan: 'Porque pagar imposto certo é direito. Pagar menos, legalmente, é inteligência.',
-        versao: '4.1.0'
+        nomeCompleto: 'IMPOST. — Inteligência em Modelagem de Otimização Tributária',
+        slogan: 'Pagar menos imposto, legalmente, é inteligência.',
+        descricao: 'Sistema de análise e otimização tributária para empresas optantes pelo Simples Nacional. Informe os dados da sua empresa e descubra quanto você pode economizar de forma 100% legal.',
+        versao: _VERSION
     };
 
 
@@ -4582,7 +6423,7 @@
      * @private
      */
     function _moedaOuNA(v) {
-        if (v == null || isNaN(v) || v === 0) return 'N/A';
+        if (v == null || isNaN(v)) return 'N/A';
         return Utils.formatarMoeda(v);
     }
 
@@ -4614,14 +6455,7 @@
         var plano = PlanoAcao.gerar(diag);
         var explicacoes = null;
         try {
-            explicacoes = Explicacoes.obterExplicacao ? {
-                anexo: Explicacoes.obterExplicacao('anexo') || '',
-                fatorR: Explicacoes.obterExplicacao('fatorR') || '',
-                economia: Explicacoes.obterExplicacao('economia') || '',
-                iss: Explicacoes.obterExplicacao('iss') || '',
-                cpp: Explicacoes.obterExplicacao('cpp') || '',
-                mei: Explicacoes.obterExplicacao('mei') || ''
-            } : {};
+            explicacoes = Explicacoes.gerarExplicacaoCompleta(calculo);
         } catch (e) {
             explicacoes = {};
         }
@@ -4635,21 +6469,19 @@
         var dicasEconomia = null;
         var impactoDividendos = null;
 
+        // Comparativo de Regimes — usar módulo local CompararRegimes (v5.0)
+        try {
+            comparativoRegimes = CompararRegimes.compararRegimesCompleto({
+                receitaBrutaAnual: rbt12,
+                receitaBrutaMensal: d.receitaBrutaMensal,
+                folhaMensal: d.folhaMensal,
+                cnae: d.cnae,
+                uf: d.uf,
+                issAliquota: d.issAliquota || 5
+            });
+        } catch (e) { /* silenciar */ }
+
         if (_IMPOST) {
-            try {
-                if (typeof _IMPOST.compararRegimesCompleto === 'function') {
-                    comparativoRegimes = _IMPOST.compararRegimesCompleto({
-                        receitaBrutaAnual: rbt12,
-                        receitaBrutaMensal: d.receitaBrutaMensal,
-                        folhaMensal: d.folhaMensal,
-                        folhaAnual: d.folhaAnual || d.folhaMensal * 12,
-                        proLabore: d.proLabore || 0,
-                        cnae: d.cnae,
-                        uf: d.uf,
-                        socios: d.socios || []
-                    });
-                }
-            } catch (e) { /* silenciar */ }
             try {
                 if (typeof _IMPOST.gerarRelatorioOtimizacao === 'function') {
                     relatorioOtimizacao = _IMPOST.gerarRelatorioOtimizacao({
@@ -4749,6 +6581,82 @@
             penalidades2026 = _IMPOST.PENALIDADES_2026;
         }
 
+        // ── Simulações de cenários (todos os 6) ──
+        var simulacoes = [];
+        var _cenariosDef = [
+            { cenario: 'aumentar_proLabore', parametro: Math.max((d.proLabore || 3000) * 1.5, SALARIO_MINIMO_2026 * 2) },
+            { cenario: 'reduzir_receita', parametro: (d.receitaBrutaMensal || 50000) * 0.8 },
+            { cenario: 'incluir_socio', parametro: { novosSocios: 1, proLaborePorSocio: SALARIO_MINIMO_2026 } },
+            { cenario: 'exportacao', parametro: (d.receitaBrutaMensal || 50000) * 0.2 },
+            { cenario: 'segregar_receitas', parametro: 0.3 },
+            { cenario: 'mudar_cnae', parametro: d.cnae || '' }
+        ];
+        _cenariosDef.forEach(function (def) {
+            try {
+                var sim = SimuladorCenarios.simular({
+                    cenario: def.cenario,
+                    parametro: def.parametro,
+                    empresa: d
+                });
+                if (sim && !sim.erro) simulacoes.push(sim);
+            } catch (e) { /* cenário não aplicável */ }
+        });
+
+        // ── Coletar basesLegais de todas as fontes ──
+        var basesLegaisSet = {};
+        basesLegaisSet['LC 123/2006'] = 'Estatuto Nacional da Microempresa e da Empresa de Pequeno Porte';
+        basesLegaisSet['LC 155/2016'] = 'Alterações no Simples Nacional — Fator R';
+        basesLegaisSet['Resolução CGSN 140/2018'] = 'Regulamentação do Simples Nacional';
+        basesLegaisSet['Art. 10, Lei 9.249/95'] = 'Isenção de IR sobre distribuição de lucros';
+        (oportunidades || []).forEach(function (op) {
+            if (op.baseLegal) basesLegaisSet[op.baseLegal] = op.titulo || '';
+        });
+        (planoAcao.acoes || []).forEach(function (a) {
+            if (a.baseLegal) basesLegaisSet[a.baseLegal] = a.titulo || '';
+        });
+        var basesLegais = Object.keys(basesLegaisSet).map(function (k) {
+            return { referencia: k, contexto: basesLegaisSet[k] };
+        });
+
+        // ── Estrutura calculoAtual / calculoOtimizado ──
+        var _partilhaSimples = {};
+        var _tributos = ['irpj', 'csll', 'cofins', 'pis', 'cpp', 'icms', 'iss'];
+        _tributos.forEach(function (t) {
+            if (partilhaTributos[t] != null) _partilhaSimples[t] = partilhaTributos[t];
+        });
+
+        var calculoAtual = {
+            das: {
+                mensal: calculo.dasMensal ? calculo.dasMensal.semOtimizacao.valor : 0,
+                anual: calculo.anual ? calculo.anual.dasAnual : 0,
+                aliquotaEfetiva: calculo.aliquotaEfetiva ? calculo.aliquotaEfetiva.valor : 0,
+                faixa: calculo.aliquotaEfetiva ? calculo.aliquotaEfetiva.faixa : 0,
+                anexo: calculo.anexo ? calculo.anexo.anexo : ''
+            },
+            partilha: _partilhaSimples,
+            fatorR: {
+                valor: calculo.fatorR ? calculo.fatorR.valor : 0,
+                percentual: calculo.fatorR ? calculo.fatorR.percentual : '0,00%',
+                situacao: calculo.fatorR ? (calculo.fatorR.acimaDoLimiar ? 'acima' : 'abaixo') : 'desconhecido'
+            }
+        };
+
+        var _ecoMensal = calculo.dasMensal ? (calculo.dasMensal.comOtimizacao.economia || 0) : 0;
+        var _dasOtimizado = calculo.dasMensal ? (calculo.dasMensal.comOtimizacao.valor || 0) : 0;
+        var _dasAtual = calculoAtual.das.mensal;
+        var calculoOtimizado = {
+            das: {
+                mensal: _dasOtimizado,
+                anual: _dasOtimizado * 12,
+                aliquotaEfetiva: _dasAtual > 0 && d.receitaBrutaMensal > 0 ? _dasOtimizado / d.receitaBrutaMensal : 0
+            },
+            economia: {
+                mensal: _ecoMensal,
+                anual: _ecoMensal * 12,
+                percentual: _dasAtual > 0 ? _ecoMensal / _dasAtual : 0
+            }
+        };
+
         // Data formatada
         var agora = new Date();
         var geradoEmFormatado = agora.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })
@@ -4813,6 +6721,13 @@
             tributacaoDividendos2026: calculo.dividendos2026 || null,
             otimizacaoFatorR: calculo.otimizacaoFatorR || {},
             mei: calculo.mei || null,
+            // Campos do schema unificado (Parte 3)
+            calculoAtual: calculoAtual,
+            calculoOtimizado: calculoOtimizado,
+            simulacoes: simulacoes,
+            basesLegais: basesLegais,
+            versao: PRODUTO.versao,
+
             disclaimer: 'Este relat\u00f3rio tem car\u00e1ter exclusivamente informativo e educacional. '
                 + 'N\u00e3o substitui consultoria cont\u00e1bil ou jur\u00eddica profissional. '
                 + 'Valores calculados com base na legisla\u00e7\u00e3o vigente em ' + agora.getFullYear() + '. '
@@ -4968,11 +6883,19 @@
         var emp = d.empresa || {};
         var classif = emp.classificacao || '';
         var badgeClassif = classif ? ' <span class="ir-badge-me">' + _sanitize(classif) + '</span>' : '';
+        var sc = d.score || {};
+        var total = sc.total || 0;
+        var corScore = total >= 80 ? CORES.verde : total >= 60 ? CORES.primariaClara : total >= 40 ? CORES.dourado : CORES.vermelho;
+        var sit = d.situacaoAtual || {};
+        var ecoMensal = sit.economiaOtimizacao || 0;
+        var ecoAnual = ecoMensal * 12;
 
         return '<div class="ir-capa">'
+            + '<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:24px;">'
+            + '<div style="flex:1;min-width:280px;">'
             + '<div class="ir-capa-logo">IMPOST<span>.</span></div>'
             + '<div class="ir-capa-slogan">' + _sanitize(PRODUTO.slogan) + '</div>'
-            + '<div class="ir-capa-titulo">Relat\u00f3rio de Estudo Tribut\u00e1rio \u2014 Simples Nacional' + badgeClassif + '</div>'
+            + '<div class="ir-capa-titulo">Relat\u00f3rio de Otimiza\u00e7\u00e3o Tribut\u00e1ria' + badgeClassif + '</div>'
             + '<dl class="ir-capa-grid">'
             + '<dt>Empresa</dt><dd>' + _sanitize(emp.nome) + '</dd>'
             + '<dt>CNPJ</dt><dd>' + _sanitize(emp.cnpj ? Utils.formatarCNPJ(emp.cnpj) : 'N\u00e3o informado') + '</dd>'
@@ -4983,6 +6906,35 @@
             + '<dt>Data</dt><dd>' + _sanitize(d.geradoEmFormatado) + '</dd>'
             + '<dt>Vers\u00e3o</dt><dd>' + _sanitize(PRODUTO.versao) + '</dd>'
             + '</dl>'
+            + '</div>'
+            // Score em destaque na capa
+            + '<div style="text-align:center;min-width:160px;">'
+            + '<div style="width:140px;height:140px;border-radius:50%;background:rgba(255,255,255,0.15);border:4px solid ' + corScore + ';display:flex;flex-direction:column;align-items:center;justify-content:center;margin:0 auto 12px;">'
+            + '<div style="font-size:48px;font-weight:800;line-height:1;color:#fff;">' + total + '</div>'
+            + '<div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:' + corScore + ';">' + _sanitize(sc.faixa || '') + '</div>'
+            + '</div>'
+            + '<div style="font-size:12px;opacity:0.8;">Score Tribut\u00e1rio</div>'
+            + '</div>'
+            + '</div>'
+            // Resumo executivo na capa
+            + (ecoAnual > 0 || sit.dasMensal > 0
+                ? '<div style="margin-top:24px;display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;">'
+                + '<div style="background:rgba(255,255,255,0.1);border-radius:8px;padding:12px 16px;">'
+                + '<div style="font-size:11px;text-transform:uppercase;opacity:0.7;">DAS Atual</div>'
+                + '<div style="font-size:22px;font-weight:700;">' + _sanitize(Utils.formatarMoeda(sit.dasMensal || 0)) + '<span style="font-size:12px;opacity:0.7;">/m\u00eas</span></div>'
+                + '</div>'
+                + '<div style="background:rgba(255,255,255,0.1);border-radius:8px;padding:12px 16px;">'
+                + '<div style="font-size:11px;text-transform:uppercase;opacity:0.7;">DAS Otimizado</div>'
+                + '<div style="font-size:22px;font-weight:700;color:' + CORES.verde + ';">' + _sanitize(Utils.formatarMoeda(sit.dasMensalOtimizado || 0)) + '<span style="font-size:12px;opacity:0.7;">/m\u00eas</span></div>'
+                + '</div>'
+                + (ecoAnual > 0
+                    ? '<div style="background:rgba(56,161,105,0.2);border:1px solid rgba(56,161,105,0.4);border-radius:8px;padding:12px 16px;">'
+                    + '<div style="font-size:11px;text-transform:uppercase;opacity:0.7;">Economia Anual</div>'
+                    + '<div style="font-size:22px;font-weight:700;color:#68d391;">' + _sanitize(Utils.formatarMoeda(ecoAnual)) + '</div>'
+                    + '</div>'
+                    : '')
+                + '</div>'
+                : '')
             + '</div>';
     }
 
@@ -5053,20 +7005,22 @@
         var corBg = total >= 86 ? CORES.verde : total >= 71 ? CORES.primariaClara : total >= 51 ? CORES.dourado : total >= 31 ? CORES.laranja : CORES.vermelho;
 
         var barrasHTML = '';
-        var cats = sc.categorias || [];
-        if (Array.isArray(cats)) {
-            cats.forEach(function (cat) {
-                var nome = cat.nome || cat.categoria || '';
-                var pts = cat.pontuacao || cat.pontos || 0;
-                var max = cat.maximo || cat.max || 25;
-                var pct = max > 0 ? Math.min(100, (pts / max) * 100) : 0;
-                var cor = pct >= 80 ? CORES.verde : pct >= 60 ? CORES.primariaClara : pct >= 40 ? CORES.dourado : CORES.vermelho;
-                barrasHTML += '<div class="ir-score-barra">'
-                    + '<div class="ir-score-barra-label"><span>' + _sanitize(nome) + '</span><span>' + pts + '/' + max + '</span></div>'
-                    + '<div class="ir-score-barra-track"><div class="ir-score-barra-fill" style="width:' + pct + '%;background:' + cor + '"></div></div>'
-                    + '</div>';
-            });
-        }
+        var cats = sc.categorias || {};
+        var catsArray = Array.isArray(cats) ? cats : Object.keys(cats).map(function(k) {
+            var c = cats[k];
+            return { nome: NOMES_CATEGORIA_SCORE[k] || k, pontuacao: c.pontos, maximo: c.maximo, motivo: c.motivo };
+        });
+        catsArray.forEach(function (cat) {
+            var nome = cat.nome || cat.categoria || '';
+            var pts = cat.pontuacao || cat.pontos || 0;
+            var max = cat.maximo || cat.max || 25;
+            var pct = max > 0 ? Math.min(100, (pts / max) * 100) : 0;
+            var cor = pct >= 80 ? CORES.verde : pct >= 60 ? CORES.primariaClara : pct >= 40 ? CORES.dourado : CORES.vermelho;
+            barrasHTML += '<div class="ir-score-barra">'
+                + '<div class="ir-score-barra-label"><span>' + _sanitize(nome) + '</span><span>' + pts + '/' + max + '</span></div>'
+                + '<div class="ir-score-barra-track"><div class="ir-score-barra-fill" style="width:' + pct + '%;background:' + cor + '"></div></div>'
+                + '</div>';
+        });
 
         return '<div class="ir-secao">'
             + '<div class="ir-secao-titulo"><span class="ir-secao-numero">02</span> Score Tribut\u00e1rio</div>'
@@ -5088,31 +7042,96 @@
         var sit = d.situacaoAtual || {};
         var part = d.partilhaTributos || {};
 
-        var rowsPartilha = '';
+        // Cards de indicadores principais
+        var cardsHTML = '<div class="ir-cards" style="margin-bottom:24px;">'
+            + '<div class="ir-card"><div class="ir-card-label">DAS Mensal</div><div class="ir-card-valor">' + _sanitize(Utils.formatarMoeda(sit.dasMensal)) + '</div>'
+            + '<div class="ir-card-sub">DAS anual: ' + _sanitize(Utils.formatarMoeda(sit.dasAnual)) + '</div></div>'
+            + '<div class="ir-card"><div class="ir-card-label">Al\u00edquota Efetiva</div><div class="ir-card-valor">' + _sanitize(sit.aliquotaEfetivaFormatada || '0,00%') + '</div>'
+            + '<div class="ir-card-sub">Nominal: ' + _sanitize(sit.aliquotaNominalFormatada || 'N/A') + '</div></div>'
+            + '<div class="ir-card"><div class="ir-card-label">Anexo</div><div class="ir-card-valor" style="font-size:18px;">' + _sanitize(sit.anexo || 'N/A') + '</div>'
+            + '<div class="ir-card-sub">' + _sanitize(sit.anexoNome || '') + '</div></div>'
+            + '<div class="ir-card"><div class="ir-card-label">Faixa</div><div class="ir-card-valor" style="font-size:18px;">' + _sanitize(sit.faixa || '') + '\u00aa</div>'
+            + '<div class="ir-card-sub">' + _sanitize(sit.faixaDescricao || '') + '</div></div>'
+            + '</div>';
+
+        // Fator R — barra visual colorida
+        var frVal = sit.fatorR || 0;
+        var frPct = Math.min(100, typeof frVal === 'number' ? frVal * 100 : parseFloat(frVal) || 0);
+        var frCor = sit.fatorRAcimaLimiar ? CORES.verde : CORES.vermelho;
+        var frBadge = sit.fatorRAcimaLimiar
+            ? '<span class="ir-badge ir-badge-baixo">\u2265 28% \u2014 Pode migrar para Anexo III</span>'
+            : '<span class="ir-badge ir-badge-alto">&lt; 28% \u2014 Permanece no Anexo V</span>';
+
+        var fatorRHTML = '<div style="margin-bottom:24px;">'
+            + '<h4 style="color:' + CORES.primaria + ';margin-bottom:10px;">Fator R</h4>'
+            + '<div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">'
+            + '<div style="flex:1;min-width:250px;">'
+            + '<div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px;">'
+            + '<span>Fator R: <strong>' + _sanitize(sit.fatorRPercentual || '0,00%') + '</strong></span>'
+            + '<span style="color:' + CORES.cinzaSecundario + '">Limiar: 28%</span></div>'
+            + '<div style="height:28px;background:' + CORES.cinzaBorda + ';border-radius:14px;overflow:hidden;position:relative;">'
+            + '<div style="width:' + frPct + '%;height:100%;background:linear-gradient(90deg,' + frCor + ',' + (sit.fatorRAcimaLimiar ? '#68d391' : '#fc8181') + ');border-radius:14px;transition:width 0.8s;"></div>'
+            + '<div style="position:absolute;left:28%;top:0;bottom:0;width:2px;background:' + CORES.primaria + ';opacity:0.6;"></div>'
+            + '<div style="position:absolute;left:calc(28% + 4px);top:50%;transform:translateY(-50%);font-size:10px;color:' + CORES.primaria + ';font-weight:600;">28%</div>'
+            + '</div>'
+            + '<div style="margin-top:6px;">' + frBadge + '</div>'
+            + '</div></div></div>';
+
+        // Partilha — tabela + gráfico pizza CSS
         var tributos = ['irpj', 'csll', 'cofins', 'pis', 'cpp', 'icms', 'iss'];
         var nomeTrib = { irpj: 'IRPJ', csll: 'CSLL', cofins: 'COFINS', pis: 'PIS/Pasep', cpp: 'CPP', icms: 'ICMS', iss: 'ISS' };
+        var coresTrib = { irpj: '#1a365d', csll: '#2b6cb0', cofins: '#38a169', pis: '#d69e2e', cpp: '#dd6b20', icms: '#e53e3e', iss: '#805ad5' };
+        var partData = [];
+        var partTotal = 0;
         tributos.forEach(function (t) {
             var val = part[t];
-            if (val != null && !isNaN(val)) {
-                rowsPartilha += '<tr><td>' + (nomeTrib[t] || t.toUpperCase()) + '</td>'
-                    + '<td class="ir-td-perc">' + _sanitize(typeof val === 'number' && val < 1 ? Utils.formatarPercentual(val) : val + '%') + '</td></tr>';
+            if (val == null) return;
+            var pctVal = 0;
+            if (typeof val === 'object' && val !== null) {
+                pctVal = (val.percentual || 0) * 100;
+            } else if (typeof val === 'number') {
+                pctVal = val < 1 ? val * 100 : val;
+            } else {
+                pctVal = parseFloat(val) || 0;
+            }
+            if (pctVal > 0.01) {
+                partData.push({ nome: nomeTrib[t] || t.toUpperCase(), pct: pctVal, cor: coresTrib[t] || '#718096' });
+                partTotal += pctVal;
             }
         });
 
+        var partilhaHTML = '';
+        if (partData.length > 0) {
+            // Gerar conic-gradient para pizza CSS
+            var gradParts = [];
+            var acum = 0;
+            partData.forEach(function (p) {
+                var frac = partTotal > 0 ? (p.pct / partTotal) * 100 : 0;
+                gradParts.push(p.cor + ' ' + acum.toFixed(1) + '% ' + (acum + frac).toFixed(1) + '%');
+                acum += frac;
+            });
+
+            var legendaHTML = '';
+            partData.forEach(function (p) {
+                legendaHTML += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">'
+                    + '<div style="width:14px;height:14px;border-radius:3px;background:' + p.cor + ';flex-shrink:0;"></div>'
+                    + '<span style="font-size:13px;flex:1;">' + _sanitize(p.nome) + '</span>'
+                    + '<span style="font-size:13px;font-weight:600;font-family:\'JetBrains Mono\',monospace;">' + p.pct.toFixed(2) + '%</span>'
+                    + '</div>';
+            });
+
+            partilhaHTML = '<h4 style="color:' + CORES.primaria + ';margin:24px 0 12px;">Partilha de Tributos no DAS</h4>'
+                + '<div style="display:flex;gap:32px;align-items:center;flex-wrap:wrap;">'
+                + '<div style="width:180px;height:180px;border-radius:50%;background:conic-gradient(' + gradParts.join(',') + ');flex-shrink:0;box-shadow:inset 0 0 0 30px ' + CORES.branco + ';"></div>'
+                + '<div style="flex:1;min-width:200px;">' + legendaHTML + '</div>'
+                + '</div>';
+        }
+
         return '<div class="ir-secao">'
             + '<div class="ir-secao-titulo"><span class="ir-secao-numero">03</span> Situa\u00e7\u00e3o Atual</div>'
-            + '<table class="ir-tabela"><thead><tr><th>Indicador</th><th>Valor</th></tr></thead><tbody>'
-            + '<tr><td>Anexo do Simples Nacional</td><td class="ir-td-valor">' + _sanitize(sit.anexo || '') + ' \u2014 ' + _sanitize(sit.anexoNome || '') + '</td></tr>'
-            + '<tr><td>Fator R</td><td class="ir-td-valor">' + _sanitize(sit.fatorRPercentual || '0,00%') + (sit.fatorRAcimaLimiar ? ' <span class="ir-badge ir-badge-baixo">\u2265 28%</span>' : ' <span class="ir-badge ir-badge-alto">&lt; 28%</span>') + '</td></tr>'
-            + '<tr><td>Al\u00edquota Nominal</td><td class="ir-td-valor">' + _sanitize(sit.aliquotaNominalFormatada || 'N/A') + '</td></tr>'
-            + '<tr><td>Al\u00edquota Efetiva</td><td class="ir-td-valor">' + _sanitize(sit.aliquotaEfetivaFormatada || '0,00%') + '</td></tr>'
-            + '<tr><td>Faixa</td><td class="ir-td-valor">' + _sanitize(sit.faixaDescricao || 'N/A') + '</td></tr>'
-            + '<tr><td>DAS Mensal</td><td class="ir-td-valor">' + _sanitize(Utils.formatarMoeda(sit.dasMensal)) + '</td></tr>'
-            + '<tr><td>DAS Anual</td><td class="ir-td-valor">' + _sanitize(Utils.formatarMoeda(sit.dasAnual)) + '</td></tr>'
-            + '</tbody></table>'
-            + (rowsPartilha ? '<h4 style="margin:20px 0 8px;color:' + CORES.primaria + '">Partilha de Tributos</h4>'
-                + '<table class="ir-tabela"><thead><tr><th>Tributo</th><th style="text-align:center">Percentual</th></tr></thead><tbody>' + rowsPartilha + '</tbody></table>'
-                : '')
+            + cardsHTML
+            + fatorRHTML
+            + partilhaHTML
             + '</div>';
     }
 
@@ -5171,7 +7190,11 @@
             + '<td class="ir-td-perc">' + _sanitize(sn.obrigacoes || 'Reduzidas') + '</td>'
             + '<td class="ir-td-perc">' + _sanitize(lp.obrigacoes || 'Intermedi\u00e1rias') + '</td>'
             + '<td class="ir-td-perc">' + _sanitize(lr.obrigacoes || 'Extensas') + '</td></tr>'
-            + '</tbody></table></div>';
+            + '</tbody></table>'
+            + '<div class="ir-alerta ir-alerta-info" style="margin-top:12px;font-size:12px;">'
+            + '<strong>Nota:</strong> Os valores de Lucro Presumido e Lucro Real s\u00e3o meramente estimativos e n\u00e3o consideram todas as vari\u00e1veis de cada regime. '
+            + 'Consulte seu contador para uma an\u00e1lise detalhada antes de qualquer decis\u00e3o de mudan\u00e7a de regime tribut\u00e1rio.'
+            + '</div></div>';
     }
 
     /**
@@ -5320,6 +7343,11 @@
             + '<div class="ir-card ir-card-verde"><div class="ir-card-label">Lucro Distribu\u00edvel</div><div class="ir-card-valor">' + _sanitize(Utils.formatarMoeda(dist.lucroDistribuivel || 0)) + '</div></div>'
             + '</div>'
             + tabelaSocios
+            + '<div class="ir-explicacao" style="margin-top:16px;">'
+            + '<div class="ir-explicacao-titulo">Base Legal</div>'
+            + '<p>A distribui\u00e7\u00e3o de lucros apurados em escritura\u00e7\u00e3o cont\u00e1bil ou por presun\u00e7\u00e3o (Simples Nacional) \u00e9 isenta de Imposto de Renda na fonte e na declara\u00e7\u00e3o do benefici\u00e1rio.</p>'
+            + '<div class="ir-explicacao-legal">Art. 10, Lei 9.249/95 \u2014 "Os lucros ou dividendos calculados com base nos resultados apurados a partir do m\u00eas de janeiro de 1996, pagos ou creditados pelas pessoas jur\u00eddicas tributadas com base no lucro real, presumido ou arbitrado, n\u00e3o ficar\u00e3o sujeitos \u00e0 incid\u00eancia do imposto de renda na fonte, nem integrar\u00e3o a base de c\u00e1lculo do imposto de renda do benefici\u00e1rio."</div>'
+            + '</div>'
             + (divid ? '<div class="ir-alerta ir-alerta-aviso"><strong>Alerta \u2014 Dividendos 2026 (Lei 15.270/2025):</strong> Distribui\u00e7\u00f5es acima de R$ 50.000,00/m\u00eas poder\u00e3o ser tributadas na fonte. Consulte seu contador para planejamento.</div>' : '')
             + (dist.alertas && dist.alertas.length > 0 ? dist.alertas.map(function (a) {
                 return '<div class="ir-alerta ir-alerta-aviso">' + _sanitize(typeof a === 'string' ? a : a.mensagem || a.alerta || String(a)) + '</div>';
@@ -5408,12 +7436,21 @@
         }
 
         if (riscos.length > 0) {
+            var _gravOrdem = { critica: 0, critico: 0, alta: 1, alto: 1, media: 2, medio: 2, baixa: 3, baixo: 3 };
+            var riscosOrdenados = riscos.slice().sort(function (a, b) {
+                var ga = _gravOrdem[(a.gravidade || 'media').toLowerCase()]; if (ga == null) ga = 2;
+                var gb = _gravOrdem[(b.gravidade || 'media').toLowerCase()]; if (gb == null) gb = 2;
+                return ga - gb;
+            });
+            var iconesGrav = { critica: '\u26D4', critico: '\u26D4', alta: '\u26A0', alto: '\u26A0', media: '\u2139', medio: '\u2139', baixa: '\u2714', baixo: '\u2714' };
             html += '<h4 style="color:' + CORES.laranja + ';margin:20px 0 10px;">Riscos Fiscais</h4>'
-                + '<table class="ir-tabela"><thead><tr><th>Risco</th><th>Gravidade</th><th>Recomenda\u00e7\u00e3o</th></tr></thead><tbody>';
-            riscos.forEach(function (r) {
+                + '<table class="ir-tabela"><thead><tr><th style="width:40px"></th><th>Risco</th><th>Gravidade</th><th>Recomenda\u00e7\u00e3o</th></tr></thead><tbody>';
+            riscosOrdenados.forEach(function (r) {
                 var grav = (r.gravidade || 'media').toLowerCase();
-                var badgeClass = grav === 'alta' || grav === 'critica' ? 'ir-badge-critico' : grav === 'media' ? 'ir-badge-medio' : 'ir-badge-baixo';
-                html += '<tr><td><strong>' + _sanitize(r.titulo) + '</strong><br><span style="font-size:12px;color:' + CORES.cinzaSecundario + '">' + _sanitize(r.descricao || '') + '</span></td>'
+                var badgeClass = grav === 'alta' || grav === 'critica' || grav === 'critico' || grav === 'alto' ? 'ir-badge-critico' : grav === 'media' || grav === 'medio' ? 'ir-badge-medio' : 'ir-badge-baixo';
+                var icone = iconesGrav[grav] || '\u2139';
+                html += '<tr><td style="font-size:18px;text-align:center;">' + icone + '</td>'
+                    + '<td><strong>' + _sanitize(r.titulo) + '</strong><br><span style="font-size:12px;color:' + CORES.cinzaSecundario + '">' + _sanitize(r.descricao || '') + '</span></td>'
                     + '<td><span class="ir-badge ' + badgeClass + '">' + _sanitize(grav) + '</span></td>'
                     + '<td style="font-size:13px;">' + _sanitize(r.recomendacao || '') + '</td></tr>';
             });
@@ -5735,7 +7772,32 @@
         var wsResumo = XLSX.utils.aoa_to_sheet(resumo);
         XLSX.utils.book_append_sheet(wb, wsResumo, 'Resumo Executivo');
 
-        // --- Aba 2: Situa\u00e7\u00e3o Atual ---
+        // --- Aba 2: DAS Mensal 12 Meses ---
+        var dasRows = [['M\u00eas', 'Receita Mensal (R$)', 'RBT12 Estimada (R$)', 'Al\u00edq. Efetiva (%)', 'DAS (R$)', 'Observa\u00e7\u00e3o']];
+        var mesesNome = ['Janeiro', 'Fevereiro', 'Mar\u00e7o', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+        var recMensal = emp.receitaMensal || 0;
+        var rbt12Est = emp.receitaAnual || recMensal * 12;
+        var aliqEfetiva = sit.aliquotaEfetiva || 0;
+        var dasMensalVal = sit.dasMensal || 0;
+        var totalDAS12 = 0;
+        var totalRec12 = 0;
+        for (var mi = 0; mi < 12; mi++) {
+            var recMes = recMensal;
+            var dasMes = dasMensalVal;
+            var obs = '';
+            if (mi === 0) obs = 'Compet\u00eancia jan/' + new Date().getFullYear();
+            if (mi === 11) obs = '\u00daltima compet\u00eancia';
+            totalDAS12 += dasMes;
+            totalRec12 += recMes;
+            dasRows.push([mesesNome[mi], recMes, rbt12Est, aliqEfetiva, dasMes, obs]);
+        }
+        dasRows.push(['']);
+        dasRows.push(['TOTAL 12 MESES', totalRec12, '', '', totalDAS12, '']);
+        dasRows.push(['M\u00c9DIA MENSAL', totalRec12 / 12, '', '', totalDAS12 / 12, '']);
+        var wsDAS = XLSX.utils.aoa_to_sheet(dasRows);
+        XLSX.utils.book_append_sheet(wb, wsDAS, 'DAS Mensal 12 Meses');
+
+        // --- Aba 3: Situa\u00e7\u00e3o Atual ---
         var sitRows = [
             ['Indicador', 'Valor'],
             ['Anexo', sit.anexo || ''],
@@ -5795,9 +7857,28 @@
             var sn = dados.comparativoRegimes.simplesNacional || dados.comparativoRegimes.simples || {};
             var lp = dados.comparativoRegimes.lucroPresumido || dados.comparativoRegimes.presumido || {};
             var lr = dados.comparativoRegimes.lucroReal || dados.comparativoRegimes.real || {};
-            compRows.push(['Carga Tribut\u00e1ria Anual', sn.cargaTotal || 0, lp.cargaTotal || 0, lr.cargaTotal || 0]);
+            compRows.push(['Carga Tribut\u00e1ria Anual', sn.cargaTotal || sn.dasAnual || 0, lp.cargaTotal || lp.cargaAnual || 0, lr.cargaTotal || lr.cargaAnual || 0]);
+            compRows.push(['Carga Mensal', (sn.cargaTotal || sn.dasAnual || 0) / 12, (lp.cargaTotal || lp.cargaAnual || 0) / 12, (lr.cargaTotal || lr.cargaAnual || 0) / 12]);
             compRows.push(['Al\u00edquota Efetiva', sn.aliquotaEfetiva || 0, lp.aliquotaEfetiva || 0, lr.aliquotaEfetiva || 0]);
-            compRows.push(['Complexidade', sn.complexidade || '', lp.complexidade || '', lr.complexidade || '']);
+            compRows.push(['Complexidade', sn.complexidade || 'Baixa', lp.complexidade || 'M\u00e9dia', lr.complexidade || 'Alta']);
+            compRows.push(['Obriga\u00e7\u00f5es Acess\u00f3rias', sn.obrigacoes || 'Reduzidas', lp.obrigacoes || 'Intermedi\u00e1rias', lr.obrigacoes || 'Extensas']);
+            compRows.push(['']);
+            if (lp.detalhamento) {
+                compRows.push(['Detalhamento LP', '', '', '']);
+                compRows.push(['  IRPJ', '', lp.detalhamento.irpj || 0, '']);
+                compRows.push(['  CSLL', '', lp.detalhamento.csll || 0, '']);
+                compRows.push(['  PIS', '', lp.detalhamento.pis || 0, '']);
+                compRows.push(['  COFINS', '', lp.detalhamento.cofins || 0, '']);
+            }
+            if (lr.detalhamento) {
+                compRows.push(['Detalhamento LR', '', '', '']);
+                compRows.push(['  IRPJ', '', '', lr.detalhamento.irpj || 0]);
+                compRows.push(['  CSLL', '', '', lr.detalhamento.csll || 0]);
+                compRows.push(['  PIS/COFINS L\u00edq.', '', '', lr.detalhamento.pisCofinsLiquido || 0]);
+            }
+            compRows.push(['']);
+            compRows.push(['Melhor Regime', dados.comparativoRegimes.melhorRegime || '', '', '']);
+            compRows.push(['Recomenda\u00e7\u00e3o', dados.comparativoRegimes.recomendacao || '', '', '']);
         } else {
             compRows.push(['N\u00e3o dispon\u00edvel', '', '', '']);
         }
@@ -5855,7 +7936,12 @@
             [''],
             ['Categoria', 'Pontua\u00e7\u00e3o', 'M\u00e1ximo']
         ];
-        (sc.categorias || []).forEach(function (cat) {
+        var catsExcel = sc.categorias || {};
+        var catsArr = Array.isArray(catsExcel) ? catsExcel : Object.keys(catsExcel).map(function(k) {
+            var c = catsExcel[k];
+            return { nome: NOMES_CATEGORIA_SCORE[k] || k, pontuacao: c.pontos, maximo: c.maximo };
+        });
+        catsArr.forEach(function (cat) {
             scoreRows.push([cat.nome || cat.categoria || '', cat.pontuacao || cat.pontos || 0, cat.maximo || cat.max || 25]);
         });
         var wsScore = XLSX.utils.aoa_to_sheet(scoreRows);
@@ -5917,7 +8003,507 @@
 
 
     // ═══════════════════════════════════════════════════════════════
-    //  EXPORTAÇÃO FINAL — Todos os 17 módulos
+    //  DEMONSTRAÇÃO — Executa módulos 7, 8 e 9 com dados reais
+    // ═══════════════════════════════════════════════════════════════
+
+    /**
+     * Executa demonstração completa dos módulos 7 (Calculadora), 8 (Diagnóstico)
+     * e 9 (Score) com dados de exemplo reais usando IMPOST.
+     *
+     * Dados de exemplo: empresa de tecnologia (CNAE 62.01-5) em São Paulo.
+     * Receita: R$ 50.000/mês. Folha: R$ 12.000/mês. Pró-labore: R$ 5.000.
+     *
+     * @returns {Object} { calculo, diagnostico, score }
+     */
+    function executarDemonstracao() {
+        var sep = '═'.repeat(70);
+        var lin = '─'.repeat(50);
+
+        console.log('\n' + sep);
+        console.log('  SIMPLES-ESTUDOS v' + _VERSION + ' — DEMONSTRAÇÃO DE CÁLCULOS REAIS');
+        console.log('  Motor: IMPOST (simples_nacional.js) ' + (_IMPOST ? 'v' + (_IMPOST.VERSION || '?') : 'NÃO CARREGADO'));
+        console.log(sep + '\n');
+
+        if (!_IMPOST) {
+            console.error('[DEMO] IMPOST não carregado. Carregue simples_nacional.js primeiro.');
+            return { erro: 'IMPOST não carregado' };
+        }
+
+        // ── Dados de exemplo ──
+        var dadosExemplo = {
+            nomeEmpresa: 'EMPRESA EXEMPLO LTDA',
+            cnae: '62.01-5',
+            uf: 'PA',
+            municipio: 'Belém',
+            receitaBrutaMensal: 50000,
+            receitaBrutaAnual: 600000,
+            folhaMensal: 12000,
+            proLabore: 5000,
+            issAliquota: 5.00,
+            receitaMonofasica: 0,
+            receitaExportacao: 0,
+            receitaICMS_ST: 0,
+            receitaLocacaoBensMoveis: 0,
+            issRetidoFonte: 0,
+            socios: [
+                { nome: 'Sócio 1', percentual: 0.50 },
+                { nome: 'Sócio 2', percentual: 0.50 }
+            ]
+        };
+
+        console.log('  DADOS DE ENTRADA:');
+        console.log('  Empresa: ' + dadosExemplo.nomeEmpresa);
+        console.log('  CNAE: ' + dadosExemplo.cnae + ' (Desenvolvimento de software)');
+        console.log('  UF: ' + dadosExemplo.uf + ' | Município: ' + dadosExemplo.municipio);
+        console.log('  Receita mensal: ' + Utils.formatarMoeda(dadosExemplo.receitaBrutaMensal));
+        console.log('  Receita anual:  ' + Utils.formatarMoeda(dadosExemplo.receitaBrutaAnual));
+        console.log('  Folha mensal:   ' + Utils.formatarMoeda(dadosExemplo.folhaMensal));
+        console.log('  Pró-labore:     ' + Utils.formatarMoeda(dadosExemplo.proLabore));
+        console.log('  ISS:            ' + dadosExemplo.issAliquota + '%');
+        console.log('  Sócios:         ' + dadosExemplo.socios.length + '\n');
+
+        // ── Carregar dados no Formulário ──
+        Formulario.carregarDados(dadosExemplo);
+
+        // ══════════════════════════════════════════
+        //  MÓDULO 7: Calculadora
+        // ══════════════════════════════════════════
+        console.log(lin);
+        console.log('  MÓDULO 7: CALCULADORA — Cálculos com IMPOST real');
+        console.log(lin);
+
+        // 7a. Fator R
+        var fatorR = null;
+        try {
+            fatorR = Calculadora.calcularFatorRDireto({
+                folhaSalarios12Meses: dadosExemplo.folhaMensal * 12,
+                receitaBruta12Meses: dadosExemplo.receitaBrutaAnual
+            });
+            console.log('  [OK] calcularFatorR:');
+            console.log('       Fator R = ' + (fatorR.fatorRPercentual || Utils.formatarPercentual(fatorR.fatorR)));
+            console.log('       Acima do limiar 28%? ' + (fatorR.acimaDoLimiar ? 'SIM' : 'NÃO'));
+            console.log('       Anexo resultante: ' + fatorR.anexoResultante);
+        } catch (e) {
+            console.error('  [ERRO] calcularFatorR: ' + e.message);
+        }
+
+        // 7b. Determinar Anexo
+        var anexo = null;
+        try {
+            var frVal = fatorR ? fatorR.fatorR : 0;
+            anexo = Calculadora.determinarAnexo(dadosExemplo.cnae, frVal);
+            console.log('  [OK] determinarAnexo:');
+            console.log('       CNAE ' + dadosExemplo.cnae + ' → Anexo ' + anexo.anexo);
+            console.log('       Tipo: ' + anexo.tipo + ' | CPP inclusa: ' + (anexo.cppInclusa !== false));
+        } catch (e) {
+            console.error('  [ERRO] determinarAnexo: ' + e.message);
+        }
+
+        // 7c. Alíquota Efetiva
+        var aliquota = null;
+        var anexoFinal = anexo ? anexo.anexo : 'V';
+        try {
+            aliquota = Calculadora.calcularAliquotaEfetiva({
+                rbt12: dadosExemplo.receitaBrutaAnual,
+                anexo: anexoFinal
+            });
+            console.log('  [OK] calcularAliquotaEfetiva:');
+            console.log('       Faixa: ' + aliquota.faixa + 'ª | Alíq. nominal: ' + aliquota.aliquotaNominalFormatada);
+            console.log('       Parcela a deduzir: ' + Utils.formatarMoeda(aliquota.parcelaADeduzir));
+            console.log('       ALÍQUOTA EFETIVA: ' + aliquota.aliquotaEfetivaFormatada);
+        } catch (e) {
+            console.error('  [ERRO] calcularAliquotaEfetiva: ' + e.message);
+        }
+
+        // 7d. DAS Mensal
+        var das = null;
+        try {
+            das = Calculadora.calcularDASMensal({
+                receitaBrutaMensal: dadosExemplo.receitaBrutaMensal,
+                rbt12: dadosExemplo.receitaBrutaAnual,
+                anexo: anexoFinal,
+                folhaMensal: dadosExemplo.folhaMensal
+            });
+            console.log('  [OK] calcularDASMensal:');
+            console.log('       DAS valor: ' + Utils.formatarMoeda(das.dasValor || das.dasAPagar));
+            console.log('       DAS a pagar: ' + Utils.formatarMoeda(das.dasAPagar || das.dasValor));
+            console.log('       INSS patronal fora: ' + Utils.formatarMoeda(das.inssPatronalFora || 0));
+            console.log('       TOTAL a pagar: ' + Utils.formatarMoeda(das.totalAPagar || das.dasAPagar || das.dasValor));
+        } catch (e) {
+            console.error('  [ERRO] calcularDASMensal: ' + e.message);
+        }
+
+        // 7e. Partilha de Tributos
+        var partilha = null;
+        if (das && aliquota) {
+            try {
+                partilha = Calculadora.calcularPartilhaTributos(
+                    das.dasValor || das.dasAPagar || 0,
+                    aliquota.faixa,
+                    anexoFinal,
+                    dadosExemplo.receitaBrutaMensal,
+                    aliquota.aliquotaEfetiva
+                );
+                console.log('  [OK] calcularPartilhaTributos:');
+                var tributos = ['irpj', 'csll', 'cofins', 'pis', 'cpp', 'iss', 'icms'];
+                tributos.forEach(function (t) {
+                    if (partilha[t]) {
+                        var p = partilha[t];
+                        console.log('       ' + t.toUpperCase().padEnd(7) + ': '
+                            + (p.percentualFormatado || Utils.formatarPercentual(p.percentual || 0)).padEnd(8)
+                            + ' → ' + Utils.formatarMoeda(p.valor || 0));
+                    }
+                });
+            } catch (e) {
+                console.error('  [ERRO] calcularPartilhaTributos: ' + e.message);
+            }
+        }
+
+        // 7f. Consolidado Anual (calcularTudo)
+        var resultado = null;
+        try {
+            resultado = Calculadora.calcularTudo();
+            console.log('  [OK] calcularTudo (consolidado anual):');
+            console.log('       DAS anual: ' + Utils.formatarMoeda(resultado.anual ? resultado.anual.dasAnual : 0));
+            console.log('       Alíquota efetiva: ' + (resultado.aliquotaEfetiva ? resultado.aliquotaEfetiva.formatada : 'N/D'));
+            console.log('       Classificação: ' + (resultado.classificacao ? resultado.classificacao.tipo : 'N/D'));
+            console.log('       Elegível: ' + (resultado.elegibilidade ? resultado.elegibilidade.elegivel : 'N/D'));
+            if (resultado.otimizacaoFatorR && resultado.otimizacaoFatorR.aplicavel) {
+                console.log('       Otimização Fator R: ' + (resultado.otimizacaoFatorR.valeAPena ? 'COMPENSA' : 'Não compensa'));
+                if (resultado.otimizacaoFatorR.economiaLiquida) {
+                    console.log('       Economia líquida Fator R: ' + Utils.formatarMoeda(resultado.otimizacaoFatorR.economiaLiquida) + '/ano');
+                }
+            }
+        } catch (e) {
+            console.error('  [ERRO] calcularTudo: ' + e.message);
+        }
+
+        // ══════════════════════════════════════════
+        //  MÓDULO 8: Diagnóstico
+        // ══════════════════════════════════════════
+        console.log('\n' + lin);
+        console.log('  MÓDULO 8: DIAGNÓSTICO — Oportunidades e alertas');
+        console.log(lin);
+
+        var diagnostico = null;
+        try {
+            diagnostico = Diagnostico.executar(resultado);
+            console.log('  [OK] Diagnóstico executado:');
+            console.log('       Verificações: ' + diagnostico.totalVerificacoes);
+            console.log('       Oportunidades: ' + diagnostico.oportunidadesEncontradas);
+            console.log('       Alertas: ' + diagnostico.alertasEncontrados);
+            console.log('       Informativos: ' + diagnostico.informativosEncontrados);
+            console.log('       ECONOMIA TOTAL: ' + diagnostico.economiaTotal.anualFormatada + '/ano');
+
+            if (diagnostico.oportunidades.length > 0) {
+                console.log('\n       TOP OPORTUNIDADES:');
+                diagnostico.oportunidades.forEach(function (op, i) {
+                    console.log('       #' + (i + 1) + ' ' + op.titulo);
+                    console.log('          Economia: ' + Utils.formatarMoeda(op.economiaAnual || 0) + '/ano');
+                    console.log('          Base legal: ' + (op.baseLegal || 'N/D'));
+                });
+            }
+
+            if (diagnostico.alertas.length > 0) {
+                console.log('\n       ALERTAS:');
+                diagnostico.alertas.forEach(function (al) {
+                    console.log('       ⚠ ' + al.titulo);
+                });
+            }
+        } catch (e) {
+            console.error('  [ERRO] Diagnóstico: ' + e.message);
+        }
+
+        // ══════════════════════════════════════════
+        //  MÓDULO 9: Score
+        // ══════════════════════════════════════════
+        console.log('\n' + lin);
+        console.log('  MÓDULO 9: SCORE — Saúde tributária');
+        console.log(lin);
+
+        var score = null;
+        try {
+            score = Score.calcular(diagnostico, resultado);
+            console.log('  [OK] Score calculado:');
+            console.log('       NOTA: ' + score.total + '/100 — ' + score.faixa + ' ' + score.iconeFaixa);
+            console.log('       ' + score.descricaoFaixa);
+            console.log('       Economia potencial: ' + score.economiaPotencialAnualFormatada + '/ano');
+            console.log('\n       DETALHAMENTO POR CATEGORIA:');
+            Object.keys(score.categorias).forEach(function (cat) {
+                var c = score.categorias[cat];
+                var nome = NOMES_CATEGORIA_SCORE[cat] || cat;
+                var barra = '';
+                var cheio = Math.round((c.pontos / c.maximo) * 10);
+                for (var bi = 0; bi < 10; bi++) barra += bi < cheio ? '█' : '░';
+                console.log('       ' + nome.padEnd(22) + ' ' + barra + ' ' + c.pontos + '/' + c.maximo);
+                console.log('         → ' + c.motivo);
+            });
+        } catch (e) {
+            console.error('  [ERRO] Score: ' + e.message);
+        }
+
+        // ══════════════════════════════════════════
+        //  MÓDULO 11: Plano de Ação (v5.0 — Priorizado Real)
+        // ══════════════════════════════════════════
+        console.log('\n' + lin);
+        console.log('  MÓDULO 11: PLANO DE AÇÃO — Ações priorizadas por economia');
+        console.log(lin);
+
+        var plano = null;
+        try {
+            plano = PlanoAcao.gerar(diagnostico, resultado);
+            console.log('  [OK] Plano de Ação gerado:');
+            console.log('       Total de ações: ' + plano.totalAcoes);
+            console.log('       ECONOMIA TOTAL: ' + plano.economiaTotalFormatada + '/ano');
+            console.log('');
+            if (plano.acoes.length > 0) {
+                console.log('       AÇÕES PRIORIZADAS POR ECONOMIA:');
+                plano.acoes.forEach(function (a, i) {
+                    console.log('       #' + (i + 1) + ' ' + a.titulo);
+                    console.log('          Economia anual: ' + Utils.formatarMoeda(a.economiaAnual || 0));
+                    console.log('          Economia líquida: ' + Utils.formatarMoeda(a.economiaLiquida || 0));
+                    console.log('          Prazo: ' + (a.prazo || 'N/D') + ' | Dificuldade: ' + (a.dificuldade || 'N/D'));
+                    console.log('          Base legal: ' + (a.baseLegal || 'N/D'));
+                    if (a.comoFazer) console.log('          Como fazer: ' + a.comoFazer.substring(0, 100) + '...');
+                    console.log('');
+                });
+            }
+        } catch (e) {
+            console.error('  [ERRO] Plano de Ação: ' + e.message);
+        }
+
+        // ══════════════════════════════════════════
+        //  MÓDULO 13: SimuladorCenarios
+        // ══════════════════════════════════════════
+        console.log(lin);
+        console.log('  MÓDULO 13: SIMULADOR DE CENÁRIOS — 6 tipos');
+        console.log(lin);
+
+        // Cenário 1: aumentar pró-labore
+        try {
+            var simPL = SimuladorCenarios.simular({
+                cenario: 'aumentar_proLabore',
+                parametro: 8000,
+                empresa: dadosExemplo
+            });
+            console.log('  [OK] Cenário "aumentar_proLabore" (para R$ 8.000):');
+            if (simPL.diferenca) {
+                console.log('       DAS antes: ' + Utils.formatarMoeda(simPL.antes.DAS) + '/mês');
+                console.log('       DAS depois: ' + Utils.formatarMoeda(simPL.depois.DAS) + '/mês');
+                console.log('       Diferença DAS: ' + Utils.formatarMoeda(simPL.diferenca.DAS) + '/mês');
+                console.log('       Diferença INSS: ' + Utils.formatarMoeda(simPL.diferenca.INSSsocio) + '/mês');
+                console.log('       Economia líquida: ' + Utils.formatarMoeda(simPL.diferenca.economiaLiquida) + '/mês');
+                console.log('       ' + (simPL.diferenca.resumo || ''));
+            }
+        } catch (e) {
+            console.error('  [ERRO] SimuladorCenarios.aumentar_proLabore: ' + e.message);
+        }
+
+        // Cenário 4: reduzir receita
+        try {
+            var simRec = SimuladorCenarios.simular({
+                cenario: 'reduzir_receita',
+                parametro: 30000,
+                empresa: dadosExemplo
+            });
+            console.log('  [OK] Cenário "reduzir_receita" (para R$ 30.000/mês):');
+            if (simRec.diferenca) {
+                console.log('       DAS antes: ' + Utils.formatarMoeda(simRec.antes.DAS) + '/mês');
+                console.log('       DAS depois: ' + Utils.formatarMoeda(simRec.depois.DAS) + '/mês');
+                console.log('       Economia: ' + Utils.formatarMoeda(simRec.diferenca.DAS) + '/mês');
+                console.log('       ' + (simRec.diferenca.resumo || ''));
+            }
+        } catch (e) {
+            console.error('  [ERRO] SimuladorCenarios.reduzir_receita: ' + e.message);
+        }
+
+        // Cenário 5: incluir sócio
+        try {
+            var simSocio = SimuladorCenarios.simular({
+                cenario: 'incluir_socio',
+                parametro: { novosSocios: 1, proLaborePorSocio: 1621 },
+                empresa: dadosExemplo
+            });
+            console.log('  [OK] Cenário "incluir_socio" (+1 sócio, PL R$ 1.621):');
+            if (simSocio.diferenca) {
+                console.log('       Sócios depois: ' + simSocio.depois.numSocios);
+                console.log('       DAS: ' + Utils.formatarMoeda(simSocio.depois.DAS) + '/mês');
+                console.log('       Economia líquida: ' + Utils.formatarMoeda(simSocio.diferenca.economiaLiquida) + '/mês');
+                console.log('       ' + (simSocio.diferenca.resumo || ''));
+            }
+        } catch (e) {
+            console.error('  [ERRO] SimuladorCenarios.incluir_socio: ' + e.message);
+        }
+
+        // ══════════════════════════════════════════
+        //  MÓDULO 14: CompararRegimes
+        // ══════════════════════════════════════════
+        console.log('\n' + lin);
+        console.log('  MÓDULO 14: COMPARATIVO DE REGIMES — SN × LP × LR');
+        console.log(lin);
+
+        var comparativo = null;
+        try {
+            comparativo = CompararRegimes.compararRegimesCompleto({
+                receitaBrutaAnual: dadosExemplo.receitaBrutaAnual,
+                receitaBrutaMensal: dadosExemplo.receitaBrutaMensal,
+                folhaMensal: dadosExemplo.folhaMensal,
+                cnae: dadosExemplo.cnae,
+                uf: dadosExemplo.uf,
+                issAliquota: dadosExemplo.issAliquota,
+                margemLucro: 0.20,
+                percentualCreditos: 0.40
+            });
+            console.log('  [OK] Comparativo calculado:');
+            console.log('');
+            if (comparativo.ranking) {
+                comparativo.ranking.forEach(function (r, i) {
+                    var badge = i === 0 ? ' ★ MELHOR' : '';
+                    console.log('       ' + (i + 1) + '° ' + r.regime + badge);
+                    console.log('          Carga anual: ' + Utils.formatarMoeda(r.cargaAnual));
+                    console.log('          Carga mensal: ' + Utils.formatarMoeda(r.cargaMensal));
+                    console.log('          Alíquota efetiva: ' + r.aliquotaEfetiva);
+                    if (r.economia > 0) console.log('          Excesso vs melhor: +' + Utils.formatarMoeda(r.economia));
+                    console.log('');
+                });
+            }
+            console.log('       RECOMENDAÇÃO: ' + comparativo.recomendacao);
+
+            // Detalhamento LP
+            if (comparativo.lucroPresumido && comparativo.lucroPresumido.detalhamento) {
+                var lpDet = comparativo.lucroPresumido.detalhamento;
+                console.log('\n       LUCRO PRESUMIDO — Detalhamento:');
+                console.log('          IRPJ: ' + Utils.formatarMoeda(lpDet.irpj) + ' + Adicional: ' + Utils.formatarMoeda(lpDet.adicionalIRPJ));
+                console.log('          CSLL: ' + Utils.formatarMoeda(lpDet.csll));
+                console.log('          PIS: ' + Utils.formatarMoeda(lpDet.pis) + ' | COFINS: ' + Utils.formatarMoeda(lpDet.cofins));
+                console.log('          ISS/ICMS: ' + Utils.formatarMoeda(lpDet.issOuICMS));
+            }
+
+            // Detalhamento LR
+            if (comparativo.lucroReal && comparativo.lucroReal.detalhamento) {
+                var lrDet = comparativo.lucroReal.detalhamento;
+                console.log('\n       LUCRO REAL — Detalhamento (margem ' + ((lrDet.margemEstimada || 0.20) * 100) + '%):');
+                console.log('          Lucro real estimado: ' + Utils.formatarMoeda(lrDet.lucroReal));
+                console.log('          IRPJ: ' + Utils.formatarMoeda(lrDet.irpj) + ' + Adicional: ' + Utils.formatarMoeda(lrDet.adicionalIRPJ));
+                console.log('          CSLL: ' + Utils.formatarMoeda(lrDet.csll));
+                console.log('          PIS+COFINS bruto: ' + Utils.formatarMoeda(lrDet.pisBruto + lrDet.cofinsBruto));
+                console.log('          Créditos PIS/COFINS: -' + Utils.formatarMoeda(lrDet.creditosPISCOFINS));
+            }
+        } catch (e) {
+            console.error('  [ERRO] CompararRegimes: ' + e.message);
+        }
+
+        // ══════════════════════════════════════════
+        //  TESTE ADICIONAL: Comercial ABC Ltda
+        // ══════════════════════════════════════════
+        console.log('\n' + sep);
+        console.log('  TESTE: COMERCIAL ABC LTDA — CNAE 4712-1/00, RBT12 R$ 600.000');
+        console.log(sep + '\n');
+
+        var dadosABC = {
+            nomeEmpresa: 'COMERCIAL ABC LTDA',
+            cnae: '47.12-1/00',
+            uf: 'SP',
+            municipio: 'São Paulo',
+            receitaBrutaMensal: 50000,
+            receitaBrutaAnual: 600000,
+            folhaMensal: 8400,
+            proLabore: 3000,
+            issAliquota: 5.00,
+            receitaMonofasica: 5000,
+            receitaExportacao: 0,
+            receitaICMS_ST: 3000,
+            receitaLocacaoBensMoveis: 0,
+            issRetidoFonte: 0,
+            socios: [
+                { nome: 'Sócio A', percentual: 0.50 },
+                { nome: 'Sócio B', percentual: 0.50 }
+            ]
+        };
+
+        Formulario.carregarDados(dadosABC);
+
+        console.log('  DADOS DE ENTRADA:');
+        console.log('  Empresa: ' + dadosABC.nomeEmpresa);
+        console.log('  CNAE: ' + dadosABC.cnae + ' (Comércio varejista)');
+        console.log('  UF: ' + dadosABC.uf + ' | Município: ' + dadosABC.municipio);
+        console.log('  Receita mensal: ' + Utils.formatarMoeda(dadosABC.receitaBrutaMensal));
+        console.log('  Receita anual:  ' + Utils.formatarMoeda(dadosABC.receitaBrutaAnual));
+        console.log('  Folha mensal:   ' + Utils.formatarMoeda(dadosABC.folhaMensal));
+        console.log('  Pró-labore:     ' + Utils.formatarMoeda(dadosABC.proLabore));
+        console.log('  Rec. monofásica: ' + Utils.formatarMoeda(dadosABC.receitaMonofasica));
+        console.log('  Rec. ICMS-ST:   ' + Utils.formatarMoeda(dadosABC.receitaICMS_ST));
+        console.log('  Sócios: ' + dadosABC.socios.length + '\n');
+
+        try {
+            var resultadoABC = Calculadora.calcularTudo();
+            console.log('  [OK] calcularTudo:');
+            console.log('       Anexo: ' + (resultadoABC.anexo ? resultadoABC.anexo.anexo : 'N/D'));
+            console.log('       Fator R: ' + (resultadoABC.fatorR ? resultadoABC.fatorR.percentual : 'N/D'));
+            console.log('       Alíquota efetiva: ' + (resultadoABC.aliquotaEfetiva ? resultadoABC.aliquotaEfetiva.formatada : 'N/D'));
+            console.log('       DAS mensal: ' + Utils.formatarMoeda(resultadoABC.dasMensal ? resultadoABC.dasMensal.semOtimizacao.valor : 0));
+            console.log('       DAS anual:  ' + Utils.formatarMoeda(resultadoABC.anual ? resultadoABC.anual.dasAnual : 0));
+
+            var diagABC = Diagnostico.executar(resultadoABC);
+            console.log('\n  [OK] Diagnóstico:');
+            console.log('       Oportunidades: ' + diagABC.oportunidadesEncontradas);
+            console.log('       Economia total: ' + diagABC.economiaTotal.anualFormatada);
+
+            var planoABC = PlanoAcao.gerar(diagABC, resultadoABC);
+            console.log('\n  [OK] Plano de Ação:');
+            console.log('       Ações: ' + planoABC.totalAcoes);
+            console.log('       Economia: ' + planoABC.economiaTotalFormatada);
+            planoABC.acoes.forEach(function (a, i) {
+                console.log('       #' + (i + 1) + ' ' + a.titulo + ' → ' + Utils.formatarMoeda(a.economiaLiquida || a.economiaAnual || 0) + '/ano');
+            });
+
+            var compABC = CompararRegimes.compararRegimesCompleto({
+                receitaBrutaAnual: 600000,
+                receitaBrutaMensal: 50000,
+                folhaMensal: 8400,
+                cnae: '47.12-1/00',
+                uf: 'SP',
+                issAliquota: 5
+            });
+            console.log('\n  [OK] Comparativo de Regimes:');
+            if (compABC.ranking) {
+                compABC.ranking.forEach(function (r, i) {
+                    console.log('       ' + (i + 1) + '° ' + r.regime + ': ' + Utils.formatarMoeda(r.cargaAnual) + '/ano (' + r.aliquotaEfetiva + ')');
+                });
+                console.log('       → ' + compABC.recomendacao);
+            }
+
+            // SimuladorCenarios para ABC
+            var simABC = SimuladorCenarios.simular({
+                cenario: 'exportacao',
+                parametro: 10000,
+                empresa: dadosABC
+            });
+            console.log('\n  [OK] Simulação exportação R$ 10.000/mês:');
+            if (simABC.diferenca) {
+                console.log('       Economia: ' + Utils.formatarMoeda(simABC.diferenca.economiaLiquida) + '/mês');
+            }
+        } catch (e) {
+            console.error('  [ERRO] Teste Comercial ABC: ' + e.message);
+        }
+
+        console.log('\n' + sep);
+        console.log('  DEMONSTRAÇÃO CONCLUÍDA — v' + _VERSION);
+        console.log('  PlanoAcao, SimuladorCenarios, CompararRegimes — TODOS OPERACIONAIS');
+        console.log(sep + '\n');
+
+        return {
+            calculo: resultado,
+            diagnostico: diagnostico,
+            score: score,
+            plano: plano,
+            comparativo: comparativo
+        };
+    }
+
+
+    // ═══════════════════════════════════════════════════════════════
+    //  EXPORTAÇÃO FINAL — Todos os 19 módulos
     // ═══════════════════════════════════════════════════════════════
 
     return {
@@ -5935,7 +8521,11 @@
         PlanoAcao: PlanoAcao,
         Explicacoes: Explicacoes,
 
-        // Relatório e exportação (Módulos 13-17)
+        // Engine de Otimização (Módulos 13-14) — v5.0
+        SimuladorCenarios: SimuladorCenarios,
+        CompararRegimes: CompararRegimes,
+
+        // Relatório e exportação (Módulos 15-19)
         Relatorio: {
             consolidarDados: consolidarDados,
             gerarDados: consolidarDados,
@@ -5951,7 +8541,10 @@
         CORES: CORES,
         PRODUTO: PRODUTO,
 
+        // Demonstração
+        executarDemonstracao: executarDemonstracao,
+
         // Metadados
-        VERSION: '3.0.0'
+        VERSION: _VERSION
     };
 });
