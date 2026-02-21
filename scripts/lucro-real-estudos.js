@@ -1,6 +1,6 @@
 /**
  * ╔══════════════════════════════════════════════════════════════════════════════╗
- * ║  LUCRO REAL — ESTUDOS TRIBUTÁRIOS  v3.5  (ARQUIVO UNIFICADO)              ║
+ * ║  LUCRO REAL — ESTUDOS TRIBUTÁRIOS  v3.5.1  (ARQUIVO UNIFICADO)            ║
  * ║  Wizard 7 etapas + Motor de diagnóstico + Exportação PDF/Excel            ║
  * ║  100% LUCRO REAL — Sem comparativo com Simples/Presumido                   ║
  * ║  Motor: cruza respostas do usuário com LucroRealMap (LR.calcular.*)        ║
@@ -20,10 +20,32 @@
  *   window.IMPOSTExport      — alias de compatibilidade para exportação
  *
  * IMPOST. — Inteligência em Modelagem de Otimização Tributária
- * Versão: 3.5.0 | Data: Fevereiro/2026
+ * Versão: 3.5.1 | Data: Fevereiro/2026
  *
  * NOTA: Este arquivo unifica os antigos lucro-real-estudos.js + lucro-real-estudos-export.js
  *       Não é mais necessário carregar o arquivo de exportação separadamente.
+ *
+ * CHANGELOG v3.5.1 (Fevereiro/2026) — AUDITORIA COMPLETA:
+ *   BUG CRÍTICO 1 — irpjBruto MOVIDO para APÓS correção trimestral. Antes: adicional de IRPJ
+ *                   calculado com limite anual (R$240k) inflava cargaBruta em R$18k no exemplo.
+ *                   Agora: irpjBruto = irpjNormal + irpjAdicional corretos (trimestre a trimestre).
+ *                   Corrige: cargaBruta, aliquotaEfetiva global, composição, gráfico pizza.
+ *   BUG 2 — JCP numMeses agora é 12 (anual) para oportunidade. Antes: 3 para trimestral,
+ *           subestimando economia em 75%. Agora: calcula anual com anotação trimestral.
+ *           Corrige: Etapa 3 auto-calc, card oportunidade JCP, economiaAnual.
+ *   BUG 3 — Fluxo de caixa trimestral: IRPJ/CSLL alocados nos meses de vencimento reais
+ *           (Abr, Jul, Out) em vez dos meses de encerramento (Mar, Jun, Set).
+ *           Q4 alocado em Dez como provisão (vencimento real: Janeiro seguinte).
+ *           Nota explicativa adicionada na Seção 10.
+ *   ALÍQUOTA PIS/COFINS — Label esclarecido como "Bruta" na Etapa 2 auto-calc. Adicionada
+ *                         alíquota líquida (após retenções) quando há retenções informadas.
+ *                         Composição (Seção 5) agora exibe "líq." explicitamente.
+ *   ALÍQUOTA IRPJ — Auto-corrigido pelo BUG CRÍTICO 1 (comp.irpj.valor = irpjBruto correto).
+ *   SIMULAÇÃO INTEGRADA — PIS/COFINS e ISS integrados nos cenários semOtimizacao/comOtimizacao.
+ *                         Descrição da oportunidade inclui carga total completa (IRPJ+CSLL+PIS/COFINS+ISS).
+ *   ECONOMIA JCP — Recalculada como diferença real entre IRPJ+CSLL (sem JCP - com JCP) - IRRF,
+ *                  usando bases finais pós-ajustes e compensações. Fallback ao cálculo simplificado
+ *                  quando cenários com/sem JCP não disponíveis.
  *
  * CHANGELOG v3.5.0 (Fevereiro/2026):
  *   FIX CRÍTICO — Dados do elaborador (nome, CRC, email, telefone) agora são
@@ -81,7 +103,7 @@
   // ═══════════════════════════════════════════════════════════════════════════
   //  CONSTANTES E HELPERS
   // ═══════════════════════════════════════════════════════════════════════════
-  const VERSAO = "3.5.0";
+  const VERSAO = "3.5.1";
   const LS_KEY_DADOS = "impost_lr_dados";
   const LS_KEY_STEP = "impost_lr_step";
   const LS_KEY_RESULTADOS = "impost_lr_resultados";
@@ -2351,6 +2373,7 @@
       var llVal = _calcLL();
       if (plVal > 0 && llVal > 0) {
         try {
+          // ═══ FIX BUG 2 (AUDITORIA): Sempre calcular JCP para 12 meses (anual) ═══
           var jcpRes = LR.calcular.jcp({
             patrimonioLiquido: _n(d.plAjustadoJCP) > 0 ? _n(d.plAjustadoJCP) : plVal,
             capitalSocial: _n(d.capitalSocial) || null,
@@ -2361,18 +2384,23 @@
             tjlp: (_n(d.tjlp) || _TJLP_DEFAULT) / 100,
             lucroLiquidoAntes: llVal,
             lucroRealAnual: Math.max(llVal + _n(d.adicoesLALUR) - _n(d.exclusoesLALUR), 0),
-            numMeses: d.apuracaoLR === "trimestral" ? 3 : 12,
+            numMeses: 12,
           });
-          calcJCP.innerHTML =
-            '<strong>💰 Simulação de JCP</strong><br>' +
+          var _jcpHtml =
+            '<strong>💰 Simulação de JCP (Anual)</strong><br>' +
             'JCP máximo (PL × TJLP): ' + _m(jcpRes.jcpMaximoTJLP) + '<br>' +
             'Limite 1 — 50% lucro líquido: ' + _m(jcpRes.limite50LL) + '<br>' +
             'Limite 2 — 50% lucros acum. + reservas: ' + _m(jcpRes.limite50Reservas) + '<br>' +
-            '<strong>JCP dedutível: ' + _m(jcpRes.jcpDedutivel) + '</strong><br>' +
+            '<strong>JCP dedutível (anual): ' + _m(jcpRes.jcpDedutivel) + '</strong><br>' +
             'Economia IRPJ (25%): ' + _m(jcpRes.economiaIRPJ) + '<br>' +
             'Economia CSLL (9%): ' + _m(jcpRes.economiaCSLL) + '<br>' +
             '(-) Custo IRRF (17,5%): ' + _m(jcpRes.custoIRRF) + '<br>' +
             '<span style="color:#2ECC71"><strong>✅ ECONOMIA LÍQUIDA: ' + _m(jcpRes.economiaLiquida) + ' /ano</strong></span>';
+          // Se trimestral, mostrar distribuição por trimestre
+          if (d.apuracaoLR === "trimestral") {
+            _jcpHtml += '<br><em>📅 Apuração trimestral: ' + _m(_r(jcpRes.jcpDedutivel / 4)) + '/trimestre, economia de ' + _m(_r(jcpRes.economiaLiquida / 4)) + '/trimestre</em>';
+          }
+          calcJCP.innerHTML = _jcpHtml;
         } catch (e) {
           calcJCP.innerHTML = '<em>Erro ao calcular JCP: ' + e.message + '</em>';
         }
@@ -2440,6 +2468,11 @@
       var aliqEfetiva = rb3 > 0 ? (totalPC / rb3 * 100).toFixed(2) : "0.00";
       var aproveitamento = (debPIS + debCOF) > 0 ? ((credPIS + credCOF) / (debPIS + debCOF) * 100).toFixed(1) : "0.0";
 
+      // ═══ FIX AUDITORIA: Esclarecer que alíquota é BRUTA (antes retenções na fonte) ═══
+      var retPISCOFINS = _n(d.pisRetido) + _n(d.cofinsRetido);
+      var totalPCLiquido = Math.max(totalPC - retPISCOFINS, 0);
+      var aliqEfetivaLiq = rb3 > 0 ? (_r(totalPCLiquido / rb3 * 100)).toFixed(2) : "0.00";
+
       calcPC.innerHTML =
         '<strong>📊 Simulação PIS/COFINS em Tempo Real</strong><br>' +
         'Receita tributável: ' + _m(recTrib) + '<br>' +
@@ -2448,8 +2481,13 @@
         'Base de créditos: ' + _m(baseCred) + '<br>' +
         'Crédito PIS (1,65%): ' + _m(credPIS) + ' | Crédito COFINS (7,6%): ' + _m(credCOF) + '<br>' +
         'Total créditos: ' + _m(credPIS + credCOF) + '<br><br>' +
-        '<strong>PIS/COFINS a pagar: ' + _m(totalPC) + '</strong><br>' +
-        '<strong>ALÍQUOTA EFETIVA: ' + aliqEfetiva + '%</strong> (de 9,25% nominal)<br>' +
+        '<strong>PIS/COFINS a pagar (bruto): ' + _m(totalPC) + '</strong><br>' +
+        '<strong>ALÍQUOTA EFETIVA BRUTA: ' + aliqEfetiva + '%</strong> (de 9,25% nominal)' +
+        (retPISCOFINS > 0
+          ? '<br>Retenções na fonte: ' + _m(retPISCOFINS) +
+            ' → <strong>A pagar líquido: ' + _m(totalPCLiquido) + '</strong>' +
+            ' | <strong>Alíq. Efetiva Líquida: ' + aliqEfetivaLiq + '%</strong>'
+          : '') + '<br>' +
         'Aproveitamento de créditos: ' + aproveitamento + '%' +
         (parseFloat(aproveitamento) < 30 && baseCred > 0
           ? '<br><span style="color:#e67e22">⚠️ Aproveitamento baixo — revise se há insumos não classificados que geram crédito</span>'
@@ -3174,8 +3212,6 @@
     irpjResult.irpjNormal = irpjResult.irpjNormal || 0;
     irpjResult.irpjAdicional = irpjResult.irpjAdicional || 0;
 
-    // ═══ CORREÇÃO BUG CRÍTICO 2: irpjBruto = IRPJ antes de incentivos (cargaBruta verdadeiramente bruta) ═══
-    var irpjBruto = _r((irpjResult.irpjNormal || 0) + (irpjResult.irpjAdicional || 0));
     // Aplicar redução SUDAM/SUDENE sobre o IRPJ
     var irpjAntesReducao = irpjResult.irpjDevido;
     var irpjAposReducao = _r(Math.max(irpjAntesReducao - reducaoSUDAM, 0));
@@ -3189,6 +3225,11 @@
       irpjAntesReducao = irpjResult.irpjDevido;
       irpjAposReducao = _r(Math.max(irpjAntesReducao - reducaoSUDAM, 0));
     }
+
+    // ═══ FIX BUG CRÍTICO 1 (AUDITORIA): irpjBruto APÓS correção trimestral ═══
+    // Antes: irpjBruto era calculado ANTES do bloco trimestral, retendo o adicional errado (base anual).
+    // Agora: calculado DEPOIS, garantindo que irpjBruto reflita o adicional correto (trimestre a trimestre).
+    var irpjBruto = _r((irpjResult.irpjNormal || 0) + (irpjResult.irpjAdicional || 0));
 
     // ═══════════════════════════════════════════════════════════════════════
     //  PASSO 6A — Subcapitalização
@@ -3492,6 +3533,10 @@
     }
     if (plParaJCP > 0 && (lucroLiquido > 0 || lucroRealFinal > 0)) {
       try {
+        // ═══ FIX BUG 2 (AUDITORIA): Usar numMeses=12 para calcular JCP ANUAL (oportunidade completa) ═══
+        // Antes: usava _numMeses (3 para trimestral), subestimando economia em 75%.
+        // Agora: calcula JCP para 12 meses. Se trimestral, adiciona anotação de distribuição por trimestre.
+        var _numMesesJCP = 12;
         jcpResult = LR.calcular.jcp({
           patrimonioLiquido: plParaJCP,
           capitalSocial: _n(d.capitalSocial) || null,
@@ -3502,13 +3547,19 @@
           tjlp: _tjlpInformada / 100,
           lucroLiquidoAntes: lucroLiquido,
           lucroRealAnual: Math.max(lucroRealFinal, 0),
-          numMeses: _numMeses
+          numMeses: _numMesesJCP
         });
         // Marcar no resultado se usou taxa default
         if (jcpResult && _tjlpUsarDefault) {
           jcpResult.tjlpDefault = true;
           jcpResult.tjlpUsada = _tjlpInformada;
           jcpResult.alertaTJLP = "ATENÇÃO: TJLP não informada. Usando taxa default de " + _tjlpInformada + "%. Verifique a taxa vigente no BCB.";
+        }
+        // Anotar se apuração trimestral para referência na apresentação
+        if (jcpResult && d.apuracaoLR === "trimestral") {
+          jcpResult.apuracaoTrimestral = true;
+          jcpResult.jcpPorTrimestre = _r((jcpResult.jcpDedutivel || 0) / 4);
+          jcpResult.economiaPorTrimestre = _r((jcpResult.economiaLiquida || 0) / 4);
         }
         // ═══ CORREÇÃO ERRO #4: Aplicar cap de 50% do lucro líquido / lucros acumulados ═══
         // Art. 9º, §1º, Lei 9.249/95: JCP limitado ao MAIOR entre 50% do LL do exercício
@@ -3901,7 +3952,25 @@
     // ═══════════════════════════════════════════════════════════════════════
     //  PRÉ-CÁLCULO — Totais de economia (necessário para projeção)
     // ═══════════════════════════════════════════════════════════════════════
-    var economiaJCP = _safe(jcpResult, 'economiaLiquida');
+    // ═══ FIX AUDITORIA (Economia JCP Simplificada): Calcular como diferença real entre cenários ═══
+    // Antes: economiaJCP = jcpResult.economiaLiquida (simplificação sobre lucro contábil, antes ajustes).
+    // Agora: diferença real IRPJ+CSLL (sem JCP - com JCP) - custo IRRF, calculada sobre base final.
+    var economiaJCP = 0;
+    if (jcpDedutivel > 0 && irpjResult.irpjSemJCP !== undefined && csllResult.csllSemJCP !== undefined) {
+      var _econIRPJRealJCP = _r((irpjResult.irpjSemJCP || 0) - (irpjResult.irpjComJCP || 0));
+      var _econCSLLRealJCP = _r((csllResult.csllSemJCP || 0) - (csllResult.csllComJCP || 0));
+      var _custoIRRFRealJCP = _r(jcpDedutivel * 0.175);
+      economiaJCP = _r(Math.max(_econIRPJRealJCP + _econCSLLRealJCP - _custoIRRFRealJCP, 0));
+      // Gravar detalhes no jcpResult para rastreabilidade
+      if (jcpResult) {
+        jcpResult.economiaIRPJReal = _econIRPJRealJCP;
+        jcpResult.economiaCSLLReal = _econCSLLRealJCP;
+        jcpResult.economiaLiquidaReal = economiaJCP;
+      }
+    } else {
+      // Fallback: usar cálculo simplificado do motor se cenários com/sem JCP não disponíveis
+      economiaJCP = _safe(jcpResult, 'economiaLiquida');
+    }
     var economiaPrejuizo = _safe(compensacao, 'resumo', 'economia', 'total');
     var economiaSUDAM = reducaoSUDAM;
     var economiaIncentivos = _safe(incentivosFiscais, 'economiaTotal');
@@ -4332,7 +4401,9 @@
       // ═══ FIX BUG #5: Passar alíquotas efetivas para cálculo consistente de PDD ═══
       aliqEfetIRPJ: _aliqEfetIRPJ,
       aliqEfetCSLL: _aliqEfetCSLL,
-      numMeses: _numMeses
+      numMeses: _numMeses,
+      // ═══ FIX AUDITORIA: Passar issAnual para Simulação Integrada incluir PIS/COFINS+ISS ═══
+      issAnual: issAnual
     });
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -4746,11 +4817,16 @@
 
     // #1 — JCP
     if (ctx.plVal > 0 && ctx.lucroLiquido > 0 && ctx.jcpResult && ctx.jcpResult.economiaLiquida > 0) {
+      // ═══ FIX BUG 2 (AUDITORIA): Descrição inclui valor anual e distribuição trimestral ═══
+      var _jcpDescBase = "JCP dedutível de " + _m(ctx.jcpResult.jcpDedutivel) + " gera economia líquida de " + _m(ctx.jcpResult.economiaLiquida) + "/ano (34% de economia - 17,5% IRRF — LC 224/2025).";
+      if (ctx.jcpResult.apuracaoTrimestral) {
+        _jcpDescBase += " Na apuração trimestral: " + _m(ctx.jcpResult.jcpPorTrimestre) + "/trimestre, economia de " + _m(ctx.jcpResult.economiaPorTrimestre) + "/trimestre.";
+      }
       ops.push({
         id: "JCP", titulo: "Juros sobre Capital Próprio",
         tipo: "Dedução", complexidade: "Baixa", risco: "Baixo",
         economiaAnual: ctx.jcpResult.economiaLiquida,
-        descricao: "JCP dedutível de " + _m(ctx.jcpResult.jcpDedutivel) + " gera economia líquida de " + _m(ctx.jcpResult.economiaLiquida) + "/ano (34% de economia - 17,5% IRRF — LC 224/2025).",
+        descricao: _jcpDescBase,
         baseLegal: "Art. 355-358 do RIR/2018",
         acaoRecomendada: "Deliberar distribuição de JCP aos sócios. Formalizar via ata e pagar IRRF (DARF 5706).",
         prazoImplementacao: "Imediato",
@@ -5491,9 +5567,38 @@
         // BUG#4: guarda para evitar exibir número fantasma quando baseline é zero
         if (simCompleta && simCompleta.economia && simCompleta.economia.total > 0
             && simCompleta.semOtimizacao && simCompleta.semOtimizacao.irpjDevido > 0) {
+
+          // ═══ FIX AUDITORIA: Integrar PIS/COFINS na Simulação Integrada ═══
+          // Antes: carga total da simulação só incluía IRPJ + CSLL, subestimando a carga real.
+          // Agora: inclui PIS/COFINS e ISS para visão completa da carga tributária.
+          var _simPisCofins = ctx.pisCofinsResult ? (ctx.pisCofinsResult.totalAPagarBruto || 0) : 0;
+          var _simISS = ctx.issAnual || 0;
+          if (simCompleta.semOtimizacao) {
+            simCompleta.semOtimizacao.pisCofins = _simPisCofins;
+            simCompleta.semOtimizacao.iss = _simISS;
+            simCompleta.semOtimizacao.cargaTotal = _r(
+              (simCompleta.semOtimizacao.irpjDevido || 0) +
+              (simCompleta.semOtimizacao.csllDevida || 0) +
+              _simPisCofins + _simISS
+            );
+          }
+          if (simCompleta.comOtimizacao) {
+            simCompleta.comOtimizacao.pisCofins = _simPisCofins; // PIS/COFINS não muda com JCP/incentivos IRPJ
+            simCompleta.comOtimizacao.iss = _simISS;
+            simCompleta.comOtimizacao.cargaTotal = _r(
+              (simCompleta.comOtimizacao.irpjDevido || 0) +
+              (simCompleta.comOtimizacao.csllDevida || 0) +
+              _simPisCofins + _simISS
+            );
+          }
+
           // ═══ CORREÇÃO ERRO 8: Composição rastreável da Simulação Integrada ═══
           var _simEcon = simCompleta.economia;
-          var _simDesc = "⚠️ CONSOLIDAÇÃO (não somar com itens acima) — Simulação consolidada indica economia total de " + _m(_simEcon.total) + " vs cenário sem otimizações.";
+          var _simDesc = "⚠️ CONSOLIDAÇÃO (não somar com itens acima) — Simulação consolidada indica economia total de " + _m(_simEcon.total) + " em IRPJ+CSLL vs cenário sem otimizações.";
+          // Informar carga total incluindo PIS/COFINS+ISS
+          if (_simPisCofins > 0 || _simISS > 0) {
+            _simDesc += " Carga tributária total (com PIS/COFINS + ISS): Sem otimização " + _m(simCompleta.semOtimizacao.cargaTotal) + " → Com otimização " + _m(simCompleta.comOtimizacao.cargaTotal) + ".";
+          }
           // Montar breakdown dos componentes
           var _simParts = [];
           if (_simEcon.jcp > 0) _simParts.push("JCP: " + _m(_simEcon.jcp));
@@ -5502,7 +5607,7 @@
           if (_simEcon.incentivos > 0) _simParts.push("Incentivos: " + _m(_simEcon.incentivos));
           if (_simParts.length > 0) {
             var _simSomaParts = (_simEcon.jcp || 0) + (_simEcon.irpj || 0) + (_simEcon.csll || 0) + (_simEcon.compensacao || 0) + (_simEcon.incentivos || 0);
-            _simDesc += " Composição: " + _simParts.join(" + ") + ".";
+            _simDesc += " Composição economia IRPJ+CSLL: " + _simParts.join(" + ") + ".";
             var _simDiff = _r(_simEcon.total - _simSomaParts);
             if (Math.abs(_simDiff) > 1) {
               _simDesc += " Efeito de interação entre incentivos: " + _m(_simDiff) + ".";
@@ -6068,9 +6173,14 @@
       var retIRRFMes = 0;
       var retCSLLMes = 0;
       if (apuracao === "trimestral") {
-        // Concentrado nos meses 3, 6, 9, 12
-        if (m % 3 === 0) {
-          var triIdx = (m / 3) - 1;
+        // ═══ FIX BUG 3 (AUDITORIA): Desembolso trimestral no mês de vencimento ═══
+        // Q1 pago em Abril (m=4), Q2 em Julho (m=7), Q3 em Outubro (m=10).
+        // Q4 é devido em Janeiro do ano seguinte, mas para totalizar corretamente
+        // no fluxo anual, alocamos em Dezembro (m=12) como provisão de encerramento.
+        var _mesesPagamentoTrimestral = [4, 7, 10, 12]; // meses de vencimento
+        var _triMap = { 4: 0, 7: 1, 10: 2, 12: 3 }; // mês → índice do trimestre
+        if (_mesesPagamentoTrimestral.indexOf(m) >= 0) {
+          var triIdx = _triMap[m];
           if (simTrimestralData && simTrimestralData.trimestres && simTrimestralData.trimestres[triIdx]) {
             irpjMes = _r(simTrimestralData.trimestres[triIdx].irpjTotal);
             csllMes = _r(simTrimestralData.trimestres[triIdx].csll);
@@ -6082,7 +6192,7 @@
           retIRRFMes = _r(totalIRRFAnual / 4);
           retCSLLMes = _r(totalCSLLRetAnual / 4);
         }
-        // Em meses não-trimestrais, retIRRFMes e retCSLLMes ficam 0
+        // Em meses sem vencimento trimestral, retIRRFMes e retCSLLMes ficam 0
       } else {
         // Estimativa mensal
         irpjMes = _r(irpjAnual / 12);
@@ -6131,7 +6241,12 @@
       irpjAnualBruto: _r(irpjAnual),
       csllAnualBruto: _r(csllAnual),
       pisAnualBruto: _r(pisAnual || 0),
-      cofinsAnualBruto: _r(cofinsAnual || 0)
+      cofinsAnualBruto: _r(cofinsAnual || 0),
+      // ═══ FIX BUG 3 (AUDITORIA): Nota sobre vencimentos trimestrais ═══
+      notaTrimestral: apuracao === "trimestral"
+        ? "IRPJ e CSLL trimestrais vencem no mês seguinte ao encerramento do trimestre (Abr, Jul, Out). O 4º trimestre é devido em Janeiro do ano seguinte — alocado em Dezembro como provisão."
+        : null,
+      mesesPagamentoIRPJCSLL: apuracao === "trimestral" ? [4, 7, 10, 12] : null
     };
   }
 
@@ -6678,7 +6793,8 @@
     // CORREÇÃO FALHA #2: alíquota efetiva LÍQUIDA (após retenções e créditos)
     var pcValorBruto = comp.pisCofins.valor; // bruto para consistência com cargaBruta
     var pcAliqEfetivaLiquida = dre.receitaBruta > 0 ? _pp(_r(r.pisCofins.totalAPagarLiquido / dre.receitaBruta * 100)) : '0,00%';
-    var pcAliqDisplay = r.pisCofins.aliquotaEfetiva || pcAliqEfetivaLiquida;
+    // ═══ FIX AUDITORIA: Exibir alíquota LÍQUIDA (desembolso real) com referência à bruta ═══
+    var pcAliqDisplay = pcAliqEfetivaLiquida + ' (líq.)';
     s5 += '<tr><td style="color:#3498DB;">PIS/COFINS</td><td>' + _m(dre.receitaBruta) + '</td><td>' + pcAliqDisplay + '</td><td>' + _m(pcValorBruto) + '</td><td>' + _m(_r(pcValorBruto / 12)) + '</td><td>' + _pp(comp.pisCofins.percentual) + '</td></tr>';
     s5 += '<tr><td style="color:#9B59B6;">ISS</td><td>' + _m(r.iss.receitaServicos) + '</td><td>' + _pp(r.iss.aliquota) + '</td><td>' + _m(comp.iss.valor) + '</td><td>' + _m(_r(comp.iss.valor / 12)) + '</td><td>' + _pp(comp.iss.percentual) + '</td></tr>';
     s5 += '</tbody>';
@@ -6964,6 +7080,10 @@
       s10 += '<tr class="res-total"><td><strong>TOTAL</strong></td><td><strong>' + _m(totIRPJExato) + '</strong></td><td><strong>' + _m(totCSLLExato) + '</strong></td><td><strong>' + _m(totPISExato) + '</strong></td><td><strong>' + _m(totCOFExato) + '</strong></td><td><strong>' + _m(totISSExato) + '</strong></td><td><strong>' + _m(totTotExato) + '</strong></td></tr>';
       s10 += '</tbody></table></div>';
       s10 += '<div class="res-chart-container"><canvas id="chartFluxoMensal" width="700" height="350"></canvas></div>';
+      // ═══ FIX BUG 3 (AUDITORIA): Nota sobre vencimentos trimestrais ═══
+      if (fc.notaTrimestral) {
+        s10 += '<p class="res-nota">* <strong>Nota (Regime Trimestral):</strong> ' + fc.notaTrimestral + '</p>';
+      }
     }
     html += _secao(10, 'Fluxo de Caixa Tributário Mensal', s10);
 
