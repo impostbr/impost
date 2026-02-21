@@ -1,6 +1,6 @@
 /**
  * ============================================================================
- * MOTOR DE CÁLCULO UNIFICADO — LUCRO REAL (IRPJ + CSLL)  v5.5
+ * MOTOR DE CÁLCULO UNIFICADO — LUCRO REAL (IRPJ + CSLL)  v5.7
  * Base Legal: Decreto nº 9.580/2018 (RIR/2018) — Artigos 217 a 290+
  * Ano-Base: 2026
  * ============================================================================
@@ -1200,7 +1200,7 @@ function calcularIRPJLucroReal(dados) {
  * @param {number} saldoPrejuizo  - Saldo de prejuízo fiscal (LALUR Parte B)
  * @returns {Object}
  */
-function compensarPrejuizo(lucroRealAntes, saldoPrejuizo) {
+function compensarPrejuizo(lucroRealAntes, saldoPrejuizo, aliquotaCSLL = 0.09) {
   // Se houver prejuízo no período, acumula
   if (lucroRealAntes <= 0) {
     return {
@@ -1222,6 +1222,7 @@ function compensarPrejuizo(lucroRealAntes, saldoPrejuizo) {
   const lucroRealFinal = lucroRealAntes - compensacao;
   const novoSaldo = saldoPrejuizo - compensacao;
 
+  const economiaCSLL = compensacao * aliquotaCSLL;
   return {
     lucroAntes: lucroRealAntes,
     limite30,
@@ -1230,8 +1231,8 @@ function compensarPrejuizo(lucroRealAntes, saldoPrejuizo) {
     saldoRemanescente: novoSaldo,
     prejuizoPeriodo: 0,
     economiaIRPJ: _calcularIRPJ(lucroRealAntes) - _calcularIRPJ(lucroRealFinal),
-    economiaCSLL: compensacao * 0.09,
-    economiaTotal: (_calcularIRPJ(lucroRealAntes) - _calcularIRPJ(lucroRealFinal)) + (compensacao * 0.09),
+    economiaCSLL: economiaCSLL,
+    economiaTotal: (_calcularIRPJ(lucroRealAntes) - _calcularIRPJ(lucroRealFinal)) + economiaCSLL,
   };
 }
 
@@ -1254,6 +1255,8 @@ function calcularCSLL(dados) {
     exclusoesCSLL = 0,
     saldoBaseNegativa = 0,
     ehInstituicaoFinanceira = false,
+    retencoesCSLL = 0,
+    estimativasPagasCSLL = 0,
   } = dados;
 
   // ═══ FIX v5.5/5.6: Aceitar AMBAS convenções de nomes (internos E simplificados) ═══
@@ -1281,11 +1284,16 @@ function calcularCSLL(dados) {
   const baseAjustada = _lc + _ad - _ex;
 
   // Compensação de base negativa (mesma trava de 30%)
-  const compensacaoBaseNeg = compensarPrejuizo(baseAjustada, _bn);
+  const compensacaoBaseNeg = compensarPrejuizo(baseAjustada, _bn, aliquota);
 
   // CSLL devida
   const basePositiva = Math.max(compensacaoBaseNeg.lucroRealFinal, 0);
   const csllDevida = basePositiva * aliquota;
+
+  // ═══ FIX ERRO #11: Deduzir retenções e estimativas do csllAPagar ═══
+  const _ret = Number(retencoesCSLL || dados.retencoes) || 0;
+  const _est = Number(estimativasPagasCSLL || dados.estimativas) || 0;
+  const csllAPagar = csllDevida - _ret - _est;
 
   return {
     baseAjustada,
@@ -1297,8 +1305,10 @@ function calcularCSLL(dados) {
     saldoBaseNegativaRemanescente: compensacaoBaseNeg.saldoRemanescente,
     nota: 'CSLL NÃO tem incentivos dedutíveis (diferente do IRPJ)',
 
-    // ═══ ALIAS — compatibilidade ═══
-    csllAPagar: csllDevida,                    // Alias: mesmo valor pois CSLL não tem retenções deduzidas neste nível
+    // ═══ FIX ERRO #11: csllAPagar agora deduz retenções e estimativas ═══
+    csllAPagar,
+    retencoes: _ret,
+    estimativasPagas: _est,
     baseCSLL: basePositiva,                    // Alias
     csllNormal: csllDevida,                    // Alias
   };
@@ -1535,25 +1545,38 @@ function calcularSuspensaoReducao(dados) {
  */
 function calcularJCP(dados) {
   const {
+    // ═══ Parâmetros da versão original (retrocompatibilidade) ═══
     patrimonioLiquido = 0,
     tjlp,
     lucroLiquidoAntes = 0,
     lucrosAcumulados = 0,
     numMeses = 12,
+
+    // ═══ Parâmetros da versão Lei 12.973 (PL decomposto) ═══
+    capitalSocial = 0,
+    reservasCapital = 0,
+    reservasLucros = 0,
+    acoesEmTesouraria = 0,
+    prejuizosAcumulados = 0,
+    taxaTJLP,
+    tipoBeneficiario = 'PJ_LUCRO_REAL',
+    lucroRealAnual = null,
+    lucroLiquidoExercicio = null,
+    ehFinanceira = false,
+    periodoApuracao = 'ANUAL',
   } = dados;
 
-  // ═══ FIX: Garantir tipos numéricos ═══
-  const _pl = Number(patrimonioLiquido) || 0;
-  const _ll = Number(lucroLiquidoAntes) || 0;
-  const _la = Number(lucrosAcumulados) || 0;
-  const _nm = Number(numMeses) || 12;
+  // ═══ Resolver TJLP: aceitar 'tjlp' ou 'taxaTJLP' ═══
+  const _tjlpRaw = taxaTJLP ?? tjlp;
 
   // v5.0: Validação obrigatória da TJLP — não usar default
-  if (tjlp === undefined || tjlp === null) {
+  if (_tjlpRaw === undefined || _tjlpRaw === null) {
+    const ref = typeof obterTJLPReferencia === 'function' ? obterTJLPReferencia() : {};
     return {
       erro: true,
       mensagem: 'TJLP é OBRIGATÓRIA e não possui valor default. '
         + 'A TJLP para JCP é divulgada trimestralmente pelo BACEN. '
+        + (ref.taxa ? `Sugestão: última TJLP disponível = ${(ref.taxa * 100).toFixed(2)}% a.a. (${ref.fonte})` : '')
         + 'Consulte: https://www.gov.br/receitafederal/pt-br/assuntos/orientacao-tributaria/'
         + 'pagamentos-e-parcelamentos/taxa-de-juros-de-longo-prazo-tjlp',
       taxasReferencia: {
@@ -1563,75 +1586,219 @@ function calcularJCP(dados) {
         'Q1_2026': '9,19% a.a. (0.0919) — Comunicado BCB 44.463',
         'Q2_2026': 'Consultar BACEN',
       },
-      artigo: 'Art. 355 c/c Lei 9.249/95, Art. 9º',
+      artigo: 'Art. 9º da Lei 9.249/1995 c/c Lei 12.973/2014, Art. 355',
+      basePL: 0,
+      jcpCalculado: 0,
       jcpDedutivel: 0,
+      irrfRetido: 0,
       economiaLiquida: 0,
+      impactoFiscal: { economiaIRPJ: 0, economiaCSLL: 0, economiaTotal: 0, custoIRRF: 0, beneficioLiquido: 0 },
     };
   }
 
-  if (tjlp <= 0 || tjlp > 0.30) {
+  const _tjlp = Number(_tjlpRaw) || 0;
+
+  if (_tjlp <= 0 || _tjlp > 0.30) {
     return {
       erro: true,
-      mensagem: `TJLP informada (${(tjlp * 100).toFixed(2)}%) parece incorreta. `
+      mensagem: `TJLP informada (${(_tjlp * 100).toFixed(2)}%) parece incorreta. `
         + 'Valor deve ser decimal entre 0.01 e 0.30 (1% a 30% a.a.). '
         + 'Em 2025-2026, a TJLP variou entre 7,97% e 9,19% a.a.',
+      jcpCalculado: 0,
       jcpDedutivel: 0,
       economiaLiquida: 0,
+      impactoFiscal: { economiaIRPJ: 0, economiaCSLL: 0, economiaTotal: 0, custoIRRF: 0, beneficioLiquido: 0 },
     };
   }
 
-  // JCP máximo pela TJLP
-  const tjlpProporcional = tjlp * (_nm / 12);
-  const jcpMaximoTJLP = _pl * tjlpProporcional;
+  // ═══ Sanitizar entradas numéricas ═══
+  const _cs = Number(capitalSocial) || 0;
+  const _rc = Number(reservasCapital) || 0;
+  const _rl = Number(reservasLucros) || 0;
+  const _at = Number(acoesEmTesouraria) || 0;
+  const _pa = Number(prejuizosAcumulados) || 0;
+  const _pl = Number(patrimonioLiquido) || 0;
+  const _nm = Number(numMeses) || 12;
 
-  // Limite 1: 50% do lucro líquido do exercício (antes do JCP e IRPJ)
-  const limite1 = _ll * CONSTANTES.JCP_LIMITE_LUCRO_LIQUIDO;
+  // ═══ Determinar base do PL: decomposta (Lei 12.973) ou valor direto (retrocompatível) ═══
+  const temPLDecomposto = (_cs > 0 || _rc > 0 || _rl > 0 || _at > 0 || _pa > 0);
+  const basePL = temPLDecomposto
+    ? (_cs + _rc + _rl - _at - _pa)
+    : _pl;
 
-  // Limite 2: 50% de (lucros acumulados + reservas de lucros)
-  const limite2 = _la * CONSTANTES.JCP_LIMITE_LUCROS_ACUMULADOS;
+  if (basePL <= 0) {
+    return {
+      artigo: 'Art. 9º da Lei 9.249/1995 c/c Lei 12.973/2014',
+      basePL: 0,
+      jcpCalculado: 0,
+      jcpDedutivel: 0,
+      irrfRetido: 0,
+      observacao: 'PL negativo ou zero — JCP não pode ser calculado',
+      impactoFiscal: { economiaIRPJ: 0, economiaCSLL: 0, economiaTotal: 0, custoIRRF: 0, beneficioLiquido: 0 },
+    };
+  }
 
-  // CORREÇÃO: Lei 9.249/95, Art. 9°, §1° — JCP limitado ao MAIOR entre
-  // 50% do lucro líquido do período OU 50% de lucros acumulados + reservas
-  const limiteLegal = Math.max(limite1, limite2);
-  const jcpDedutivel = Math.max(0, Math.min(jcpMaximoTJLP, limiteLegal));
+  // ═══ JCP máximo pela TJLP ═══
+  const tjlpProporcional = _tjlp * (_nm / 12);
+  let jcpCalculado = Math.round(basePL * tjlpProporcional * 100) / 100;
+  const jcpAntesCap = jcpCalculado;
 
-  // Economia tributária — diferença incremental de IRPJ (respeita faixa do adicional)
-  const limiteAdicionalPeriodo = CONSTANTES.IRPJ_LIMITE_ADICIONAL_MES * _nm;
-  const lucroBaseAntesJCP = Math.max(0, _ll);
-  const lucroBaseAposJCP = Math.max(0, _ll - jcpDedutivel);
-  const irpjAntesJCP = lucroBaseAntesJCP * CONSTANTES.IRPJ_ALIQUOTA_NORMAL
-    + Math.max(0, lucroBaseAntesJCP - limiteAdicionalPeriodo) * CONSTANTES.IRPJ_ALIQUOTA_ADICIONAL;
-  const irpjAposJCP = lucroBaseAposJCP * CONSTANTES.IRPJ_ALIQUOTA_NORMAL
-    + Math.max(0, lucroBaseAposJCP - limiteAdicionalPeriodo) * CONSTANTES.IRPJ_ALIQUOTA_ADICIONAL;
-  const economiaIRPJ = irpjAntesJCP - irpjAposJCP;
-  const economiaCSLL = jcpDedutivel * CONSTANTES.CSLL_ALIQUOTA_GERAL;
-  const economiaTotal = economiaIRPJ + economiaCSLL;
+  // ═══ Cap de 50% — Art. 9º, §1º da Lei 9.249/95 ═══
+  // JCP dedutível limitado ao MAIOR entre:
+  //   (a) 50% do lucro líquido do exercício (antes do JCP e IRPJ)
+  //   (b) 50% de (lucros acumulados + reservas de lucros)
+  const _ll = Number(lucroLiquidoAntes || lucroLiquidoExercicio || dados.lucroLiquido) || 0;
+  const _lacum = Number(lucrosAcumulados || dados.lucrosAcumuladosReservas) || 0;
+  let capAplicado = false;
+  let limiteAplicavel = null;
+  let limite1_50LL = null;
+  let limite2_50Acum = null;
 
-  // Custo do JCP (IRRF 17,5% retido do beneficiário — LC 224/2025)
-  const custoIRRF = jcpDedutivel * CONSTANTES.JCP_IRRF_ALIQUOTA;
+  if (_ll > 0 || _lacum > 0) {
+    limite1_50LL = _ll * CONSTANTES.JCP_LIMITE_LUCRO_LIQUIDO;
+    limite2_50Acum = (_lacum + _rl) * CONSTANTES.JCP_LIMITE_LUCROS_ACUMULADOS;
+    limiteAplicavel = Math.max(limite1_50LL, limite2_50Acum);
+    if (limiteAplicavel > 0) {
+      jcpCalculado = Math.min(jcpCalculado, limiteAplicavel);
+      jcpCalculado = Math.round(jcpCalculado * 100) / 100;
+      capAplicado = jcpCalculado < jcpAntesCap;
+    }
+  }
+
+  const jcpDedutivel = Math.max(0, jcpCalculado);
+
+  // ═══ IRRF sobre o JCP (LC 224/2025) ═══
+  const irrfRetido = Math.round(jcpDedutivel * CONSTANTES.JCP_IRRF_ALIQUOTA * 100) / 100;
+
+  // ═══ Tratamento no beneficiário ═══
+  let tratamento;
+  switch (tipoBeneficiario) {
+    case 'PJ_LUCRO_REAL':
+    case 'PJ_LUCRO_PRESUMIDO':
+      tratamento = 'Antecipação do IRPJ devido (Art. 726 §1º, I)';
+      break;
+    default:
+      tratamento = 'Tributação definitiva (Art. 726 §1º, II)';
+  }
+
+  // ═══ FIX ERRO #7: Economia de CSLL com alíquota variável (financeiras vs geral) ═══
+  const _anoBase = Number(dados.anoBase || dados.ano) || new Date().getFullYear();
+  let aliquotaCSLL;
+  if (ehFinanceira) {
+    aliquotaCSLL = _anoBase <= 2027
+      ? CONSTANTES.CSLL_ALIQUOTA_FINANCEIRAS_LC224_ATE_2027
+      : CONSTANTES.CSLL_ALIQUOTA_FINANCEIRAS;
+  } else {
+    aliquotaCSLL = CONSTANTES.CSLL_ALIQUOTA_GERAL;
+  }
+
+  // ═══ Economia tributária de IRPJ (considerando faixa do adicional) ═══
+  let economiaIRPJ;
+  let notaEconomia;
+  const _lucroRealRef = Number(lucroRealAnual ?? _ll) || 0;
+
+  if (_lucroRealRef > 0) {
+    const limiteAdicional = periodoApuracao === 'TRIMESTRAL'
+      ? CONSTANTES.IRPJ_LIMITE_ADICIONAL_TRIMESTRE
+      : (CONSTANTES.IRPJ_LIMITE_ADICIONAL_MES * _nm);
+
+    const lucroAntesJCP = Math.max(_lucroRealRef, 0);
+    const lucroAposJCP = Math.max(lucroAntesJCP - jcpDedutivel, 0);
+
+    const irpjAntesJCP = lucroAntesJCP * CONSTANTES.IRPJ_ALIQUOTA_NORMAL
+      + Math.max(0, lucroAntesJCP - limiteAdicional) * CONSTANTES.IRPJ_ALIQUOTA_ADICIONAL;
+    const irpjAposJCP = lucroAposJCP * CONSTANTES.IRPJ_ALIQUOTA_NORMAL
+      + Math.max(0, lucroAposJCP - limiteAdicional) * CONSTANTES.IRPJ_ALIQUOTA_ADICIONAL;
+
+    economiaIRPJ = Math.round((irpjAntesJCP - irpjAposJCP) * 100) / 100;
+    notaEconomia = `Economia calculada considerando lucro real de R$ ${lucroAntesJCP.toLocaleString('pt-BR')} (${periodoApuracao.toLowerCase()})`;
+  } else {
+    economiaIRPJ = Math.round(jcpDedutivel * CONSTANTES.IRPJ_ALIQUOTA_NORMAL * 100) / 100;
+    notaEconomia = 'Economia estimada apenas com alíquota de 15% (sem lucro real informado — adicional de 10% pode se aplicar se lucro > R$ 240.000/ano)';
+  }
+
+  const economiaCSLL = Math.round(jcpDedutivel * aliquotaCSLL * 100) / 100;
+  const economiaTotal = Math.round((economiaIRPJ + economiaCSLL) * 100) / 100;
+
+  // Custo do JCP (IRRF retido do beneficiário)
+  const custoIRRF = irrfRetido;
 
   // Economia líquida
-  const economiaLiquida = economiaTotal - custoIRRF;  // 34% - 17,5% = 16,5% do JCP (LC 224/2025)
+  const economiaLiquida = Math.round((economiaTotal - custoIRRF) * 100) / 100;
 
   return {
-    patrimonioLiquido: _pl,
-    tjlp,
+    artigo: 'Art. 9º da Lei 9.249/1995 c/c Lei 12.973/2014, art. 9º (§§8º-12)',
+
+    // ═══ Composição do PL ═══
+    composicaoPL: temPLDecomposto ? {
+      capitalSocial: _cs,
+      reservasCapital: _rc,
+      reservasLucros: _rl,
+      acoesEmTesouraria: -_at,
+      prejuizosAcumulados: -_pa,
+      basePL
+    } : { patrimonioLiquido: basePL, basePL },
+
+    patrimonioLiquido: basePL,
+    tjlp: _tjlp,
     tjlpProporcional,
-    jcpMaximoTJLP,
-    limite1_50LL: limite1,
-    limite2_50Reservas: limite2,
+    taxaTJLP: `${(_tjlp * 100).toFixed(2)}% a.a.`,
+    jcpMaximoTJLP: jcpAntesCap,
+    jcpCalculado,
+    jcpAntesCap,
     jcpDedutivel,
+
+    // ═══ Limites de 50% ═══
+    limites: {
+      limite1_50LucroLiquido: limite1_50LL,
+      limite2_50LucrosAcumulados: limite2_50Acum,
+      limiteAplicavel,
+      capAplicado,
+      excessoGlosavel: capAplicado ? Math.round((jcpAntesCap - jcpCalculado) * 100) / 100 : 0,
+      nota: limiteAplicavel !== null
+        ? (capAplicado
+          ? `JCP reduzido de R$ ${jcpAntesCap.toLocaleString('pt-BR')} para R$ ${jcpCalculado.toLocaleString('pt-BR')} pelo limite de 50% (Art. 9º, §1º Lei 9.249/95)`
+          : 'JCP dentro do limite de 50% — nenhum ajuste necessário')
+        : 'ATENÇÃO: lucroLiquidoExercicio e lucrosAcumulados não informados — cap de 50% NÃO aplicado. Validar externamente.',
+      referencia: 'Art. 9º, §1º da Lei 9.249/1995'
+    },
+    limite1_50LL: limite1_50LL,
+    limite2_50Reservas: limite2_50Acum,
+
+    // ═══ IRRF ═══
+    irrfRetido,
+    aliquotaIRRF: `${(CONSTANTES.JCP_IRRF_ALIQUOTA * 100).toFixed(1)}%`,
+    jcpLiquido: Math.round((jcpDedutivel - irrfRetido) * 100) / 100,
+    custoIRRF,
+
+    // ═══ Economia tributária ═══
     economiaIRPJ,
     economiaCSLL,
     economiaTotal,
-    custoIRRF,
     economiaLiquida,
+
+    impactoFiscal: {
+      deducaoLucroReal: jcpDedutivel,
+      economiaIRPJ,
+      economiaCSLL,
+      economiaTotal,
+      custoIRRF: irrfRetido,
+      beneficioLiquido: economiaLiquida,
+      nota: notaEconomia,
+      aliquotaCSLLUsada: `${(aliquotaCSLL * 100).toFixed(1)}%`,
+      custoIRRFNota: `IRRF ${(CONSTANTES.JCP_IRRF_ALIQUOTA * 100).toFixed(1)}% (LC 224/2025)`
+    },
+
     percentualEconomia: jcpDedutivel > 0
       ? ((economiaLiquida / jcpDedutivel) * 100).toFixed(1) + '%'
       : '0%',
-    limiteUtilizado: jcpDedutivel === jcpMaximoTJLP ? 'TJLP'
-      : jcpDedutivel === limiteLegal ? (limite1 >= limite2 ? '50% Lucro Líquido' : '50% Lucros Acumulados')
-      : 'TJLP',
+    limiteUtilizado: jcpDedutivel === jcpAntesCap ? 'TJLP'
+      : (capAplicado ? (limite1_50LL >= limite2_50Acum ? '50% Lucro Líquido' : '50% Lucros Acumulados') : 'TJLP'),
+
+    tipoBeneficiario,
+    tratamento,
+    deducaoIRPJ: 'JCP é DESPESA DEDUTÍVEL do lucro real e da base da CSLL (Art. 9º, §11)',
+    codigoDARF: '5706',
     artigos: 'Art. 355 a 358',
   };
 }
@@ -6320,7 +6487,7 @@ function calcularAmortizacaoGoodwill(dados) {
  *
  * Base Legal: Art. 415-418, 426 do RIR/2018
  */
-function analisarParticipacoesSOcietarias(dados) {
+function analisarParticipacoesSocietarias(dados) {
   const {
     dividendosRecebidos = 0,
     resultadoMEP = 0,
@@ -9628,202 +9795,9 @@ function gerarRelatorioG(params) {
 // FUNÇÕES — LEI 12.973/2014
 // ============================================================================
 
-/**
- * 11. Calcular JCP com base nas contas do PL definidas pela Lei 12.973
- *
- * Art. 9º, §8º da Lei 9.249/1995 (redação Lei 12.973): somente capital social,
- * reservas de capital, reservas de lucros, ações em tesouraria e prejuízos acumulados.
- *
- * @param {Object} params
- * @param {number} params.capitalSocial - Capital social (inclui ações em passivo — §12)
- * @param {number} [params.reservasCapital=0]
- * @param {number} [params.reservasLucros=0]
- * @param {number} [params.acoesEmTesouraria=0] - Valor positivo (será deduzido)
- * @param {number} [params.prejuizosAcumulados=0] - Valor positivo (será deduzido)
- * @param {number} params.taxaTJLP - Taxa TJLP/TLP do período (decimal, ex: 0.0612 para 6,12% a.a.)
- * @param {string} [params.tipoBeneficiario='PJ_LUCRO_REAL']
- * @param {number} [params.lucroRealAnual=null] - Lucro real ANTES do JCP (para cálculo correto do adicional de 10%)
- * @param {number} [params.lucroLiquidoExercicio=null] - Lucro líquido do exercício antes do JCP/IRPJ (para cap 50% — Art. 9º §1º)
- * @param {number} [params.lucrosAcumulados=0] - Lucros acumulados em balanço (para cap 50% — Art. 9º §1º)
- * @param {boolean} [params.ehFinanceira=false] - Se true, usa alíquota de CSLL de financeiras
- * @param {string} [params.periodoApuracao='ANUAL'] - 'ANUAL' ou 'TRIMESTRAL' — afeta limite do adicional
- * @returns {Object} JCP calculado com IRRF e base legal Lei 12.973
- */
-function calcularJCPLei12973(params) {
-  const {
-    capitalSocial = 0,
-    reservasCapital = 0,
-    reservasLucros = 0,
-    acoesEmTesouraria = 0,
-    prejuizosAcumulados = 0,
-    taxaTJLP,
-    tipoBeneficiario = 'PJ_LUCRO_REAL',
-    lucroRealAnual = null,        // Lucro real anual ANTES do JCP (para cálculo correto do adicional)
-    lucroLiquidoExercicio = null,  // FIX ERRO #4: Lucro líquido do exercício (para cap 50% — Art. 9º §1º Lei 9.249/95)
-    lucrosAcumulados = 0,          // FIX ERRO #4: Lucros acumulados (para cap 50% — Art. 9º §1º Lei 9.249/95)
-    ehFinanceira = false,         // Se true, usa CSLL de financeiras
-    periodoApuracao = 'ANUAL'     // 'ANUAL' ou 'TRIMESTRAL' — afeta limite do adicional
-  } = params;
-
-  // ═══ FIX v5.5: Aceitar alias 'tjlp' e validar antes de calcular ═══
-  const _tjlp = Number(taxaTJLP ?? params.tjlp) || 0;
-
-  if (!_tjlp || _tjlp <= 0) {
-    const ref = obterTJLPReferencia();
-    return {
-      erro: true,
-      artigo: 'Art. 9º da Lei 9.249/1995 c/c Lei 12.973/2014',
-      mensagem: 'taxaTJLP é OBRIGATÓRIA e deve ser um número positivo (ex: 0.0919 para 9,19% a.a.). '
-        + (ref.taxa ? `Sugestão: última TJLP disponível = ${(ref.taxa * 100).toFixed(2)}% a.a. (${ref.fonte})` : 'Consultar BACEN.'),
-      basePL: 0,
-      jcpCalculado: 0,
-      irrfRetido: 0,
-      taxaTJLP: '0.00% a.a.',
-      impactoFiscal: { economiaIRPJ: 0, economiaCSLL: 0, economiaTotal: 0, custoIRRF: 0, beneficioLiquido: 0 },
-    };
-  }
-
-  // ═══ Sanitizar entradas numéricas ═══
-  const _cs = Number(capitalSocial) || 0;
-  const _rc = Number(reservasCapital) || 0;
-  const _rl = Number(reservasLucros) || 0;
-  const _at = Number(acoesEmTesouraria) || 0;
-  const _pa = Number(prejuizosAcumulados) || 0;
-
-  // Base do PL para JCP conforme §8º do Art. 9º Lei 9.249 (redação Lei 12.973)
-  const basePL = _cs + _rc + _rl - _at - _pa;
-
-  if (basePL <= 0) {
-    return {
-      artigo: 'Art. 9º da Lei 9.249/1995 c/c Lei 12.973/2014',
-      basePL: 0,
-      jcpCalculado: 0,
-      irrfRetido: 0,
-      observacao: 'PL negativo ou zero — JCP não pode ser calculado'
-    };
-  }
-
-  // JCP = PL × TJLP (limitado a 50% do lucro líquido do exercício ou 50% dos lucros acumulados)
-  let jcpCalculado = Math.round(basePL * _tjlp * 100) / 100;
-  const jcpAntesCap = jcpCalculado;
-
-  // ═══ FIX ERRO #4: Aplicar cap de 50% — Art. 9º, §1º da Lei 9.249/95 ═══
-  // JCP dedutível limitado ao MAIOR entre:
-  //   (a) 50% do lucro líquido do exercício (antes do JCP e IRPJ)
-  //   (b) 50% dos lucros acumulados + reservas de lucros
-  // Se lucroLiquidoExercicio não foi informado, o cap não pode ser aplicado automaticamente
-  // e retorna aviso para validação externa (compatibilidade retroativa).
-  const _lle = Number(lucroLiquidoExercicio ?? params.lucroLiquido) || 0;
-  const _lacum = Number(lucrosAcumulados ?? params.lucrosAcumuladosReservas) || 0;
-  let capAplicado = false;
-  let limiteAplicavel = null;
-  let limite1_50LL = null;
-  let limite2_50Acum = null;
-
-  if (_lle > 0 || _lacum > 0) {
-    limite1_50LL = _lle * CONSTANTES.JCP_LIMITE_LUCRO_LIQUIDO;            // 50% do lucro líquido
-    limite2_50Acum = (_lacum + _rl) * CONSTANTES.JCP_LIMITE_LUCROS_ACUMULADOS;  // 50% de (lucros acum + reservas)
-    limiteAplicavel = Math.max(limite1_50LL, limite2_50Acum);
-    if (limiteAplicavel > 0) {
-      jcpCalculado = Math.min(jcpCalculado, limiteAplicavel);
-      jcpCalculado = Math.round(jcpCalculado * 100) / 100;
-      capAplicado = jcpCalculado < jcpAntesCap;
-    }
-  }
-
-  const irrfRetido = Math.round(jcpCalculado * CONSTANTES.JCP_IRRF_ALIQUOTA * 100) / 100;
-
-  let tratamento;
-  switch (tipoBeneficiario) {
-    case 'PJ_LUCRO_REAL':
-    case 'PJ_LUCRO_PRESUMIDO':
-      tratamento = 'Antecipação do IRPJ devido (Art. 726 §1º, I)';
-      break;
-    default:
-      tratamento = 'Tributação definitiva (Art. 726 §1º, II)';
-  }
-
-  // --- Economia tributária: IRPJ (considerando faixa do adicional) ---
-  // O adicional de 10% só incide sobre o lucro real que excede o limite (Art. 225, parágrafo único)
-  // ═══ FIX ERRO #2: CSLL financeiras — LC 224/2025 escalonada ═══
-  const _anoBaseJCP = Number(params.anoBase || params.ano) || new Date().getFullYear();
-  const aliquotaCSLL = ehFinanceira
-    ? (_anoBaseJCP <= 2027 ? CONSTANTES.CSLL_ALIQUOTA_FINANCEIRAS_LC224_ATE_2027 : CONSTANTES.CSLL_ALIQUOTA_FINANCEIRAS)
-    : CONSTANTES.CSLL_ALIQUOTA_GERAL;
-  let economiaIRPJ;
-  let notaEconomia;
-
-  if (lucroRealAnual !== null && lucroRealAnual !== undefined) {
-    // Cálculo preciso: verifica se a dedução do JCP "morde" a faixa do adicional
-    const limiteAdicional = periodoApuracao === 'TRIMESTRAL'
-      ? CONSTANTES.IRPJ_LIMITE_ADICIONAL_TRIMESTRE
-      : CONSTANTES.IRPJ_LIMITE_ADICIONAL_ANO;
-
-    const lucroAntesJCP = Math.max(lucroRealAnual, 0);
-    const lucroAposJCP = Math.max(lucroAntesJCP - jcpCalculado, 0);
-
-    const irpjAntesJCP = lucroAntesJCP * CONSTANTES.IRPJ_ALIQUOTA_NORMAL
-      + Math.max(0, lucroAntesJCP - limiteAdicional) * CONSTANTES.IRPJ_ALIQUOTA_ADICIONAL;
-    const irpjAposJCP = lucroAposJCP * CONSTANTES.IRPJ_ALIQUOTA_NORMAL
-      + Math.max(0, lucroAposJCP - limiteAdicional) * CONSTANTES.IRPJ_ALIQUOTA_ADICIONAL;
-
-    economiaIRPJ = Math.round((irpjAntesJCP - irpjAposJCP) * 100) / 100;
-    notaEconomia = `Economia calculada considerando lucro real de R$ ${lucroAntesJCP.toLocaleString('pt-BR')} (${periodoApuracao.toLowerCase()})`;
-  } else {
-    // Estimativa conservadora: assume apenas 15% (sem garantia de que atinge faixa do adicional)
-    economiaIRPJ = Math.round(jcpCalculado * CONSTANTES.IRPJ_ALIQUOTA_NORMAL * 100) / 100;
-    notaEconomia = 'Economia estimada apenas com alíquota de 15% (sem lucroRealAnual informado — adicional de 10% pode se aplicar se lucro > R$ 240.000/ano)';
-  }
-
-  const economiaCSLL = Math.round(jcpCalculado * aliquotaCSLL * 100) / 100;
-  const economiaTotal = Math.round((economiaIRPJ + economiaCSLL) * 100) / 100;
-
-  return {
-    artigo: 'Art. 9º da Lei 9.249/1995 c/c Lei 12.973/2014, art. 9º (§§8º-12)',
-    composicaoPL: {
-      capitalSocial: _cs,
-      reservasCapital: _rc,
-      reservasLucros: _rl,
-      acoesEmTesouraria: -_at,
-      prejuizosAcumulados: -_pa,
-      basePL
-    },
-    taxaTJLP: `${(_tjlp * 100).toFixed(2)}% a.a.`,
-    jcpCalculado,
-    jcpAntesCap,
-    limites: {
-      limite1_50LucroLiquido: limite1_50LL,
-      limite2_50LucrosAcumulados: limite2_50Acum,
-      limiteAplicavel,
-      capAplicado,
-      excessoGlosavel: capAplicado ? Math.round((jcpAntesCap - jcpCalculado) * 100) / 100 : 0,
-      nota: limiteAplicavel !== null
-        ? (capAplicado
-          ? `JCP reduzido de R$ ${jcpAntesCap.toLocaleString('pt-BR')} para R$ ${jcpCalculado.toLocaleString('pt-BR')} pelo limite de 50% (Art. 9º, §1º Lei 9.249/95)`
-          : 'JCP dentro do limite de 50% — nenhum ajuste necessário')
-        : 'ATENÇÃO: lucroLiquidoExercicio e lucrosAcumulados não informados — cap de 50% NÃO aplicado. Validar externamente.',
-      referencia: 'Art. 9º, §1º da Lei 9.249/1995'
-    },
-    irrfRetido,
-    aliquotaIRRF: `${(CONSTANTES.JCP_IRRF_ALIQUOTA * 100).toFixed(1)}%`,
-    jcpLiquido: Math.round((jcpCalculado - irrfRetido) * 100) / 100,
-    tipoBeneficiario,
-    tratamento,
-    deducaoIRPJ: 'JCP é DESPESA DEDUTÍVEL do lucro real e da base da CSLL (Art. 9º, §11)',
-    codigoDARF: '5706',
-    impactoFiscal: {
-      deducaoLucroReal: jcpCalculado,
-      economiaIRPJ,
-      economiaCSLL,
-      economiaTotal,
-      custoIRRF: irrfRetido,
-      beneficioLiquido: Math.round((economiaTotal - irrfRetido) * 100) / 100,
-      nota: notaEconomia,
-      aliquotaCSLLUsada: `${(aliquotaCSLL * 100).toFixed(1)}%`,
-      custoIRRFNota: `IRRF ${(CONSTANTES.JCP_IRRF_ALIQUOTA * 100).toFixed(1)}% (LC 224/2025)`
-    }
-  };
-}
+// ═══ calcularJCPLei12973 foi unificada em calcularJCP (v5.7) ═══
+// Alias mantido para retrocompatibilidade via exports
+const calcularJCPLei12973 = calcularJCP;
 
 /**
  * 12. Analisar impacto dos ajustes da Lei 12.973 na compensação de retenções
@@ -10875,7 +10849,7 @@ const _motorExports = {
   analisarEncargosFinanceirosVencidos,
   analisarImpactoLei12973,
   analisarLeasing,
-  analisarParticipacoesSOcietarias,
+  analisarParticipacoesSocietarias,
   analisarValorJusto,
   arvoreDecisaoOtimizacao,
   avaliarEstoqueSemCustoIntegrado,
