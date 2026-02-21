@@ -1,13 +1,38 @@
 /**
  * ============================================================================
- * MOTOR DE CÁLCULO UNIFICADO — LUCRO REAL (IRPJ + CSLL)  v5.4
+ * MOTOR DE CÁLCULO UNIFICADO — LUCRO REAL (IRPJ + CSLL)  v5.5
  * Base Legal: Decreto nº 9.580/2018 (RIR/2018) — Artigos 217 a 290+
  * Ano-Base: 2026
  * ============================================================================
  *
  * CHANGELOG v5.3 (correções fiscais e de interface):
  *
+ * --- v5.5 (correções de bugs de destructuring — motor quebrado) ---
+ *
+ * [FIX GRAVE] calcularIRPJLucroReal() retornava sempre zero
+ *   - Causa: destructuring esperava nomes internos (lucroLiquidoContabil, totalAdicoes,
+ *     totalExclusoes, saldoPrejuizoFiscal) mas consumidores passavam nomes simplificados
+ *     (lucroLiquido, adicoes, exclusoes, prejuizoFiscal) — todos caíam no default = 0
+ *   - Fix: aceita AMBAS convenções via fallback (lucroLiquidoContabil || dados.lucroLiquido)
+ *
+ * [FIX GRAVE] calcularCSLL() retornava sempre zero
+ *   - Mesma causa: destructuring esperava (adicoesCSLL, exclusoesCSLL, saldoBaseNegativa)
+ *     mas consumidores passavam (adicoes, exclusoes, baseNegativa)
+ *   - Fix: aceita AMBAS convenções + alias 'financeira' para ehInstituicaoFinanceira
+ *
+ * [FIX GRAVE] calcularJCPLei12973() retornava NaN e null
+ *   - Causa: taxaTJLP não era validada — quando undefined, basePL × undefined = NaN
+ *     que se propagava para jcpCalculado, irrfRetido, taxaTJLP display ("NaN% a.a.") etc.
+ *   - Fix: validação com erro informativo (inclui sugestão da última TJLP via obterTJLPReferencia),
+ *     sanitização via Number(), aceita alias 'tjlp', e usa _tjlp em vez de taxaTJLP no return
+ *
  * --- v5.4 (correções fiscais — auditoria de erros) ---
+ *
+ * [FIX] TJLP_REFERENCIA.Q1_2026 atualizada: 9,19% a.a. (Comunicado BCB 44.463, 31/12/2025)
+ *   - Antes: Q1_2026 = null (sem valor, risco de fallback incorreto em consumidores)
+ *   - Nova função obterTJLPReferencia(trimestre, ano): retorna a última taxa válida
+ *     quando o trimestre solicitado ainda não foi publicado pelo BACEN
+ *   - Mensagens de erro em calcularJCP atualizadas com taxas 2025-2026
  *
  * [FIX CRÍTICO] IRRF_JCP objeto documental: aliquota corrigida de 0.15 para 0.175
  *   - O cálculo (CONSTANTES.JCP_IRRF_ALIQUOTA) já estava correto em 0.175
@@ -198,11 +223,12 @@ const CONSTANTES = {
   // Consultar: https://www.gov.br/receitafederal/pt-br/assuntos/orientacao-tributaria/pagamentos-e-parcelamentos/taxa-de-juros-de-longo-prazo-tjlp
   TJLP_REFERENCIA: {
     nota: 'Taxas de referência — consultar BACEN para valor atualizado',
-    Q1_2025: 0.0797,   // 7,97% a.a. (Comunicado BCB 42.642)
-    Q2_2025: 0.0850,   // ~8,50% a.a.
-    Q3_2025: 0.0877,   // ~8,77% a.a.
-    Q4_2025: 0.0877,   // ~8,77% a.a.
-    Q1_2026: null,      // Consultar BACEN
+    Q1_2025: 0.0797,   // 7,97% a.a. (Comunicado BCB 42.642, de 31/12/2024)
+    Q2_2025: 0.0850,   // 8,50% a.a.
+    Q3_2025: 0.0877,   // 8,77% a.a.
+    Q4_2025: 0.0877,   // 8,77% a.a.
+    Q1_2026: 0.0919,   // 9,19% a.a. (Comunicado BCB 44.463, de 31/12/2025)
+    Q2_2026: null,      // Consultar BACEN (publicação até último dia útil de mar/2026)
   },
 
   // --- Limites de Obrigatoriedade ---
@@ -216,6 +242,73 @@ const CONSTANTES = {
     { numero: 4, inicio: '10-01', fim: '12-31', meses: 3 },
   ],
 };
+
+/**
+ * Helper: Obtém a TJLP de referência para um dado trimestre/ano.
+ *
+ * Lógica de fallback: se o trimestre solicitado for null (ainda não publicado),
+ * retorna a última taxa válida disponível (a mais recente, não a mais antiga).
+ *
+ * IMPORTANTE: Esta função retorna valores de REFERÊNCIA para orientação do usuário.
+ * A TJLP para cálculo de JCP DEVE ser informada explicitamente pelo usuário com
+ * base na taxa vigente publicada pelo BACEN.
+ *
+ * @param {number} [trimestre] - 1 a 4 (default: trimestre atual baseado na data)
+ * @param {number} [ano] - Ano-calendário (default: ano atual)
+ * @returns {Object} { taxa, trimestre, ano, fonte, isFallback }
+ */
+function obterTJLPReferencia(trimestre, ano) {
+  const agora = new Date();
+  const _ano = ano || agora.getFullYear();
+  const _tri = trimestre || (Math.floor(agora.getMonth() / 3) + 1);
+
+  const ref = CONSTANTES.TJLP_REFERENCIA;
+  const chave = `Q${_tri}_${_ano}`;
+
+  // Tentativa direta
+  if (ref[chave] !== null && ref[chave] !== undefined) {
+    return {
+      taxa: ref[chave],
+      trimestre: _tri,
+      ano: _ano,
+      fonte: `TJLP_REFERENCIA.${chave} (Comunicado BACEN)`,
+      isFallback: false,
+    };
+  }
+
+  // Fallback: percorre de trás para frente até encontrar a última taxa válida
+  const chaves = Object.keys(ref)
+    .filter(k => k.startsWith('Q') && ref[k] !== null && typeof ref[k] === 'number')
+    .sort((a, b) => {
+      // Ordena por ano e trimestre: Q1_2025 < Q2_2025 < ... < Q1_2026
+      const [qa, ya] = a.replace('Q', '').split('_').map(Number);
+      const [qb, yb] = b.replace('Q', '').split('_').map(Number);
+      return (ya * 10 + qa) - (yb * 10 + qb);
+    });
+
+  if (chaves.length === 0) {
+    return {
+      taxa: null,
+      trimestre: _tri,
+      ano: _ano,
+      fonte: 'Nenhuma taxa de referência disponível — consultar BACEN',
+      isFallback: true,
+    };
+  }
+
+  const ultimaChave = chaves[chaves.length - 1];
+  const [qf, yf] = ultimaChave.replace('Q', '').split('_').map(Number);
+
+  return {
+    taxa: ref[ultimaChave],
+    trimestre: _tri,
+    ano: _ano,
+    fonte: `Fallback para ${ultimaChave} (${(ref[ultimaChave] * 100).toFixed(2)}% a.a.) — última taxa disponível. `
+      + `Taxa de Q${_tri}/${_ano} ainda não publicada pelo BACEN.`,
+    isFallback: true,
+    ultimaTaxaDisponivel: { trimestre: qf, ano: yf, taxa: ref[ultimaChave] },
+  };
+}
 
 // ============================================================================
 // BLOCO 2 — PERCENTUAIS DE PRESUNÇÃO PARA ESTIMATIVA MENSAL
@@ -978,15 +1071,15 @@ function calcularIRPJLucroReal(dados) {
     estimativasPagas = 0,
   } = dados;
 
-  // ═══ FIX: Garantir tipos numéricos em todas as entradas ═══
-  const _lc = Number(lucroLiquidoContabil) || 0;
-  const _ta = Number(totalAdicoes) || 0;
-  const _te = Number(totalExclusoes) || 0;
-  const _sp = Number(saldoPrejuizoFiscal) || 0;
-  const _nm = Number(numMeses) || 12;
-  const _id = Number(incentivosDedutiveis) || 0;
-  const _rf = Number(retencoesFonte) || 0;
-  const _ep = Number(estimativasPagas) || 0;
+  // ═══ FIX v5.5: Aceitar AMBAS convenções de nomes (internos E simplificados) ═══
+  const _lc = Number(lucroLiquidoContabil || dados.lucroLiquido) || 0;
+  const _ta = Number(totalAdicoes || dados.adicoes) || 0;
+  const _te = Number(totalExclusoes || dados.exclusoes) || 0;
+  const _sp = Number(saldoPrejuizoFiscal || dados.prejuizoFiscal || dados.prejuizo) || 0;
+  const _nm = Number(numMeses || dados.meses) || 12;
+  const _id = Number(incentivosDedutiveis || dados.incentivos) || 0;
+  const _rf = Number(retencoesFonte || dados.retencoes) || 0;
+  const _ep = Number(estimativasPagas || dados.estimativas) || 0;
 
   // PASSO 1: Lucro Líquido Contábil — Art. 259
   const passo1_lucroLiquido = _lc;
@@ -1134,13 +1227,14 @@ function calcularCSLL(dados) {
     ehInstituicaoFinanceira = false,
   } = dados;
 
-  // ═══ FIX: Garantir tipos numéricos ═══
-  const _lc = Number(lucroLiquidoContabil) || 0;
-  const _ad = Number(adicoesCSLL) || 0;
-  const _ex = Number(exclusoesCSLL) || 0;
-  const _bn = Number(saldoBaseNegativa) || 0;
+  // ═══ FIX v5.5: Aceitar AMBAS convenções de nomes (internos E simplificados) ═══
+  const _lc = Number(lucroLiquidoContabil || dados.lucroLiquido) || 0;
+  const _ad = Number(adicoesCSLL || dados.adicoes || dados.totalAdicoes) || 0;
+  const _ex = Number(exclusoesCSLL || dados.exclusoes || dados.totalExclusoes) || 0;
+  const _bn = Number(saldoBaseNegativa || dados.baseNegativa || dados.prejuizoCSLL) || 0;
+  const _fin = ehInstituicaoFinanceira || dados.financeira || false;
 
-  const aliquota = ehInstituicaoFinanceira
+  const aliquota = _fin
     ? CONSTANTES.CSLL_ALIQUOTA_FINANCEIRAS
     : CONSTANTES.CSLL_ALIQUOTA_GERAL;
 
@@ -1385,8 +1479,8 @@ function calcularSuspensaoReducao(dados) {
  *   https://www.gov.br/receitafederal/pt-br/assuntos/orientacao-tributaria/pagamentos-e-parcelamentos/taxa-de-juros-de-longo-prazo-tjlp
  *
  * Referência de taxas recentes:
- *   Q1/2025: 7,97% a.a.  |  Q2/2025: ~8,50% a.a.  |  Q3-Q4/2025: ~8,77% a.a.
- *   Q1/2026: consultar BACEN (publicação até último dia útil do trimestre anterior)
+ *   Q1/2025: 7,97% a.a.  |  Q2/2025: 8,50% a.a.  |  Q3-Q4/2025: 8,77% a.a.
+ *   Q1/2026: 9,19% a.a. (Comunicado BCB 44.463)  |  Q2/2026: consultar BACEN
  *
  * @param {Object} dados
  * @param {number} dados.patrimonioLiquido      - PL da empresa
@@ -1421,9 +1515,10 @@ function calcularJCP(dados) {
         + 'pagamentos-e-parcelamentos/taxa-de-juros-de-longo-prazo-tjlp',
       taxasReferencia: {
         'Q1_2025': '7,97% a.a. (0.0797)',
-        'Q2_2025': '~8,50% a.a.',
-        'Q3_Q4_2025': '~8,77% a.a.',
-        'Q1_2026': 'Consultar BACEN',
+        'Q2_2025': '8,50% a.a. (0.0850)',
+        'Q3_Q4_2025': '8,77% a.a. (0.0877)',
+        'Q1_2026': '9,19% a.a. (0.0919) — Comunicado BCB 44.463',
+        'Q2_2026': 'Consultar BACEN',
       },
       artigo: 'Art. 355 c/c Lei 9.249/95, Art. 9º',
       jcpDedutivel: 0,
@@ -1436,7 +1531,7 @@ function calcularJCP(dados) {
       erro: true,
       mensagem: `TJLP informada (${(tjlp * 100).toFixed(2)}%) parece incorreta. `
         + 'Valor deve ser decimal entre 0.01 e 0.30 (1% a 30% a.a.). '
-        + 'Em 2025, a TJLP variou entre 7,97% e 8,77% a.a.',
+        + 'Em 2025-2026, a TJLP variou entre 7,97% e 9,19% a.a.',
       jcpDedutivel: 0,
       economiaLiquida: 0,
     };
@@ -9511,7 +9606,7 @@ function gerarRelatorioG(params) {
  */
 function calcularJCPLei12973(params) {
   const {
-    capitalSocial,
+    capitalSocial = 0,
     reservasCapital = 0,
     reservasLucros = 0,
     acoesEmTesouraria = 0,
@@ -9523,8 +9618,33 @@ function calcularJCPLei12973(params) {
     periodoApuracao = 'ANUAL'     // 'ANUAL' ou 'TRIMESTRAL' — afeta limite do adicional
   } = params;
 
+  // ═══ FIX v5.5: Aceitar alias 'tjlp' e validar antes de calcular ═══
+  const _tjlp = Number(taxaTJLP ?? params.tjlp) || 0;
+
+  if (!_tjlp || _tjlp <= 0) {
+    const ref = obterTJLPReferencia();
+    return {
+      erro: true,
+      artigo: 'Art. 9º da Lei 9.249/1995 c/c Lei 12.973/2014',
+      mensagem: 'taxaTJLP é OBRIGATÓRIA e deve ser um número positivo (ex: 0.0919 para 9,19% a.a.). '
+        + (ref.taxa ? `Sugestão: última TJLP disponível = ${(ref.taxa * 100).toFixed(2)}% a.a. (${ref.fonte})` : 'Consultar BACEN.'),
+      basePL: 0,
+      jcpCalculado: 0,
+      irrfRetido: 0,
+      taxaTJLP: '0.00% a.a.',
+      impactoFiscal: { economiaIRPJ: 0, economiaCSLL: 0, economiaTotal: 0, custoIRRF: 0, beneficioLiquido: 0 },
+    };
+  }
+
+  // ═══ Sanitizar entradas numéricas ═══
+  const _cs = Number(capitalSocial) || 0;
+  const _rc = Number(reservasCapital) || 0;
+  const _rl = Number(reservasLucros) || 0;
+  const _at = Number(acoesEmTesouraria) || 0;
+  const _pa = Number(prejuizosAcumulados) || 0;
+
   // Base do PL para JCP conforme §8º do Art. 9º Lei 9.249 (redação Lei 12.973)
-  const basePL = capitalSocial + reservasCapital + reservasLucros - acoesEmTesouraria - prejuizosAcumulados;
+  const basePL = _cs + _rc + _rl - _at - _pa;
 
   if (basePL <= 0) {
     return {
@@ -9537,7 +9657,7 @@ function calcularJCPLei12973(params) {
   }
 
   // JCP = PL × TJLP (limitado a 50% do lucro líquido do exercício ou 50% dos lucros acumulados)
-  const jcpCalculado = Math.round(basePL * taxaTJLP * 100) / 100;
+  const jcpCalculado = Math.round(basePL * _tjlp * 100) / 100;
   const irrfRetido = Math.round(jcpCalculado * CONSTANTES.JCP_IRRF_ALIQUOTA * 100) / 100;
 
   let tratamento;
@@ -9584,14 +9704,14 @@ function calcularJCPLei12973(params) {
   return {
     artigo: 'Art. 9º da Lei 9.249/1995 c/c Lei 12.973/2014, art. 9º (§§8º-12)',
     composicaoPL: {
-      capitalSocial,
-      reservasCapital,
-      reservasLucros,
-      acoesEmTesouraria: -acoesEmTesouraria,
-      prejuizosAcumulados: -prejuizosAcumulados,
+      capitalSocial: _cs,
+      reservasCapital: _rc,
+      reservasLucros: _rl,
+      acoesEmTesouraria: -_at,
+      prejuizosAcumulados: -_pa,
       basePL
     },
-    taxaTJLP: `${(taxaTJLP * 100).toFixed(2)}% a.a.`,
+    taxaTJLP: `${(_tjlp * 100).toFixed(2)}% a.a.`,
     jcpCalculado,
     limites: {
       nota: 'JCP limitado a 50% do lucro líquido do exercício OU 50% dos lucros acumulados e reservas de lucros (o maior) — validar externamente',
@@ -10693,6 +10813,7 @@ const _motorExports = {
   calcularIncentivos,
   calcularJCP,
   calcularJCPLei12973,
+  obterTJLPReferencia,
   calcularJurosMoraSelic,
   calcularLimiteDoacoes,
   calcularLimitePrevidenciaComplementar,
@@ -10751,6 +10872,7 @@ const _motorExports = {
   estimativaMensal: calcularEstimativaMensal,     // Alias curto
   compensarPrejuizoFiscalCompleto: compensarIntegrado, // Alias descritivo
   jcp: calcularJCP,                               // Alias mínimo
+  tjlpReferencia: obterTJLPReferencia,             // Alias mínimo
   depreciacao: calcularDepreciacao,               // Alias mínimo
   subcapitalizacao: verificarSubcapitalizacao,    // Alias
   vedacoesCompensacao: verificarVedacoes,         // Alias
