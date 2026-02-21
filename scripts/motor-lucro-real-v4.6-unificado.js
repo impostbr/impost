@@ -1071,8 +1071,8 @@ function calcularIRPJLucroReal(dados) {
     estimativasPagas = 0,
   } = dados;
 
-  // ═══ FIX v5.5: Aceitar AMBAS convenções de nomes (internos E simplificados) ═══
-  const _lc = Number(lucroLiquidoContabil || dados.lucroLiquido) || 0;
+  // ═══ FIX v5.5/5.6: Aceitar AMBAS convenções de nomes (internos E simplificados) ═══
+  const _lc = Number(lucroLiquidoContabil || dados.lucroLiquido || dados.lucroReal) || 0;
   const _ta = Number(totalAdicoes || dados.adicoes) || 0;
   const _te = Number(totalExclusoes || dados.exclusoes) || 0;
   const _sp = Number(saldoPrejuizoFiscal || dados.prejuizoFiscal || dados.prejuizo) || 0;
@@ -1227,8 +1227,9 @@ function calcularCSLL(dados) {
     ehInstituicaoFinanceira = false,
   } = dados;
 
-  // ═══ FIX v5.5: Aceitar AMBAS convenções de nomes (internos E simplificados) ═══
-  const _lc = Number(lucroLiquidoContabil || dados.lucroLiquido) || 0;
+  // ═══ FIX v5.5/5.6: Aceitar AMBAS convenções de nomes (internos E simplificados) ═══
+  // lucroReal é alias válido — consumidores frequentemente passam o lucro já ajustado
+  const _lc = Number(lucroLiquidoContabil || dados.lucroLiquido || dados.lucroReal || dados.baseCalculo) || 0;
   const _ad = Number(adicoesCSLL || dados.adicoes || dados.totalAdicoes) || 0;
   const _ex = Number(exclusoesCSLL || dados.exclusoes || dados.totalExclusoes) || 0;
   const _bn = Number(saldoBaseNegativa || dados.baseNegativa || dados.prejuizoCSLL) || 0;
