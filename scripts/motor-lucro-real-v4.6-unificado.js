@@ -7,6 +7,28 @@
  *
  * CHANGELOG v5.3 (correções fiscais e de interface):
  *
+ * --- v5.7 (correções de bugs críticos — auditoria fiscal) ---
+ *
+ * [FIX CRÍTICO #1] calcularIRPJLucroReal() — adicional de IRPJ zerado no regime trimestral
+ *   - Causa: numMeses era sempre 12 (callers nunca convertiam apuracaoLR para numMeses)
+ *   - Fix: aceita periodoApuracao/'trimestral' e deriva numMeses=3 automaticamente
+ *   - Impacto: empresas trimestrais tinham limite de R$ 240k em vez de R$ 60k → IRPJ subestimado
+ *
+ * [FIX CRÍTICO #2] calcularCSLL(), calcularEstimativaMensal(), calcularJCPLei12973() — CSLL financeiras 15% em vez de 12%
+ *   - Causa: CSLL_ALIQUOTA_FINANCEIRAS_LC224_ATE_2027 (12%) existia mas nunca era usada
+ *   - Fix: lógica de ano-base (anoBase <= 2027 → 12%, ≥ 2028 → 15%) em todas as funções
+ *   - Impacto: financeiras pagavam 3pp a mais de CSLL (R$ 30k por R$ 1M de lucro)
+ *
+ * [FIX GRAVE #4] calcularJCPLei12973() — cap de 50% do lucro líquido não era aplicado
+ *   - Causa: limite retornava apenas "validar externamente" sem aplicar o cap
+ *   - Fix: novos params lucroLiquidoExercicio e lucrosAcumulados; cap aplicado automaticamente
+ *   - Art. 9º, §1º Lei 9.249/95: JCP ≤ max(50% LL exercício, 50% lucros acum + reservas)
+ *   - Compatibilidade: se params não informados, avisa mas não aplica (retrocompatível)
+ *
+ * [FIX MÉDIO #5] PRESUNCOES — imprecisão de ponto flutuante em aliquotaEfetivaCSLL
+ *   - 0.12 * 0.09 = 0.010799999... → pré-calculado como 0.0108
+ *   - Evita erros de arredondamento em exibição e comparações LR × LP
+ *
  * --- v5.5 (correções de bugs de destructuring — motor quebrado) ---
  *
  * [FIX GRAVE] calcularIRPJLucroReal() retornava sempre zero
@@ -328,7 +350,7 @@ const PRESUNCOES = {
     artigo: 'Art. 220, caput',
     descricao: 'Comércio, indústria, transporte de carga',
     aliquotaEfetivaIRPJ: 0.08 * 0.15, // 1,20%
-    aliquotaEfetivaCSLL: 0.12 * 0.09, // 1,08%
+    aliquotaEfetivaCSLL: 0.0108, // FIX ERRO #5: valor pré-calculado (0.12 × 0.09 = 1,08%) — evita imprecisão float
   },
   REVENDA_COMBUSTIVEIS: {
     irpj: 0.016,
@@ -336,7 +358,7 @@ const PRESUNCOES = {
     artigo: 'Art. 220, §1º, I',
     descricao: 'Revenda de combustível derivado de petróleo, álcool, gás natural',
     aliquotaEfetivaIRPJ: 0.016 * 0.15, // 0,24%
-    aliquotaEfetivaCSLL: 0.12 * 0.09,
+    aliquotaEfetivaCSLL: 0.0108, // FIX ERRO #5: valor pré-calculado (0.12 × 0.09) — evita imprecisão float
   },
   TRANSPORTE_PASSAGEIROS: {
     irpj: 0.16,
@@ -344,7 +366,7 @@ const PRESUNCOES = {
     artigo: 'Art. 220, §1º, II, a',
     descricao: 'Transporte de passageiros',
     aliquotaEfetivaIRPJ: 0.16 * 0.15, // 2,40%
-    aliquotaEfetivaCSLL: 0.12 * 0.09,
+    aliquotaEfetivaCSLL: 0.0108, // FIX ERRO #5: valor pré-calculado (0.12 × 0.09) — evita imprecisão float
   },
   INSTITUICOES_FINANCEIRAS: {
     irpj: 0.16,
@@ -368,7 +390,7 @@ const PRESUNCOES = {
     artigo: 'Art. 220, §2º (exceção do §1º, III, a)',
     descricao: 'Serviços hospitalares (sociedade empresária + normas ANVISA)',
     aliquotaEfetivaIRPJ: 0.08 * 0.15,
-    aliquotaEfetivaCSLL: 0.12 * 0.09,
+    aliquotaEfetivaCSLL: 0.0108, // FIX ERRO #5: valor pré-calculado (0.12 × 0.09) — evita imprecisão float
     requisitos: ['Sociedade empresária', 'Atender normas ANVISA'],
   },
   INTERMEDIACAO_NEGOCIOS: {
@@ -422,7 +444,7 @@ const PRESUNCOES = {
     artigo: 'Art. 220, §7º + Art. 224',
     descricao: 'Loteamento, incorporação, construção p/ venda',
     aliquotaEfetivaIRPJ: 0.08 * 0.15,
-    aliquotaEfetivaCSLL: 0.12 * 0.09,
+    aliquotaEfetivaCSLL: 0.0108, // FIX ERRO #5: valor pré-calculado (0.12 × 0.09) — evita imprecisão float
     nota: 'Receita = montante efetivamente recebido (regime de caixa)',
   },
   TRANSPORTE_CARGA: {
@@ -431,7 +453,7 @@ const PRESUNCOES = {
     artigo: 'Art. 220, caput',
     descricao: 'Transporte de carga',
     aliquotaEfetivaIRPJ: 0.08 * 0.15,
-    aliquotaEfetivaCSLL: 0.12 * 0.09,
+    aliquotaEfetivaCSLL: 0.0108, // FIX ERRO #5: valor pré-calculado (0.12 × 0.09) — evita imprecisão float
   },
 };
 
@@ -1076,7 +1098,14 @@ function calcularIRPJLucroReal(dados) {
   const _ta = Number(totalAdicoes || dados.adicoes) || 0;
   const _te = Number(totalExclusoes || dados.exclusoes) || 0;
   const _sp = Number(saldoPrejuizoFiscal || dados.prejuizoFiscal || dados.prejuizo) || 0;
-  const _nm = Number(numMeses || dados.meses) || 12;
+  // ═══ FIX ERRO #1: Derivar numMeses de periodoApuracao/apuracaoLR quando presente ═══
+  // Corrige bug onde callers passavam numMeses=12 mesmo para apuração trimestral,
+  // zerando o adicional de IRPJ (limite = R$ 240k em vez de R$ 60k/trimestre)
+  const _periodoApuracao = dados.periodoApuracao || dados.apuracaoLR;
+  const _nm = (_periodoApuracao === 'trimestral' || _periodoApuracao === 'TRIMESTRAL')
+    ? 3
+    : (Number(numMeses || dados.meses) || 12);
+
   const _id = Number(incentivosDedutiveis || dados.incentivos) || 0;
   const _rf = Number(retencoesFonte || dados.retencoes) || 0;
   const _ep = Number(estimativasPagas || dados.estimativas) || 0;
@@ -1235,9 +1264,18 @@ function calcularCSLL(dados) {
   const _bn = Number(saldoBaseNegativa || dados.baseNegativa || dados.prejuizoCSLL) || 0;
   const _fin = ehInstituicaoFinanceira || dados.financeira || false;
 
-  const aliquota = _fin
-    ? CONSTANTES.CSLL_ALIQUOTA_FINANCEIRAS
-    : CONSTANTES.CSLL_ALIQUOTA_GERAL;
+  // ═══ FIX ERRO #2: CSLL de financeiras — alíquota escalonada LC 224/2025 ═══
+  // A constante CSLL_ALIQUOTA_FINANCEIRAS_LC224_ATE_2027 (12%) já existia mas
+  // nunca era usada. Agora aplica-se 12% até 2027 e 15% a partir de 2028.
+  const _anoBase = Number(dados.anoBase || dados.ano) || new Date().getFullYear();
+  let aliquota;
+  if (_fin) {
+    aliquota = _anoBase <= 2027
+      ? CONSTANTES.CSLL_ALIQUOTA_FINANCEIRAS_LC224_ATE_2027   // 12% até 31/12/2027
+      : CONSTANTES.CSLL_ALIQUOTA_FINANCEIRAS;                  // 15% a partir de 2028
+  } else {
+    aliquota = CONSTANTES.CSLL_ALIQUOTA_GERAL;                 // 9% empresas em geral
+  }
 
   // Base de cálculo ajustada
   const baseAjustada = _lc + _ad - _ex;
@@ -1319,7 +1357,11 @@ function calcularEstimativaMensal(dados) {
   // CORREÇÃO: Usar alíquota correta de CSLL (15% para inst. financeiras, 9% demais)
   const baseCSLL = _rbm * presuncao.csll + ganhosCapital + demaisReceitas;
   const ehFinanceira = dados.financeira === true || tipoAtividade === 'INSTITUICOES_FINANCEIRAS';
-  const aliqCSLLEstimativa = ehFinanceira ? CONSTANTES.CSLL_ALIQUOTA_FINANCEIRAS : CONSTANTES.CSLL_ALIQUOTA_GERAL;
+  // ═══ FIX ERRO #2: CSLL financeiras — LC 224/2025 escalonada ═══
+  const _anoBaseEst = Number(dados.anoBase || dados.ano) || new Date().getFullYear();
+  const aliqCSLLEstimativa = ehFinanceira
+    ? (_anoBaseEst <= 2027 ? CONSTANTES.CSLL_ALIQUOTA_FINANCEIRAS_LC224_ATE_2027 : CONSTANTES.CSLL_ALIQUOTA_FINANCEIRAS)
+    : CONSTANTES.CSLL_ALIQUOTA_GERAL;
   const csllDevida = baseCSLL * aliqCSLLEstimativa;
 
   return {
@@ -9601,6 +9643,8 @@ function gerarRelatorioG(params) {
  * @param {number} params.taxaTJLP - Taxa TJLP/TLP do período (decimal, ex: 0.0612 para 6,12% a.a.)
  * @param {string} [params.tipoBeneficiario='PJ_LUCRO_REAL']
  * @param {number} [params.lucroRealAnual=null] - Lucro real ANTES do JCP (para cálculo correto do adicional de 10%)
+ * @param {number} [params.lucroLiquidoExercicio=null] - Lucro líquido do exercício antes do JCP/IRPJ (para cap 50% — Art. 9º §1º)
+ * @param {number} [params.lucrosAcumulados=0] - Lucros acumulados em balanço (para cap 50% — Art. 9º §1º)
  * @param {boolean} [params.ehFinanceira=false] - Se true, usa alíquota de CSLL de financeiras
  * @param {string} [params.periodoApuracao='ANUAL'] - 'ANUAL' ou 'TRIMESTRAL' — afeta limite do adicional
  * @returns {Object} JCP calculado com IRRF e base legal Lei 12.973
@@ -9615,6 +9659,8 @@ function calcularJCPLei12973(params) {
     taxaTJLP,
     tipoBeneficiario = 'PJ_LUCRO_REAL',
     lucroRealAnual = null,        // Lucro real anual ANTES do JCP (para cálculo correto do adicional)
+    lucroLiquidoExercicio = null,  // FIX ERRO #4: Lucro líquido do exercício (para cap 50% — Art. 9º §1º Lei 9.249/95)
+    lucrosAcumulados = 0,          // FIX ERRO #4: Lucros acumulados (para cap 50% — Art. 9º §1º Lei 9.249/95)
     ehFinanceira = false,         // Se true, usa CSLL de financeiras
     periodoApuracao = 'ANUAL'     // 'ANUAL' ou 'TRIMESTRAL' — afeta limite do adicional
   } = params;
@@ -9658,7 +9704,33 @@ function calcularJCPLei12973(params) {
   }
 
   // JCP = PL × TJLP (limitado a 50% do lucro líquido do exercício ou 50% dos lucros acumulados)
-  const jcpCalculado = Math.round(basePL * _tjlp * 100) / 100;
+  let jcpCalculado = Math.round(basePL * _tjlp * 100) / 100;
+  const jcpAntesCap = jcpCalculado;
+
+  // ═══ FIX ERRO #4: Aplicar cap de 50% — Art. 9º, §1º da Lei 9.249/95 ═══
+  // JCP dedutível limitado ao MAIOR entre:
+  //   (a) 50% do lucro líquido do exercício (antes do JCP e IRPJ)
+  //   (b) 50% dos lucros acumulados + reservas de lucros
+  // Se lucroLiquidoExercicio não foi informado, o cap não pode ser aplicado automaticamente
+  // e retorna aviso para validação externa (compatibilidade retroativa).
+  const _lle = Number(lucroLiquidoExercicio ?? params.lucroLiquido) || 0;
+  const _lacum = Number(lucrosAcumulados ?? params.lucrosAcumuladosReservas) || 0;
+  let capAplicado = false;
+  let limiteAplicavel = null;
+  let limite1_50LL = null;
+  let limite2_50Acum = null;
+
+  if (_lle > 0 || _lacum > 0) {
+    limite1_50LL = _lle * CONSTANTES.JCP_LIMITE_LUCRO_LIQUIDO;            // 50% do lucro líquido
+    limite2_50Acum = (_lacum + _rl) * CONSTANTES.JCP_LIMITE_LUCROS_ACUMULADOS;  // 50% de (lucros acum + reservas)
+    limiteAplicavel = Math.max(limite1_50LL, limite2_50Acum);
+    if (limiteAplicavel > 0) {
+      jcpCalculado = Math.min(jcpCalculado, limiteAplicavel);
+      jcpCalculado = Math.round(jcpCalculado * 100) / 100;
+      capAplicado = jcpCalculado < jcpAntesCap;
+    }
+  }
+
   const irrfRetido = Math.round(jcpCalculado * CONSTANTES.JCP_IRRF_ALIQUOTA * 100) / 100;
 
   let tratamento;
@@ -9673,7 +9745,11 @@ function calcularJCPLei12973(params) {
 
   // --- Economia tributária: IRPJ (considerando faixa do adicional) ---
   // O adicional de 10% só incide sobre o lucro real que excede o limite (Art. 225, parágrafo único)
-  const aliquotaCSLL = ehFinanceira ? CONSTANTES.CSLL_ALIQUOTA_FINANCEIRAS : CONSTANTES.CSLL_ALIQUOTA_GERAL;
+  // ═══ FIX ERRO #2: CSLL financeiras — LC 224/2025 escalonada ═══
+  const _anoBaseJCP = Number(params.anoBase || params.ano) || new Date().getFullYear();
+  const aliquotaCSLL = ehFinanceira
+    ? (_anoBaseJCP <= 2027 ? CONSTANTES.CSLL_ALIQUOTA_FINANCEIRAS_LC224_ATE_2027 : CONSTANTES.CSLL_ALIQUOTA_FINANCEIRAS)
+    : CONSTANTES.CSLL_ALIQUOTA_GERAL;
   let economiaIRPJ;
   let notaEconomia;
 
@@ -9714,8 +9790,18 @@ function calcularJCPLei12973(params) {
     },
     taxaTJLP: `${(_tjlp * 100).toFixed(2)}% a.a.`,
     jcpCalculado,
+    jcpAntesCap,
     limites: {
-      nota: 'JCP limitado a 50% do lucro líquido do exercício OU 50% dos lucros acumulados e reservas de lucros (o maior) — validar externamente',
+      limite1_50LucroLiquido: limite1_50LL,
+      limite2_50LucrosAcumulados: limite2_50Acum,
+      limiteAplicavel,
+      capAplicado,
+      excessoGlosavel: capAplicado ? Math.round((jcpAntesCap - jcpCalculado) * 100) / 100 : 0,
+      nota: limiteAplicavel !== null
+        ? (capAplicado
+          ? `JCP reduzido de R$ ${jcpAntesCap.toLocaleString('pt-BR')} para R$ ${jcpCalculado.toLocaleString('pt-BR')} pelo limite de 50% (Art. 9º, §1º Lei 9.249/95)`
+          : 'JCP dentro do limite de 50% — nenhum ajuste necessário')
+        : 'ATENÇÃO: lucroLiquidoExercicio e lucrosAcumulados não informados — cap de 50% NÃO aplicado. Validar externamente.',
       referencia: 'Art. 9º, §1º da Lei 9.249/1995'
     },
     irrfRetido,
