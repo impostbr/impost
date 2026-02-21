@@ -3216,10 +3216,15 @@
     var irpjAntesReducao = irpjResult.irpjDevido;
     var irpjAposReducao = _r(Math.max(irpjAntesReducao - reducaoSUDAM, 0));
 
-    // A simulação trimestral ainda é útil para recomendação, mas não deve sobrescrever o cálculo principal.
+    // ═══ CORREÇÃO BUG 1: Na apuração trimestral, usar simulação trimestral (adicional correto) ═══
     var simTrimestral = _simularTrimestral(d, lucroAjustado, prejuizoFiscal, baseNegCSLL, vedaCompensacao, ehFinanceira);
-    // O bloco if (d.apuracaoLR === "trimestral") que sobrescreve irpjResult foi removido,
-    // pois o motor (v5.7+) já lida com o período de apuração corretamente.
+    if (d.apuracaoLR === "trimestral") {
+      irpjResult.irpjAdicional = simTrimestral.totalIRPJAdicional;
+      irpjResult.irpjNormal = simTrimestral.totalIRPJNormal;
+      irpjResult.irpjDevido = _r(irpjResult.irpjNormal + irpjResult.irpjAdicional);
+      irpjAntesReducao = irpjResult.irpjDevido;
+      irpjAposReducao = _r(Math.max(irpjAntesReducao - reducaoSUDAM, 0));
+    }
 
     // ═══ FIX BUG CRÍTICO 1 (AUDITORIA): irpjBruto APÓS correção trimestral ═══
     // Antes: irpjBruto era calculado ANTES do bloco trimestral, retendo o adicional errado (base anual).
@@ -3377,13 +3382,11 @@
     }
     // Fallback manual se motor não disponível ou falhou
     if (!pisCofinsResult) {
-      var PIS_ALIQUOTA = (LR && LR.CONSTANTES && LR.CONSTANTES.PIS_ALIQUOTA) ? LR.CONSTANTES.PIS_ALIQUOTA : 0.0165;
-      var COFINS_ALIQUOTA = (LR && LR.CONSTANTES && LR.CONSTANTES.COFINS_ALIQUOTA) ? LR.CONSTANTES.COFINS_ALIQUOTA : 0.076;
       var _recTribFB = _r(Math.max(receitaBruta - receitasIsentas, 0));
-      var _debPIS = _r(_recTribFB * PIS_ALIQUOTA);
-      var _debCOF = _r(_recTribFB * COFINS_ALIQUOTA);
-      var _credPIS = _r(baseCreditos * PIS_ALIQUOTA);
-      var _credCOF = _r(baseCreditos * COFINS_ALIQUOTA);
+      var _debPIS = _r(_recTribFB * 0.0165);
+      var _debCOF = _r(_recTribFB * 0.076);
+      var _credPIS = _r(baseCreditos * 0.0165);
+      var _credCOF = _r(baseCreditos * 0.076);
       pisCofinsResult = {
         receitaTributavel: _recTribFB,
         debitoPIS: _debPIS,
@@ -3409,19 +3412,17 @@
     if (!pisCofinsResult.aPagar) pisCofinsResult.aPagar = { pis: 0, cofins: 0, total: 0 };
 
     // Garantir flat props a partir de aninhados (ou vice-versa)
-    var _PIS_ALIQ = (LR && LR.CONSTANTES && LR.CONSTANTES.PIS_ALIQUOTA) ? LR.CONSTANTES.PIS_ALIQUOTA : 0.0165;
-    var _COF_ALIQ = (LR && LR.CONSTANTES && LR.CONSTANTES.COFINS_ALIQUOTA) ? LR.CONSTANTES.COFINS_ALIQUOTA : 0.076;
     var _recTrib = pisCofinsResult.receitaTributavel || _r(receitaBruta - receitasIsentas);
     pisCofinsResult.receitaTributavel = _recTrib;
-    pisCofinsResult.debitoPIS    = pisCofinsResult.debitoPIS    || pisCofinsResult.debitos.pis    || _r(_recTrib * _PIS_ALIQ);
-    pisCofinsResult.debitoCOFINS = pisCofinsResult.debitoCOFINS || pisCofinsResult.debitos.cofins || _r(_recTrib * _COF_ALIQ);
+    pisCofinsResult.debitoPIS    = pisCofinsResult.debitoPIS    || pisCofinsResult.debitos.pis    || _r(_recTrib * 0.0165);
+    pisCofinsResult.debitoCOFINS = pisCofinsResult.debitoCOFINS || pisCofinsResult.debitos.cofins || _r(_recTrib * 0.076);
     pisCofinsResult.debitos.pis    = pisCofinsResult.debitos.pis    || pisCofinsResult.debitoPIS;
     pisCofinsResult.debitos.cofins = pisCofinsResult.debitos.cofins || pisCofinsResult.debitoCOFINS;
 
     // Créditos: replicar lógica do simulador da Etapa 5
     var _totalCredBase = baseCreditos;
-    pisCofinsResult.creditoPIS    = pisCofinsResult.creditoPIS    || pisCofinsResult.creditos.pis    || _r(_totalCredBase * _PIS_ALIQ);
-    pisCofinsResult.creditoCOFINS = pisCofinsResult.creditoCOFINS || pisCofinsResult.creditos.cofins || _r(_totalCredBase * _COF_ALIQ);
+    pisCofinsResult.creditoPIS    = pisCofinsResult.creditoPIS    || pisCofinsResult.creditos.pis    || _r(_totalCredBase * 0.0165);
+    pisCofinsResult.creditoCOFINS = pisCofinsResult.creditoCOFINS || pisCofinsResult.creditos.cofins || _r(_totalCredBase * 0.076);
     pisCofinsResult.creditos.pis    = pisCofinsResult.creditos.pis    || pisCofinsResult.creditoPIS;
     pisCofinsResult.creditos.cofins = pisCofinsResult.creditos.cofins || pisCofinsResult.creditoCOFINS;
 
@@ -3467,11 +3468,6 @@
     if (issAliquota > 0 && issAliquota < 1) {
       issAliquota = _r(issAliquota * 100); // converter 0.05 → 5
     }
-    // Validação de teto (LC 116/2003)
-    if (issAliquota > 5) {
-      console.warn('[IMPOST ISS] Alíquota informada (' + issAliquota + '%) excede o teto de 5%. Usando 5%.');
-      issAliquota = 5;
-    }
     var ehSUP = d.ehSUP === true || d.ehSUP === "true";
     var issAnual, issMensal, issModalidade;
     if (ehSUP) {
@@ -3507,10 +3503,7 @@
       var baseCPRB = _n(d.receitaBrutaCPRB) || receitaBruta;
       var custoCPRB = _r(baseCPRB * aliqCPRB);
       var folhaBrutaCPRB = _n(d.folhaPagamentoAnual) || (_n(d.salariosBrutos) + _n(d.proLabore));
-      var aliquotaRAT = (_n(d.aliquotaRAT) / 100) || 0.03; // Ex: 3% padrão
-      var aliquotaFAP = _n(d.fap) || 1; // Ex: 1.0 (neutro)
-      var aliquotaRATajustado = aliquotaRAT * aliquotaFAP;
-      var cppNormal = _r(folhaBrutaCPRB * (0.20 + aliquotaRATajustado));
+      var cppNormal = _r(folhaBrutaCPRB * 0.20);
       var economiaCPRB = _r(cppNormal - custoCPRB);
       cprbResult = {
         optou: true,
@@ -3530,10 +3523,14 @@
     // MELHORIA Lei 14.789/2023: usar PL Ajustado quando informado
     var plParaJCP = _n(d.plAjustadoJCP) > 0 ? _n(d.plAjustadoJCP) : plVal;
     var jcpResult = null;
-    // ═══ CORREÇÃO ERRO MÉDIO #6: TJLP deve ser informada pelo usuário ═══
+    // ═══ CORREÇÃO ERRO MÉDIO #6: Não usar default silencioso para TJLP ═══
     var _tjlpInformada = _n(d.tjlp);
-    // Fallback removido — o motor é responsável por validar a TJLP.
-    // Se não informada, passa o valor direto (zero/undefined) e o motor deve retornar erro.
+    var _tjlpUsarDefault = false;
+    if (!_tjlpInformada || _tjlpInformada === 0) {
+      _tjlpInformada = _TJLP_DEFAULT;
+      _tjlpUsarDefault = true;
+      console.warn('[IMPOST] TJLP default ' + _TJLP_DEFAULT + '% usada — verificar se atualizada para o exercício vigente');
+    }
     if (plParaJCP > 0 && (lucroLiquido > 0 || lucroRealFinal > 0)) {
       try {
         // ═══ FIX BUG 2 (AUDITORIA): Usar numMeses=12 para calcular JCP ANUAL (oportunidade completa) ═══
@@ -3552,10 +3549,11 @@
           lucroRealAnual: Math.max(lucroRealFinal, 0),
           numMeses: _numMesesJCP
         });
-        // Tratar erro do motor se TJLP não informada
-        if (jcpResult && jcpResult.erro) {
-          console.error('[IMPOST JCP] Erro do motor: ', jcpResult.mensagem || 'TJLP não informada');
-          jcpResult = null;
+        // Marcar no resultado se usou taxa default
+        if (jcpResult && _tjlpUsarDefault) {
+          jcpResult.tjlpDefault = true;
+          jcpResult.tjlpUsada = _tjlpInformada;
+          jcpResult.alertaTJLP = "ATENÇÃO: TJLP não informada. Usando taxa default de " + _tjlpInformada + "%. Verifique a taxa vigente no BCB.";
         }
         // Anotar se apuração trimestral para referência na apresentação
         if (jcpResult && d.apuracaoLR === "trimestral") {
@@ -3785,7 +3783,7 @@
         depBensNovos: depBensNovos,
         depBensSmall: depBensSmall,
         total: depreciacaoTotal,
-        economiaFiscal: _r(depreciacaoTotal * (0.25 + _aliqCSLLEmpresa)),
+        economiaFiscal: _r(depreciacaoTotal * 0.34),
         turnos: turnos,
         multiplicador: multTurnos
       };
@@ -3817,7 +3815,7 @@
         depBensNovos: depBensNovos2,
         depBensSmall: depBensSmall2,
         total: depreciacaoTotal2,
-        economiaFiscal: _r(depreciacaoTotal2 * (0.25 + _aliqCSLLEmpresa)),
+        economiaFiscal: _r(depreciacaoTotal2 * 0.34),
         turnos: turnos,
         multiplicador: multTurnos
       };
