@@ -1,11 +1,36 @@
 /**
  * ============================================================================
- * MOTOR DE CÁLCULO UNIFICADO — LUCRO REAL (IRPJ + CSLL)  v5.3
+ * MOTOR DE CÁLCULO UNIFICADO — LUCRO REAL (IRPJ + CSLL)  v5.4
  * Base Legal: Decreto nº 9.580/2018 (RIR/2018) — Artigos 217 a 290+
  * Ano-Base: 2026
  * ============================================================================
  *
  * CHANGELOG v5.3 (correções fiscais e de interface):
+ *
+ * --- v5.4 (correções fiscais — auditoria de erros) ---
+ *
+ * [FIX CRÍTICO] IRRF_JCP objeto documental: aliquota corrigida de 0.15 para 0.175
+ *   - O cálculo (CONSTANTES.JCP_IRRF_ALIQUOTA) já estava correto em 0.175
+ *   - Corrigido o objeto IRRF_JCP que ainda referenciava 15% na documentação
+ *   - Adicionada LC 224/2025 nas referências de baseLegal
+ *
+ * [FIX MÉDIO] calcularJCPLei12973 — economia IRPJ agora considera faixa do adicional
+ *   - Antes: economiaIRPJ = JCP × 25% fixo (assumia adicional sempre aplicável)
+ *   - Agora: calcula diferença real de IRPJ antes/após JCP, respeitando limite adicional
+ *   - Novo parâmetro: lucroRealAnual (opcional) — se informado, cálculo preciso
+ *   - Sem lucroRealAnual: estimativa conservadora a 15% (sem adicional)
+ *   - Novo parâmetro: ehFinanceira — usa CSLL de financeiras quando aplicável
+ *   - Novo parâmetro: periodoApuracao — 'ANUAL' ou 'TRIMESTRAL'
+ *
+ * [FIX MÉDIO] CSLL alíquotas financeiras escalonadas (LC 224/2025, Art. 7º)
+ *   - Novas constantes: CSLL_ALIQUOTA_FINANCEIRAS_LC224_ATE_2027 (12%)
+ *   - CSLL_ALIQUOTA_CREDITO_FINANCIAMENTO_ATE_2027 (17,5%)
+ *   - CSLL_ALIQUOTA_CREDITO_FINANCIAMENTO_2028 (20%)
+ *   - CSLL_ALIQUOTA_FINANCEIRAS mantida em 15% (bancos, seguradoras — regra geral)
+ *
+ * [FIX LEVE] Depreciação veículos de carga: corrigido de 20%/5 anos para 25%/4 anos
+ *   - Conforme IN RFB 1.700/17, Anexo III, NCM 8704 (caminhões)
+ *   - Veículos de passageiros (NCM 8703) permanecem em 20%/5 anos
  *
  * --- v5.3 (correções de interface e robustez) ---
  *
@@ -139,7 +164,15 @@ const CONSTANTES = {
 
   // --- CSLL ---
   CSLL_ALIQUOTA_GERAL: 0.09,            // 9% para empresas em geral
-  CSLL_ALIQUOTA_FINANCEIRAS: 0.15,      // 15% para instituições financeiras
+  CSLL_ALIQUOTA_FINANCEIRAS: 0.15,      // 15% para instituições financeiras (bancos, seguradoras — Lei 7.689/88)
+
+  // --- CSLL — Alíquotas majoradas LC 224/2025 (Art. 7º — nova redação do Art. 3º da Lei 7.689/88) ---
+  // Instituições de pagamento, adm. mercado balcão, bolsas, cooperativas de crédito, etc.:
+  CSLL_ALIQUOTA_FINANCEIRAS_LC224_ATE_2027: 0.12,   // 12% até 31/12/2027
+  CSLL_ALIQUOTA_FINANCEIRAS_LC224_2028: 0.15,        // 15% a partir de 01/01/2028
+  // Sociedades de crédito, financiamento e investimentos, PJ capitalização:
+  CSLL_ALIQUOTA_CREDITO_FINANCIAMENTO_ATE_2027: 0.175, // 17,5% até 31/12/2027
+  CSLL_ALIQUOTA_CREDITO_FINANCIAMENTO_2028: 0.20,      // 20% a partir de 01/01/2028
 
   // --- Compensação de Prejuízos ---
   TRAVA_COMPENSACAO_PREJUIZO: 0.30,     // Art. 261, III: 30%
@@ -759,7 +792,7 @@ const DEPRECIACAO = {
     { bem: 'Máquinas e equipamentos', taxaAnual: 0.10, vidaUtil: 10, artigo: 'Art. 311' },
     { bem: 'Móveis e utensílios', taxaAnual: 0.10, vidaUtil: 10, artigo: 'Art. 311' },
     { bem: 'Veículos de passageiros', taxaAnual: 0.20, vidaUtil: 5, artigo: 'Art. 311' },
-    { bem: 'Veículos de carga', taxaAnual: 0.20, vidaUtil: 5, artigo: 'Art. 311' },  // pode ser 25% (4 anos)
+    { bem: 'Veículos de carga (caminhões NCM 8704)', taxaAnual: 0.25, vidaUtil: 4, artigo: 'Art. 311 + IN RFB 1.700/17 Anexo III, NCM 8704' },
     { bem: 'Computadores e periféricos', taxaAnual: 0.20, vidaUtil: 5, artigo: 'Art. 311' },
     { bem: 'Software (adquirido)', taxaAnual: 0.20, vidaUtil: 5, artigo: 'Art. 311' },
     { bem: 'Equipamentos de comunicação', taxaAnual: 0.10, vidaUtil: 10, artigo: 'Art. 311' },
@@ -7915,10 +7948,11 @@ const IRRF_ADMINISTRACAO_PUBLICA = {
 const IRRF_JCP = {
   artigo: 'Art. 726',
   baseLegal: [
-    'Lei 9.249/1995, art. 9º, §2º',
+    'Lei 9.249/1995, art. 9º, §2º (redação dada pela LC 224/2025)',
+    'LC 224/2025, art. 8º — alíquota majorada de 15% para 17,5% (vigente a partir de 01/01/2026)',
     'Lei 12.973/2014, art. 9º (altera §§8º-12 da Lei 9.249/1995 — contas PL para cálculo JCP)'
   ],
-  aliquota: 0.15, // 15%
+  aliquota: 0.175, // 17,5% (LC 224/2025, vigente a partir de 01/01/2026)
   tratamento: {
     lucroReal: 'ANTECIPAÇÃO (Art. 726 §1º, I)',
     lucroPresumido: 'ANTECIPAÇÃO (Art. 726 §1º, I)',
@@ -9470,6 +9504,9 @@ function gerarRelatorioG(params) {
  * @param {number} [params.prejuizosAcumulados=0] - Valor positivo (será deduzido)
  * @param {number} params.taxaTJLP - Taxa TJLP/TLP do período (decimal, ex: 0.0612 para 6,12% a.a.)
  * @param {string} [params.tipoBeneficiario='PJ_LUCRO_REAL']
+ * @param {number} [params.lucroRealAnual=null] - Lucro real ANTES do JCP (para cálculo correto do adicional de 10%)
+ * @param {boolean} [params.ehFinanceira=false] - Se true, usa alíquota de CSLL de financeiras
+ * @param {string} [params.periodoApuracao='ANUAL'] - 'ANUAL' ou 'TRIMESTRAL' — afeta limite do adicional
  * @returns {Object} JCP calculado com IRRF e base legal Lei 12.973
  */
 function calcularJCPLei12973(params) {
@@ -9480,7 +9517,10 @@ function calcularJCPLei12973(params) {
     acoesEmTesouraria = 0,
     prejuizosAcumulados = 0,
     taxaTJLP,
-    tipoBeneficiario = 'PJ_LUCRO_REAL'
+    tipoBeneficiario = 'PJ_LUCRO_REAL',
+    lucroRealAnual = null,        // Lucro real anual ANTES do JCP (para cálculo correto do adicional)
+    ehFinanceira = false,         // Se true, usa CSLL de financeiras
+    periodoApuracao = 'ANUAL'     // 'ANUAL' ou 'TRIMESTRAL' — afeta limite do adicional
   } = params;
 
   // Base do PL para JCP conforme §8º do Art. 9º Lei 9.249 (redação Lei 12.973)
@@ -9510,8 +9550,35 @@ function calcularJCPLei12973(params) {
       tratamento = 'Tributação definitiva (Art. 726 §1º, II)';
   }
 
-  const economiaIRPJ = Math.round(jcpCalculado * (CONSTANTES.IRPJ_ALIQUOTA_NORMAL + CONSTANTES.IRPJ_ALIQUOTA_ADICIONAL) * 100) / 100;
-  const economiaCSLL = Math.round(jcpCalculado * CONSTANTES.CSLL_ALIQUOTA_GERAL * 100) / 100;
+  // --- Economia tributária: IRPJ (considerando faixa do adicional) ---
+  // O adicional de 10% só incide sobre o lucro real que excede o limite (Art. 225, parágrafo único)
+  const aliquotaCSLL = ehFinanceira ? CONSTANTES.CSLL_ALIQUOTA_FINANCEIRAS : CONSTANTES.CSLL_ALIQUOTA_GERAL;
+  let economiaIRPJ;
+  let notaEconomia;
+
+  if (lucroRealAnual !== null && lucroRealAnual !== undefined) {
+    // Cálculo preciso: verifica se a dedução do JCP "morde" a faixa do adicional
+    const limiteAdicional = periodoApuracao === 'TRIMESTRAL'
+      ? CONSTANTES.IRPJ_LIMITE_ADICIONAL_TRIMESTRE
+      : CONSTANTES.IRPJ_LIMITE_ADICIONAL_ANO;
+
+    const lucroAntesJCP = Math.max(lucroRealAnual, 0);
+    const lucroAposJCP = Math.max(lucroAntesJCP - jcpCalculado, 0);
+
+    const irpjAntesJCP = lucroAntesJCP * CONSTANTES.IRPJ_ALIQUOTA_NORMAL
+      + Math.max(0, lucroAntesJCP - limiteAdicional) * CONSTANTES.IRPJ_ALIQUOTA_ADICIONAL;
+    const irpjAposJCP = lucroAposJCP * CONSTANTES.IRPJ_ALIQUOTA_NORMAL
+      + Math.max(0, lucroAposJCP - limiteAdicional) * CONSTANTES.IRPJ_ALIQUOTA_ADICIONAL;
+
+    economiaIRPJ = Math.round((irpjAntesJCP - irpjAposJCP) * 100) / 100;
+    notaEconomia = `Economia calculada considerando lucro real de R$ ${lucroAntesJCP.toLocaleString('pt-BR')} (${periodoApuracao.toLowerCase()})`;
+  } else {
+    // Estimativa conservadora: assume apenas 15% (sem garantia de que atinge faixa do adicional)
+    economiaIRPJ = Math.round(jcpCalculado * CONSTANTES.IRPJ_ALIQUOTA_NORMAL * 100) / 100;
+    notaEconomia = 'Economia estimada apenas com alíquota de 15% (sem lucroRealAnual informado — adicional de 10% pode se aplicar se lucro > R$ 240.000/ano)';
+  }
+
+  const economiaCSLL = Math.round(jcpCalculado * aliquotaCSLL * 100) / 100;
   const economiaTotal = Math.round((economiaIRPJ + economiaCSLL) * 100) / 100;
 
   return {
@@ -9544,7 +9611,9 @@ function calcularJCPLei12973(params) {
       economiaTotal,
       custoIRRF: irrfRetido,
       beneficioLiquido: Math.round((economiaTotal - irrfRetido) * 100) / 100,
-      nota: `Benefício líquido = economia tributária (${((CONSTANTES.IRPJ_ALIQUOTA_NORMAL + CONSTANTES.IRPJ_ALIQUOTA_ADICIONAL + CONSTANTES.CSLL_ALIQUOTA_GERAL) * 100).toFixed(0)}%) - custo IRRF retido (${(CONSTANTES.JCP_IRRF_ALIQUOTA * 100).toFixed(1)}%) — LC 224/2025`
+      nota: notaEconomia,
+      aliquotaCSLLUsada: `${(aliquotaCSLL * 100).toFixed(1)}%`,
+      custoIRRFNota: `IRRF ${(CONSTANTES.JCP_IRRF_ALIQUOTA * 100).toFixed(1)}% (LC 224/2025)`
     }
   };
 }
