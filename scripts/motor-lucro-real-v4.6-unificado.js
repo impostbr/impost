@@ -1619,11 +1619,12 @@ function calcularJCP(dados) {
   const _pa = Number(prejuizosAcumulados) || 0;
   const _pl = Number(patrimonioLiquido) || 0;
   const _nm = Number(numMeses) || 12;
+  const _lacum_motor = Number(lucrosAcumulados) || 0;
 
   // ═══ Determinar base do PL: decomposta (Lei 12.973) ou valor direto (retrocompatível) ═══
-  const temPLDecomposto = (_cs > 0 || _rc > 0 || _rl > 0 || _at > 0 || _pa > 0);
+  const temPLDecomposto = (_cs > 0 || _rc > 0 || _rl > 0 || _at > 0 || _pa > 0 || _lacum_motor > 0);
   const basePL = temPLDecomposto
-    ? (_cs + _rc + _rl - _at - _pa)
+    ? (_cs + _rc + _rl + _lacum_motor - _at - _pa)
     : _pl;
 
   if (basePL <= 0) {
@@ -1732,6 +1733,7 @@ function calcularJCP(dados) {
     // ═══ Composição do PL ═══
     composicaoPL: temPLDecomposto ? {
       capitalSocial: _cs,
+      lucrosAcumulados: _lacum_motor,
       reservasCapital: _rc,
       reservasLucros: _rl,
       acoesEmTesouraria: -_at,
