@@ -107,6 +107,29 @@
   }
 
   /**
+   * CORREÇÃO ERRO 1: TJLP dinâmica — lê do motor se disponível, senão usa Q1/2026 (9,19%)
+   * Tenta acessar LR.CONSTANTES.TJLP_REFERENCIA e pega a última taxa não-nula disponível.
+   * Retorna a taxa PERCENTUAL (ex: 9.19), não decimal.
+   */
+  function _getTJLP() {
+    try {
+      var _LR = window.LR || window.LucroRealMap || {};
+      if (_LR && _LR.CONSTANTES && _LR.CONSTANTES.TJLP_REFERENCIA) {
+        var ref = _LR.CONSTANTES.TJLP_REFERENCIA;
+        // Tentar trimestres em ordem reversa para pegar o mais recente não-nulo
+        var trimestres = ['Q4_2026','Q3_2026','Q2_2026','Q1_2026','Q4_2025','Q3_2025','Q2_2025','Q1_2025'];
+        for (var i = 0; i < trimestres.length; i++) {
+          if (ref[trimestres[i]] !== null && ref[trimestres[i]] !== undefined && ref[trimestres[i]] > 0) {
+            return _r(ref[trimestres[i]] * 100); // motor armazena como decimal (0.0919)
+          }
+        }
+      }
+    } catch(e) { /* fallback abaixo */ }
+    return 9.19; // Q1/2026 default
+  }
+  var _TJLP_DEFAULT = _getTJLP();
+
+  /**
    * MELHORIA #2: Acesso seguro a propriedades aninhadas.
    * Uso: _safe(sudamResult, 'resumo', 'economiaReducao75')
    * Em vez de: sudamResult ? (sudamResult.resumo.economiaReducao75 || 0) : 0
@@ -1371,8 +1394,8 @@
       );
     }
     h += _field("tjlp", "TJLP anual vigente (%)", "percent", {
-      default: "7.97",
-      tip: "Taxa de Juros de Longo Prazo (TJLP 2025: 7,97% a.a.). Consulte a taxa vigente no Banco Central (www.bcb.gov.br).",
+      default: String(_TJLP_DEFAULT),
+      tip: "Taxa de Juros de Longo Prazo (TJLP vigente: " + _TJLP_DEFAULT + "% a.a.). Consulte a taxa vigente no Banco Central (www.bcb.gov.br).",
     });
     h += _field("plAjustadoJCP", "PL Ajustado p/ JCP — Lei 14.789/2023 (opcional)", "money", {
       tip: "Conforme Lei 14.789/2023, a base do JCP pode ser limitada ao PL Ajustado (PL - MEP - PDD - AVP). Se informado, será usado no lugar do PL contábil total para cálculo do JCP máximo.",
@@ -2324,7 +2347,7 @@
             reservasLucros: _n(d.reservasLucros),
             lucrosAcumulados: _n(d.lucrosAcumulados) + _n(d.reservasLucros),
             prejuizosAcumulados: _n(d.prejuizosContabeis),
-            tjlp: (_n(d.tjlp) || 7.97) / 100,
+            tjlp: (_n(d.tjlp) || _TJLP_DEFAULT) / 100,
             lucroLiquidoAntes: llVal,
             numMeses: 12,
           });
@@ -3439,9 +3462,9 @@
     var _tjlpInformada = _n(d.tjlp);
     var _tjlpUsarDefault = false;
     if (!_tjlpInformada || _tjlpInformada === 0) {
-      _tjlpInformada = 7.97; // Taxa Q1/2025 como fallback
+      _tjlpInformada = _TJLP_DEFAULT;
       _tjlpUsarDefault = true;
-      console.warn('[IMPOST] TJLP default 7.97% (Q1/2025) usada — verificar se atualizada para o exercício vigente');
+      console.warn('[IMPOST] TJLP default ' + _TJLP_DEFAULT + '% usada — verificar se atualizada para o exercício vigente');
     }
     if (plParaJCP > 0 && (lucroLiquido > 0 || lucroRealFinal > 0)) {
       try {
@@ -3460,7 +3483,7 @@
         if (jcpResult && _tjlpUsarDefault) {
           jcpResult.tjlpDefault = true;
           jcpResult.tjlpUsada = _tjlpInformada;
-          jcpResult.alertaTJLP = "ATENÇÃO: TJLP não informada. Usando taxa default de " + _tjlpInformada + "% (Q1/2025). Verifique a taxa vigente.";
+          jcpResult.alertaTJLP = "ATENÇÃO: TJLP não informada. Usando taxa default de " + _tjlpInformada + "%. Verifique a taxa vigente no BCB.";
         }
       } catch (e) { console.warn('[IMPOST] Erro em JCP:', e.message); jcpResult = null; }
     }
@@ -3927,28 +3950,71 @@
         } catch (e) { console.warn('[IMPOST] Erro em projeção:', e.message); projecao = null; }
       }
       // Projeção de carga tributária com crescimento
-      // ═══ CORREÇÃO ERRO 7: Recalcular IRPJ progressivo por ano (não escalar linearmente) ═══
-      // O adicional de 10% sobre excedente de R$240k é fixo, então a alíquota efetiva sobe com o lucro
+      // ═══ CORREÇÃO ERRO 7: Recálculo completo por ano (IRPJ progressivo + compensação com saldo) ═══
       var econSemJCP = _r(totalEconomias - economiaJCP);
       var projecaoCarga = [];
       var receitaProj = receitaBruta;
       var econAcum = 0;
-      // Razão SUDAM: proporção do IRPJ que sobra após redução SUDAM (preservar para anos futuros)
+
+      // Razão SUDAM: preservar para anos futuros
       var _irpjBrutoAno1 = _irpj(Math.max(lucroRealFinal, 0));
       var _ratioSUDAM = _irpjBrutoAno1 > 0 ? irpjAposReducao / _irpjBrutoAno1 : 1;
       var _aliqCSLLProj = _aliqEfetCSLL; // 0.09 ou 0.15 (financeiras)
+
+      // Saldos remanescentes pós-Ano 1 (para compensação nos anos futuros)
+      var _saldoPF = compensacao && compensacao.resumo && compensacao.resumo.saldosPosCompensacao
+        ? (compensacao.resumo.saldosPosCompensacao.prejuizoOperacional || 0) : prejuizoFiscal;
+      var _saldoBN = compensacao && compensacao.resumo && compensacao.resumo.saldosPosCompensacao
+        ? (compensacao.resumo.saldosPosCompensacao.baseNegativaCSLL || 0) : baseNegCSLL;
+
+      // Bases pré-compensação do Ano 1 (para escalar proporcionalmente à receita)
+      var _lucroAjAno1 = lucroAjustado; // base IRPJ antes compensação
+      // Base CSLL antes compensação (pode diferir da base IRPJ)
+      var _baseCSLLAjAno1 = (baseCSLLFinal || lucroRealFinal);
+      if (compensacao && compensacao.resumo && compensacao.resumo.compensacaoEfetiva && compensacao.resumo.compensacaoEfetiva.baseNegativaCSLL > 0) {
+        _baseCSLLAjAno1 = _r(_baseCSLLAjAno1 + compensacao.resumo.compensacaoEfetiva.baseNegativaCSLL);
+      }
+
       for (var aP = 0; aP < horizonte; aP++) {
         if (aP > 0) receitaProj = _r(receitaProj * (1 + taxa));
         var fator = receitaProj / (receitaBruta || 1);
-        // IRPJ: recalcular com _irpj() sobre lucro real projetado (captura adicional de 10%)
-        var _lucroRealProj = _r(lucroRealFinal * fator);
-        var _irpjProj = _r(_irpj(Math.max(_lucroRealProj, 0)) * _ratioSUDAM);
-        // CSLL: taxa fixa, escala linearmente com o lucro
-        var _baseCSLLProj = _r((baseCSLLFinal || lucroRealFinal) * fator);
-        var _csllProj = _r(Math.max(_baseCSLLProj, 0) * _aliqCSLLProj);
-        // PIS/COFINS e ISS: lineares com a receita
-        var _pisCofProj = _r(pisCofinsLiquido * fator);
-        var _issProj = _r(issAnual * fator);
+
+        if (aP === 0) {
+          // Ano 1: usar valores já calculados (exatos)
+          var _irpjProj = irpjAposReducao;
+          var _csllProj = csllResult.csllDevida;
+          var _pisCofProj = pisCofinsLiquido;
+          var _issProj = issAnual;
+        } else {
+          // Anos 2+: recalcular com lucro ajustado projetado e compensação do saldo remanescente
+          var _lucroAjProj = _r(_lucroAjAno1 * fator);
+
+          // IRPJ: aplicar trava 30% no saldo de prejuízo remanescente
+          var _compPFAno = 0;
+          if (_saldoPF > 0 && _lucroAjProj > 0 && !vedaCompensacao) {
+            _compPFAno = Math.min(_r(_lucroAjProj * 0.30), _saldoPF);
+          }
+          var _lucroRealProj = _r(Math.max(_lucroAjProj - _compPFAno, 0));
+          _saldoPF = _r(_saldoPF - _compPFAno); // consumir saldo
+
+          // IRPJ progressivo: _irpj() captura corretamente o adicional de 10%
+          var _irpjProj = _r(_irpj(Math.max(_lucroRealProj, 0)) * _ratioSUDAM);
+
+          // CSLL: compensar base negativa do saldo remanescente
+          var _baseCSLLProj = _r(_baseCSLLAjAno1 * fator);
+          var _compBNAno = 0;
+          if (_saldoBN > 0 && _baseCSLLProj > 0 && !vedaCompensacao) {
+            _compBNAno = Math.min(_r(_baseCSLLProj * 0.30), _saldoBN);
+          }
+          var _baseCSLLLiq = _r(Math.max(_baseCSLLProj - _compBNAno, 0));
+          _saldoBN = _r(_saldoBN - _compBNAno); // consumir saldo
+          var _csllProj = _r(_baseCSLLLiq * _aliqCSLLProj);
+
+          // PIS/COFINS e ISS: lineares com a receita
+          var _pisCofProj = _r(pisCofinsLiquido * fator);
+          var _issProj = _r(issAnual * fator);
+        }
+
         var cargaAno = _r(_irpjProj + _csllProj + _pisCofProj + _issProj);
         var econAno = _r(econSemJCP * fator + economiaJCP);
         econAcum += econAno;
@@ -5336,18 +5402,44 @@
           prejuizoFiscal: _n(d.prejuizoFiscal),
           baseNegativaCSLL: _n(d.baseNegativaCSLL),
           lucrosAcumulados: _n(d.lucrosAcumulados) + _n(d.reservasLucros),
-          tjlp: (_n(d.tjlp) || 7.97) / 100,
+          tjlp: (_n(d.tjlp) || _TJLP_DEFAULT) / 100,
           financeira: ctx.ehFinanceira,
           despesasIncentivos: ctx.despesasIncentivos || {},
           retencoesFonte: ctx.totalIRRF || 0,
           estimativasPagas: 0,
           numMeses: 12
         });
+        // ═══ CORREÇÃO ERRO 5: Patch CSLL quando motor retorna 0 (bug do parâmetro lucroReal) ═══
+        if (simCompleta) {
+          // Se semOtimizacao.csllDevida é 0 mas há lucro, recalcular localmente
+          if (simCompleta.semOtimizacao && simCompleta.semOtimizacao.irpjDevido > 0
+              && (simCompleta.semOtimizacao.csllDevida === 0 || simCompleta.semOtimizacao.csllDevida === undefined)) {
+            var _csllBase = ctx.lucroLiquido + (ctx.totalAdicoes || 0) - (ctx.totalExclusoes || 0);
+            var _csllAliq = ctx.ehFinanceira ? 0.15 : 0.09;
+            simCompleta.semOtimizacao.csllDevida = _r(Math.max(_csllBase, 0) * _csllAliq);
+          }
+          if (simCompleta.comOtimizacao && simCompleta.semOtimizacao
+              && simCompleta.semOtimizacao.csllDevida > 0
+              && (simCompleta.comOtimizacao.csllDevida === 0 || simCompleta.comOtimizacao.csllDevida === undefined)) {
+            // CSLL com JCP deduzido
+            var _jcpDed = simCompleta.comOtimizacao.jcpDedutivel || _safe(ctx, 'jcpResult', 'jcpDedutivel') || 0;
+            var _csllBaseOtim = Math.max((ctx.lucroLiquido + (ctx.totalAdicoes || 0) - (ctx.totalExclusoes || 0)) - _jcpDed, 0);
+            var _csllAliq2 = ctx.ehFinanceira ? 0.15 : 0.09;
+            simCompleta.comOtimizacao.csllDevida = _r(_csllBaseOtim * _csllAliq2);
+            // Recalcular economia total se houver patch
+            if (simCompleta.economia) {
+              var _econCSLLPatch = _r(simCompleta.semOtimizacao.csllDevida - simCompleta.comOtimizacao.csllDevida);
+              if (_econCSLLPatch > 0 && (!simCompleta.economia.csll || simCompleta.economia.csll === 0)) {
+                simCompleta.economia.csll = _econCSLLPatch;
+                simCompleta.economia.total = _r((simCompleta.economia.total || 0) + _econCSLLPatch);
+              }
+            }
+          }
+        }
         // BUG#4: guarda para evitar exibir número fantasma quando baseline é zero
         if (simCompleta && simCompleta.economia && simCompleta.economia.total > 0
             && simCompleta.semOtimizacao && simCompleta.semOtimizacao.irpjDevido > 0) {
-          // ═══ CORREÇÃO ERRO 8: Documentar composição da Simulação Integrada ═══
-          // Extrair componentes disponíveis para rastreabilidade
+          // ═══ CORREÇÃO ERRO 8: Composição rastreável da Simulação Integrada ═══
           var _simEcon = simCompleta.economia;
           var _simDesc = "⚠️ CONSOLIDAÇÃO (não somar com itens acima) — Simulação consolidada indica economia total de " + _m(_simEcon.total) + " vs cenário sem otimizações.";
           // Montar breakdown dos componentes
@@ -5356,17 +5448,17 @@
           if (_simEcon.irpj > 0 || _simEcon.csll > 0) _simParts.push("IRPJ+CSLL: " + _m((_simEcon.irpj || 0) + (_simEcon.csll || 0)));
           if (_simEcon.compensacao > 0) _simParts.push("Compensação prejuízo: " + _m(_simEcon.compensacao));
           if (_simEcon.incentivos > 0) _simParts.push("Incentivos: " + _m(_simEcon.incentivos));
-          // Se houver componentes, exibir breakdown; se total não bater, mostrar diferença de interação
           if (_simParts.length > 0) {
             var _simSomaParts = (_simEcon.jcp || 0) + (_simEcon.irpj || 0) + (_simEcon.csll || 0) + (_simEcon.compensacao || 0) + (_simEcon.incentivos || 0);
             _simDesc += " Composição: " + _simParts.join(" + ") + ".";
             var _simDiff = _r(_simEcon.total - _simSomaParts);
             if (Math.abs(_simDiff) > 1) {
-              _simDesc += " Efeito de interação entre incentivos: " + _m(_simDiff) + " (JCP reduz base IRPJ/CSLL, compensação interage com adicional 10%).";
+              _simDesc += " Efeito de interação entre incentivos: " + _m(_simDiff) + ".";
             }
           }
-          // Informar valores sem/com otimização para transparência
-          if (simCompleta.semOtimizacao && simCompleta.comOtimizacao) {
+          // Só exibir sem/com quando AMBOS os valores são válidos (não-zero) — evita debug incorreto
+          if (simCompleta.semOtimizacao && simCompleta.comOtimizacao
+              && simCompleta.semOtimizacao.csllDevida > 0) {
             _simDesc += " [Sem otimização: IRPJ " + _m(simCompleta.semOtimizacao.irpjDevido || 0) + " + CSLL " + _m(simCompleta.semOtimizacao.csllDevida || 0);
             _simDesc += " → Com otimização: IRPJ " + _m(simCompleta.comOtimizacao.irpjDevido || 0) + " + CSLL " + _m(simCompleta.comOtimizacao.csllDevida || 0) + "]";
           }
@@ -7981,7 +8073,7 @@
       capitalSocial: 300000,
       lucrosAcumulados: 300000,
       detalharPL: true,
-      tjlp: 7.97,
+      tjlp: 9.19,
       prejuizoFiscal: 200000,
       baseNegativaCSLL: 150000,
       irrfRetidoPublico: 21600,
