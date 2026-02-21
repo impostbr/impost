@@ -1073,17 +1073,19 @@ const PARTILHA_CGSN140 = {
   ],
 
   V: [
-    // Faixa 1 — Anexo V (valores oficiais CGSN 140/2018, renormalizados para 100%)
-    { irpj: 0.1628, csll: 0.1432, cofins: 0.1628, pis: 0.0352, cpp: 0.3332, iss: 0.1628 },
-    // Faixa 2
-    { irpj: 0.1628, csll: 0.1432, cofins: 0.1628, pis: 0.0352, cpp: 0.3332, iss: 0.1628 },
-    // Faixa 3
-    { irpj: 0.1628, csll: 0.1432, cofins: 0.1628, pis: 0.0352, cpp: 0.3332, iss: 0.1628 },
-    // Faixa 4
-    { irpj: 0.1628, csll: 0.1432, cofins: 0.1628, pis: 0.0352, cpp: 0.3332, iss: 0.1628 },
-    // Faixa 5
-    { irpj: 0.1628, csll: 0.1432, cofins: 0.1628, pis: 0.0352, cpp: 0.3332, iss: 0.1628 },
-    // Faixa 6 — ISS = 0% (recolhido por fora); valores oficiais CGSN 140/2018
+    // Faixa 1 — Anexo V | Valores oficiais CGSN 140/2018, Anexo V, vigência 01/01/2018
+    // Faixa 1: Até R$ 180.000,00 — Alíq. 15,50%
+    { irpj: 0.2500, csll: 0.1500, cofins: 0.1410, pis: 0.0305, cpp: 0.2885, iss: 0.1400 },
+    // Faixa 2: De R$ 180.000,01 a R$ 360.000,00 — Alíq. 18,00%
+    { irpj: 0.2300, csll: 0.1500, cofins: 0.1410, pis: 0.0305, cpp: 0.2785, iss: 0.1700 },
+    // Faixa 3: De R$ 360.000,01 a R$ 720.000,00 — Alíq. 19,50%
+    { irpj: 0.2400, csll: 0.1500, cofins: 0.1492, pis: 0.0323, cpp: 0.2385, iss: 0.1900 },
+    // Faixa 4: De R$ 720.000,01 a R$ 1.800.000,00 — Alíq. 20,50%
+    { irpj: 0.2100, csll: 0.1500, cofins: 0.1574, pis: 0.0341, cpp: 0.2385, iss: 0.2100 },
+    // Faixa 5: De R$ 1.800.000,01 a R$ 3.600.000,00 — Alíq. 23,00% (*)
+    // (*) ISS efetivo limitado a 5%; excedente redistribuído proporcionalmente aos tributos federais
+    { irpj: 0.2300, csll: 0.1250, cofins: 0.1410, pis: 0.0305, cpp: 0.2385, iss: 0.2350 },
+    // Faixa 6: De R$ 3.600.000,01 a R$ 4.800.000,00 — ISS = 0% (recolhido por fora do DAS)
     { irpj: 0.3500, csll: 0.1500, cofins: 0.1603, pis: 0.0347, cpp: 0.3050, iss: 0.0000 }
   ]
 };
@@ -6221,7 +6223,9 @@ function calcularDASSegregado(params) {
  * @param {number} params.folhaAtual12Meses
  * @param {number} params.receitaMensal
  * @param {string} [params.cnae]
- * @param {number} [params.encargosPatronaisFolha=0.368] — FGTS+INSS+RAT+Terceiros
+ * @param {number} [params.encargosPatronaisFolha=0.300] — Encargos patronais sobre folha:
+ *   FGTS (8%) + INSS Patronal (20%) + RAT (2%) = 30% para ME/EPP com até 3 func.
+ *   Use 0.358 para empresas com mais de 3 func. (+ Terceiros/Sistema S 5,8%)
  * @returns {Object} Cenário ótimo e tabela de cenários
  */
 function otimizarFatorR(params) {
@@ -6230,7 +6234,7 @@ function otimizarFatorR(params) {
     folhaAtual12Meses,
     receitaMensal,
     cnae = null,
-    encargosPatronaisFolha = 0.368
+    encargosPatronaisFolha = 0.300 // FGTS(8%) + INSS Patronal(20%) + RAT(2%) = 30% | use 0.358 com Sistema S
   } = params;
 
   if (!rbt12 || rbt12 <= 0) throw new Error('[FATOR_R_OPT_001] RBT12 deve ser maior que zero.');
