@@ -2346,7 +2346,9 @@
         var compIRPJ = Math.min(maxComp, pfIRPJ, Math.max(lucroAj, 0));
         var compCSLL = Math.min(maxComp, bnCSLL, Math.max(lucroAj, 0));
         var economiaIRPJ = _r(_irpj(lucroAj) - _irpj(lucroAj - compIRPJ));
-        var economiaCSLL = compCSLL * 0.09;
+        // CORREÇÃO BUG 4: Usar alíquota CSLL correta (15% financeiras, 9% demais)
+        var _aliqCSLLPrev = (d.ehFinanceira === true || d.ehFinanceira === "true") ? 0.15 : 0.09;
+        var economiaCSLL = _r(compCSLL * _aliqCSLLPrev);
         var periodosIRPJ = maxComp > 0 ? Math.ceil(pfIRPJ / maxComp) : "∞";
         calcPrej.innerHTML =
           '<strong>📉 Simulação de Compensação de Prejuízos</strong><br>' +
@@ -2526,7 +2528,9 @@
     var rb = _n(d.receitaBrutaAnual);
     var isentas = _n(d.receitasIsentas) + _n(d.receitaExportacao) + _n(d.receitasMonofasicas);
     var recTrib = Math.max(rb - isentas, 0);
-    var pisCofDeb = _r(recTrib * 0.0925);
+    // CORREÇÃO BUG 5: Financeiras usam PIS/COFINS cumulativo (4,65%), demais não-cumulativo (9,25%)
+    var _aliqPCPrev = (d.ehFinanceira === true || d.ehFinanceira === "true") ? 0.0465 : 0.0925;
+    var pisCofDeb = _r(recTrib * _aliqPCPrev);
     var dep = _calcDepNormal();
     var recFin = _n(d.receitaFinanceiras) + _n(d.receitasFinanceirasEspeciais);
     return _r(rb - pisCofDeb - _calcTotalCustos() - _calcTotalDespesas() - dep + recFin);
@@ -2741,10 +2745,12 @@
       }
     }
     // Pré-cálculo PIS/COFINS débitos para DRE (antes do passo 8)
-    // Na DRE, deduz-se da Receita Bruta os débitos totais de PIS/COFINS (9,25% da receita tributável)
+    // Na DRE, deduz-se da Receita Bruta os débitos totais de PIS/COFINS
     var receitasIsentasPreDRE = _n(d.receitasIsentas) + _n(d.receitaExportacao) + _n(d.receitasMonofasicas);
     var receitaTributavelDRE = _r(Math.max(receitaBruta - receitasIsentasPreDRE, 0));
-    var pisCofinsDebitosDRE = _r(receitaTributavelDRE * 0.0925); // PIS 1,65% + COFINS 7,60%
+    // Financeiras: PIS 0,65% + COFINS 4% = 4,65% (cumulativo) | Demais: PIS 1,65% + COFINS 7,60% = 9,25% (não-cumulativo)
+    var _aliqPCDre = d.ehFinanceira ? 0.0465 : 0.0925;
+    var pisCofinsDebitosDRE = _r(receitaTributavelDRE * _aliqPCDre);
 
     var receitaLiquida = _r(receitaBruta - pisCofinsDebitosDRE);
     var lucroBruto = _r(receitaLiquida - custosTotais);
@@ -5800,8 +5806,10 @@
     var isentas = _n(d.receitasIsentas) + _n(d.receitaExportacao) + _n(d.receitasMonofasicas);
     var tributavel = Math.max(rb - isentas, 0);
     var baseCreditos = _calcBaseCreditos();
-    var debitos = _r(tributavel * 0.0925);
-    var creditos = _r(baseCreditos * 0.0925);
+    // Financeiras: PIS 0,65% + COFINS 4% = 4,65% (cumulativo) | Demais: 9,25% (não-cumulativo)
+    var _aliqPC = (d.ehFinanceira === true || d.ehFinanceira === "true") ? 0.0465 : 0.0925;
+    var debitos = _r(tributavel * _aliqPC);
+    var creditos = _r(baseCreditos * _aliqPC);
     // CORREÇÃO ERRO 3: NÃO descontar retenções para manter consistência com Painel Resumo (bruto)
     // As retenções são compensações de fluxo de caixa, não reduzem o tributo devido
     return _r(Math.max(debitos - creditos, 0));
