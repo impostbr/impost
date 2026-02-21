@@ -100,6 +100,17 @@
   /** Formata valor que JÁ É percentual (ex: 25 → "25.00%"). Diferente de _p que multiplica por 100. */
   function _pp(v) { return (v || 0).toFixed(2) + "%"; }
   function _irpj(lr) { return lr <= 0 ? 0 : lr * 0.15 + Math.max(0, lr - 240000) * 0.10; }
+
+  /**
+   * CORREÇÃO ERRO #2: Alíquota CSLL conforme LC 224/2025
+   * Financeiras: 12% para 2025-2027, 15% a partir de 2028
+   * Demais: 9%
+   */
+  function _csllAliq(ehFinanceira, anoBase) {
+    if (!ehFinanceira) return 0.09;
+    var _ano = parseInt(anoBase) || new Date().getFullYear();
+    return (_ano >= 2025 && _ano <= 2027) ? 0.12 : 0.15;
+  }
   /** Sanitiza string para uso seguro em innerHTML — previne XSS */
   function _esc(s) {
     if (typeof s !== 'string') return s;
@@ -2269,7 +2280,7 @@
         // Economia marginal: usa _irpj diferencial para adaptar ao porte da empresa
         var _lucroAjPDD = _calcLucroAjustado();
         var _econIRPJpdd = _r(_irpj(Math.max(_lucroAjPDD, 0)) - _irpj(Math.max(_lucroAjPDD - totalPDD, 0)));
-        var _aliqCSLLpdd = (d.ehFinanceira === true || d.ehFinanceira === "true") ? 0.15 : 0.09;
+        var _aliqCSLLpdd = _csllAliq(d.ehFinanceira === true || d.ehFinanceira === "true", d.anoBase);
         var econPDD = _r(_econIRPJpdd + totalPDD * _aliqCSLLpdd);
         var _aliqMargPDD = totalPDD > 0 ? _r(econPDD / totalPDD * 100) : 34;
         calcPDD.innerHTML =
@@ -2287,7 +2298,7 @@
       // Economia marginal: adapta ao porte via _irpj diferencial
       var _lucroAjEx = _calcLucroAjustado();
       var _econIRPJex = _r(_irpj(Math.max(_lucroAjEx, 0)) - _irpj(Math.max(_lucroAjEx - totalEx, 0)));
-      var _aliqCSLLex = (d.ehFinanceira === true || d.ehFinanceira === "true") ? 0.15 : 0.09;
+      var _aliqCSLLex = _csllAliq(d.ehFinanceira === true || d.ehFinanceira === "true", d.anoBase);
       var _econTotEx = _r(_econIRPJex + totalEx * _aliqCSLLex);
       var _aliqMargEx = totalEx > 0 ? _r(_econTotEx / totalEx * 100) : 34;
       calcTotEx.innerHTML =
@@ -2349,7 +2360,8 @@
             prejuizosAcumulados: _n(d.prejuizosContabeis),
             tjlp: (_n(d.tjlp) || _TJLP_DEFAULT) / 100,
             lucroLiquidoAntes: llVal,
-            numMeses: 12,
+            lucroRealAnual: Math.max(llVal + _n(d.adicoesLALUR) - _n(d.exclusoesLALUR), 0),
+            numMeses: d.apuracaoLR === "trimestral" ? 3 : 12,
           });
           calcJCP.innerHTML =
             '<strong>💰 Simulação de JCP</strong><br>' +
@@ -2381,7 +2393,7 @@
         var compCSLL = Math.min(maxComp, bnCSLL, Math.max(lucroAj, 0));
         var economiaIRPJ = _r(_irpj(lucroAj) - _irpj(lucroAj - compIRPJ));
         // CORREÇÃO BUG 4: Usar alíquota CSLL correta (15% financeiras, 9% demais)
-        var _aliqCSLLPrev = (d.ehFinanceira === true || d.ehFinanceira === "true") ? 0.15 : 0.09;
+        var _aliqCSLLPrev = _csllAliq(d.ehFinanceira === true || d.ehFinanceira === "true", d.anoBase);
         var economiaCSLL = _r(compCSLL * _aliqCSLLPrev);
         var periodosIRPJ = maxComp > 0 ? Math.ceil(pfIRPJ / maxComp) : "∞";
         calcPrej.innerHTML =
@@ -2525,7 +2537,7 @@
       var _gratPrev = _n(d.gratificacoesAdm);
       var _lucroAjGrat = Math.max(_calcLucroAjustado(), 0);
       var _econIRPJgrat = _r(_irpj(_lucroAjGrat) - _irpj(Math.max(_lucroAjGrat - _gratPrev, 0)));
-      var _aliqCSLLgrat = (d.ehFinanceira === true || d.ehFinanceira === "true") ? 0.15 : 0.09;
+      var _aliqCSLLgrat = _csllAliq(d.ehFinanceira === true || d.ehFinanceira === "true", d.anoBase);
       econGrat.textContent = _m(_r(_econIRPJgrat + _gratPrev * _aliqCSLLgrat));
     }
   }
@@ -2761,6 +2773,16 @@
     d.ehFinanceira = d.ehFinanceira === true || d.ehFinanceira === "true";
     d.temProjetoAprovado = d.temProjetoAprovado === true || d.temProjetoAprovado === "true";
     d.apuracaoLR = (d.apuracaoLR || "anual").toLowerCase();
+
+    // ═══ CORREÇÃO ERRO #1: numMeses dinâmico para apuração trimestral ═══
+    // Motor usa numMeses para calcular limiteAdicional = R$20.000 × numMeses
+    // Trimestral: 3 meses por período → limite R$60.000 (não R$240.000)
+    var _numMeses = d.apuracaoLR === "trimestral" ? 3 : 12;
+
+    // ═══ CORREÇÃO ERRO #2: CSLL financeiras conforme LC 224/2025 ═══
+    // Helper _csllAliq(ehFin, anoBase) já definido no escopo global
+    var _anoBase = parseInt(d.anoBase) || new Date().getFullYear();
+    var _aliqCSLLEmpresa = _csllAliq(d.ehFinanceira, _anoBase);
 
     // ═══════════════════════════════════════════════════════════════════════
     //  PASSO 2 — Montar DRE (Receita → Lucro Líquido Contábil)
@@ -3093,7 +3115,7 @@
           receitaLiquidaIncentivada: receitaBruta - receitaFinanceiras,
           adicoes: totalAdicoes,
           exclusoes: totalExclusoes,
-          csllDevida: _r(baseCSLLFinal * (ehFinanceira ? 0.15 : 0.09)),
+          csllDevida: _r(baseCSLLFinal * _csllAliq(ehFinanceira, d.anoBase)),
           percentualReducao: (_n(d.percentualReducao) || 75) / 100,
           usarReinvestimento: d.usarReinvestimento30 === true || d.usarReinvestimento30 === "true",
           superintendencia: isSUDAM ? "SUDAM" : "SUDENE",
@@ -3116,7 +3138,7 @@
           adicoes: _irpjUsarBaseCompensada ? 0 : totalAdicoes,
           exclusoes: _irpjUsarBaseCompensada ? 0 : totalExclusoes,
           prejuizoFiscal: _irpjUsarBaseCompensada ? 0 : (vedaCompensacao ? 0 : prejuizoFiscal),
-          numMeses: 12,
+          numMeses: _numMeses,
           incentivos: totalDeducoesIncentivos,
           retencoesFonte: totalIRRF,
           estimativasPagas: estimIRPJPagas,
@@ -3130,8 +3152,10 @@
     // Fallback manual se motor não disponível ou falhou
     if (!irpjResult) {
       var _baseIRPJ = Math.max(lucroRealFinal, 0);
+      // CORREÇÃO ERRO #1: Usar limite do adicional proporcional ao numMeses
+      var _limiteAdicionalFB = 20000 * _numMeses;
       var _irpjN = _r(_baseIRPJ * 0.15);
-      var _irpjA = _r(Math.max(_baseIRPJ - 240000, 0) * 0.10);
+      var _irpjA = _r(Math.max(_baseIRPJ - _limiteAdicionalFB, 0) * 0.10);
       var _irpjDev = _r(_irpjN + _irpjA - totalDeducoesIncentivos);
       irpjResult = {
         baseCalculo: _baseIRPJ,
@@ -3142,7 +3166,7 @@
         irpjAPagar: _r(Math.max(_irpjDev, 0) - totalIRRF - estimIRPJPagas),
         aliquota: 0.15,
         aliquotaAdicional: 0.10,
-        limiteAdicional: 240000
+        limiteAdicional: _limiteAdicionalFB
       };
     }
     // Garantir propriedades mínimas
@@ -3216,7 +3240,7 @@
     // Fallback manual se motor não disponível ou falhou
     // ═══ CORREÇÃO ERRO CRÍTICO #3: Usar baseCSLLFinal (não lucroRealFinal) no fallback ═══
     if (!csllResult) {
-      var _aliqCSLL = ehFinanceira ? 0.15 : 0.09;
+      var _aliqCSLL = _csllAliq(ehFinanceira, d.anoBase);
       var _baseCSLL = Math.max(baseCSLLFinal, 0);
       var _compBN = 0;
       if (!_csllUsarBaseCompensada && _baseCSLL > 0 && baseNegCSLL > 0 && !vedaCompensacao) {
@@ -3233,7 +3257,7 @@
     }
     // Garantir propriedades mínimas
     csllResult.csllDevida = csllResult.csllDevida || 0;
-    csllResult.aliquota = csllResult.aliquota || (ehFinanceira ? 0.15 : 0.09);
+    csllResult.aliquota = csllResult.aliquota || _csllAliq(ehFinanceira, d.anoBase);
     // ═══ CORREÇÃO BUG CRÍTICO 3: Garantir csllAPagar descontando estimativas ═══
     if (csllResult.csllAPagar === undefined || csllResult.csllAPagar === null) {
       csllResult.csllAPagar = _r(Math.max(
@@ -3245,7 +3269,7 @@
     // O SUDAM foi calculado no PASSO 6 com csllDevida manual. Agora que temos csllResult,
     // recalcular se o valor divergiu.
     if (temProjetoSUDAM && LR.simular && LR.simular.incentivosRegionais && csllResult) {
-      var _csllManual = _r(baseCSLLFinal * (ehFinanceira ? 0.15 : 0.09));
+      var _csllManual = _r(baseCSLLFinal * _csllAliq(ehFinanceira, d.anoBase));
       if (Math.abs(csllResult.csllDevida - _csllManual) > 0.01) {
         try {
           sudamResult = LR.simular.incentivosRegionais({
@@ -3477,13 +3501,40 @@
           prejuizosAcumulados: _n(d.prejuizosContabeis),
           tjlp: _tjlpInformada / 100,
           lucroLiquidoAntes: lucroLiquido,
-          numMeses: 12
+          lucroRealAnual: Math.max(lucroRealFinal, 0),
+          numMeses: _numMeses
         });
         // Marcar no resultado se usou taxa default
         if (jcpResult && _tjlpUsarDefault) {
           jcpResult.tjlpDefault = true;
           jcpResult.tjlpUsada = _tjlpInformada;
           jcpResult.alertaTJLP = "ATENÇÃO: TJLP não informada. Usando taxa default de " + _tjlpInformada + "%. Verifique a taxa vigente no BCB.";
+        }
+        // ═══ CORREÇÃO ERRO #4: Aplicar cap de 50% do lucro líquido / lucros acumulados ═══
+        // Art. 9º, §1º, Lei 9.249/95: JCP limitado ao MAIOR entre 50% do LL do exercício
+        // OU 50% dos lucros acumulados + reservas de lucros
+        if (jcpResult && jcpResult.jcpDedutivel > 0) {
+          var _lucrosAcum = _n(d.lucrosAcumulados) + _n(d.reservasLucros);
+          var _limiteCap1 = _r(Math.max(lucroLiquido, 0) * 0.50); // 50% do LL do exercício
+          var _limiteCap2 = _r(Math.max(_lucrosAcum, 0) * 0.50);  // 50% dos lucros acum + reservas
+          var _limiteCapJCP = Math.max(_limiteCap1, _limiteCap2);
+          if (jcpResult.jcpDedutivel > _limiteCapJCP && _limiteCapJCP > 0) {
+            var _jcpOriginal = jcpResult.jcpDedutivel;
+            jcpResult.jcpDedutivel = _limiteCapJCP;
+            jcpResult.jcpCalculado = _jcpOriginal; // preservar valor original para referência
+            jcpResult.capAplicado = true;
+            jcpResult.limiteCapJCP = _limiteCapJCP;
+            jcpResult.limiteCapMotivo = _limiteCap1 >= _limiteCap2
+              ? "50% do lucro líquido (R$ " + _m(_limiteCap1) + ")"
+              : "50% dos lucros acumulados + reservas (R$ " + _m(_limiteCap2) + ")";
+            // Recalcular economias com o cap aplicado
+            var _aliqIRPJjcp = lucroRealFinal > 240000 ? 0.25 : 0.15;
+            jcpResult.economiaIRPJ = _r(jcpResult.jcpDedutivel * _aliqIRPJjcp);
+            jcpResult.economiaCSLL = _r(jcpResult.jcpDedutivel * _aliqCSLLEmpresa);
+            jcpResult.custoIRRF = _r(jcpResult.jcpDedutivel * 0.175);
+            jcpResult.economiaLiquida = _r(jcpResult.economiaIRPJ + jcpResult.economiaCSLL - jcpResult.custoIRRF);
+            console.warn('[IMPOST] Cap JCP aplicado: ' + _m(_jcpOriginal) + ' → ' + _m(_limiteCapJCP) + ' (' + jcpResult.limiteCapMotivo + ')');
+          }
         }
       } catch (e) { console.warn('[IMPOST] Erro em JCP:', e.message); jcpResult = null; }
     }
@@ -3512,7 +3563,7 @@
             adicoes: 0,
             exclusoes: 0,
             prejuizoFiscal: 0, // já compensado manualmente acima
-            numMeses: 12,
+            numMeses: _numMeses,
             incentivos: totalDeducoesIncentivos,
             retencoesFonte: totalIRRF,
             estimativasPagas: estimIRPJPagas,
@@ -3860,7 +3911,7 @@
     var _aliqEfetIRPJ = lucroRealFinal > 0
       ? Math.min((irpjResult.irpjDevido || 0) / lucroRealFinal, 0.25)
       : 0.15;
-    var _aliqEfetCSLL = csllResult.aliquota || 0.09;
+    var _aliqEfetCSLL = csllResult.aliquota || _aliqCSLLEmpresa;
     // Alíquota marginal: para exclusões/adições, a economia real é o impacto incremental
     // Usa _irpj() diferencial para capturar corretamente a faixa do adicional de 10%
     var _gratAdm = _n(d.gratificacoesAdm);
@@ -4280,7 +4331,8 @@
       totalExclusoes: totalExclusoes || 0,  // BUG#4 CORRIGIDO: mapeado do LALUR
       // ═══ FIX BUG #5: Passar alíquotas efetivas para cálculo consistente de PDD ═══
       aliqEfetIRPJ: _aliqEfetIRPJ,
-      aliqEfetCSLL: _aliqEfetCSLL
+      aliqEfetCSLL: _aliqEfetCSLL,
+      numMeses: _numMeses
     });
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -5407,7 +5459,7 @@
           despesasIncentivos: ctx.despesasIncentivos || {},
           retencoesFonte: ctx.totalIRRF || 0,
           estimativasPagas: 0,
-          numMeses: 12
+          numMeses: ctx.numMeses || 12
         });
         // ═══ CORREÇÃO ERRO 5: Patch CSLL quando motor retorna 0 (bug do parâmetro lucroReal) ═══
         if (simCompleta) {
@@ -5415,8 +5467,8 @@
           if (simCompleta.semOtimizacao && simCompleta.semOtimizacao.irpjDevido > 0
               && (simCompleta.semOtimizacao.csllDevida === 0 || simCompleta.semOtimizacao.csllDevida === undefined)) {
             var _csllBase = ctx.lucroLiquido + (ctx.totalAdicoes || 0) - (ctx.totalExclusoes || 0);
-            var _csllAliq = ctx.ehFinanceira ? 0.15 : 0.09;
-            simCompleta.semOtimizacao.csllDevida = _r(Math.max(_csllBase, 0) * _csllAliq);
+            var _csllAliqPatch = _csllAliq(ctx.ehFinanceira, d.anoBase);
+            simCompleta.semOtimizacao.csllDevida = _r(Math.max(_csllBase, 0) * _csllAliqPatch);
           }
           if (simCompleta.comOtimizacao && simCompleta.semOtimizacao
               && simCompleta.semOtimizacao.csllDevida > 0
@@ -5424,8 +5476,8 @@
             // CSLL com JCP deduzido
             var _jcpDed = simCompleta.comOtimizacao.jcpDedutivel || _safe(ctx, 'jcpResult', 'jcpDedutivel') || 0;
             var _csllBaseOtim = Math.max((ctx.lucroLiquido + (ctx.totalAdicoes || 0) - (ctx.totalExclusoes || 0)) - _jcpDed, 0);
-            var _csllAliq2 = ctx.ehFinanceira ? 0.15 : 0.09;
-            simCompleta.comOtimizacao.csllDevida = _r(_csllBaseOtim * _csllAliq2);
+            var _csllAliqPatch2 = _csllAliq(ctx.ehFinanceira, d.anoBase);
+            simCompleta.comOtimizacao.csllDevida = _r(_csllBaseOtim * _csllAliqPatch2);
             // Recalcular economia total se houver patch
             if (simCompleta.economia) {
               var _econCSLLPatch = _r(simCompleta.semOtimizacao.csllDevida - simCompleta.comOtimizacao.csllDevida);
@@ -5589,7 +5641,7 @@
     var totalCSLLExato = 0;
     var saldoPF = vedaCompensacao ? 0 : prejuizoFiscal;
     var saldoBN = vedaCompensacao ? 0 : baseNegCSLL;
-    var aliqCSLL = ehFinanceira ? 0.15 : 0.09;
+    var aliqCSLL = _csllAliq(ehFinanceira, d.anoBase);
 
     // Se temos meses preenchidos, usar dados reais por trimestre
     var temMes = d.preencherMesAMes === true || d.preencherMesAMes === "true";
@@ -5715,7 +5767,7 @@
         var baseIRPJMes = _r(recMes * presIRPJ);
         irpjMes = _r(baseIRPJMes * 0.15 + Math.max(baseIRPJMes - 20000, 0) * 0.10);
         var baseCSLLMes = _r(recMes * presCSLL);
-        csllMes = _r(baseCSLLMes * (ehFinanceira ? 0.15 : 0.09));
+        csllMes = _r(baseCSLLMes * _csllAliq(ehFinanceira, d.anoBase));
       }
 
       totalEstimIRPJ += irpjMes;
@@ -5731,7 +5783,7 @@
 
     // Ajuste anual: IRPJ real - estimativas (usa valores do motor quando disponíveis)
     var irpjRealAnual = irpjRealDoMotor || _r(lucroRealFinal * 0.15 + Math.max(lucroRealFinal - 240000, 0) * 0.10);
-    var csllRealAnual = csllRealDoMotor || _r(lucroRealFinal * (ehFinanceira ? 0.15 : 0.09));
+    var csllRealAnual = csllRealDoMotor || _r(lucroRealFinal * _csllAliq(ehFinanceira, d.anoBase));
     var ajusteIRPJ = _r(irpjRealAnual - totalEstimIRPJ);
     var ajusteCSLL = _r(csllRealAnual - totalEstimCSLL);
 
@@ -5792,12 +5844,12 @@
         var baseEstIRPJ = _r(recMes * presIRPJ);
         estimIRPJMes = _r(baseEstIRPJ * 0.15 + Math.max(baseEstIRPJ - 20000, 0) * 0.10);
         var baseEstCSLL = _r(recMes * presCSLL);
-        estimCSLLMes = _r(baseEstCSLL * (ehFinanceira ? 0.15 : 0.09));
+        estimCSLLMes = _r(baseEstCSLL * _csllAliq(ehFinanceira, d.anoBase));
       }
 
       // IRPJ real acumulado até o mês (proporcional — usa valores do motor quando disponíveis)
       var irpjRealAcum = _r((irpjRealDoMotor || (lucroRealFinal * 0.15 + Math.max(lucroRealFinal - 240000, 0) * 0.10)) * m / 12);
-      var csllRealAcum = _r((csllRealDoMotor || (lucroRealFinal * (ehFinanceira ? 0.15 : 0.09))) * m / 12);
+      var csllRealAcum = _r((csllRealDoMotor || (lucroRealFinal * _csllAliq(ehFinanceira, d.anoBase))) * m / 12);
 
       var sr = null;
       try {
@@ -5919,7 +5971,7 @@
     var cenarios = [];
     var nomes = ["Pessimista", "Base", "Otimista"];
     var fatores = [-variacao, 0, variacao];
-    var aliqCSLL = ehFinanceira ? 0.15 : 0.09;
+    var aliqCSLL = _csllAliq(ehFinanceira, d.anoBase);
     var pf = vedaCompensacao ? 0 : (prejuizoFiscal || 0);
     var bn = vedaCompensacao ? 0 : (baseNegCSLL || 0);
 
@@ -6512,7 +6564,7 @@
     s4 += '<h3>4.2 — CSLL <span class="res-artigo">Lei 7.689/1988</span></h3>';
     s4 += '<table class="res-table">';
     if (r.csll) {
-      var aliqCSLL = r.csll.aliquota || (d.ehFinanceira ? 0.15 : 0.09);
+      var aliqCSLL = r.csll.aliquota || _csllAliq(d.ehFinanceira, d.anoBase);
       // CORREÇÃO BUG 4: Exibir base pós-compensação para CSLL
       var baseCSLLDisplay = (r.csll.baseCalculo !== undefined) ? r.csll.baseCalculo : r.baseCSLLFinal;
       s4 += _linha('Base de cálculo CSLL', baseCSLLDisplay, '', '');
@@ -7294,7 +7346,7 @@
       sAliq += '<div class="res-detail-card"><h3>CSLL <span class="res-artigo">' + (aliqCSLL.artigoBase || 'Lei 7.689') + '</span></h3>';
       sAliq += '<table class="res-table">';
       sAliq += '<tr><td>Alíquota geral</td><td class="res-valor">' + _p(aliqCSLL.geral || 0.09) + '</td></tr>';
-      sAliq += '<tr><td>Instituições financeiras</td><td class="res-valor">' + _p(aliqCSLL.financeiras || 0.15) + '</td></tr>';
+      sAliq += '<tr><td>Instituições financeiras</td><td class="res-valor">' + _p(aliqCSLL.financeiras || _csllAliq(true, d.anoBase)) + '</td></tr>';
       sAliq += '</table></div>';
       sAliq += '<div class="res-detail-card"><h3>PIS/COFINS NC <span class="res-artigo">' + (aliqPC.artigoBase || '') + '</span></h3>';
       sAliq += '<table class="res-table">';
@@ -9698,7 +9750,7 @@
       aliqRowsPdf.push({ cells: ['IRPJ Normal', _pp((aIRPJ.normal || 0.15) * 100), aIRPJ.artigoBase || 'Art. 225'] });
       aliqRowsPdf.push({ cells: ['IRPJ Adicional', _pp((aIRPJ.adicional || 0.10) * 100), 'Excedente R$ 20.000/mês'] });
       aliqRowsPdf.push({ cells: ['CSLL Geral', _pp((aCSLL.geral || 0.09) * 100), aCSLL.artigoBase || 'Lei 7.689'] });
-      aliqRowsPdf.push({ cells: ['CSLL Financeiras', _pp((aCSLL.financeiras || 0.15) * 100), 'Lei 13.169/2015'] });
+      aliqRowsPdf.push({ cells: ['CSLL Financeiras', _pp((aCSLL.financeiras || _csllAliq(true, d.anoBase)) * 100), 'Lei 13.169/2015'] });
       aliqRowsPdf.push({ cells: ['PIS NC', _pp((aPC.pisNaoCumulativo || 0.0165) * 100), 'Lei 10.637/02'] });
       aliqRowsPdf.push({ cells: ['COFINS NC', _pp((aPC.cofinsNaoCumulativo || 0.076) * 100), 'Lei 10.833/03'] });
       aliqRowsPdf.push({ cells: ['JCP IRRF', '17,50%', 'Art. 355-358 + LC 224/2025'] });
@@ -10292,7 +10344,7 @@
       aba12.push(['IRPJ Normal', pv(aI.normal || 0.15), aI.artigoBase || 'Art. 225']);
       aba12.push(['IRPJ Adicional', pv(aI.adicional || 0.10), 'Excedente R$ 20.000/mês']);
       aba12.push(['CSLL Geral', pv(aC.geral || 0.09), aC.artigoBase || 'Lei 7.689']);
-      aba12.push(['CSLL Financeiras', pv(aC.financeiras || 0.15), 'Lei 13.169/2015']);
+      aba12.push(['CSLL Financeiras', pv(aC.financeiras || _csllAliq(true, d.anoBase)), 'LC 224/2025 (2025-2027: 12%)']);
       aba12.push(['PIS NC', pv(aP.pisNaoCumulativo || 0.0165), 'Lei 10.637/02']);
       aba12.push(['COFINS NC', pv(aP.cofinsNaoCumulativo || 0.076), 'Lei 10.833/03']);
       aba12.push(['JCP IRRF', 17.50, 'Art. 355-358 + LC 224/2025']);
