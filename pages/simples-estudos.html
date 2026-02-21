@@ -249,14 +249,11 @@ input,select,textarea,button{font-family:inherit;font-size:inherit}
 .opp-arrow{transition:.2s;font-size:18px;color:var(--txt3)}
 .opp-card.open .opp-arrow{transform:rotate(180deg)}
 
-/* Premium Lock */
-.premium-locked{position:relative;overflow:hidden}
-.premium-locked .premium-blur{filter:blur(4px);pointer-events:none;user-select:none;opacity:.6}
-.premium-overlay{position:absolute;top:0;left:0;right:0;bottom:0;display:flex;align-items:center;justify-content:center;z-index:10;background:rgba(255,255,255,.5)}
-.premium-cta-card{background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;border-radius:var(--radius-sm);padding:24px;text-align:center;max-width:340px;box-shadow:var(--shadow-lg)}
-.premium-cta-card h4{font-size:16px;margin-bottom:6px}
-.premium-cta-card p{font-size:13px;opacity:.9;margin-bottom:14px}
-.premium-cta-card .btn{background:#fff;color:#d97706;font-weight:700}
+/* Explicacoes */
+.explicacao-item{background:var(--bg);border:1px solid var(--brd);border-radius:var(--radius-xs);padding:14px 16px;margin-bottom:10px}
+.explicacao-item .exp-title{font-weight:700;font-size:14px;margin-bottom:4px;color:var(--pri)}
+.explicacao-item .exp-text{font-size:13px;color:var(--txt2);line-height:1.6}
+.explicacao-item .exp-legal{font-size:11px;color:var(--txt3);font-style:italic;margin-top:6px}
 
 /* Charts */
 .chart-container{position:relative;max-width:380px;margin:0 auto}
@@ -300,19 +297,10 @@ input,select,textarea,button{font-family:inherit;font-size:inherit}
 .risk-title{font-weight:700;font-size:14px;margin-bottom:4px}
 .risk-text{font-size:13px;color:var(--txt2)}
 
-/* CTA Premium Section */
-.cta-premium{background:linear-gradient(135deg,#16a34a 0%,#15803d 50%,#14532d 100%);border-radius:var(--radius);padding:40px;text-align:center;color:#fff;margin:32px 0}
-.cta-premium h3{font-size:24px;font-weight:800;margin-bottom:8px}
-.cta-premium .cta-sub{font-size:15px;opacity:.9;margin-bottom:24px}
-.plans-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:24px}
-.plan-card{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);border-radius:var(--radius-sm);padding:24px;backdrop-filter:blur(4px);position:relative}
-.plan-card.popular{background:rgba(255,255,255,.2);border-color:rgba(255,255,255,.4);transform:scale(1.04)}
-.plan-card .plan-badge{position:absolute;top:-10px;left:50%;transform:translateX(-50%);background:#fff;color:var(--pri);font-size:11px;font-weight:700;padding:3px 12px;border-radius:10px;text-transform:uppercase}
-.plan-card .plan-name{font-size:16px;font-weight:700;margin-bottom:4px}
-.plan-card .plan-price{font-size:28px;font-weight:800;font-family:var(--mono);margin-bottom:4px}
-.plan-card .plan-price small{font-size:14px;font-weight:400;opacity:.8}
-.plan-card .plan-desc{font-size:13px;opacity:.85;margin-bottom:12px}
-.plan-card .btn{width:100%;justify-content:center;background:#fff;color:var(--pri);font-weight:700}
+/* Vedado Alert */
+.vedado-alert{background:var(--danger-lt);border:2px solid var(--danger);border-radius:var(--radius);padding:24px;text-align:center;margin:24px 0}
+.vedado-alert h3{color:var(--danger);font-size:20px;margin-bottom:8px}
+.vedado-alert p{font-size:14px;color:var(--txt2)}
 
 /* Footer */
 .report-footer{background:var(--bg);border-top:3px solid var(--pri);border-radius:0 0 var(--radius) var(--radius);padding:32px;margin-top:24px}
@@ -344,7 +332,7 @@ input,select,textarea,button{font-family:inherit;font-size:inherit}
 
 /* ─── Print ─── */
 @media print{
-  .site-header,.progress-bar,.wizard-footer,.loading-overlay,.cta-premium,.premium-overlay,.btn{display:none!important}
+  .site-header,.progress-bar,.wizard-footer,.loading-overlay,.btn{display:none!important}
   .results-section{display:block!important}
   .section-card{box-shadow:none;break-inside:avoid}
   body{background:#fff}
@@ -366,7 +354,7 @@ input,select,textarea,button{font-family:inherit;font-size:inherit}
       <div class="logo">IMPOST<span>.</span></div>
       <span class="badge-sn">Simples Nacional</span>
     </div>
-    <div class="tagline">Porque pagar imposto certo é direito. Pagar menos, legalmente, é inteligência.</div>
+    <div class="tagline">Pagar menos imposto, legalmente, é inteligência.</div>
   </div>
 </header>
 
@@ -399,7 +387,7 @@ input,select,textarea,button{font-family:inherit;font-size:inherit}
   <div class="form-row">
     <div class="form-group">
       <label>Nome da empresa <span class="req">*</span></label>
-      <input type="text" id="nomeEmpresa" placeholder="Ex: Agrogeo Brasil Ltda" required>
+      <input type="text" id="nomeEmpresa" placeholder="Ex: Minha Empresa Ltda" required>
     </div>
     <div class="form-group">
       <label>CNPJ <span class="req">*</span></label>
@@ -414,10 +402,9 @@ input,select,textarea,button{font-family:inherit;font-size:inherit}
       <span class="hint">Para cálculo de RBT12 proporcional</span>
     </div>
     <div class="form-group">
-      <label>Porte <span class="tooltip-icon" data-tip="MEI: até R$ 81k | ME: até R$ 360k | EPP: até R$ 4,8M (LC 123/2006, Art. 3º)">?</span></label>
+      <label>Porte <span class="tooltip-icon" id="porteTooltip" data-tip="">?</span></label>
       <select id="porte">
         <option value="">Selecione...</option>
-        <option value="MEI">MEI - Microempreendedor Individual</option>
         <option value="ME">ME - Microempresa</option>
         <option value="EPP">EPP - Empresa de Pequeno Porte</option>
       </select>
@@ -488,7 +475,7 @@ input,select,textarea,button{font-family:inherit;font-size:inherit}
       <input type="text" id="receitaMensal" class="money-input" placeholder="R$ 0,00">
     </div>
     <div class="form-group">
-      <label>RBT12 (Receita Bruta 12 meses) <span class="tooltip-icon" data-tip="Receita acumulada dos últimos 12 meses. Calculada automaticamente, mas pode editar.">?</span></label>
+      <label><span class="sigla" data-tip="Receita Bruta Total acumulada nos 12 meses anteriores ao período de apuração. É a base para determinar a faixa de tributação no Simples Nacional (LC 123/2006, Art. 18).">RBT12</span> (Receita Bruta 12 meses) <span class="tooltip-icon" data-tip="Receita Bruta Total acumulada nos 12 meses anteriores. Calculada automaticamente (mensal × 12), mas pode editar.">?</span></label>
       <input type="text" id="rbt12" class="money-input" placeholder="R$ 0,00">
       <span class="hint">Calculado: mensal × 12 (editável)</span>
     </div>
@@ -513,7 +500,7 @@ input,select,textarea,button{font-family:inherit;font-size:inherit}
   </div>
   <div class="form-row">
     <div class="form-group">
-      <label>Receita monofasica mensal</label>
+      <label>Receita monofasica mensal <span class="tooltip-icon" data-tip="Produtos monofásicos (combustíveis, farmácias, cosméticos, bebidas, autopeças) têm PIS e COFINS pagos na origem. No Simples, essas parcelas podem ser segregadas e excluídas do DAS (LC 123/2006, Art. 18, §4º-A, I).">?</span></label>
       <input type="text" id="receitaMonofasica" class="money-input" placeholder="R$ 0,00">
     </div>
     <div class="form-group">
@@ -550,7 +537,7 @@ input,select,textarea,button{font-family:inherit;font-size:inherit}
   </div>
   <div class="form-row">
     <div class="form-group">
-      <label>Folha de pagamento mensal <span class="req">*</span> <span class="tooltip-icon" data-tip="Inclua salários brutos, 13º proporcional, férias, FGTS, INSS patronal, pró-labore">?</span></label>
+      <label>Folha de pagamento mensal <span class="req">*</span> <span class="tooltip-icon" data-tip="Inclua o total bruto de: salários, 13º proporcional, férias + 1/3, FGTS (8%), INSS patronal, e pró-labore dos sócios. Este valor é usado para calcular o Fator R (LC 123/2006, Art. 18, §24).">?</span></label>
       <input type="text" id="folhaMensal" class="money-input" placeholder="R$ 0,00">
     </div>
     <div class="form-group">
@@ -560,11 +547,11 @@ input,select,textarea,button{font-family:inherit;font-size:inherit}
   </div>
   <div class="form-row">
     <div class="form-group">
-      <label>Número de funcionários</label>
+      <label>Número de funcionários <span class="tooltip-icon" data-tip="Informar o número de empregados CLT registrados. Usado para estimar custos adicionais de folha e para validação do Fator R.">?</span></label>
       <input type="number" id="qtdFuncionarios" min="0" value="0">
     </div>
     <div class="form-group">
-      <label>RAT (Risco Ambiental) <span class="tooltip-icon" data-tip="Alíquota do Risco Ambiental do Trabalho, definida pelo CNAE">?</span></label>
+      <label>RAT (Risco Ambiental) <span class="tooltip-icon" data-tip="Risco Ambiental do Trabalho — varia de 1% a 3% conforme o CNAE da empresa. Definido pelo grau de risco da atividade econômica (Decreto 3.048/1999, Anexo V).">?</span></label>
       <select id="rat">
         <option value="0.01">1%</option>
         <option value="0.02" selected>2%</option>
@@ -622,7 +609,7 @@ input,select,textarea,button{font-family:inherit;font-size:inherit}
   </div>
   <div class="form-row">
     <div class="form-group">
-      <label>Alíquota ISS do município (%)</label>
+      <label>Alíquota ISS do município (%) <span class="tooltip-icon" data-tip="Alíquota do ISS varia de 2% a 5% conforme o município (LC 116/2003, Art. 8-A). Para prestadores de serviço no Simples, o ISS é uma parcela do DAS. Se o ISS no DAS for inferior a 2%, aplica-se o mínimo legal.">?</span></label>
       <input type="number" id="issAliquota" min="2" max="5" step="0.01" value="5.00">
       <span class="hint" id="issHint">Mínimo 2%, máximo 5% (LC 116/2003)</span>
     </div>
@@ -633,7 +620,7 @@ input,select,textarea,button{font-family:inherit;font-size:inherit}
   </div>
   <div class="form-row">
     <div class="form-group">
-      <label>Lucro contábil efetivo mensal <span class="tooltip-icon" data-tip="Se tiver escrituração contábil completa, o lucro efetivo pode ampliar a distribuição isenta de IR">?</span></label>
+      <label>Lucro contábil efetivo mensal <span class="tooltip-icon" data-tip="Se a empresa possui escrituração contábil completa, o lucro contábil efetivo pode ser usado para distribuição de lucros isentos de IR, podendo ser MAIOR que a presunção legal (RIR/2018, Art. 145, §3º e ADN COSIT 04/96).">?</span></label>
       <input type="text" id="lucroEfetivo" class="money-input" placeholder="R$ 0,00">
     </div>
   </div>
@@ -677,11 +664,11 @@ input,select,textarea,button{font-family:inherit;font-size:inherit}
 </div>
 
 <!-- ═══════════════════════════ SCRIPTS ═══════════════════════════ -->
-<script src="../scripts/cnae-mapeamento.js"></script>
-<script src="../scripts/estados.js"></script>
-<script src="../scripts/municipios.js"></script>
-<script src="../scripts/simples_nacional.js"></script>
-<script src="../scripts/simples-estudos.js"></script>
+<script src="cnae-mapeamento.js"></script>
+<script src="estados.js"></script>
+<script src="municipios.js"></script>
+<script src="simples_nacional.js"></script>
+<script src="simples-estudos.js"></script>
 
 <script>
 // ═══════════════════════════════════════════════════════════════
@@ -692,7 +679,7 @@ input,select,textarea,button{font-family:inherit;font-size:inherit}
 
 // ─── State ───
 const S = {
-  step: 1, totalSteps: 6, premium: false,
+  step: 1, totalSteps: 6,
   formData: {}, resultados: null, socios: []
 };
 const LS_KEY = 'impost_estudo_form';
@@ -713,6 +700,38 @@ function parseBRL(str) {
 function fmtPct(v, dec) {
   if (v == null || isNaN(v)) return '0%';
   return (v * 100).toFixed(dec != null ? dec : 2).replace('.', ',') + '%';
+}
+
+// ═══ CONSTANTES DO MOTOR (alimentadas por simples_nacional.js) ═══
+const C = {
+  LIMITE_ME:          IMPOST.LIMITE_ME,
+  LIMITE_EPP:         IMPOST.LIMITE_EPP,
+  SUBLIMITE_ICMS_ISS: IMPOST.SUBLIMITE_ICMS_ISS,
+  FATOR_R_LIMIAR:     IMPOST.LIMITE_FATOR_R,
+  ISS_MIN:            IMPOST.ISS_MINIMO,
+  ISS_MAX:            IMPOST.ISS_MAXIMO,
+  RAT_PADRAO:         IMPOST.ALIQUOTA_RAT_PADRAO,
+  PRESUNCAO_SERVICOS: IMPOST.PRESUNCAO_LUCRO_SERVICOS,
+  PRESUNCAO_COMERCIO: IMPOST.PRESUNCAO_LUCRO_COMERCIO,
+  MESES:   ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'],
+  TRIBUTOS: ['IRPJ','CSLL','COFINS','PIS','CPP','ICMS','ISS'],
+  CORES_TRIBUTOS: ['#16a34a','#059669','#f59e0b','#f97316','#14b8a6','#6366f1','#8b5cf6']
+};
+
+// ═══ SCORE DINÂMICO (alimentado por SimplesEstudoCompleto.Score) ═══
+function getScoreFaixa(score) {
+  var SF = (typeof SimplesEstudoCompleto !== 'undefined' && SimplesEstudoCompleto.Score)
+    ? SimplesEstudoCompleto.Score.FAIXAS
+    : [
+      { min: 80, max: 100, nome: 'OTIMIZADO', cor: '#10B981' },
+      { min: 60, max: 79,  nome: 'BOM',       cor: '#3B82F6' },
+      { min: 40, max: 59,  nome: 'REGULAR',   cor: '#EAB308' },
+      { min: 0,  max: 39,  nome: 'CRÍTICO',   cor: '#DC2626' }
+    ];
+  for (var i = 0; i < SF.length; i++) {
+    if (score >= SF[i].min && score <= SF[i].max) return SF[i];
+  }
+  return SF[SF.length - 1];
 }
 
 // ─── Money mask ───
@@ -738,7 +757,9 @@ function cnpjMask(input) {
 }
 function validarCNPJ(cnpj) {
   const c = cnpj.replace(/\D/g, '');
-  if (c.length !== 14 || /^(\d)\1+$/.test(c)) return false;
+  if (c.length !== 14) return false;
+  // Allow CNPJs like 00.000.000/0001-91 — only reject if ALL 14 digits identical
+  if (/^(\d)\1{13}$/.test(c)) return false;
   let t = 0, p = [5,4,3,2,9,8,7,6,5,4,3,2];
   for (let i = 0; i < 12; i++) t += parseInt(c[i]) * p[i];
   let r = t % 11 < 2 ? 0 : 11 - (t % 11);
@@ -781,7 +802,7 @@ function updateProgress() {
 
 function nextStep() {
   if (!validateStep(S.step)) return;
-  if (S.step < S.totalSteps) { S.step++; updateProgress(); saveToLS(); window.scrollTo({top:0,behavior:'smooth'}); }
+  if (S.step < S.totalSteps) { S.step++; updateProgress(); if (S.step === 4) updateFatorRGauge(); saveToLS(); window.scrollTo({top:0,behavior:'smooth'}); }
 }
 function prevStep() {
   if (S.step > 1) { S.step--; updateProgress(); window.scrollTo({top:0,behavior:'smooth'}); }
@@ -967,11 +988,23 @@ initToggle('toggleMesAMes', 'mesAMesFields');
 initToggle('toggleProjecao', 'projecaoFields');
 initToggle('toggleMultiCNPJ', null);
 
+// ═══ Inicializações dinâmicas (via constantes do motor) ═══
+(function initDynamicFields() {
+  // Porte tooltip
+  var pt = $('porteTooltip');
+  if (pt) pt.setAttribute('data-tip', 'ME: até ' + fmtBRL(C.LIMITE_ME) + ' | EPP: até ' + fmtBRL(C.LIMITE_EPP) + ' (LC 123/2006, Art. 3º)');
+  // ISS min/max
+  var issInput = $('issAliquota');
+  if (issInput) { issInput.min = C.ISS_MIN * 100; issInput.max = C.ISS_MAX * 100; }
+  var issHint = $('issHint');
+  if (issHint) issHint.textContent = 'Mínimo ' + (C.ISS_MIN * 100) + '%, máximo ' + (C.ISS_MAX * 100) + '% (LC 116/2003)';
+})();
+
 // ═══════════════════════════════════════════
 // MONTHS GRID
 // ═══════════════════════════════════════════
 (function initMonths() {
-  const meses = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  const meses = C.MESES;
   const grid = $('monthsGrid');
   if (!grid) return;
   meses.forEach((m, i) => {
@@ -1000,12 +1033,11 @@ function updateRevenueSummary() {
     sum.style.display = 'block';
     $('rsValue').textContent = fmtBRL(anual);
     let badge = '';
-    if (anual <= 81000) badge = '<span class="rs-badge">MEI (até R$ 81k)</span>';
-    else if (anual <= 360000) badge = '<span class="rs-badge">ME — Microempresa</span>';
-    else if (anual <= 4800000) badge = '<span class="rs-badge">EPP — Empresa de Pequeno Porte</span>';
-    else badge = '<span class="rs-badge" style="background:rgba(220,38,38,.3)">⚠ EXCEDE LIMITE DO SIMPLES (R$ 4,8M)</span>';
-    if (anual > 3600000 && anual <= 4800000) {
-      badge += '<span class="rs-badge" style="background:rgba(217,119,6,.3)">Acima do sublimite ICMS/ISS (R$ 3,6M)</span>';
+    if (anual <= C.LIMITE_ME) badge = '<span class="rs-badge">ME — Microempresa</span>';
+    else if (anual <= C.LIMITE_EPP) badge = '<span class="rs-badge">EPP — Empresa de Pequeno Porte</span>';
+    else badge = '<span class="rs-badge" style="background:rgba(220,38,38,.3)">⚠ EXCEDE LIMITE DO SIMPLES (' + fmtBRL(C.LIMITE_EPP) + ')</span>';
+    if (anual > C.SUBLIMITE_ICMS_ISS && anual <= C.LIMITE_EPP) {
+      badge += '<span class="rs-badge" style="background:rgba(217,119,6,.3)">Acima do sublimite ICMS/ISS (' + fmtBRL(C.SUBLIMITE_ICMS_ISS) + ')</span>';
     }
     $('rsClassificacao').innerHTML = badge;
   } else {
@@ -1035,24 +1067,25 @@ function updateFatorRGauge() {
     $('gaugeValue').textContent = pct + '%';
     const circle = $('gaugeCircle');
     let bg, status, text;
-    if (fr >= 0.28) {
+    const frPct = (C.FATOR_R_LIMIAR * 100) + '%';
+    if (fr >= C.FATOR_R_LIMIAR) {
       bg = 'conic-gradient(var(--ok) ' + Math.min(fr * 100, 100) + '%, var(--brd) 0)';
       status = 'Anexo III (Fator R favorável)';
-      text = 'Folha ≥ 28% da receita. Sua empresa tributa pelo Anexo III, com alíquotas menores.';
-    } else if (fr >= 0.25) {
+      text = 'Folha ≥ ' + frPct + ' da receita. Sua empresa tributa pelo Anexo III, com alíquotas menores.';
+    } else if (fr >= C.FATOR_R_LIMIAR - 0.03) {
       bg = 'conic-gradient(var(--warn) ' + (fr * 100) + '%, var(--brd) 0)';
-      status = 'Zona de risco — próximo de 28%';
-      const falta = (receita * 0.28) - folha;
-      text = 'Faltam ' + fmtBRL(falta) + '/mês na folha para atingir 28% e migrar para o Anexo III.';
+      status = 'Zona de risco — próximo de ' + frPct;
+      const falta = (receita * C.FATOR_R_LIMIAR) - folha;
+      text = 'Faltam ' + fmtBRL(falta) + '/mês na folha para atingir ' + frPct + ' e migrar para o Anexo III.';
     } else {
       bg = 'conic-gradient(var(--danger) ' + (fr * 100) + '%, var(--brd) 0)';
       status = 'Anexo V (Fator R baixo)';
-      const falta = (receita * 0.28) - folha;
-      text = 'Você precisa de mais ' + fmtBRL(falta) + '/mês na folha para atingir 28%.';
+      const falta = (receita * C.FATOR_R_LIMIAR) - folha;
+      text = 'Você precisa de mais ' + fmtBRL(falta) + '/mês na folha para atingir ' + frPct + '.';
     }
     circle.style.background = bg;
     $('gaugeStatus').textContent = status;
-    $('gaugeStatus').style.color = fr >= 0.28 ? 'var(--ok)' : fr >= 0.25 ? 'var(--warn)' : 'var(--danger)';
+    $('gaugeStatus').style.color = fr >= C.FATOR_R_LIMIAR ? 'var(--ok)' : fr >= C.FATOR_R_LIMIAR - 0.03 ? 'var(--warn)' : 'var(--danger)';
     $('gaugeText').textContent = text;
   } else {
     gauge.style.display = 'none';
@@ -1098,10 +1131,10 @@ window.updateSociosValidation = function () {
   // Distribution preview
   const receita = parseBRL($('receitaMensal').value);
   if (receita > 0) {
-    const presuncao = 0.32;
+    const presuncao = C.PRESUNCAO_SERVICOS;
     const lucroMensal = receita * presuncao;
     $('distLucrosPreview').style.display = 'block';
-    $('distLucrosText').textContent = 'Lucro distribuível estimado (presunção ' + (presunção * 100) + '%): ' + fmtBRL(lucroMensal) + '/mes | ' + fmtBRL(lucroMensal * 12) + '/ano — isento de IR por sócio.';
+    $('distLucrosText').textContent = 'Lucro distribuível estimado (presunção ' + (presuncao * 100) + '%): ' + fmtBRL(lucroMensal) + '/mes | ' + fmtBRL(lucroMensal * 12) + '/ano — isento de IR por sócio.';
   }
 };
 
@@ -1260,7 +1293,7 @@ function collectFormData() {
     receitaExportacao: parseBRL($('receitaExportacao').value),
     receitaLocacaoBensMoveis: parseBRL($('receitaLocacao').value),
     issRetidoFonte: parseBRL($('issRetido').value),
-    aliquotaRAT: parseFloat($('rat').value) || 0.02,
+    aliquotaRAT: parseFloat($('rat').value) || C.RAT_PADRAO,
     issAliquota: parseFloat($('issAliquota').value) || 5,
     proLabore: proLabore,
     qtdFuncionarios: parseInt($('qtdFuncionarios').value) || 0,
@@ -1321,7 +1354,7 @@ async function gerarEstudo() {
         receitaBruta12Meses: params.receitaBrutaAnual
       });
     } catch (e) {
-      resultado.fatorR = { fatorR: params.folhaAnual / params.receitaBrutaAnual, acimaDoLimiar: (params.folhaAnual / params.receitaBrutaAnual) >= 0.28, anexoResultante: (params.folhaAnual / params.receitaBrutaAnual) >= 0.28 ? 'III' : 'V' };
+      resultado.fatorR = { fatorR: params.folhaAnual / params.receitaBrutaAnual, acimaDoLimiar: (params.folhaAnual / params.receitaBrutaAnual) >= C.FATOR_R_LIMIAR, anexoResultante: (params.folhaAnual / params.receitaBrutaAnual) >= C.FATOR_R_LIMIAR ? 'III' : 'V' };
     }
 
     // 3. Determinar anexo
@@ -1329,6 +1362,21 @@ async function gerarEstudo() {
       const anexoStr = IMPOST.obterAnexoEfetivoCNAE(params.cnae, null, resultado.fatorR.fatorR);
       resultado.anexo = typeof anexoStr === 'string' ? anexoStr : (anexoStr && anexoStr.anexo ? anexoStr.anexo : 'III');
     } catch (e) { resultado.anexo = resultado.fatorR.anexoResultante || 'III'; }
+
+    // Check VEDADO — abort DAS calculations
+    if (resultado.anexo === 'VEDADO' || (resultado.elegibilidade && resultado.elegibilidade.vedado)) {
+      resultado.vedado = true;
+      clearInterval(loadInterval);
+      $('loadingFill').style.width = '100%';
+      $('loadingPct').textContent = '100%';
+      $('loadingText').textContent = 'Atividade vedada ao Simples Nacional';
+      await new Promise(r => setTimeout(r, 400));
+      overlay.classList.remove('show');
+      S.resultados = resultado;
+      S.formData = params;
+      renderResults(params, resultado);
+      return;
+    }
 
     await new Promise(r => setTimeout(r, 300));
 
@@ -1402,7 +1450,7 @@ async function gerarEstudo() {
     // 10. SimplesEstudoCompleto integration
     try {
       if (typeof SimplesEstudoCompleto !== 'undefined') {
-        SimplesEstudoCompleto.Formulario.setDados({
+        SimplesEstudoCompleto.Formulario.carregarDados({
           nomeEmpresa: params.nomeEmpresa,
           cnpj: params.cnpj,
           cnae: params.cnae,
@@ -1423,23 +1471,43 @@ async function gerarEstudo() {
         resultado.calcTudo = SimplesEstudoCompleto.Calculadora.calcularTudo();
         resultado.diagnostico = SimplesEstudoCompleto.Diagnostico.executar(resultado.calcTudo);
         resultado.score = SimplesEstudoCompleto.Score.calcular(resultado.diagnostico, resultado.calcTudo);
-        resultado.dadosRelatorio = SimplesEstudoCompleto.Relatorio.consolidarDados();
+        try {
+          resultado.explicacoes = SimplesEstudoCompleto.Explicacoes.gerarExplicacaoCompleta(resultado.calcTudo);
+        } catch(ex) { resultado.explicacoes = null; }
+        try {
+          resultado.planoAcao = SimplesEstudoCompleto.PlanoAcao.gerar(resultado.diagnostico);
+        } catch(ex) { resultado.planoAcao = null; }
       }
     } catch (e) { console.warn('SimplesEstudoCompleto:', e); }
 
     // 11. Distribuicao de lucros
     try {
+      const dasAtualValor = resultado.dasAtual ? (resultado.dasAtual.dasAPagar || 0) : 0;
       resultado.distribuicao = IMPOST.calcularDistribuicaoLucros({
         receitaBrutaAnual: params.receitaBrutaAnual,
-        socios: params.socios.length > 0 ? params.socios : [{ nome: 'Socio 1', percentual: 100, proLabore: params.proLabore }],
+        dasAnual: dasAtualValor * 12,
+        socios: params.socios.length > 0
+          ? params.socios.map(function(s) {
+              return { nome: s.nome, percentual: s.percentual / 100, proLabore: s.proLabore };
+            })
+          : [{ nome: 'Socio 1', percentual: 1.0, proLabore: params.proLabore }],
         lucroContabilEfetivo: params.lucroContabilEfetivo
       });
     } catch (e) { resultado.distribuicao = null; }
 
-    // 12. Partilha tributos
+    // 12. Partilha tributos (5 positional args: dasValor, faixa, anexo, receitaBrutaMensal, aliquotaEfetiva)
     try {
-      resultado.partilha = IMPOST.calcularPartilhaTributos ?
-        IMPOST.calcularPartilhaTributos({ rbt12: params.receitaBrutaAnual, anexo: resultado.anexo }) : null;
+      if (IMPOST.calcularPartilhaTributos && resultado.anexo !== 'VEDADO') {
+        resultado.partilha = IMPOST.calcularPartilhaTributos(
+          resultado.dasAtual ? (resultado.dasAtual.dasAPagar || 0) : 0,
+          resultado.dasAtual ? (resultado.dasAtual.faixa || 1) : 1,
+          resultado.anexo,
+          params.receitaBrutaMensal,
+          resultado.dasAtual ? (resultado.dasAtual.aliquotaEfetiva || 0) : 0
+        );
+      } else {
+        resultado.partilha = null;
+      }
     } catch (e) { resultado.partilha = null; }
 
     // Calendar
@@ -1491,11 +1559,23 @@ function renderResults(params, R) {
   const fatorR = R.fatorR ? R.fatorR.fatorR : 0;
   const anexo = R.anexo || 'III';
   const score = R.score ? (R.score.total || R.score.pontuacaoTotal || 0) : 50;
-  const scoreFaixa = score >= 86 ? 'Excelente' : score >= 71 ? 'Bom' : score >= 51 ? 'Regular' : score >= 31 ? 'Atencao' : 'Critico';
-  const scoreColor = score >= 86 ? 'var(--ok)' : score >= 71 ? 'var(--pri)' : score >= 51 ? 'var(--accent)' : score >= 31 ? 'var(--warn)' : 'var(--danger)';
+  const _sf = getScoreFaixa(score);
+  const scoreFaixa = _sf.nome;
+  const scoreColor = _sf.cor;
 
-  // Best regime
   let html = '';
+
+  // ─── VEDADO ALERT ───
+  if (R.vedado || R.anexo === 'VEDADO') {
+    html += '<div class="vedado-alert"><h3>Atividade Vedada ao Simples Nacional</h3>';
+    html += '<p>O CNAE informado não permite a opção pelo Simples Nacional (LC 123/2006, Art. 17).</p>';
+    html += '<p style="margin-top:12px">Considere consultar um contador para analisar outros regimes tributários (Lucro Presumido ou Lucro Real).</p></div>';
+    html += '<div class="report-footer"><div class="footer-logo">IMPOST<span>.</span></div>';
+    html += '<div class="footer-disclaimer">Este relatório tem caráter informativo e educacional. Não substitui consultoria contábil ou jurídica profissional.</div></div>';
+    $('resultsContent').innerHTML = html;
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    return;
+  }
 
   // ─── HERO CARD ───
   html += '<div class="hero-card" data-section="hero">';
@@ -1515,7 +1595,7 @@ function renderResults(params, R) {
   const classificacao = R.elegibilidade ? (R.elegibilidade.classificacao || 'EPP') : 'EPP';
   html += '<div class="kpi-grid" data-section="kpis">';
   html += kpiCard('Carga Tributária Anual', fmtBRL(dasAtual * 12), fmtPct(dasAtual * 12 / params.receitaBrutaAnual) + ' da receita', 'blue');
-  html += kpiCard('Fator R', fmtPct(fatorR), fatorR >= 0.28 ? 'Anexo III ✅' : 'Anexo V ⚠️', fatorR >= 0.28 ? 'green' : 'red');
+  html += kpiCard('Fator R', fmtPct(fatorR), fatorR >= C.FATOR_R_LIMIAR ? 'Anexo III ✅' : 'Anexo V ⚠️', fatorR >= C.FATOR_R_LIMIAR ? 'green' : 'red');
   html += kpiCard('Economia Potencial', fmtBRL(economiaAnual), economiaMensal > 0 ? fmtBRL(economiaMensal) + '/mês' : 'DAS já otimizado', 'gold');
   html += kpiCard('Classificação', classificacao, 'Anexo ' + anexo + ' — Simples Nacional', 'green');
   html += '</div>';
@@ -1525,20 +1605,24 @@ function renderResults(params, R) {
   html += '<div class="score-wrap">';
   html += '<div class="score-circle" style="background:' + scoreColor + '"><span class="sc-val">' + Math.round(score) + '</span><span class="sc-faixa">' + scoreFaixa + '</span></div>';
   html += '<div class="score-bars">';
-  const cats = R.score && R.score.categorias ? R.score.categorias : [
-    { nome: 'Fator R', pontuacao: 15, maximo: 25 },
-    { nome: 'Segregacao', pontuacao: 12, maximo: 20 },
-    { nome: 'ISS', pontuacao: 10, maximo: 15 },
-    { nome: 'Pro-labore', pontuacao: 8, maximo: 15 },
-    { nome: 'Compliance', pontuacao: 10, maximo: 15 },
-    { nome: 'Obrigacoes', pontuacao: 7, maximo: 10 }
-  ];
-  (Array.isArray(cats) ? cats : Object.values(cats)).forEach(c => {
-    const pts = c.pontuacao || c.pontos || 0;
+  const catNames = { fatorR: 'Fator R', segregacao: 'Segregação', iss: 'ISS', proLabore: 'Pró-labore', semRiscos: 'Compliance', obrigacoes: 'Obrigações' };
+  const rawCats = R.score && R.score.categorias ? R.score.categorias : null;
+  const catsArr = rawCats
+    ? (Array.isArray(rawCats) ? rawCats : Object.entries(rawCats).map(function(e) { return { nome: catNames[e[0]] || e[0], pontos: e[1].pontos || 0, maximo: e[1].maximo || 25, motivo: e[1].motivo || '' }; }))
+    : (function() {
+      var P = (typeof SimplesEstudoCompleto !== 'undefined' && SimplesEstudoCompleto.Score)
+        ? SimplesEstudoCompleto.Score.PESOS
+        : { fatorR: 25, segregacao: 25, iss: 15, proLabore: 20, semRiscos: 15 };
+      return Object.entries(P).map(function(e) {
+        return { nome: catNames[e[0]] || e[0], pontos: Math.round(e[1] * 0.6), maximo: e[1] };
+      });
+    })();
+  catsArr.forEach(function(c) {
+    const pts = c.pontos || c.pontuacao || 0;
     const max = c.maximo || c.max || 25;
     const pct = max > 0 ? (pts / max) * 100 : 0;
     const col = pct >= 80 ? 'var(--ok)' : pct >= 50 ? 'var(--accent)' : 'var(--danger)';
-    html += '<div class="score-bar"><div class="sb-header"><span>' + (c.nome || c.categoria || '') + '</span><span style="font-family:var(--mono)">' + pts + '/' + max + '</span></div>';
+    html += '<div class="score-bar"><div class="sb-header"><span>' + (c.nome || '') + '</span><span style="font-family:var(--mono)">' + pts + '/' + max + '</span></div>';
     html += '<div class="sb-track"><div class="sb-fill" style="width:' + pct + '%;background:' + col + '"></div></div></div>';
   });
   html += '</div></div>';
@@ -1553,12 +1637,8 @@ function renderResults(params, R) {
   if (allOps.length === 0) {
     html += '<div class="info-card success"><div class="ic-title">Parabens!</div><div class="ic-text">Nenhuma oportunidade de otimização identificada. Seu DAS já está otimizado.</div></div>';
   }
-  allOps.forEach((op, i) => {
-    const locked = !S.premium && i >= 2 && op.nivel === 'premium';
-    html += '<div class="opp-card' + (locked ? ' premium-locked' : '') + '" onclick="this.classList.toggle(\'open\')">';
-    if (locked) {
-      html += '<div class="premium-blur">';
-    }
+  allOps.forEach(function(op) {
+    html += '<div class="opp-card" onclick="this.classList.toggle(\'open\')">';
     html += '<div class="opp-header">';
     html += '<span class="opp-icon">' + (op.impacto === 'critico' || op.impacto === 'alto' ? '&#9888;' : op.impacto === 'medio' ? '&#128161;' : '&#10003;') + '</span>';
     html += '<span class="opp-title">' + esc(op.titulo || op.oportunidade || '') + '</span>';
@@ -1569,11 +1649,7 @@ function renderResults(params, R) {
     html += '<div class="opp-body"><p>' + esc(op.descricao || op.detalhes || '') + '</p>';
     if (op.acao) html += '<p style="margin-top:8px;font-weight:600;color:var(--pri)">Acao: ' + esc(typeof op.acao === 'string' ? op.acao : '') + '</p>';
     if (op.baseLegal) html += '<p style="margin-top:4px;font-size:11px;color:var(--txt3);font-style:italic">Base legal: ' + esc(op.baseLegal) + '</p>';
-    html += '</div>';
-    if (locked) {
-      html += '</div><div class="premium-overlay"><div class="premium-cta-card"><h4>Conteúdo Premium</h4><p>Desbloqueie esta estratégia de economia.</p><button class="btn btn-sm">Assinar IMPOST.</button></div></div>';
-    }
-    html += '</div>';
+    html += '</div></div>';
   });
   html += '</div></div></div>';
 
@@ -1591,8 +1667,9 @@ function renderResults(params, R) {
     html += '<div class="ic-text">Percentual de presuncao: ' + ((dist.percentualPresuncao || 0.32) * 100).toFixed(0) + '% | Lucro distribuivel anual: ' + fmtBRL(dist.lucroDistribuivel || 0) + '</div></div>';
     if (dist.porSocio && dist.porSocio.length > 0) {
       html += '<table class="comp-table" style="margin-top:12px"><thead><tr><th>Socio</th><th>Participacao</th><th class="val">Valor Isento/Ano</th></tr></thead><tbody>';
-      dist.porSocio.forEach(s => {
-        html += '<tr><td>' + esc(s.nome || 'Socio') + '</td><td>' + (s.percentual || s.participacao || 0) + '%</td><td class="val">' + fmtBRL(s.valorIsento || s.valor || 0) + '</td></tr>';
+      dist.porSocio.forEach(function(s) {
+        var pctDisplay = s.percentualFormatado || ((s.percentual || s.participacao || 0) <= 1 ? ((s.percentual || 0) * 100).toFixed(0) + '%' : (s.percentual || 0) + '%');
+        html += '<tr><td>' + esc(s.nome || 'Socio') + '</td><td>' + pctDisplay + '</td><td class="val">' + fmtBRL(s.valorIsento || s.valor || 0) + '</td></tr>';
       });
       html += '</tbody></table>';
     }
@@ -1613,7 +1690,8 @@ function renderResults(params, R) {
   // ─── PLANO DE ACAO ───
   html += '<div class="section-card" data-section="plano"><div class="sc-header"><span class="sc-num">06</span><span class="sc-title">Plano de Ação Priorizado</span></div><div class="sc-body">';
   html += '<div class="timeline" id="timelinePlano">';
-  const acoes = (R.diagnostico && R.diagnostico.oportunidades) ? R.diagnostico.oportunidades.slice(0, 6) : allOps.slice(0, 6);
+  var planoAcoes = (R.planoAcao && R.planoAcao.acoes) ? R.planoAcao.acoes : null;
+  const acoes = planoAcoes ? planoAcoes.slice(0, 6) : (R.diagnostico && R.diagnostico.oportunidades) ? R.diagnostico.oportunidades.slice(0, 6) : allOps.slice(0, 6);
   if (acoes.length === 0) html += '<p style="color:var(--txt2)">Nenhuma ação necessária.</p>';
   acoes.forEach(a => {
     html += '<div class="timeline-item"><div class="tl-title">' + esc(a.titulo || a.oportunidade || '') + '</div>';
@@ -1631,31 +1709,77 @@ function renderResults(params, R) {
   cal.forEach(item => {
     const d = item.data ? new Date(item.data + 'T12:00:00') : null;
     const day = d ? d.getDate() : '--';
-    const monthNames = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
-    const month = d ? monthNames[d.getMonth()] : 'Mensal';
+    const month = d ? C.MESES[d.getMonth()] : 'Mensal';
     html += '<div class="cal-item"><div class="cal-date"><div class="cd-day">' + day + '</div><div class="cd-month">' + month + '</div></div>';
     html += '<div><div class="cal-desc">' + esc(item.evento || '') + '</div><div class="cal-legal">' + esc(item.baseLegal || '') + '</div></div></div>';
   });
   html += '</div></div></div>';
 
-  // ─── CTA PREMIUM ───
-  html += '<div class="cta-premium" data-section="cta">';
-  html += '<h3>Desbloqueie o poder completo do IMPOST.</h3>';
-  html += '<div class="cta-sub">Sua empresa pode estar pagando ' + fmtBRL(economiaAnual) + ' a mais por ano.</div>';
-  html += '<div class="plans-grid">';
-  html += planCard('Basico', '29,90', 'R$', '/mes', '1 empresa, relatório mensal', false);
-  html += planCard('Profissional', '69,90', 'R$', '/mes', '5 empresas, relatórios ilimitados, exportação', true);
-  html += planCard('Escritorio', '149,90', 'R$', '/mes', 'Ilimitado, white-label, API', false);
-  html += '</div>';
-  html += '<p style="font-size:13px;opacity:.8">Cancele quando quiser. Sem fidelidade. Teste grátis por 7 dias.</p>';
-  html += '</div>';
+  // ─── EXPLICACOES LEGAIS ───
+  html += '<div class="section-card" data-section="explicacoes"><div class="sc-header"><span class="sc-num">08</span><span class="sc-title">Explicações Legais</span></div><div class="sc-body">';
+  var explicacoes = R.explicacoes || null;
+  if (!explicacoes) {
+    try {
+      if (typeof SimplesEstudoCompleto !== 'undefined' && SimplesEstudoCompleto.Explicacoes) {
+        explicacoes = SimplesEstudoCompleto.Explicacoes.gerarExplicacaoCompleta(R.calcTudo || R);
+      }
+    } catch (e) { explicacoes = null; }
+  }
+  if (explicacoes && typeof explicacoes === 'object') {
+    var expKeys = { anexo: 'Enquadramento no Anexo', fatorR: 'Fator R', economia: 'Economia Tributária', iss: 'ISS no Simples', cpp: 'CPP — Contribuição Patronal Previdenciária', vedacoes: 'Vedações ao Simples', distribuicaoLucros: 'Distribuição de Lucros' };
+    Object.entries(explicacoes).forEach(function(entry) {
+      var k = entry[0], v = entry[1];
+      if (!v || (Array.isArray(v) && v.length === 0)) return;
+      var titulo = expKeys[k] || k;
+      var texto;
+      if (typeof v === 'string') { texto = v; }
+      else if (Array.isArray(v)) { texto = v.join('\n'); }
+      else { texto = v.texto || v.explicacao || JSON.stringify(v); }
+      var legal = (typeof v === 'object' && !Array.isArray(v)) ? (v.baseLegal || '') : '';
+      html += '<div class="explicacao-item"><div class="exp-title">' + esc(titulo) + '</div>';
+      html += '<div class="exp-text" style="white-space:pre-line">' + esc(texto) + '</div>';
+      if (legal) html += '<div class="exp-legal">' + esc(legal) + '</div>';
+      html += '</div>';
+    });
+  } else {
+    html += '<div class="explicacao-item"><div class="exp-title">Simples Nacional</div>';
+    html += '<div class="exp-text">O Simples Nacional é um regime tributário diferenciado, simplificado e favorecido, previsto na LC 123/2006. Reúne até 8 tributos (IRPJ, CSLL, PIS, COFINS, CPP, ICMS, ISS, IPI) em uma única guia mensal — o DAS.</div>';
+    html += '<div class="exp-legal">LC 123/2006, Art. 12 a 41 | Resolução CGSN 140/2018</div></div>';
+    html += '<div class="explicacao-item"><div class="exp-title">Fator R</div>';
+    html += '<div class="exp-text">O Fator R (folha de pagamento / receita bruta dos últimos 12 meses) determina se atividades sujeitas ao Fator R tributam pelo Anexo III (≥ ' + (C.FATOR_R_LIMIAR*100) + '%) ou Anexo V (< ' + (C.FATOR_R_LIMIAR*100) + '%). Aumentar a folha pode reduzir significativamente o DAS.</div>';
+    html += '<div class="exp-legal">LC 123/2006, Art. 18, §5º-J e §24 | LC 155/2016</div></div>';
+    html += '<div class="explicacao-item"><div class="exp-title">Distribuição de Lucros</div>';
+    html += '<div class="exp-text">Lucros distribuídos ao sócio são isentos de IR até o limite da presunção legal (' + (C.PRESUNCAO_SERVICOS*100) + '% para serviços, ' + (C.PRESUNCAO_COMERCIO*100) + '% para comércio). Se a empresa tiver escrituração contábil completa, o lucro efetivo pode ser distribuído isento mesmo acima da presunção.</div>';
+    html += '<div class="exp-legal">RIR/2018, Art. 145 | ADN COSIT 04/96</div></div>';
+  }
+  html += '</div></div>';
+
+  // ─── RISCOS FISCAIS ───
+  html += '<div class="section-card" data-section="riscos"><div class="sc-header"><span class="sc-num">09</span><span class="sc-title">Riscos Fiscais</span></div><div class="sc-body">';
+  var riscos = (typeof IMPOST !== 'undefined' && IMPOST.RISCOS_FISCAIS) ? IMPOST.RISCOS_FISCAIS : [];
+  if (riscos.length === 0 && R.relatorio && R.relatorio.riscos) riscos = R.relatorio.riscos;
+  if (riscos.length > 0) {
+    riscos.forEach(function(risco) {
+      var sev = (risco.severidade || risco.nivel || 'medio').toLowerCase();
+      html += '<div class="risk-card ' + sev + '">';
+      html += '<div class="risk-title">' + esc(risco.titulo || risco.nome || '') + '</div>';
+      html += '<div class="risk-text">' + esc(risco.descricao || '') + '</div>';
+      if (risco.baseLegal) html += '<div style="font-size:11px;color:var(--txt3);margin-top:4px;font-style:italic">' + esc(risco.baseLegal) + '</div>';
+      html += '</div>';
+    });
+  } else {
+    html += '<div class="info-card success"><div class="ic-title">Nenhum risco fiscal critico identificado</div><div class="ic-text">Mantenha as obrigações acessórias em dia para evitar exclusão do Simples Nacional.</div></div>';
+  }
+  html += '</div></div>';
 
   // ─── FOOTER ───
   html += '<div class="report-footer">';
   html += '<div class="footer-logo">IMPOST<span>.</span></div>';
-  html += '<div class="footer-slogan">Porque pagar imposto certo e direito. Pagar menos, legalmente, e inteligencia.</div>';
+  var _slogan = (typeof SimplesEstudoCompleto !== 'undefined' && SimplesEstudoCompleto.PRODUTO) ? SimplesEstudoCompleto.PRODUTO.slogan : 'Pagar menos imposto, legalmente, é inteligência.';
+  html += '<div class="footer-slogan">' + esc(_slogan) + '</div>';
   html += '<div class="footer-disclaimer">Este relatório tem caráter informativo e educacional. Não substitui consultoria contábil ou jurídica profissional. Os cálculos são baseados na legislação vigente (LC 123/2006, Resolucao CGSN 140/2018, LC 214/2025, Lei 15.270/2025) e podem variar conforme interpretações específicas. Consulte seu contador antes de tomar decisões fiscais.</div>';
-  html += '<div class="footer-meta"><span>Gerado por IMPOST. v4.1 em ' + new Date().toLocaleString('pt-BR') + '</span><span>Base legal: LC 123/2006 | Resolucao CGSN 140/2018</span></div>';
+  var _ver = (typeof SimplesEstudoCompleto !== 'undefined' && SimplesEstudoCompleto.PRODUTO) ? SimplesEstudoCompleto.PRODUTO.versao : '5.1.0';
+  html += '<div class="footer-meta"><span>Gerado por IMPOST. v' + _ver + ' em ' + new Date().toLocaleString('pt-BR') + '</span><span>Base legal: LC 123/2006 | Resolucao CGSN 140/2018</span></div>';
   html += '</div>';
 
   $('resultsContent').innerHTML = html;
@@ -1677,13 +1801,9 @@ function fmtCNPJ(c) {
 function kpiCard(label, value, sub, color) {
   return '<div class="kpi-card ' + color + '"><div class="kpi-label">' + label + '</div><div class="kpi-value">' + value + '</div><div class="kpi-sub">' + sub + '</div></div>';
 }
-function planCard(name, price, currency, period, desc, popular) {
-  return '<div class="plan-card' + (popular ? ' popular' : '') + '">' +
-    (popular ? '<div class="plan-badge">Mais popular</div>' : '') +
-    '<div class="plan-name">' + name + '</div>' +
-    '<div class="plan-price">' + currency + ' ' + price + '<small>' + period + '</small></div>' +
-    '<div class="plan-desc">' + desc + '</div>' +
-    '<button class="btn btn-sm">Começar teste grátis</button></div>';
+function moedaOuNA(v) {
+  if (v == null || isNaN(v)) return 'N/A';
+  return fmtBRL(v);
 }
 
 // ─── Partilha Chart ───
@@ -1698,16 +1818,17 @@ function initPartilhaChart(R) {
   } else if (R.relatorio && R.relatorio.resumo) {
     // fallback
   }
-  const tributos = ['IRPJ','CSLL','COFINS','PIS','CPP','ICMS','ISS'];
-  const colors = ['#16a34a','#059669','#f59e0b','#f97316','#14b8a6','#6366f1','#8b5cf6'];
-  const values = tributos.map(t => {
+  const tributos = C.TRIBUTOS;
+  const colors = C.CORES_TRIBUTOS;
+  const values = tributos.map(function(t) {
     const k = t.toLowerCase();
     let v = partData[k] || partData[t] || 0;
-    if (typeof v === 'object' && v.valor != null) v = v.valor;
+    // calcularPartilhaTributos returns {tributo: {percentual, valor}} objects
     if (typeof v === 'object' && v.percentual != null) v = v.percentual;
+    else if (typeof v === 'object' && v.valor != null) v = v.valor;
     return typeof v === 'number' ? v : 0;
   });
-  const hasData = values.some(v => v > 0);
+  const hasData = values.some(function(v) { return v > 0; });
   if (!hasData) {
     canvas.parentElement.innerHTML = '<p style="text-align:center;color:var(--txt2);padding:20px">Dados de partilha não disponíveis.</p>';
     return;
@@ -1722,7 +1843,7 @@ function initPartilhaChart(R) {
       responsive: true,
       plugins: {
         legend: { position: 'right', labels: { boxWidth: 14, padding: 12, font: { family: 'Inter', size: 13 } } },
-        tooltip: { callbacks: { label: ctx => ctx.label + ': ' + (ctx.parsed * 100).toFixed(2) + '%' } }
+        tooltip: { callbacks: { label: function(ctx) { return ctx.label + ': ' + (ctx.parsed * 100).toFixed(2) + '%'; } } }
       }
     }
   });
@@ -1741,7 +1862,7 @@ function initSimulator(params, R) {
     document.getElementById('simFolhaVal').textContent = fmtBRL(novaFolha);
 
     const novoFR = novaReceita > 0 ? novaFolha / novaReceita : 0;
-    const novoAnexo = novoFR >= 0.28 ? 'III' : 'V';
+    const novoAnexo = novoFR >= C.FATOR_R_LIMIAR ? 'III' : 'V';
     let novoDAS = 0;
     try {
       const r = IMPOST.calcularDASMensal({
