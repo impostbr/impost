@@ -5802,9 +5802,9 @@
     var baseCreditos = _calcBaseCreditos();
     var debitos = _r(tributavel * 0.0925);
     var creditos = _r(baseCreditos * 0.0925);
-    // CORREÇÃO FALHA #7: Descontar retenções de PIS/COFINS (consistente com cálculo principal)
-    var retencoesPisCofins = _n(d.pisRetido) + _n(d.cofinsRetido);
-    return _r(Math.max(debitos - creditos - retencoesPisCofins, 0));
+    // CORREÇÃO ERRO 3: NÃO descontar retenções para manter consistência com Painel Resumo (bruto)
+    // As retenções são compensações de fluxo de caixa, não reduzem o tributo devido
+    return _r(Math.max(debitos - creditos, 0));
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -5887,17 +5887,27 @@
       });
     }
 
-    // ═══ FIX BUG #3: Usar valores anuais exatos nos totais em vez da soma de parcelas arredondadas ═══
+    // ═══ FIX ERRO 2: Totais anuais LÍQUIDOS (consistentes com as linhas mensais) ═══
+    var totalIRPJLiq = _r(irpjAnual - (_r(totalIRRFAnual) || 0));
+    var totalCSLLLiq = _r(csllAnual - (_r(totalCSLLRetAnual) || 0));
+    var totalPISLiq = _r((pisAnual || 0) - (_r(_n(d.pisRetido)) || 0));
+    var totalCOFINSLiq = _r((cofinsAnual || 0) - (_r(_n(d.cofinsRetido)) || 0));
+
     return {
       meses: meses,
       totalAnual: _r(totalFluxo),
       apuracao: apuracao,
       mediaMensal: _r(totalFluxo / 12),
-      // Totais anuais exatos (para evitar diferença de centavos ao somar meses arredondados)
-      irpjAnualExato: _r(irpjAnual),
-      csllAnualExato: _r(csllAnual),
-      pisAnualExato: _r(pisAnual),
-      cofinsAnualExato: _r(cofinsAnual)
+      // CORRIGIDO: Totais anuais LÍQUIDOS (consistentes com as linhas mensais)
+      irpjAnualExato: _r(Math.max(totalIRPJLiq, 0)),
+      csllAnualExato: _r(Math.max(totalCSLLLiq, 0)),
+      pisAnualExato: _r(Math.max(totalPISLiq, 0)),
+      cofinsAnualExato: _r(Math.max(totalCOFINSLiq, 0)),
+      // Manter brutos para referência (se necessário em outros locais)
+      irpjAnualBruto: _r(irpjAnual),
+      csllAnualBruto: _r(csllAnual),
+      pisAnualBruto: _r(pisAnual || 0),
+      cofinsAnualBruto: _r(cofinsAnual || 0)
     };
   }
 
@@ -6334,10 +6344,14 @@
       // CORREÇÃO BUG 4: Exibir base pós-compensação para CSLL
       var baseCSLLDisplay = (r.csll.baseCalculo !== undefined) ? r.csll.baseCalculo : r.baseCSLLFinal;
       s4 += _linha('Base de cálculo CSLL', baseCSLLDisplay, '', '');
+      // CORREÇÃO ERRO 1: Só exibir compensação se o motor CSLL a aplicou internamente
+      // (ou seja, se r.csll.compensacao > 0, significando que a dedução NÃO veio pré-aplicada)
       if (r.csll.compensacao > 0) {
         s4 += _linha('(-) Compensação Base Negativa (30%)', r.csll.compensacao, 'Art. 580-586', 'res-sub res-economia');
       } else if (r.compensacao && r.compensacao.resumo && r.compensacao.resumo.compensacaoEfetiva && r.compensacao.resumo.compensacaoEfetiva.baseNegativaCSLL > 0) {
-        s4 += _linha('(-) Compensação Base Negativa (30%)', r.compensacao.resumo.compensacaoEfetiva.baseNegativaCSLL, 'Art. 580-586', 'res-sub res-economia');
+        // Exibir como NOTA informativa (não como dedução) — a base acima JÁ inclui essa compensação
+        var _compBNInfo = r.compensacao.resumo.compensacaoEfetiva.baseNegativaCSLL;
+        s4 += '<tr class="res-sub" style="color:#888;font-style:italic;"><td>ℹ️ Compensação Base Negativa já incluída na base acima</td><td class="res-valor" style="color:#888;">' + _m(_compBNInfo) + '</td></tr>';
       }
       // CORREÇÃO BUG 5: Usar _linhaPerc em vez de _linha para alíquota (evita prefixo "R$" em valor percentual)
       s4 += _linhaPerc('Alíquota CSLL', aliqCSLL * 100, '');
@@ -6686,6 +6700,7 @@
         s9 += '<tr class="' + cls + '"><td><strong>' + c.nome + '</strong></td><td>' + _pp(c.margem) + '</td><td>' + _m(c.lucro) + '</td><td>' + _m(c.irpjCSLL) + '</td><td>' + _m(c.pisCofins) + '</td><td>' + _m(c.iss) + '</td><td><strong>' + _m(c.cargaTotal) + '</strong></td><td>' + _pp(c.aliquotaEfetiva) + '</td></tr>';
       });
       s9 += '</tbody></table>';
+      s9 += '<p class="res-nota" style="font-size:0.85em;color:#666;margin-top:6px;">* Carga tributária calculada com base nos tributos devidos (brutos), antes de retenções na fonte. Consistente com o Painel Resumo.</p>';
       s9 += '<div class="res-chart-container"><canvas id="chartCenarios" width="600" height="300"></canvas></div>';
     } else {
       s9 += '<p class="res-info-msg">Cenários de sensibilidade não foram habilitados. Ative na Etapa 6 para visualizar.</p>';
