@@ -3624,6 +3624,26 @@
       } catch (e) { console.warn('[IMPOST] Erro em IRPJ com JCP:', e.message); irpjComJCP = irpjResult; }
       if (!irpjComJCP) irpjComJCP = irpjResult;
 
+      // ═══ CORREÇÃO BUG JCP-TRIMESTRAL: Aplicar mesma lógica do Bug 1 ao irpjComJCP ═══
+      // O motor (LR.calcular.irpj) com apuracao "TRIMESTRAL" usa limite de R$ 60.000 por trimestre.
+      // Mas _lucroRealComJCP é o valor ANUAL completo → adicional calculado errado.
+      // Solução: rodar _simularTrimestral com o lucroAjustado já descontado do JCP,
+      // igual ao que foi feito para o irpjResult principal nas linhas 3221-3227.
+      if (d.apuracaoLR === "trimestral" && irpjComJCP !== irpjResult) {
+        var simTrimestralComJCP = _simularTrimestral(
+          d,
+          _lucroAjustadoComJCP_IRPJ,  // lucroAjustado já com JCP deduzido (calculado na linha ~3603)
+          prejuizoFiscal,              // saldo original — _simularTrimestral reaplica a trava de 30%
+          baseNegCSLL,
+          vedaCompensacao,
+          ehFinanceira
+        );
+        irpjComJCP.irpjAdicional = simTrimestralComJCP.totalIRPJAdicional;
+        irpjComJCP.irpjNormal    = simTrimestralComJCP.totalIRPJNormal;
+        irpjComJCP.irpjDevido    = _r(irpjComJCP.irpjNormal + irpjComJCP.irpjAdicional);
+      }
+      // ═══ FIM DA CORREÇÃO BUG JCP-TRIMESTRAL ═══
+
       // ═══ FIX: Aplicar SUDAM/subcapitalização no irpjComJCP (consistência com irpjResult) ═══
       if (irpjComJCP !== irpjResult) {
         var _irpjComJCPAntesReducao = irpjComJCP.irpjDevido || 0;
