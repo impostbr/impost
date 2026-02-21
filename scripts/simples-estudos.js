@@ -1229,8 +1229,9 @@
                 d.receitaBrutaMensal = d.receitaBrutaAnual / 12;
             }
 
-            // Folha anual
-            d.folhaAnual = d.folhaMensal * 12;
+            // Folha anual — LC 123/2006, Art. 18, §5º-M: pró-labore integra a "folha de salários"
+            // para fins de Fator R
+            d.folhaAnual = (d.folhaMensal + (d.proLabore || 0)) * 12;
 
             // Fator R
             let fatorR = null;
@@ -1239,9 +1240,9 @@
             let zonaDeRisco = false;
             let anexoResultante = null;
 
-            // Calcular Fator R se tiver receita e folha
+            // Calcular Fator R se tiver receita e folha (folha inclui pró-labore conforme LC 123/2006)
             const rbt12 = d.receitaBrutaAnual || 0;
-            const folha12 = d.folhaAnual || 0;
+            const folha12 = d.folhaAnual || 0; // já inclui pró-labore
 
             if (rbt12 > 0 && folha12 >= 0) {
                 fatorR = folha12 / rbt12;
@@ -1421,9 +1422,9 @@
                 });
             }
 
-            // Fator R na zona de risco (25%-31%)
-            if (d.folhaMensal > 0 && rbt > 0) {
-                const fr = (d.folhaMensal * 12) / rbt;
+            // Fator R na zona de risco (25%-31%) — inclui pró-labore conforme LC 123/2006, Art. 18, §5º-M
+            if ((d.folhaMensal > 0 || d.proLabore > 0) && rbt > 0) {
+                const fr = ((d.folhaMensal + (d.proLabore || 0)) * 12) / rbt;
                 if (fr >= 0.25 && fr < 0.31) {
                     alertas.push({
                         campo: 'folhaMensal',
@@ -1804,7 +1805,8 @@
             };
 
             // ── Fator R ──
-            const folha12 = d.folhaAnual || (d.folhaMensal * 12);
+            // LC 123/2006, Art. 18, §5º-M: "folha de salários" inclui pró-labore dos sócios
+            const folha12 = d.folhaAnual || ((d.folhaMensal + (d.proLabore || 0)) * 12);
             const fatorRRaw = _chamarIMPOST('calcularFatorR', {
                 folhaSalarios12Meses: folha12,
                 receitaBruta12Meses: rbt12
@@ -2204,7 +2206,7 @@
         function calcularFatorR() {
             var d = Formulario.getDados();
             var rbt12 = d.receitaBrutaAnual || (d.receitaBrutaMensal * 12);
-            var folha12 = d.folhaAnual || (d.folhaMensal * 12);
+            var folha12 = d.folhaAnual || ((d.folhaMensal + (d.proLabore || 0)) * 12); // LC 123/2006, Art. 18, §5º-M
 
             if (rbt12 <= 0) {
                 return {
@@ -2270,7 +2272,7 @@
             }
 
             // Determinar anexo (com fallback via IMPOST.determinarAnexo)
-            var folha12 = d.folhaAnual || (d.folhaMensal * 12);
+            var folha12 = d.folhaAnual || ((d.folhaMensal + (d.proLabore || 0)) * 12); // LC 123/2006, Art. 18, §5º-M
             var derivados = Formulario.getEstado().calculosDerivados;
             var anexoFinal = derivados.anexo ? derivados.anexo.anexo : null;
             if (!anexoFinal || anexoFinal === 'VEDADO') {
@@ -2562,7 +2564,7 @@
 
             // Calcular EXATAMENTE quanto de pró-labore adicional é necessário para FR = 28%
             var rbt12 = d.receitaBrutaAnual || (d.receitaBrutaMensal * 12);
-            var folha12Atual = d.folhaAnual || (d.folhaMensal * 12);
+            var folha12Atual = d.folhaAnual || ((d.folhaMensal + (d.proLabore || 0)) * 12); // LC 123/2006, Art. 18, §5º-M
             var folha12Necessaria = rbt12 * 0.28;
             var aumentoAnual = Math.max(0, folha12Necessaria - folha12Atual);
             var aumentoMensal = aumentoAnual / 12;
@@ -3532,7 +3534,7 @@
             var oportunidades = diag.oportunidades || [];
             var alertas = diag.alertas || [];
             var rbt12 = d.receitaBrutaAnual || (d.receitaBrutaMensal * 12);
-            var folha12 = d.folhaAnual || (d.folhaMensal * 12);
+            var folha12 = d.folhaAnual || ((d.folhaMensal + (d.proLabore || 0)) * 12); // LC 123/2006, Art. 18, §5º-M
 
             // ══════════════════════════════════════════
             // FATOR R (0-25 pontos)
@@ -3760,7 +3762,7 @@
         function _calcularBase() {
             var d = Formulario.getDados();
             var rbt12 = d.receitaBrutaAnual || (d.receitaBrutaMensal * 12);
-            var folha12 = d.folhaAnual || (d.folhaMensal * 12);
+            var folha12 = d.folhaAnual || ((d.folhaMensal + (d.proLabore || 0)) * 12); // LC 123/2006, Art. 18, §5º-M
             var fatorR = rbt12 > 0 ? folha12 / rbt12 : 0;
 
             var detAnexo = _chamarIMPOST('determinarAnexo', { cnae: d.cnae, fatorR: fatorR });
@@ -3915,7 +3917,7 @@
             }
 
             var novaRBT12 = novaReceita * 12;
-            var folha12 = d.folhaAnual || (d.folhaMensal * 12);
+            var folha12 = d.folhaAnual || ((d.folhaMensal + (d.proLabore || 0)) * 12); // LC 123/2006, Art. 18, §5º-M
             var novoFatorR = novaRBT12 > 0 ? folha12 / novaRBT12 : 0;
 
             var detAnexo = _chamarIMPOST('determinarAnexo', { cnae: d.cnae, fatorR: novoFatorR });
@@ -4238,7 +4240,7 @@
             if (!regrasCnae || !regrasCnae.fatorR) return null;
 
             var rbt12 = d.receitaBrutaAnual || (d.receitaBrutaMensal * 12);
-            var folha12Atual = d.folhaAnual || (d.folhaMensal * 12);
+            var folha12Atual = d.folhaAnual || ((d.folhaMensal + (d.proLabore || 0)) * 12); // LC 123/2006, Art. 18, §5º-M
             var folha12Necessaria = rbt12 * 0.28;
             var aumentoAnual = Math.max(0, folha12Necessaria - folha12Atual);
             var aumentoMensal = aumentoAnual / 12;
@@ -5665,7 +5667,8 @@
         function _calcularAntes(empresa) {
             var e = empresa || Formulario.getDados();
             var rbt12 = e.receitaBrutaAnual || (e.receitaBrutaMensal * 12);
-            var folha12 = e.folhaAnual || (e.folhaMensal * 12);
+            // LC 123/2006, Art. 18, §5º-M: pró-labore integra a folha para fins de Fator R
+            var folha12 = e.folhaAnual || ((e.folhaMensal + (e.proLabore || 0)) * 12);
             var fatorR = rbt12 > 0 ? folha12 / rbt12 : 0;
             var anexo = _detAnexo(e.cnae, fatorR);
             if (anexo === 'VEDADO') anexo = 'III';
@@ -5698,8 +5701,8 @@
         function _simAumentarProLabore(parametro, empresa) {
             var antes = _calcularAntes(empresa);
             var novoProLabore = parametro;
-            var delta = novoProLabore - antes.proLabore;
-            var novaFolha = Math.max(0, antes.folhaMensal + delta);
+            // Fator R correto: folha CLT + novo pró-labore (LC 123/2006, Art. 18, §5º-M)
+            var novaFolha = antes.folhaMensal + novoProLabore; // total mensal (CLT + pró-labore)
             var novaFolha12 = novaFolha * 12;
             var novoFatorR = antes.receitaAnual > 0 ? novaFolha12 / antes.receitaAnual : 0;
             var novoAnexo = _detAnexo(antes.cnae, novoFatorR);
@@ -5832,7 +5835,8 @@
             var antes = _calcularAntes(empresa);
             var novaReceitaMensal = parametro;
             var novaRBT12 = novaReceitaMensal * 12;
-            var novoFatorR = novaRBT12 > 0 ? (antes.folhaMensal * 12) / novaRBT12 : 0;
+            // LC 123/2006, Art. 18, §5º-M: folha para Fator R inclui pró-labore
+            var novoFatorR = novaRBT12 > 0 ? ((antes.folhaMensal + (antes.proLabore || 0)) * 12) / novaRBT12 : 0;
             var novoAnexo = _detAnexo(antes.cnae, novoFatorR);
             if (novoAnexo === 'VEDADO') novoAnexo = antes.anexo;
             var novoDAS = _calcDAS(novaReceitaMensal, novaRBT12, novoAnexo, antes.folhaMensal);
@@ -5941,8 +5945,9 @@
             var receitaMercInterna = antes.receitaMensal - recExportacao;
             var rbt12SemExp = receitaMercInterna * 12;
             // Fator R recalculado com base na receita total (exportação conta na base de cálculo)
+            // LC 123/2006, Art. 18, §5º-M: folha para Fator R inclui pró-labore
             var rbt12Total = antes.receitaAnual;
-            var fatorR = rbt12Total > 0 ? (antes.folhaMensal * 12) / rbt12Total : 0;
+            var fatorR = rbt12Total > 0 ? ((antes.folhaMensal + (antes.proLabore || 0)) * 12) / rbt12Total : 0;
             var anexo = _detAnexo(antes.cnae, fatorR);
             if (anexo === 'VEDADO') anexo = antes.anexo;
 
@@ -6070,7 +6075,9 @@
             var rbt12 = params.receitaBrutaAnual;
             var recMensal = params.receitaBrutaMensal;
             var folhaMensal = params.folhaMensal || 0;
-            var fatorR = rbt12 > 0 ? (folhaMensal * 12) / rbt12 : 0;
+            var proLabore = params.proLabore || 0;
+            // LC 123/2006, Art. 18, §5º-M: pró-labore integra a folha para fins de Fator R
+            var fatorR = rbt12 > 0 ? ((folhaMensal + proLabore) * 12) / rbt12 : 0;
 
             var detAnexo = _chamarIMPOST('determinarAnexo', { cnae: params.cnae, fatorR: fatorR });
             var anexo = detAnexo ? detAnexo.anexo : 'III';
