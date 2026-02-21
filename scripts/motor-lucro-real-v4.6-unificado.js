@@ -1,11 +1,37 @@
 /**
  * ============================================================================
- * MOTOR DE CÁLCULO UNIFICADO — LUCRO REAL (IRPJ + CSLL)  v5.0
+ * MOTOR DE CÁLCULO UNIFICADO — LUCRO REAL (IRPJ + CSLL)  v5.3
  * Base Legal: Decreto nº 9.580/2018 (RIR/2018) — Artigos 217 a 290+
  * Ano-Base: 2026
  * ============================================================================
  *
- * CHANGELOG v5.0 (correções fiscais e de interface):
+ * CHANGELOG v5.3 (correções fiscais e de interface):
+ *
+ * --- v5.3 (correções de interface e robustez) ---
+ *
+ * [FIX CRÍTICO] calcularIRPJLucroReal agora retorna aliases (irpjNormal,
+ *   irpjDevido, irpjAPagar, compensacaoPrejuizo, baseCalculo) além dos nomes
+ *   passo*_ — garante compatibilidade com consumidores sem mapeamento correto.
+ *
+ * [FIX CRÍTICO] calcularIncentivos aceita AMBAS convenções de chamada:
+ *   (irpjNormal, despesas) e ({irpjNormal, despesas}). Resolve BUG MÉDIO 5
+ *   (limiteGlobal.valor = null quando mapeamento passa objeto como 1º arg).
+ *
+ * [FIX MÉDIO] compensarPrejuizo retorna economiaTotal: 0 no path de prejuízo
+ *   (antes retornava apenas economiaIRPJ/economiaCSLL, economiaTotal era undefined).
+ *
+ * [FIX MÉDIO] calcularCSLL retorna aliases csllAPagar, baseCSLL, csllNormal.
+ *
+ * [FIX MÉDIO] calcularEstimativaMensal aceita 'receitaBruta' como alias de
+ *   'receitaBrutaMensal' — compatibilidade com consumidores.
+ *
+ * [FIX MÉDIO] Validação defensiva de inputs (Number() + || 0) em todas as
+ *   funções de cálculo: calcularIRPJLucroReal, calcularCSLL, calcularJCP,
+ *   calcularEstimativaMensal, compensarIntegrado.
+ *
+ * [FIX MENOR] _safe() wrapper previne NaN/Infinity nos campos de retorno.
+ *
+ * [FIX MENOR] Aliases de export: calcularIRPJ, irpj, csll, incentivos, jcp, etc.
  *
  * --- v5.2 (correções de bugs relatados) ---
  *
@@ -96,6 +122,8 @@
 
 'use strict';
 
+/** Sanitiza resultado numérico: NaN/Infinity/undefined → 0 */
+function _safe(v) { return (typeof v === 'number' && isFinite(v)) ? v : 0; }
 
 // ============================================================================
 // BLOCO 1 — CONSTANTES E ALÍQUOTAS
@@ -917,20 +945,30 @@ function calcularIRPJLucroReal(dados) {
     estimativasPagas = 0,
   } = dados;
 
+  // ═══ FIX: Garantir tipos numéricos em todas as entradas ═══
+  const _lc = Number(lucroLiquidoContabil) || 0;
+  const _ta = Number(totalAdicoes) || 0;
+  const _te = Number(totalExclusoes) || 0;
+  const _sp = Number(saldoPrejuizoFiscal) || 0;
+  const _nm = Number(numMeses) || 12;
+  const _id = Number(incentivosDedutiveis) || 0;
+  const _rf = Number(retencoesFonte) || 0;
+  const _ep = Number(estimativasPagas) || 0;
+
   // PASSO 1: Lucro Líquido Contábil — Art. 259
-  const passo1_lucroLiquido = lucroLiquidoContabil;
+  const passo1_lucroLiquido = _lc;
 
   // PASSO 2: + Adições obrigatórias — Art. 260
-  const passo2_adicoes = totalAdicoes;
+  const passo2_adicoes = _ta;
 
   // PASSO 3: - Exclusões permitidas — Art. 261
-  const passo3_exclusoes = totalExclusoes;
+  const passo3_exclusoes = _te;
 
   // PASSO 4: = Lucro Real antes da compensação
   const passo4_lucroAntesCompensacao = passo1_lucroLiquido + passo2_adicoes - passo3_exclusoes;
 
   // PASSO 5: - Compensação de prejuízos — Art. 261, III (trava 30%)
-  const resultadoCompensacao = compensarPrejuizo(passo4_lucroAntesCompensacao, saldoPrejuizoFiscal);
+  const resultadoCompensacao = compensarPrejuizo(passo4_lucroAntesCompensacao, _sp);
   const passo5_compensacao = resultadoCompensacao.compensacao;
 
   // PASSO 6: = Lucro Real (base de cálculo do IRPJ)
@@ -940,7 +978,7 @@ function calcularIRPJLucroReal(dados) {
   const passo7_irpjNormal = Math.max(passo6_lucroReal, 0) * CONSTANTES.IRPJ_ALIQUOTA_NORMAL;
 
   // PASSO 8: Adicional de 10% — Art. 225, parágrafo único
-  const limiteAdicional = CONSTANTES.IRPJ_LIMITE_ADICIONAL_MES * numMeses;
+  const limiteAdicional = CONSTANTES.IRPJ_LIMITE_ADICIONAL_MES * _nm;
   const baseAdicional = Math.max(passo6_lucroReal - limiteAdicional, 0);
   const passo8_adicionalIRPJ = baseAdicional * CONSTANTES.IRPJ_ALIQUOTA_ADICIONAL;
 
@@ -948,11 +986,11 @@ function calcularIRPJLucroReal(dados) {
   const passo9_irpjDevido = passo7_irpjNormal + passo8_adicionalIRPJ;
 
   // PASSO 10: - Deduções do IRPJ (incentivos fiscais) — Art. 226 / Art. 228
-  const passo10_deducoes = Math.min(incentivosDedutiveis, passo7_irpjNormal);
+  const passo10_deducoes = Math.min(_id, passo7_irpjNormal);
   // NOTA: Incentivos geralmente só deduzem do IRPJ normal, NÃO do adicional
 
   // PASSO 11: - Retenções na fonte (IRRF) + estimativas pagas
-  const passo11_retencoes = retencoesFonte + estimativasPagas;
+  const passo11_retencoes = _rf + _ep;
 
   // PASSO 12: = IRPJ a Pagar (ou saldo negativo)
   const passo12_irpjAPagar = passo9_irpjDevido - passo10_deducoes - passo11_retencoes;
@@ -984,6 +1022,18 @@ function calcularIRPJLucroReal(dados) {
       : '0%',
     saldoNegativo: passo12_irpjAPagar < 0,
     valorSaldoNegativo: passo12_irpjAPagar < 0 ? Math.abs(passo12_irpjAPagar) : 0,
+
+    // ═══ ALIASES — compatibilidade com consumidores que esperam nomes curtos ═══
+    // Mantém os nomes passo*_ para compatibilidade retroativa
+    irpjNormal: _safe(passo7_irpjNormal),
+    irpjAdicional: _safe(passo8_adicionalIRPJ),
+    baseCalculo: _safe(passo6_lucroReal),
+    lucroAntesCompensacao: _safe(passo4_lucroAntesCompensacao),
+    compensacaoPrejuizo: _safe(passo5_compensacao),
+    irpjDevido: _safe(passo9_irpjDevido),
+    deducaoIncentivos: _safe(passo10_deducoes),
+    irpjAPagar: _safe(passo12_irpjAPagar),
+    retencoes: _safe(passo11_retencoes),
   };
 }
 
@@ -1007,6 +1057,7 @@ function compensarPrejuizo(lucroRealAntes, saldoPrejuizo) {
       prejuizoPeriodo: Math.abs(lucroRealAntes),
       economiaIRPJ: 0,
       economiaCSLL: 0,
+      economiaTotal: 0,
     };
   }
 
@@ -1050,15 +1101,21 @@ function calcularCSLL(dados) {
     ehInstituicaoFinanceira = false,
   } = dados;
 
+  // ═══ FIX: Garantir tipos numéricos ═══
+  const _lc = Number(lucroLiquidoContabil) || 0;
+  const _ad = Number(adicoesCSLL) || 0;
+  const _ex = Number(exclusoesCSLL) || 0;
+  const _bn = Number(saldoBaseNegativa) || 0;
+
   const aliquota = ehInstituicaoFinanceira
     ? CONSTANTES.CSLL_ALIQUOTA_FINANCEIRAS
     : CONSTANTES.CSLL_ALIQUOTA_GERAL;
 
   // Base de cálculo ajustada
-  const baseAjustada = lucroLiquidoContabil + adicoesCSLL - exclusoesCSLL;
+  const baseAjustada = _lc + _ad - _ex;
 
   // Compensação de base negativa (mesma trava de 30%)
-  const compensacaoBaseNeg = compensarPrejuizo(baseAjustada, saldoBaseNegativa);
+  const compensacaoBaseNeg = compensarPrejuizo(baseAjustada, _bn);
 
   // CSLL devida
   const basePositiva = Math.max(compensacaoBaseNeg.lucroRealFinal, 0);
@@ -1073,6 +1130,11 @@ function calcularCSLL(dados) {
     csllDevida,
     saldoBaseNegativaRemanescente: compensacaoBaseNeg.saldoRemanescente,
     nota: 'CSLL NÃO tem incentivos dedutíveis (diferente do IRPJ)',
+
+    // ═══ ALIAS — compatibilidade ═══
+    csllAPagar: csllDevida,                    // Alias: mesmo valor pois CSLL não tem retenções deduzidas neste nível
+    baseCSLL: basePositiva,                    // Alias
+    csllNormal: csllDevida,                    // Alias
   };
 }
 
@@ -1099,13 +1161,16 @@ function calcularEstimativaMensal(dados) {
     incentivosDedutiveis = 0,
   } = dados;
 
+  // ═══ FIX: Aceitar 'receitaBruta' como alias de 'receitaBrutaMensal' ═══
+  const _rbm = receitaBrutaMensal || Number(dados.receitaBruta) || 0;
+
   const presuncao = PRESUNCOES[tipoAtividade];
   if (!presuncao) {
     throw new Error(`Tipo de atividade "${tipoAtividade}" não encontrado em PRESUNCOES`);
   }
 
   // Base de cálculo estimada — Art. 220
-  const basePresumida = receitaBrutaMensal * presuncao.irpj;
+  const basePresumida = _rbm * presuncao.irpj;
   const baseTotalEstimada = basePresumida + ganhosCapital + demaisReceitas;
 
   // IRPJ — Art. 225
@@ -1124,7 +1189,7 @@ function calcularEstimativaMensal(dados) {
 
   // CSLL estimada (mesma lógica mas com presunção CSLL)
   // CORREÇÃO: Usar alíquota correta de CSLL (15% para inst. financeiras, 9% demais)
-  const baseCSLL = receitaBrutaMensal * presuncao.csll + ganhosCapital + demaisReceitas;
+  const baseCSLL = _rbm * presuncao.csll + ganhosCapital + demaisReceitas;
   const ehFinanceira = dados.financeira === true || tipoAtividade === 'INSTITUICOES_FINANCEIRAS';
   const aliqCSLLEstimativa = ehFinanceira ? CONSTANTES.CSLL_ALIQUOTA_FINANCEIRAS : CONSTANTES.CSLL_ALIQUOTA_GERAL;
   const csllDevida = baseCSLL * aliqCSLLEstimativa;
@@ -1133,7 +1198,7 @@ function calcularEstimativaMensal(dados) {
     presuncaoUtilizada: presuncao.descricao,
     percentualPresuncaoIRPJ: (presuncao.irpj * 100).toFixed(1) + '%',
     percentualPresuncaoCSLL: (presuncao.csll * 100).toFixed(1) + '%',
-    receitaBruta: receitaBrutaMensal,
+    receitaBruta: _rbm,
     basePresumidaIRPJ: basePresumida,
     ganhosCapital,
     demaisReceitas,
@@ -1307,6 +1372,12 @@ function calcularJCP(dados) {
     numMeses = 12,
   } = dados;
 
+  // ═══ FIX: Garantir tipos numéricos ═══
+  const _pl = Number(patrimonioLiquido) || 0;
+  const _ll = Number(lucroLiquidoAntes) || 0;
+  const _la = Number(lucrosAcumulados) || 0;
+  const _nm = Number(numMeses) || 12;
+
   // v5.0: Validação obrigatória da TJLP — não usar default
   if (tjlp === undefined || tjlp === null) {
     return {
@@ -1339,14 +1410,14 @@ function calcularJCP(dados) {
   }
 
   // JCP máximo pela TJLP
-  const tjlpProporcional = tjlp * (numMeses / 12);
-  const jcpMaximoTJLP = patrimonioLiquido * tjlpProporcional;
+  const tjlpProporcional = tjlp * (_nm / 12);
+  const jcpMaximoTJLP = _pl * tjlpProporcional;
 
   // Limite 1: 50% do lucro líquido do exercício (antes do JCP e IRPJ)
-  const limite1 = lucroLiquidoAntes * CONSTANTES.JCP_LIMITE_LUCRO_LIQUIDO;
+  const limite1 = _ll * CONSTANTES.JCP_LIMITE_LUCRO_LIQUIDO;
 
   // Limite 2: 50% de (lucros acumulados + reservas de lucros)
-  const limite2 = lucrosAcumulados * CONSTANTES.JCP_LIMITE_LUCROS_ACUMULADOS;
+  const limite2 = _la * CONSTANTES.JCP_LIMITE_LUCROS_ACUMULADOS;
 
   // CORREÇÃO: Lei 9.249/95, Art. 9°, §1° — JCP limitado ao MAIOR entre
   // 50% do lucro líquido do período OU 50% de lucros acumulados + reservas
@@ -1354,9 +1425,9 @@ function calcularJCP(dados) {
   const jcpDedutivel = Math.max(0, Math.min(jcpMaximoTJLP, limiteLegal));
 
   // Economia tributária — diferença incremental de IRPJ (respeita faixa do adicional)
-  const limiteAdicionalPeriodo = CONSTANTES.IRPJ_LIMITE_ADICIONAL_MES * numMeses;
-  const lucroBaseAntesJCP = Math.max(0, lucroLiquidoAntes);
-  const lucroBaseAposJCP = Math.max(0, lucroLiquidoAntes - jcpDedutivel);
+  const limiteAdicionalPeriodo = CONSTANTES.IRPJ_LIMITE_ADICIONAL_MES * _nm;
+  const lucroBaseAntesJCP = Math.max(0, _ll);
+  const lucroBaseAposJCP = Math.max(0, _ll - jcpDedutivel);
   const irpjAntesJCP = lucroBaseAntesJCP * CONSTANTES.IRPJ_ALIQUOTA_NORMAL
     + Math.max(0, lucroBaseAntesJCP - limiteAdicionalPeriodo) * CONSTANTES.IRPJ_ALIQUOTA_ADICIONAL;
   const irpjAposJCP = lucroBaseAposJCP * CONSTANTES.IRPJ_ALIQUOTA_NORMAL
@@ -1372,7 +1443,7 @@ function calcularJCP(dados) {
   const economiaLiquida = economiaTotal - custoIRRF;  // 34% - 17,5% = 16,5% do JCP (LC 224/2025)
 
   return {
-    patrimonioLiquido,
+    patrimonioLiquido: _pl,
     tjlp,
     tjlpProporcional,
     jcpMaximoTJLP,
@@ -1475,6 +1546,16 @@ function calcularDepreciacao(bem) {
  * @returns {Object}
  */
 function calcularIncentivos(irpjNormal, despesas = {}) {
+  // ═══ FIX: Aceitar AMBAS as convenções de chamada ═══
+  // Convenção 1 (motor direto): calcularIncentivos(150000, { PAT: 10000 })
+  // Convenção 2 (via mapeamento): calcularIncentivos({ irpjNormal: 150000, despesas: { PAT: 10000 } })
+  if (typeof irpjNormal === 'object' && irpjNormal !== null) {
+    despesas = irpjNormal.despesas || {};
+    irpjNormal = irpjNormal.irpjNormal || 0;
+  }
+  // Garantir tipo numérico
+  irpjNormal = Number(irpjNormal) || 0;
+
   const resultado = [];
   let totalDeducao = 0;
   let totalSujeitoLimiteGlobal = 0;
@@ -1561,11 +1642,11 @@ function calcularIncentivos(irpjNormal, despesas = {}) {
   return {
     incentivos: resultado,
     totalDeducaoCalculada: totalDeducao,
-    totalDeducaoFinal: totalFinal,
+    totalDeducaoFinal: _safe(totalFinal),
     limiteGlobal: {
       percentual: LIMITE_GLOBAL_INCENTIVOS.percentual,
-      valor: limiteGlobal,
-      somaSujeita: totalSujeitoLimiteGlobal > limiteGlobal ? limiteGlobal : totalSujeitoLimiteGlobal,
+      valor: _safe(limiteGlobal),
+      somaSujeita: _safe(totalSujeitoLimiteGlobal > limiteGlobal ? limiteGlobal : totalSujeitoLimiteGlobal),
       excedeu: totalSujeitoLimiteGlobal > limiteGlobal,
     },
     alertaGlobal,
@@ -2930,7 +3011,7 @@ const ALIQUOTAS = {
  */
 function calcularLucroRealAjustado(dados) {
   const {
-    lucroLiquido,
+    lucroLiquido = 0,
     adicoes = 0,
     exclusoes = 0
   } = dados;
@@ -3304,7 +3385,7 @@ function verificarVedacoes(dados) {
  */
 function compensarIntegrado(dados) {
   const {
-    lucroLiquido,
+    lucroLiquido = 0,
     adicoes = 0,
     exclusoes = 0,
     saldoPrejuizoOperacional = 0,
@@ -10592,6 +10673,19 @@ const _motorExports = {
   verificarSubcapitalizacao,
   verificarSuspensaoMultaOficio,
   verificarVedacoes,
+
+  // ═══ ALIASES — convenções alternativas usadas por consumidores ═══
+  calcularIRPJ: calcularIRPJLucroReal,           // Alias curto
+  irpj: calcularIRPJLucroReal,                    // Alias mínimo
+  csll: calcularCSLL,                             // Alias mínimo
+  incentivos: calcularIncentivos,                 // Alias mínimo
+  estimativaMensal: calcularEstimativaMensal,     // Alias curto
+  compensarPrejuizoFiscalCompleto: compensarIntegrado, // Alias descritivo
+  jcp: calcularJCP,                               // Alias mínimo
+  depreciacao: calcularDepreciacao,               // Alias mínimo
+  subcapitalizacao: verificarSubcapitalizacao,    // Alias
+  vedacoesCompensacao: verificarVedacoes,         // Alias
+  compensacaoPluranual: simularCompensacaoPluranual, // Alias
 };
 
 // ============================================================================
