@@ -1086,7 +1086,8 @@ const PARTILHA_CGSN140 = {
     // (*) ISS efetivo limitado a 5%; excedente redistribuído proporcionalmente aos tributos federais
     { irpj: 0.2300, csll: 0.1250, cofins: 0.1410, pis: 0.0305, cpp: 0.2385, iss: 0.2350 },
     // Faixa 6: De R$ 3.600.000,01 a R$ 4.800.000,00 — ISS = 0% (recolhido por fora do DAS)
-    { irpj: 0.3500, csll: 0.1500, cofins: 0.1603, pis: 0.0347, cpp: 0.3050, iss: 0.0000 }
+    // Valores oficiais LC 123/2006, Anexo V, 6ª Faixa (diferem do Anexo III F6)
+    { irpj: 0.3500, csll: 0.1550, cofins: 0.1644, pis: 0.0356, cpp: 0.2950, iss: 0.0000 }
   ]
 };
 
