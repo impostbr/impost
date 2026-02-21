@@ -664,11 +664,11 @@ input,select,textarea,button{font-family:inherit;font-size:inherit}
 </div>
 
 <!-- ═══════════════════════════ SCRIPTS ═══════════════════════════ -->
-<script src="cnae-mapeamento.js"></script>
-<script src="estados.js"></script>
-<script src="municipios.js"></script>
-<script src="simples_nacional.js"></script>
-<script src="simples-estudos.js"></script>
+<script src="../scripts/cnae-mapeamento.js"></script>
+<script src="../scripts/estados.js"></script>
+<script src="../municipios.js"></script>
+<script src="../scripts/simples_nacional.js"></script>
+<script src="../scripts/simples-estudos.js"></script>
 
 <script>
 // ═══════════════════════════════════════════════════════════════
@@ -703,6 +703,26 @@ function fmtPct(v, dec) {
 }
 
 // ═══ CONSTANTES DO MOTOR (alimentadas por simples_nacional.js) ═══
+if (typeof IMPOST === 'undefined') {
+  console.error('IMPOST não carregado. Verifique se simples_nacional.js está acessível.');
+  window.IMPOST = {
+    LIMITE_ME: 360000, LIMITE_EPP: 4800000, SUBLIMITE_ICMS_ISS: 3600000,
+    LIMITE_FATOR_R: 0.28, ISS_MINIMO: 0.02, ISS_MAXIMO: 0.05,
+    ALIQUOTA_RAT_PADRAO: 0.02, PRESUNCAO_LUCRO_SERVICOS: 0.32,
+    PRESUNCAO_LUCRO_COMERCIO: 0.08, MAPEAMENTO_CNAE: [],
+    CALENDARIO_FISCAL_2026: [], RISCOS_FISCAIS: [],
+    verificarElegibilidade: function(p) { return { elegivel: true, classificacao: p.receitaBrutaAnual <= 360000 ? 'ME' : 'EPP' }; },
+    calcularFatorR: function(p) { var fr = p.receitaBruta12Meses > 0 ? p.folhaSalarios12Meses / p.receitaBruta12Meses : 0; return { fatorR: fr, acimaDoLimiar: fr >= 0.28, anexoResultante: fr >= 0.28 ? 'III' : 'V' }; },
+    obterAnexoEfetivoCNAE: function(cnae, tipo, fr) { return fr >= 0.28 ? 'III' : 'V'; },
+    calcularDASMensal: function(p) { return { dasAPagar: 0, aliquotaEfetiva: 0, aliquotaEfetivaFormatada: '0%', faixa: 1 }; },
+    calcularDASMensalOtimizado: function(p) { return this.calcularDASMensal(p); },
+    otimizarFatorR: function(p) { return null; },
+    gerarDicasEconomia: function(p) { return { dicas: [], totalDicas: 0 }; },
+    gerarRelatorioOtimizacao: function(p) { return null; },
+    calcularDistribuicaoLucros: function(p) { return null; },
+    calcularPartilhaTributos: function() { return null; }
+  };
+}
 const C = {
   LIMITE_ME:          IMPOST.LIMITE_ME,
   LIMITE_EPP:         IMPOST.LIMITE_EPP,
