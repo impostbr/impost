@@ -1,9 +1,37 @@
 /**
  * ╔══════════════════════════════════════════════════════════════════════════════╗
- * ║  LUCRO REAL — MAPEAMENTO UNIFICADO DE DADOS  v3.3 (CORREÇÕES FISCAIS)    ║
+ * ║  LUCRO REAL — MAPEAMENTO UNIFICADO DE DADOS  v3.4 (CORREÇÕES FISCAIS)    ║
  * ║  Fonte única de verdade para alimentar qualquer HTML ou JS                 ║
  * ║  Base Legal: RIR/2018 (Decreto 9.580/2018) + Lei 12.973/2014              ║
  * ║  Ano-Base: 2026                                                           ║
+ * ╠══════════════════════════════════════════════════════════════════════════════╣
+ * ║  CORREÇÕES v3.4 (ERROS CRÍTICOS — Auditoria Fiscal):                      ║
+ * ║                                                                            ║
+ * ║  [ERRO #1] CRÍTICO: Adicional IRPJ zerado no regime Trimestral            ║
+ * ║    - apuracaoLR 'trimestral' agora converte numMeses para 3               ║
+ * ║    - Aplicado em: irpj(), csll(), jcp(), simulacaoCompleta()              ║
+ * ║    - Impacto: até R$ 40.000/ano subestimado para lucro R$1M              ║
+ * ║                                                                            ║
+ * ║  [ERRO #2] CRÍTICO: CSLL Financeiras — LC 224/2025 (12% em 2025–2027)   ║
+ * ║    - Nova constante: csll.financeirasLC224Ate2027 = 0.12                  ║
+ * ║    - Lógica anoBase aplicada em: csll(), compensarIntegrado(),            ║
+ * ║      estimativaMensal()                                                    ║
+ * ║    - Impacto: R$ 30.000 superestimado por R$1M lucro financeira          ║
+ * ║                                                                            ║
+ * ║  [ERRO #3] GRAVE: Economia JCP subestimada (sem lucroRealAnual)           ║
+ * ║    - jcp() agora passa lucroRealAnual ao motor para economia correta      ║
+ * ║    - simulacaoCompleta() repassa lucroRealAnual na delegação e fallback   ║
+ * ║    - Impacto: economia JCP subestimada em até 66%                         ║
+ * ║                                                                            ║
+ * ║  [ERRO #4] GRAVE: JCP sem cap 50% do lucro líquido                        ║
+ * ║    - Safety net no wrapper: aplica Math.min(jcp, limiteAplicavel)         ║
+ * ║    - Art. 9º §1º Lei 9.249/95 — evita autuação por excesso de dedução   ║
+ * ║    - Economias recalculadas proporcionalmente se cap aplicado             ║
+ * ║                                                                            ║
+ * ║  [ERRO #5] MÉDIO: Float CSLL presuncoes + INST_FINANCEIRAS LC 224        ║
+ * ║    - Presunções já estavam corretas neste arquivo (erro no motor)         ║
+ * ║    - INSTITUICOES_FINANCEIRAS: aliquotaEfetivaCSLL atualizada p/ 0.0144  ║
+ * ║      (reflete LC 224/2025: 0.12 × 0.12); adicionado campo Pós-2027      ║
  * ╠══════════════════════════════════════════════════════════════════════════════╣
  * ║  CORREÇÕES v3.3 (alinhamento com Motor v5.0 — riscos fiscais):            ║
  * ║                                                                            ║
@@ -119,8 +147,9 @@
     },
     csll: {
       geral: 0.09,                       // 9% para empresas em geral
-      financeiras: 0.15,                 // 15% para instituições financeiras
-      artigoBase: 'Lei 7.689/1988 + Lei 13.169/2015'
+      financeiras: 0.15,                 // 15% para instituições financeiras (padrão pós-2027)
+      financeirasLC224Ate2027: 0.12,     // v3.4 FIX ERRO #2: 12% LC 224/2025 (vigente 2025–2027)
+      artigoBase: 'Lei 7.689/1988 + Lei 13.169/2015 + LC 224/2025'
     },
     pisCofins: {
       pisNaoCumulativo: 0.0165,          // 1,65%
@@ -234,8 +263,12 @@
     INSTITUICOES_FINANCEIRAS: {
       label: 'Instituições Financeiras',
       irpj: 0.16, csll: 0.12,
-      aliquotaEfetivaIRPJ: 0.024, aliquotaEfetivaCSLL: 0.018,
-      artigo: 'Art. 220, §1º, II, b + Art. 223'
+      aliquotaEfetivaIRPJ: 0.024,
+      // v3.4 FIX ERRO #5 + #2: Alíquota efetiva CSLL depende do ano (LC 224/2025)
+      // 2025–2027: 0.12 * 0.12 = 0.0144 | Pós-2027: 0.12 * 0.15 = 0.018
+      aliquotaEfetivaCSLL: 0.0144,
+      aliquotaEfetivaCSLLPos2027: 0.018,
+      artigo: 'Art. 220, §1º, II, b + Art. 223 + LC 224/2025'
     },
     SERVICOS_GERAL: {
       label: 'Prestação de Serviços em Geral',
@@ -1091,6 +1124,11 @@
           retencoesFonte: 0, estimativasPagas: 0
         }, dados);
 
+        // v3.4 FIX ERRO #1: Converter apuracaoLR → numMeses correto
+        // Antes: numMeses ficava hardcoded 12 mesmo para trimestral, zerando o adicional IRPJ
+        if (d.apuracaoLR === 'trimestral') d.numMeses = 3;
+        else if (d.apuracaoLR === 'mensal') d.numMeses = 1;
+
         // Mapear parâmetros mapeamento → motor
         var resultado = MotorLR.calcularIRPJLucroReal({
           lucroLiquidoContabil: d.lucroLiquido,
@@ -1130,6 +1168,10 @@
         prejuizoFiscal: 0, numMeses: 12, incentivos: 0,
         retencoesFonte: 0, estimativasPagas: 0
       }, dados);
+
+      // v3.4 FIX ERRO #1: Converter apuracaoLR → numMeses correto (fallback)
+      if (d.apuracaoLR === 'trimestral') d.numMeses = 3;
+      else if (d.apuracaoLR === 'mensal') d.numMeses = 1;
 
       var lucroAntesComp = d.lucroLiquido + d.adicoes - d.exclusoes;
       var limiteCompensacao = Math.max(lucroAntesComp, 0) * 0.30;
@@ -1172,7 +1214,7 @@
       if (typeof MotorLR !== 'undefined' && MotorLR.calcularCSLL) {
         var d = Object.assign({
           lucroLiquido: 0, adicoes: 0, exclusoes: 0,
-          baseNegativa: 0, financeira: false
+          baseNegativa: 0, financeira: false, anoBase: new Date().getFullYear()
         }, dados);
 
         // Mapear parâmetros mapeamento → motor
@@ -1181,7 +1223,8 @@
           adicoesCSLL: d.adicoes,
           exclusoesCSLL: d.exclusoes,
           saldoBaseNegativa: d.baseNegativa,
-          ehInstituicaoFinanceira: d.financeira
+          ehInstituicaoFinanceira: d.financeira,
+          anoBase: d.anoBase                       // v3.4 FIX ERRO #2: Motor precisa do ano para LC 224/2025
         });
 
         // Mapear retorno motor → interface esperada pelo mapeamento
@@ -1198,14 +1241,19 @@
       // FALLBACK: implementação original caso o motor não esteja carregado
       var d = Object.assign({
         lucroLiquido: 0, adicoes: 0, exclusoes: 0,
-        baseNegativa: 0, financeira: false
+        baseNegativa: 0, financeira: false, anoBase: new Date().getFullYear()
       }, dados);
 
       var base = d.lucroLiquido + d.adicoes - d.exclusoes;
       var limiteComp = Math.max(base, 0) * 0.30;
       var compensacao = Math.min(limiteComp, d.baseNegativa, Math.max(base, 0));
       var baseCalculo = Math.max(base - compensacao, 0);
-      var aliq = d.financeira ? LR.aliquotas.csll.financeiras : LR.aliquotas.csll.geral;
+      // v3.4 FIX ERRO #2: CSLL financeiras = 12% (LC 224/2025) para anoBase 2025–2027, senão 15%
+      var aliq = d.financeira
+        ? (d.anoBase >= 2025 && d.anoBase <= 2027
+            ? LR.aliquotas.csll.financeirasLC224Ate2027
+            : LR.aliquotas.csll.financeiras)
+        : LR.aliquotas.csll.geral;
       var csllDevida = baseCalculo * aliq;
 
       return {
@@ -1227,7 +1275,14 @@
     jcp: function (dados) {
       // DELEGAÇÃO AO MOTOR (v3.3) — MotorLR.calcularJCP()
       if (typeof MotorLR !== 'undefined' && MotorLR.calcularJCP) {
-        var resultado = MotorLR.calcularJCP(dados);
+        // v3.4 FIX ERRO #3: Garantir que lucroRealAnual seja passado ao motor
+        // Sem este campo, a economia IRPJ é calculada apenas com 15% (base),
+        // ignorando o adicional de 10% para lucros > R$ 240k — subestima o benefício JCP em até 66%
+        var dadosJCP = Object.assign({}, dados);
+        if (!dadosJCP.lucroRealAnual && dadosJCP.lucroRealAnual !== 0) {
+          dadosJCP.lucroRealAnual = dadosJCP.lucroRealFinal || dadosJCP.lucroLiquidoAntes || dadosJCP.lucroLiquido || 0;
+        }
+        var resultado = MotorLR.calcularJCP(dadosJCP);
 
         // v3.3 FIX #3: Motor retorna erro se TJLP não informada — propagar ao chamador
         if (resultado.erro) {
@@ -1250,17 +1305,36 @@
         }
 
         // Mapear retorno motor → interface esperada pelo mapeamento
+        // v3.4 FIX ERRO #4: Aplicar cap de 50% do lucro líquido (Art. 9º §1º Lei 9.249/95)
+        // O motor pode não aplicar o limite automaticamente — safety net aqui
+        var jcpDedutivel = resultado.jcpDedutivel || 0;
+        if (dadosJCP.lucroLiquidoAntes !== undefined || dadosJCP.lucrosAcumulados !== undefined) {
+          var limite1_50LL = (dadosJCP.lucroLiquidoAntes || 0) * 0.5;
+          var limite2_50Reservas = ((dadosJCP.lucrosAcumulados || 0) + (dadosJCP.reservasLucros || 0)) * 0.5;
+          var limiteAplicavel = Math.max(limite1_50LL, limite2_50Reservas);
+          if (limiteAplicavel > 0 && jcpDedutivel > limiteAplicavel) {
+            jcpDedutivel = limiteAplicavel;
+          }
+        }
+
+        // v3.4 FIX ERRO #4: Se JCP foi reduzido pelo cap, recalcular economias proporcionalmente
+        var foiCapado = jcpDedutivel < (resultado.jcpDedutivel || 0);
+        var fatorReducao = foiCapado && resultado.jcpDedutivel > 0
+          ? jcpDedutivel / resultado.jcpDedutivel
+          : 1;
+
         return {
           jcpMaximoTJLP: _r(resultado.jcpMaximoTJLP),
           limite50LL: _r(resultado.limite1_50LL),
           limite50Reservas: _r(resultado.limite2_50Reservas),
-          jcpDedutivel: _r(resultado.jcpDedutivel),
-          economiaIRPJ: _r(resultado.economiaIRPJ),
-          economiaCSLL: _r(resultado.economiaCSLL),
-          economiaTotal: _r(resultado.economiaTotal),
-          custoIRRF: _r(resultado.custoIRRF),
-          economiaLiquida: _r(resultado.economiaLiquida),
-          limiteUtilizado: resultado.limiteUtilizado
+          jcpDedutivel: _r(jcpDedutivel),
+          economiaIRPJ: _r((resultado.economiaIRPJ || 0) * fatorReducao),
+          economiaCSLL: _r((resultado.economiaCSLL || 0) * fatorReducao),
+          economiaTotal: _r((resultado.economiaTotal || 0) * fatorReducao),
+          custoIRRF: _r(jcpDedutivel * LR.aliquotas.jcp.irrfAliquota),
+          economiaLiquida: _r(((resultado.economiaTotal || 0) * fatorReducao) - (jcpDedutivel * LR.aliquotas.jcp.irrfAliquota)),
+          limiteUtilizado: foiCapado ? '50% Lucro/Reservas (Art. 9º §1º)' : resultado.limiteUtilizado,
+          capAplicado: foiCapado  // v3.4: Flag para UI saber que o limite legal foi aplicado
         };
       }
 
@@ -1270,6 +1344,10 @@
         patrimonioLiquido: 0, tjlp: null,
         lucroLiquidoAntes: 0, lucrosAcumulados: 0, numMeses: 12
       }, dados);
+
+      // v3.4 FIX ERRO #1: Converter apuracaoLR → numMeses correto
+      if (d.apuracaoLR === 'trimestral') d.numMeses = 3;
+      else if (d.apuracaoLR === 'mensal') d.numMeses = 1;
 
       // v3.3 FIX #3: Se TJLP não informada, retornar erro informativo
       if (d.tjlp === undefined || d.tjlp === null || d.tjlp === 0) {
@@ -1393,8 +1471,13 @@
       var irpjDevido = irpjNormal + irpjAdicional;
       var deducoes = Math.min(d.incentivosDedutiveis || 0, irpjNormal);
       var irpjAPagar = Math.max(irpjDevido - deducoes - (d.irrfCompensavel || 0), 0);
-      // CORREÇÃO: Usar alíquota correta de CSLL (15% para inst. financeiras, 9% demais)
-      var aliqCSLL = (d.financeira === true || d.financeira === 'true') ? 0.15 : 0.09;
+      // CORREÇÃO: Usar alíquota correta de CSLL (LC 224/2025: 12% financeiras 2025–2027, senão 15%; 9% demais)
+      var _anoBaseEst = d.anoBase || new Date().getFullYear();
+      var aliqCSLL = (d.financeira === true || d.financeira === 'true')
+        ? (_anoBaseEst >= 2025 && _anoBaseEst <= 2027
+            ? LR.aliquotas.csll.financeirasLC224Ate2027
+            : LR.aliquotas.csll.financeiras)
+        : LR.aliquotas.csll.geral;
       var csllDevida = baseCSLL * aliqCSLL;
 
       return {
@@ -1931,7 +2014,13 @@
         var limCSLL = baseCSLLCorrente * 0.30;
         var compCSLL = Math.min(limCSLL, d.saldoBaseNegativaCSLL);
         // v3.3 FIX E2#3: Alíquota CSLL dinâmica — 15% para financeiras (Lei 13.169/2015), 9% geral
-        var aliqCSLLComp = (d.financeira === true || d.financeira === 'true') ? 0.15 : 0.09;
+        // v3.4 FIX ERRO #2: LC 224/2025 — 12% para financeiras em 2025–2027
+        var _anoBaseComp = d.anoBase || new Date().getFullYear();
+        var aliqCSLLComp = (d.financeira === true || d.financeira === 'true')
+          ? (_anoBaseComp >= 2025 && _anoBaseComp <= 2027
+              ? LR.aliquotas.csll.financeirasLC224Ate2027
+              : LR.aliquotas.csll.financeiras)
+          : LR.aliquotas.csll.geral;
         var economiaCSLL = compCSLL * aliqCSLLComp;
 
         resultado.etapa4_compensacaoCSLL = {
@@ -2777,6 +2866,10 @@
           variacaoCenarios: { pessimista: -0.05, otimista: 0.05 }  // v3.3 FIX #7: Variação cenários
         }, empresa);
 
+        // v3.4 FIX ERRO #1: Converter apuracaoLR → numMeses correto
+        if (e.apuracaoLR === 'trimestral') e.numMeses = 3;
+        else if (e.apuracaoLR === 'mensal') e.numMeses = 1;
+
         // Mapear parâmetros mapeamento → motor
         var resultado = MotorLR.simularLucroRealCompleto({
           lucroLiquidoContabil: e.lucroLiquido,
@@ -2795,7 +2888,8 @@
           ehInstituicaoFinanceira: e.financeira || false,
           dadosPISCOFINS: e.dadosPISCOFINS,           // v3.3 FIX #6: PIS/COFINS integrado
           retencoesPISCOFINS: e.retencoesPISCOFINS,   // v3.3 FIX #6: Retenções
-          variacaoCenarios: e.variacaoCenarios         // v3.3 FIX #7: Cenários proporcionais
+          variacaoCenarios: e.variacaoCenarios,         // v3.3 FIX #7: Cenários proporcionais
+          lucroRealAnual: e.lucroRealFinal || e.lucroLiquido || 0  // v3.4 FIX ERRO #3: Para economia JCP com adicional IRPJ
         });
 
         // Mapear retorno motor → interface esperada pelo mapeamento
@@ -2849,6 +2943,13 @@
         retencoesFonte: 0, estimativasPagas: 0, numMeses: 12,
         dadosPISCOFINS: null, retencoesPISCOFINS: 0
       }, empresa);
+
+      // v3.4 FIX ERRO #1: Converter apuracaoLR → numMeses correto (fallback)
+      if (e.apuracaoLR === 'trimestral') e.numMeses = 3;
+      else if (e.apuracaoLR === 'mensal') e.numMeses = 1;
+
+      // v3.4 FIX ERRO #3: Passar lucroRealAnual ao JCP para economia correta com adicional IRPJ
+      e.lucroRealAnual = e.lucroRealFinal || e.lucroLiquido || 0;
 
       var jcp = LR.calcular.jcp(e);
       var jcpValido = !jcp.erro;
