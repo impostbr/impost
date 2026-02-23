@@ -20,10 +20,30 @@
  *   window.IMPOSTExport      — alias de compatibilidade para exportação
  *
  * IMPOST. — Inteligência em Modelagem de Otimização Tributária
- * Versão: 3.5.1 | Data: Fevereiro/2026
+ * Versão: 3.5.2 | Data: Fevereiro/2026
  *
  * NOTA: Este arquivo unifica os antigos lucro-real-estudos.js + lucro-real-estudos-export.js
  *       Não é mais necessário carregar o arquivo de exportação separadamente.
+ *
+ * CHANGELOG v3.5.2 (Fevereiro/2026) — AUDITORIA v4.6:
+ *   ERRO 1 (CRÍTICO) — _irpj() parametrizada para apuração trimestral.
+ *                   Antes: usava R$240k fixo (anual) mesmo na apuração trimestral → diferença de
+ *                   R$18.000 no IRPJ. A função agora aceita flag `trimestral` e simula 4 trimestres
+ *                   iguais com limite R$60k/tri. Corrige: _gerarCenarios(), economiaGratificacao,
+ *                   totalPDDInfo, subcapitalização marginal, projeção plurianual, oportunidades,
+ *                   auto-calc wizard (PDD, exclusões, prejuízo, gratificação), e alerta retenções.
+ *                   TODOS os 16 call-sites de _irpj() atualizados.
+ *   ERRO 2 (MÉDIO) — JCP: prevenir ativação de PL decomposto quando capitalSocial=0.
+ *                   Antes: motor recebia lucrosAcumulados>0 e ativava modo decomposto, ignorando
+ *                   patrimonioLiquido. Resultado: basePL=lucrosAcumulados (150k) em vez de PL real
+ *                   (600k) → JCP subavaliado em R$41.355. Agora: componentes de PL só são passados
+ *                   ao motor quando capitalSocial>0 (decomposição completa). Também corrige dupla
+ *                   contagem de reservasLucros em lucrosAcumulados (linha 3545/2382).
+ *   ERRO 2B — Cap local JCP: economia recalculada com _irpj() diferencial + trimestral.
+ *                   Antes: usava alíquota fixa (25%/15%) com limiar R$240k. Agora: calcula como
+ *                   IRPJ(sem JCP) - IRPJ(com JCP) com suporte trimestral para faixa marginal correta.
+ *   VARIÁVEL _isTrimestral adicionada no escopo de analisar() e ctx.trimestral passado às
+ *                   oportunidades para evitar repetição de d.apuracaoLR === "trimestral".
  *
  * CHANGELOG v3.5.1 (Fevereiro/2026) — AUDITORIA COMPLETA:
  *   BUG CRÍTICO 1 — irpjBruto MOVIDO para APÓS correção trimestral. Antes: adicional de IRPJ
@@ -103,7 +123,7 @@
   // ═══════════════════════════════════════════════════════════════════════════
   //  CONSTANTES E HELPERS
   // ═══════════════════════════════════════════════════════════════════════════
-  const VERSAO = "3.5.1";
+  const VERSAO = "3.5.2";
   const LS_KEY_DADOS = "impost_lr_dados";
   const LS_KEY_STEP = "impost_lr_step";
   const LS_KEY_RESULTADOS = "impost_lr_resultados";
@@ -121,7 +141,21 @@
   const _n = (v) => parseFloat(v) || 0;
   /** Formata valor que JÁ É percentual (ex: 25 → "25.00%"). Diferente de _p que multiplica por 100. */
   function _pp(v) { return (v || 0).toFixed(2) + "%"; }
-  function _irpj(lr) { return lr <= 0 ? 0 : lr * 0.15 + Math.max(0, lr - 240000) * 0.10; }
+  /**
+   * IRPJ progressivo com suporte a apuração trimestral.
+   * @param {number} lr - Lucro Real (valor ANUAL consolidado)
+   * @param {boolean} [trimestral=false] - Se true, simula 4 trimestres iguais com limite R$60k/tri
+   * FIX AUDITORIA v4.6 ERRO 1: Antes usava R$240k fixo (anual) mesmo na apuração trimestral.
+   */
+  function _irpj(lr, trimestral) {
+    if (lr <= 0) return 0;
+    if (trimestral) {
+      // Apuração trimestral: 4 trimestres iguais, adicional sobre excedente de R$60k/tri
+      var lrTri = lr / 4;
+      return 4 * (lrTri * 0.15 + Math.max(0, lrTri - 60000) * 0.10);
+    }
+    return lr * 0.15 + Math.max(0, lr - 240000) * 0.10;
+  }
 
   /**
    * CORREÇÃO ERRO #2: Alíquota CSLL conforme LC 224/2025
@@ -2301,7 +2335,8 @@
       if (totalPDD > 0) {
         // Economia marginal: usa _irpj diferencial para adaptar ao porte da empresa
         var _lucroAjPDD = _calcLucroAjustado();
-        var _econIRPJpdd = _r(_irpj(Math.max(_lucroAjPDD, 0)) - _irpj(Math.max(_lucroAjPDD - totalPDD, 0)));
+        var _isTrimPDD = d.apuracaoLR === "trimestral";
+        var _econIRPJpdd = _r(_irpj(Math.max(_lucroAjPDD, 0), _isTrimPDD) - _irpj(Math.max(_lucroAjPDD - totalPDD, 0), _isTrimPDD));
         var _aliqCSLLpdd = _csllAliq(d.ehFinanceira === true || d.ehFinanceira === "true", d.anoBase);
         var econPDD = _r(_econIRPJpdd + totalPDD * _aliqCSLLpdd);
         var _aliqMargPDD = totalPDD > 0 ? _r(econPDD / totalPDD * 100) : 34;
@@ -2319,7 +2354,8 @@
       var totalEx = _calcTotalExclusoes();
       // Economia marginal: adapta ao porte via _irpj diferencial
       var _lucroAjEx = _calcLucroAjustado();
-      var _econIRPJex = _r(_irpj(Math.max(_lucroAjEx, 0)) - _irpj(Math.max(_lucroAjEx - totalEx, 0)));
+      var _isTrimEx = d.apuracaoLR === "trimestral";
+      var _econIRPJex = _r(_irpj(Math.max(_lucroAjEx, 0), _isTrimEx) - _irpj(Math.max(_lucroAjEx - totalEx, 0), _isTrimEx));
       var _aliqCSLLex = _csllAliq(d.ehFinanceira === true || d.ehFinanceira === "true", d.anoBase);
       var _econTotEx = _r(_econIRPJex + totalEx * _aliqCSLLex);
       var _aliqMargEx = totalEx > 0 ? _r(_econTotEx / totalEx * 100) : 34;
@@ -2374,18 +2410,26 @@
       if (plVal > 0 && llVal > 0) {
         try {
           // ═══ FIX BUG 2 (AUDITORIA): Sempre calcular JCP para 12 meses (anual) ═══
-          var jcpRes = LR.calcular.jcp({
+          // ═══ FIX AUDITORIA v4.6 ERRO 2: Prevenir ativação de PL decomposto quando capitalSocial=0 ═══
+          // Só passa componentes de PL quando capitalSocial > 0 (decomposição completa informada).
+          // Caso contrário, motor usa patrimonioLiquido direto (evita basePL = lucrosAcumulados apenas).
+          // Também corrige dupla contagem: antes lucrosAcumulados incluía reservasLucros duplicado.
+          var _csJCP = _n(d.capitalSocial);
+          var _jcpParams = {
             patrimonioLiquido: _n(d.plAjustadoJCP) > 0 ? _n(d.plAjustadoJCP) : plVal,
-            capitalSocial: _n(d.capitalSocial) || null,
-            reservasCapital: _n(d.reservasCapital),
-            reservasLucros: _n(d.reservasLucros),
-            lucrosAcumulados: _n(d.lucrosAcumulados) + _n(d.reservasLucros),
-            prejuizosAcumulados: _n(d.prejuizosContabeis),
             tjlp: (_n(d.tjlp) || _TJLP_DEFAULT) / 100,
             lucroLiquidoAntes: llVal,
             lucroRealAnual: Math.max(llVal + _n(d.adicoesLALUR) - _n(d.exclusoesLALUR), 0),
-            numMeses: 12,
-          });
+            numMeses: 12
+          };
+          if (_csJCP > 0) {
+            _jcpParams.capitalSocial = _csJCP;
+            _jcpParams.reservasCapital = _n(d.reservasCapital);
+            _jcpParams.reservasLucros = _n(d.reservasLucros);
+            _jcpParams.lucrosAcumulados = _n(d.lucrosAcumulados); // sem somar reservasLucros (já passado acima)
+            _jcpParams.prejuizosAcumulados = _n(d.prejuizosContabeis);
+          }
+          var jcpRes = LR.calcular.jcp(_jcpParams);
           var _jcpHtml =
             '<strong>💰 Simulação de JCP (Anual)</strong><br>' +
             'JCP máximo (PL × TJLP): ' + _m(jcpRes.jcpMaximoTJLP) + '<br>' +
@@ -2419,7 +2463,7 @@
         var maxComp = Math.max(lucroAj, 0) * 0.30;
         var compIRPJ = Math.min(maxComp, pfIRPJ, Math.max(lucroAj, 0));
         var compCSLL = Math.min(maxComp, bnCSLL, Math.max(lucroAj, 0));
-        var economiaIRPJ = _r(_irpj(lucroAj) - _irpj(lucroAj - compIRPJ));
+        var economiaIRPJ = _r(_irpj(lucroAj, d.apuracaoLR === "trimestral") - _irpj(lucroAj - compIRPJ, d.apuracaoLR === "trimestral"));
         // CORREÇÃO BUG 4: Usar alíquota CSLL correta (15% financeiras, 9% demais)
         var _aliqCSLLPrev = _csllAliq(d.ehFinanceira === true || d.ehFinanceira === "true", d.anoBase);
         var economiaCSLL = _r(compCSLL * _aliqCSLLPrev);
@@ -2574,7 +2618,7 @@
       // CORREÇÃO ERRO 3: Usar _irpj diferencial (marginal) em vez de 0.34 fixo
       var _gratPrev = _n(d.gratificacoesAdm);
       var _lucroAjGrat = Math.max(_calcLucroAjustado(), 0);
-      var _econIRPJgrat = _r(_irpj(_lucroAjGrat) - _irpj(Math.max(_lucroAjGrat - _gratPrev, 0)));
+      var _econIRPJgrat = _r(_irpj(_lucroAjGrat, d.apuracaoLR === "trimestral") - _irpj(Math.max(_lucroAjGrat - _gratPrev, 0), d.apuracaoLR === "trimestral"));
       var _aliqCSLLgrat = _csllAliq(d.ehFinanceira === true || d.ehFinanceira === "true", d.anoBase);
       econGrat.textContent = _m(_r(_econIRPJgrat + _gratPrev * _aliqCSLLgrat));
     }
@@ -2816,6 +2860,8 @@
     // Motor usa numMeses para calcular limiteAdicional = R$20.000 × numMeses
     // Trimestral: 3 meses por período → limite R$60.000 (não R$240.000)
     var _numMeses = d.apuracaoLR === "trimestral" ? 3 : 12;
+    // ═══ FIX AUDITORIA v4.6: Flag booleana reutilizável para apuração trimestral ═══
+    var _isTrimestral = d.apuracaoLR === "trimestral";
 
     // ═══ CORREÇÃO ERRO #2: CSLL financeiras conforme LC 224/2025 ═══
     // Helper _csllAliq(ehFin, anoBase) já definido no escopo global
@@ -3249,7 +3295,7 @@
     // Se subcapitalização excedeu, somar IRPJ marginal dos juros indedutíveis
     if (subcapResult && subcapResult.excedeu === true && subcapResult.jurosIndedutiveis > 0) {
       var _baseSubcap = Math.max(lucroRealFinal, 0);
-      var _irpjMarginal = _irpj(_baseSubcap + subcapResult.jurosIndedutiveis) - _irpj(_baseSubcap);
+      var _irpjMarginal = _irpj(_baseSubcap + subcapResult.jurosIndedutiveis, _isTrimestral) - _irpj(_baseSubcap, _isTrimestral);
       irpjAposReducao = _r(irpjAposReducao + _irpjMarginal);
     }
 
@@ -3536,19 +3582,27 @@
         // ═══ FIX BUG 2 (AUDITORIA): Usar numMeses=12 para calcular JCP ANUAL (oportunidade completa) ═══
         // Antes: usava _numMeses (3 para trimestral), subestimando economia em 75%.
         // Agora: calcula JCP para 12 meses. Se trimestral, adiciona anotação de distribuição por trimestre.
+        // ═══ FIX AUDITORIA v4.6 ERRO 2: Prevenir ativação de PL decomposto quando capitalSocial=0 ═══
+        // Só passa componentes de PL quando capitalSocial > 0 (decomposição completa informada).
+        // Caso contrário, motor usa patrimonioLiquido direto (evita basePL = lucrosAcumulados apenas).
+        // Também corrige dupla contagem: antes lucrosAcumulados incluía reservasLucros duplicado.
         var _numMesesJCP = 12;
-        jcpResult = LR.calcular.jcp({
+        var _csJCPMain = _n(d.capitalSocial);
+        var _jcpParamsMain = {
           patrimonioLiquido: plParaJCP,
-          capitalSocial: _n(d.capitalSocial) || null,
-          reservasCapital: _n(d.reservasCapital),
-          reservasLucros: _n(d.reservasLucros),
-          lucrosAcumulados: _n(d.lucrosAcumulados) + _n(d.reservasLucros),
-          prejuizosAcumulados: _n(d.prejuizosContabeis),
           tjlp: _tjlpInformada / 100,
           lucroLiquidoAntes: lucroLiquido,
           lucroRealAnual: Math.max(lucroRealFinal, 0),
           numMeses: _numMesesJCP
-        });
+        };
+        if (_csJCPMain > 0) {
+          _jcpParamsMain.capitalSocial = _csJCPMain;
+          _jcpParamsMain.reservasCapital = _n(d.reservasCapital);
+          _jcpParamsMain.reservasLucros = _n(d.reservasLucros);
+          _jcpParamsMain.lucrosAcumulados = _n(d.lucrosAcumulados); // sem somar reservasLucros (já em campo separado)
+          _jcpParamsMain.prejuizosAcumulados = _n(d.prejuizosContabeis);
+        }
+        jcpResult = LR.calcular.jcp(_jcpParamsMain);
         // Marcar no resultado se usou taxa default
         if (jcpResult && _tjlpUsarDefault) {
           jcpResult.tjlpDefault = true;
@@ -3579,8 +3633,10 @@
               ? "50% do lucro líquido (R$ " + _m(_limiteCap1) + ")"
               : "50% dos lucros acumulados + reservas (R$ " + _m(_limiteCap2) + ")";
             // Recalcular economias com o cap aplicado
-            var _aliqIRPJjcp = lucroRealFinal > 240000 ? 0.25 : 0.15;
-            jcpResult.economiaIRPJ = _r(jcpResult.jcpDedutivel * _aliqIRPJjcp);
+            // ═══ FIX AUDITORIA v4.6: Usar _irpj diferencial (marginal) com suporte trimestral ═══
+            // Antes: usava alíquota fixa (25%/15%) com limiar R$240k, ignorando trimestral.
+            // Agora: calcula economia como IRPJ(sem JCP) - IRPJ(com JCP), capturando faixa correta.
+            jcpResult.economiaIRPJ = _r(_irpj(Math.max(lucroRealFinal, 0), _isTrimestral) - _irpj(Math.max(lucroRealFinal - jcpResult.jcpDedutivel, 0), _isTrimestral));
             jcpResult.economiaCSLL = _r(jcpResult.jcpDedutivel * _aliqCSLLEmpresa);
             jcpResult.custoIRRF = _r(jcpResult.jcpDedutivel * 0.175);
             jcpResult.economiaLiquida = _r(jcpResult.economiaIRPJ + jcpResult.economiaCSLL - jcpResult.custoIRRF);
@@ -3651,7 +3707,7 @@
         // Subcapitalização
         if (subcapResult && subcapResult.excedeu === true && subcapResult.jurosIndedutiveis > 0) {
           var _baseSubcapJCP = Math.max(_lucroRealComJCP, 0);
-          var _irpjMarginalJCP = _irpj(_baseSubcapJCP + subcapResult.jurosIndedutiveis) - _irpj(_baseSubcapJCP);
+          var _irpjMarginalJCP = _irpj(_baseSubcapJCP + subcapResult.jurosIndedutiveis, _isTrimestral) - _irpj(_baseSubcapJCP, _isTrimestral);
           _irpjComJCPAposReducao = _r(_irpjComJCPAposReducao + _irpjMarginalJCP);
         }
         irpjComJCP.irpjAPagar = _r(_irpjComJCPAposReducao - totalIRRF - estimIRPJPagas);
@@ -4005,7 +4061,7 @@
     // Usa _irpj() diferencial para capturar corretamente a faixa do adicional de 10%
     var _gratAdm = _n(d.gratificacoesAdm);
     var economiaGratificacao = _gratAdm > 0
-      ? _r((_irpj(lucroRealFinal) - _irpj(lucroRealFinal - _gratAdm)) + _gratAdm * _aliqEfetCSLL)
+      ? _r((_irpj(lucroRealFinal, _isTrimestral) - _irpj(lucroRealFinal - _gratAdm, _isTrimestral)) + _gratAdm * _aliqEfetCSLL)
       : 0;
     var economiaCPRBFinal = cprbResult ? cprbResult.economia : 0;
     // ═══ CORREÇÃO BUG CRÍTICO 1: PDD já reduz IRPJ/CSLL via exclusões LALUR — não contar 2x ═══
@@ -4013,7 +4069,7 @@
     // PDD info: economia marginal (quanto IRPJ+CSLL seria MAIOR se não houvesse a exclusão PDD)
     var _totalPDDBruto = _n(d.perdasCreditos6Meses) + _n(d.perdasCreditosJudicial) + _n(d.perdasCreditosFalencia);
     var totalPDDInfo = _totalPDDBruto > 0
-      ? _r((_irpj(lucroRealFinal + _totalPDDBruto) - _irpj(lucroRealFinal)) + _totalPDDBruto * _aliqEfetCSLL)
+      ? _r((_irpj(lucroRealFinal + _totalPDDBruto, _isTrimestral) - _irpj(lucroRealFinal, _isTrimestral)) + _totalPDDBruto * _aliqEfetCSLL)
       : 0;
 
     // ═══ CORREÇÃO ERRO BAIXO #8: Separar economias REALIZADAS vs OPORTUNIDADE ═══
@@ -4097,7 +4153,7 @@
       var econAcum = 0;
 
       // Razão SUDAM: preservar para anos futuros
-      var _irpjBrutoAno1 = _irpj(Math.max(lucroRealFinal, 0));
+      var _irpjBrutoAno1 = _irpj(Math.max(lucroRealFinal, 0), _isTrimestral);
       var _ratioSUDAM = _irpjBrutoAno1 > 0 ? irpjAposReducao / _irpjBrutoAno1 : 1;
       var _aliqCSLLProj = _aliqEfetCSLL; // 0.09 ou 0.15 (financeiras)
 
@@ -4138,7 +4194,7 @@
           _saldoPF = _r(_saldoPF - _compPFAno); // consumir saldo
 
           // IRPJ progressivo: _irpj() captura corretamente o adicional de 10%
-          var _irpjProj = _r(_irpj(Math.max(_lucroRealProj, 0)) * _ratioSUDAM);
+          var _irpjProj = _r(_irpj(Math.max(_lucroRealProj, 0), _isTrimestral) * _ratioSUDAM);
 
           // CSLL: compensar base negativa do saldo remanescente
           var _baseCSLLProj = _r(_baseCSLLAjAno1 * fator);
@@ -4422,6 +4478,8 @@
       aliqEfetIRPJ: _aliqEfetIRPJ,
       aliqEfetCSLL: _aliqEfetCSLL,
       numMeses: _numMeses,
+      // ═══ FIX AUDITORIA v4.6: Passar flag trimestral para oportunidades usarem _irpj() correto ═══
+      trimestral: _isTrimestral,
       // ═══ FIX AUDITORIA: Passar issAnual para Simulação Integrada incluir PIS/COFINS+ISS ═══
       issAnual: issAnual
     });
@@ -4787,7 +4845,7 @@
     if (totalRet > 0) {
       // IRPJ+CSLL estimados para comparação (IRPJ marginal correto)
       var _laEst = Math.max(_calcLucroAjustado(), 0);
-      var irpjEst = _irpj(_laEst);
+      var irpjEst = _irpj(_laEst, dadosEmpresa.apuracaoLR === "trimestral");
       var csllEst = _r(_laEst * 0.09);
       if (totalRet > irpjEst + csllEst && irpjEst + csllEst > 0) {
         alertas.push({ tipo: "info", msg: "Retenções excedem imposto estimado — pode gerar saldo negativo (PER/DCOMP)" });
@@ -5094,7 +5152,7 @@
       // CORREÇÃO ERRO 3: Usar _irpj diferencial (marginal) em vez de 0.34 fixo
       var _gratVal = _n(d.gratificacoesAdm);
       var _lrCtx = ctx.lucroRealFinal || 0;
-      var _econIRPJGrat = _r(_irpj(Math.max(_lrCtx, 0)) - _irpj(Math.max(_lrCtx - _gratVal, 0)));
+      var _econIRPJGrat = _r(_irpj(Math.max(_lrCtx, 0), ctx.trimestral) - _irpj(Math.max(_lrCtx - _gratVal, 0), ctx.trimestral));
       var _aliqCSLLGrat = ctx.aliqEfetCSLL || 0.09;
       var econGrat = _r(_econIRPJGrat + _gratVal * _aliqCSLLGrat);
       var _aliqMargGrat = _gratVal > 0 ? _r(econGrat / _gratVal * 100) : 34;
@@ -5181,7 +5239,7 @@
       // Isso captura corretamente a faixa do adicional de 10% conforme o porte da empresa
       var _lrFinal = ctx.lucroRealFinal || 0;
       var _aliqCSLLCtx = ctx.aliqEfetCSLL || 0.09;
-      var econIRPJPDD = _r(_irpj(_lrFinal + totalPDDOp) - _irpj(_lrFinal));
+      var econIRPJPDD = _r(_irpj(_lrFinal + totalPDDOp, ctx.trimestral) - _irpj(_lrFinal, ctx.trimestral));
       var econCSLLPDD = _r(totalPDDOp * _aliqCSLLCtx);
       var econPDDOp = _r(econIRPJPDD + econCSLLPDD);
       var aliqPDDUsada = totalPDDOp > 0 ? _r(econPDDOp / totalPDDOp * 100) : 34;
@@ -6113,8 +6171,11 @@
       }
       var lucroRealC = Math.max(lucroAjC - compPF, 0);
 
-      // IRPJ sobre lucro real do cenário
-      var irpjC = _r(lucroRealC * 0.15 + Math.max(lucroRealC - 240000, 0) * 0.10);
+      // ═══ FIX AUDITORIA v4.6 ERRO 1: Usar _irpj() parametrizado para trimestral ═══
+      // Antes: fórmula inline com R$240k fixo (anual) mesmo na apuração trimestral.
+      // Agora: _irpj(lr, trimestral) simula 4 trimestres com R$60k/tri quando trimestral.
+      var _isTrimCenario = d.apuracaoLR === "trimestral";
+      var irpjC = _r(_irpj(lucroRealC, _isTrimCenario));
 
       // CSLL com compensação de base negativa (30%)
       var compBN = 0;
