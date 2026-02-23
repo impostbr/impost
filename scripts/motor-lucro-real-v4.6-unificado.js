@@ -1201,7 +1201,7 @@ function calcularIRPJLucroReal(dados) {
  * @param {number} saldoPrejuizo  - Saldo de prejuízo fiscal (LALUR Parte B)
  * @returns {Object}
  */
-function compensarPrejuizo(lucroRealAntes, saldoPrejuizo, aliquotaCSLL = 0.09) {
+function compensarPrejuizo(lucroRealAntes, saldoPrejuizo, aliquotaCSLL = 0.09, trimestral = false) {
   // Se houver prejuízo no período, acumula
   if (lucroRealAntes <= 0) {
     return {
@@ -1231,9 +1231,9 @@ function compensarPrejuizo(lucroRealAntes, saldoPrejuizo, aliquotaCSLL = 0.09) {
     lucroRealFinal,
     saldoRemanescente: novoSaldo,
     prejuizoPeriodo: 0,
-    economiaIRPJ: _calcularIRPJ(lucroRealAntes) - _calcularIRPJ(lucroRealFinal),
+    economiaIRPJ: _calcularIRPJ(lucroRealAntes, trimestral) - _calcularIRPJ(lucroRealFinal, trimestral),
     economiaCSLL: economiaCSLL,
-    economiaTotal: (_calcularIRPJ(lucroRealAntes) - _calcularIRPJ(lucroRealFinal)) + economiaCSLL,
+    economiaTotal: (_calcularIRPJ(lucroRealAntes, trimestral) - _calcularIRPJ(lucroRealFinal, trimestral)) + economiaCSLL,
   };
 }
 
@@ -1623,10 +1623,15 @@ function calcularJCP(dados) {
   const _lacum_motor = Number(lucrosAcumulados) || 0;
 
   // ═══ Determinar base do PL: decomposta (Lei 12.973) ou valor direto (retrocompatível) ═══
-  const temPLDecomposto = (_cs > 0 || _rc > 0 || _rl > 0 || _at > 0 || _pa > 0 || _lacum_motor > 0);
+  // FIX v5.7 (ERRO 2): Modo decomposto agora requer capitalSocial > 0 como indicador
+  // primário. Antes, bastava lucrosAcumulados > 0 para ativar o modo decomposto,
+  // o que fazia basePL = lucrosAcumulados (ex: 150.000) em vez de patrimonioLiquido (600.000)
+  // quando o caller passava ambos. Se PL direto está disponível e capitalSocial não foi
+  // informado, usa PL direto como fallback seguro.
+  const temPLDecomposto = _cs > 0 && (_cs + _rc + _rl + _lacum_motor - _at - _pa) > 0;
   const basePL = temPLDecomposto
     ? (_cs + _rc + _rl + _lacum_motor - _at - _pa)
-    : _pl;
+    : (_pl > 0 ? _pl : (_cs + _rc + _rl + _lacum_motor - _at - _pa));
 
   if (basePL <= 0) {
     return {
@@ -3389,7 +3394,8 @@ function compensarPrejuizoFiscal(dados) {
   const {
     lucroRealAjustado,
     saldoPrejuizoFiscal,
-    atividadeRural = false
+    atividadeRural = false,
+    trimestral = false
   } = dados;
 
   const resultado = {
@@ -3439,8 +3445,8 @@ function compensarPrejuizoFiscal(dados) {
   resultado.ajusteLalur.valor = resultado.compensacaoEfetiva;
 
   // Calcular economia tributária (IRPJ)
-  const irpjSemCompensacao = _calcularIRPJ(lucroRealAjustado);
-  const irpjComCompensacao = _calcularIRPJ(resultado.lucroRealAposCompensacao);
+  const irpjSemCompensacao = _calcularIRPJ(lucroRealAjustado, trimestral);
+  const irpjComCompensacao = _calcularIRPJ(resultado.lucroRealAposCompensacao, trimestral);
   resultado.economia.irpj = irpjSemCompensacao - irpjComCompensacao;
 
   // Observações adicionais
@@ -3539,7 +3545,8 @@ function compensarPrejuizoNaoOperacional(dados) {
   const {
     lucroNaoOperacional,
     saldoPrejuizoNaoOperacional,
-    perdaPorObsolescencia = false
+    perdaPorObsolescencia = false,
+    trimestral = false
   } = dados;
 
   const resultado = {
@@ -3585,8 +3592,8 @@ function compensarPrejuizoNaoOperacional(dados) {
   resultado.ajusteLalur.valor = resultado.compensacaoEfetiva;
 
   // Economia
-  resultado.economia.irpj = _calcularIRPJ(lucroNaoOperacional)
-    - _calcularIRPJ(lucroNaoOperacional - resultado.compensacaoEfetiva);
+  resultado.economia.irpj = _calcularIRPJ(lucroNaoOperacional, trimestral)
+    - _calcularIRPJ(lucroNaoOperacional - resultado.compensacaoEfetiva, trimestral);
   resultado.economia.total = resultado.economia.irpj;
 
   resultado.observacoes.push(
@@ -3789,7 +3796,8 @@ function compensarIntegrado(dados) {
   if (lucroNaoOperacional > 0 && saldoPrejuizoNaoOperacional > 0) {
     const compNaoOp = compensarPrejuizoNaoOperacional({
       lucroNaoOperacional,
-      saldoPrejuizoNaoOperacional
+      saldoPrejuizoNaoOperacional,
+      trimestral
     });
     resultado.etapa2_compensacaoNaoOperacional = compNaoOp;
 
@@ -3803,7 +3811,8 @@ function compensarIntegrado(dados) {
     const compOp = compensarPrejuizoFiscal({
       lucroRealAjustado: lucroRealCorrente,
       saldoPrejuizoFiscal: saldoPrejuizoOperacional,
-      atividadeRural
+      atividadeRural,
+      trimestral
     });
     resultado.etapa3_compensacaoOperacional = compOp;
 
@@ -4099,14 +4108,16 @@ function gerarRelatorioA(dados) {
 
 /**
  * Calcula o IRPJ (15% + adicional 10%) sobre um valor de lucro real.
- * @param {number} lucroReal - Valor do lucro real (anual)
+ * @param {number} lucroReal - Valor do lucro real
+ * @param {boolean} [trimestral=false] - Se true, usa limite trimestral (R$ 60k); senão, anual (R$ 240k)
  * @returns {number} Valor do IRPJ devido
  * @private
  */
-function _calcularIRPJ(lucroReal) {
+function _calcularIRPJ(lucroReal, trimestral) {
   if (lucroReal <= 0) return 0;
   const normal = lucroReal * ALIQUOTAS.irpj.normal;
-  const baseAdicional = Math.max(0, lucroReal - ALIQUOTAS.irpj.limiteAdicionalAnual);
+  const limite = trimestral ? ALIQUOTAS.irpj.limiteAdicionalTrimestral : ALIQUOTAS.irpj.limiteAdicionalAnual;
+  const baseAdicional = Math.max(0, lucroReal - limite);
   const adicional = baseAdicional * ALIQUOTAS.irpj.adicional;
   return normal + adicional;
 }
@@ -4116,13 +4127,10 @@ function _calcularIRPJ(lucroReal) {
  * @param {number} lucroReal - Valor do lucro real (trimestral)
  * @returns {number} Valor do IRPJ devido
  * @private
+ * @deprecated Use _calcularIRPJ(lucroReal, true) em vez desta função
  */
 function _calcularIRPJTrimestral(lucroReal) {
-  if (lucroReal <= 0) return 0;
-  const normal = lucroReal * ALIQUOTAS.irpj.normal;
-  const baseAdicional = Math.max(0, lucroReal - ALIQUOTAS.irpj.limiteAdicionalTrimestral);
-  const adicional = baseAdicional * ALIQUOTAS.irpj.adicional;
-  return normal + adicional;
+  return _calcularIRPJ(lucroReal, true);
 }
 
 // ============================================================================
@@ -9421,7 +9429,7 @@ function calcularIRRFJCP(params) {
     artigo: 'Art. 726',
     baseLegal: 'Lei 9.249/1995, art. 9º, §2º',
     valorJCP,
-    aliquota: '15%',
+    aliquota: `${(IRRF_JCP.aliquota * 100).toFixed(1)}%`,
     irrfRetido,
     valorLiquido: valorJCP - irrfRetido,
     tipoBeneficiario,
