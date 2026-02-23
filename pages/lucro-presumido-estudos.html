@@ -890,6 +890,33 @@ function fmtPct(v) { const p = v * 100; return (p % 1 === 0 ? p.toFixed(0) : p.t
 function $(id) { return document.getElementById(id); }
 function $$(sel) { return document.querySelectorAll(sel); }
 
+/** Converte mensagens de erro técnicas em mensagens amigáveis para o usuário */
+function humanizarErro(msg) {
+  if (!msg) return 'Ocorreu um erro inesperado. Tente novamente.';
+  var mapa = {
+    'calcularLucroPresumidoTrimestral': 'Erro no cálculo trimestral. Verifique os dados informados.',
+    'calcularAnualConsolidado': 'Erro ao consolidar o cálculo anual. Verifique os dados.',
+    'calcularEstudoCompleto': 'Erro no estudo completo. Verifique os dados informados.',
+    'receitaBrutaTrimestral deve ser': 'A receita bruta trimestral deve ser um valor positivo.',
+    'receitaBrutaAnual deve ser': 'A receita bruta anual deve ser um valor positivo.',
+    'campo obrigatório': 'Há campos obrigatórios não preenchidos.',
+    'Atividade não encontrada': 'Atividade econômica não reconhecida. Selecione outra.',
+    'Motor lucro_presumido.js não carregado': 'Erro interno — recarregue a página.',
+    'params deve ser um objeto': 'Erro interno — recarregue a página.',
+    'LucroPresumido is not defined': 'Motor de cálculo não carregado. Recarregue a página.',
+    'Cannot read prop': 'Dados incompletos para o cálculo. Verifique os campos.',
+    'is not a function': 'Erro interno — recarregue a página.'
+  };
+  for (var chave in mapa) {
+    if (msg.indexOf(chave) !== -1) return mapa[chave];
+  }
+  // Fallback: se mensagem parece técnica, substituir
+  if (msg.length > 120 || msg.indexOf('()') !== -1 || msg.indexOf('undefined') !== -1 || msg.indexOf('null') !== -1) {
+    return 'Ocorreu um erro no cálculo. Verifique os dados informados e tente novamente. Se o problema persistir, recarregue a página.';
+  }
+  return msg;
+}
+
 // ─────────────────────────────────────────────────────────────────────────
 // 3. WIZARD NAVIGATION
 // ─────────────────────────────────────────────────────────────────────────
@@ -933,16 +960,47 @@ function goToStep(n) {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
+function validarStep(step) {
+  var erros = [];
+  if (step === 1) {
+    // CNPJ: se preenchido, deve ser válido
+    var cnpjVal = ($('cnpj').value || '').replace(/\D/g, '');
+    if (cnpjVal.length > 0 && cnpjVal.length < 14) {
+      erros.push('CNPJ incompleto — deve ter 14 dígitos.');
+    } else if (cnpjVal.length === 14 && !validateCNPJ(cnpjVal)) {
+      erros.push('CNPJ inválido — dígitos verificadores não conferem.');
+    }
+  }
+  if (step === 3) {
+    // Pelo menos uma receita informada
+    var temReceita = false;
+    $$('#tbodyReceitasSimp tr').forEach(function(tr) {
+      var inp = tr.querySelector('.money');
+      if (inp && parseMoney(inp.value) > 0) temReceita = true;
+    });
+    if (!temReceita) {
+      erros.push('Informe pelo menos uma receita com valor positivo.');
+    }
+  }
+  if (step === 4) {
+    // Receita bruta anual obrigatória para calcular
+    if (!App.formData.receitaBrutaAnual || App.formData.receitaBrutaAnual <= 0) {
+      erros.push('Informe pelo menos uma receita na etapa 3 (Dados Financeiros) antes de calcular.');
+    }
+  }
+  return erros;
+}
+
 function nextStep() {
   // Sempre coleta dados do formulário antes de navegar (mantém sidebar atualizado)
   gatherFormData();
+  // Validar step atual antes de avançar
+  var erros = validarStep(App.currentStep);
+  if (erros.length > 0) {
+    alert(erros.join('\n'));
+    return;
+  }
   if (App.currentStep === 4) {
-    // Validate: ensure at least some revenue is entered
-    if (!App.formData.receitaBrutaAnual || App.formData.receitaBrutaAnual <= 0) {
-      alert('Informe pelo menos uma receita na etapa 3 (Dados Financeiros) antes de calcular os resultados.');
-      goToStep(3);
-      return;
-    }
     goToStep(5);
     return;
   }
@@ -1251,7 +1309,8 @@ function checkElegibilidade() {
       $('sbElegibilidade').innerHTML = '<span class="badge badge-warn">Elegível (alertas)</span>';
     }
   } catch(e) {
-    $('elegibilidadeResult').innerHTML = `<div class="info-box danger">Erro: ${escapeHtml(e.message)}</div>`;
+    console.error('[IMPOST] Erro elegibilidade:', e);
+    $('elegibilidadeResult').innerHTML = `<div class="info-box danger">${escapeHtml(humanizarErro(e.message))}</div>`;
   }
 }
 
@@ -1265,7 +1324,75 @@ function setModoFinanceiro(modo) {
   });
   $('modoSimplificado').style.display = modo === 'simplificado' ? 'block' : 'none';
   $('modoDetalhado').style.display = modo === 'detalhado' ? 'block' : 'none';
-  if (modo === 'detalhado' && !$('trimContent').children.length) buildTrimestralForms();
+  var firstBuild = !$('trimContent').children.length;
+  if (modo === 'detalhado' && firstBuild) buildTrimestralForms();
+  // Herdar dados do simplificado para o detalhado ao trocar de modo
+  if (modo === 'detalhado') preencherDetalhado();
+}
+
+function preencherDetalhado() {
+  // Ler receitas do modo simplificado
+  var receitasSimp = [];
+  $$('#tbodyReceitasSimp tr').forEach(function(tr) {
+    var sel = tr.querySelector('.rec-ativ');
+    var inp = tr.querySelector('.money');
+    if (sel && inp) {
+      var valor = parseMoney(inp.value);
+      if (valor > 0) receitasSimp.push({ atividadeId: sel.value, valor: valor });
+    }
+  });
+  if (receitasSimp.length === 0) return;
+  // Para cada trimestre, pré-preencher se a primeira linha estiver vazia
+  for (var q = 1; q <= 4; q++) {
+    var tbody = $('tbodyRecTrim' + q);
+    if (!tbody) continue;
+    var rows = tbody.querySelectorAll('tr');
+    // Se já tem dados (receita > 0), não sobrescrever
+    var temDados = false;
+    rows.forEach(function(tr) {
+      var inp = tr.querySelector('.money');
+      if (inp && parseMoney(inp.value) > 0) temDados = true;
+    });
+    if (temDados) continue;
+    // Preencher: para cada receita simplificada, dividir por 4
+    receitasSimp.forEach(function(rec, idx) {
+      // Primeira receita vai na row existente, as demais adicionam nova row
+      if (idx > 0) addLinhaReceita('tbodyRecTrim' + q, rec.atividadeId);
+      var updatedRows = tbody.querySelectorAll('tr');
+      var tr = updatedRows[idx];
+      if (!tr) return;
+      var sel = tr.querySelector('.rec-ativ');
+      var inp = tr.querySelector('.money');
+      if (sel) sel.value = rec.atividadeId;
+      if (inp) {
+        var valorTrim = Math.round(rec.valor / 4 * 100) / 100;
+        inp.value = valorTrim.toFixed(2).replace('.', ',');
+        maskMoney(inp);
+      }
+    });
+  }
+  // Pré-preencher deduções trimestrais (dividir por 4)
+  var camposDeducao = [
+    { simpId: 'devolucoes', trimPrefixo: 'trimDev' },
+    { simpId: 'cancelamentos', trimPrefixo: 'trimCanc' },
+    { simpId: 'descontos', trimPrefixo: 'trimDesc' },
+    { simpId: 'ganhosCapital', trimPrefixo: 'trimGanhos' },
+    { simpId: 'rendFinanceiros', trimPrefixo: 'trimRendFin' },
+    { simpId: 'irrfRetido', trimPrefixo: 'trimIRRF' },
+    { simpId: 'csllRetida', trimPrefixo: 'trimCSLL' }
+  ];
+  camposDeducao.forEach(function(c) {
+    var valorAnual = parseMoney($(c.simpId) ? $(c.simpId).value : '');
+    if (valorAnual <= 0) return;
+    var valorTrim = Math.round(valorAnual / 4 * 100) / 100;
+    for (var q = 1; q <= 4; q++) {
+      var campo = $(c.trimPrefixo + q);
+      if (campo && !parseMoney(campo.value)) {
+        campo.value = valorTrim.toFixed(2).replace('.', ',');
+        maskMoney(campo);
+      }
+    }
+  });
 }
 
 function buildActivitySelect(selectedId) {
@@ -1538,7 +1665,7 @@ function runAllCalculations() {
           receitaBrutaAnual: d.receitaBrutaAnual,
           atividadeId: d.atividadeId,
           folhaPagamentoAnual: d.folhaPagamento || 0,
-          totalDespesasOperacionais: (d.totalDespesas || 0) + (d.folhaPagamento || 0),
+          totalDespesasOperacionais: d.totalDespesas || 0,
           creditosPISCOFINS: d.creditosPISCOFINS || 0,
           temEscrituracao: !!d.temEscrituracao,
           temEquipamentos: !!d.temEquipamentos,
@@ -1564,7 +1691,8 @@ function runAllCalculations() {
     updateSidebar();
   } catch(e) {
     console.error('Erro nos calculos:', e);
-    $('tabSim').innerHTML = `<div class="info-box danger">Erro ao calcular: ${escapeHtml(e.message)}. Verifique os dados informados.</div>`;
+    console.error('[IMPOST] Erro nos cálculos:', e);
+    $('tabSim').innerHTML = `<div class="info-box danger">${escapeHtml(humanizarErro(e.message))}</div>`;
   }
 }
 
@@ -1585,15 +1713,15 @@ function renderSimulacao(d) {
         <div class="kpi"><div class="kpi-label">IRPJ</div><div class="kpi-value" style="color:var(--danger)">${formatMoney(sim.irpj.total)}</div><div class="kpi-sub">Normal ${formatMoney(sim.irpj.normal)} + Adic. ${formatMoney(sim.irpj.adicional)}</div></div>
         <div class="kpi"><div class="kpi-label">CSLL</div><div class="kpi-value" style="color:var(--danger)">${formatMoney(sim.csll)}</div></div>
         <div class="kpi"><div class="kpi-label">PIS + COFINS</div><div class="kpi-value" style="color:var(--warn)">${formatMoney(sim.pisTrimestral + sim.cofinsTrimestral)}</div><div class="kpi-sub">PIS ${formatMoney(sim.pisTrimestral)} | COFINS ${formatMoney(sim.cofinsTrimestral)}</div></div>
-        <div class="kpi"><div class="kpi-label">Total Tributos Federais</div><div class="kpi-value" style="color:var(--danger)">${formatMoney(sim.totalTributosFederais)}</div></div>
-        <div class="kpi"><div class="kpi-label">Alíquota Efetiva</div><div class="kpi-value" style="color:var(--info)">${sim.aliquotaEfetiva}</div></div>
+        <div class="kpi"><div class="kpi-label">Total Tributos Federais</div><div class="kpi-value" style="color:var(--danger)">${formatMoney(sim.totalTributosFederais)}</div><div class="kpi-sub">IRPJ + CSLL + PIS + COFINS</div></div>
+        <div class="kpi"><div class="kpi-label">Alíquota Efetiva Federal</div><div class="kpi-value" style="color:var(--info)">${sim.aliquotaEfetiva}</div><div class="kpi-sub">Não inclui ISS nem INSS patronal</div></div>
       </div>
       <div class="info-box info" style="margin-top:12px"><strong>Atividade:</strong> ${sim.atividade}<br>${sim.observacao}</div>
       <div style="margin-top:16px;padding:12px;background:rgba(100,116,139,.08);border-radius:6px;border-left:3px solid var(--text3)">
         <p style="font-size:10px;color:var(--text3);line-height:1.5;margin:0"><strong>AVISO LEGAL:</strong> Os cálculos apresentados são estimativas baseadas na legislação vigente (RIR/2018, IN RFB 1.700/2017, LC 224/2025) e nos dados informados pelo usuário. Este sistema NÃO substitui a orientação de um contador ou advogado tributarista. Os resultados devem ser validados por profissional habilitado antes de qualquer tomada de decisão fiscal. O IMPOST não se responsabiliza por decisões tomadas com base exclusivamente nesta simulação.</p>
       </div>`;
   } catch(e) {
-    $('tabSim').innerHTML = `<div class="info-box danger">Erro: ${escapeHtml(e.message)}</div>`;
+    $('tabSim').innerHTML = `<div class="info-box danger">${escapeHtml(humanizarErro(e.message))}</div>`;
   }
 }
 
@@ -1640,7 +1768,7 @@ function renderTrimestral(d) {
       html += `<td class="right mono" style="font-weight:700">${formatMoney(total)}</td></tr>`;
     });
     html += '</tbody></table>';
-    html += `<div class="info-box info" style="margin-top:12px"><strong>DARF IRPJ:</strong> Código ${trimResults[0].resumo.codigoDARF_IRPJ} | <strong>DARF CSLL:</strong> Código ${trimResults[0].resumo.codigoDARF_CSLL}<br>Alíquota efetiva sobre receita: ${trimResults[0].resumo.aliquotaEfetivaReceita}</div>`;
+    html += `<div class="info-box info" style="margin-top:12px"><strong>DARF IRPJ:</strong> Código ${trimResults[0].resumo.codigoDARF_IRPJ} | <strong>DARF CSLL:</strong> Código ${trimResults[0].resumo.codigoDARF_CSLL}<br>Alíquota efetiva federal sobre receita: ${trimResults[0].resumo.aliquotaEfetivaReceita} <small style="color:var(--text3)">(IRPJ + CSLL + PIS + COFINS — não inclui ISS nem INSS)</small></div>`;
 
     // LC 224/2025 — Impacto na base presumida (só se receita > R$5M/ano)
     if (d.receitaBrutaAnual > 5000000 && typeof LucroPresumido.calcularBasePresumidaLC224 === 'function') {
@@ -1680,7 +1808,7 @@ function renderTrimestral(d) {
 
     $('tabTrim').innerHTML = html;
   } catch(e) {
-    $('tabTrim').innerHTML = `<div class="info-box danger">Erro: ${escapeHtml(e.message)}</div>`;
+    $('tabTrim').innerHTML = `<div class="info-box danger">${escapeHtml(humanizarErro(e.message))}</div>`;
   }
 }
 
@@ -1765,7 +1893,7 @@ function renderPISCOFINS(d) {
 
     $('tabPiscofins').innerHTML = html;
   } catch(e) {
-    $('tabPiscofins').innerHTML = `<div class="info-box danger">Erro: ${escapeHtml(e.message)}</div>`;
+    $('tabPiscofins').innerHTML = `<div class="info-box danger">${escapeHtml(humanizarErro(e.message))}</div>`;
   }
 }
 
@@ -1801,8 +1929,8 @@ function renderAnual(d) {
     let html = `<div class="kpi-grid">
       <div class="kpi"><div class="kpi-label">Receita Bruta Informada</div><div class="kpi-value" style="color:var(--accent)">${formatMoney(d.receitaBrutaAnual)}</div></div>
       <div class="kpi"><div class="kpi-label">Receita Líquida (Base)</div><div class="kpi-value" style="color:var(--accent)">${formatMoney(anual.receitaBrutaAnual)}</div><div class="kpi-sub">Após deduções (devoluções, cancelamentos, descontos)</div></div>
-      <div class="kpi"><div class="kpi-label">Carga Tributária Total</div><div class="kpi-value" style="color:var(--danger)">${formatMoney(anual.consolidacao.cargaTributariaTotal)}</div></div>
-      <div class="kpi"><div class="kpi-label">% sobre Receita</div><div class="kpi-value" style="color:var(--warn)">${anual.consolidacao.percentualCargaTributaria}</div></div>
+      <div class="kpi"><div class="kpi-label">Carga Tributária Total</div><div class="kpi-value" style="color:var(--danger)">${formatMoney(anual.consolidacao.cargaTributariaTotal)}</div><div class="kpi-sub">IRPJ + CSLL + PIS + COFINS + ISS + INSS patronal</div></div>
+      <div class="kpi"><div class="kpi-label">% sobre Receita</div><div class="kpi-value" style="color:var(--warn)">${anual.consolidacao.percentualCargaTributaria}</div><div class="kpi-sub">Carga total (todos os tributos)</div></div>
       <div class="kpi"><div class="kpi-label">Lucro Distribuível Isento</div><div class="kpi-value" style="color:var(--success)">${formatMoney(anual.distribuicaoLucros.lucroDistribuivelFinal)}</div></div>
     </div>`;
     // Tax composition
@@ -1848,7 +1976,7 @@ function renderAnual(d) {
     renderQuarterlyChart(anual);
     renderCompositionChart(anual);
   } catch(e) {
-    $('tabAnual').innerHTML = `<div class="info-box danger">Erro: ${escapeHtml(e.message)}</div>`;
+    $('tabAnual').innerHTML = `<div class="info-box danger">${escapeHtml(humanizarErro(e.message))}</div>`;
   }
 }
 
@@ -1941,7 +2069,7 @@ function renderVantagens(d) {
     html += `<div style="margin-top:16px;display:flex;gap:12px"><div class="kpi" style="flex:1"><div class="kpi-label">Vantagens Aplicáveis</div><div class="kpi-value" style="color:var(--success)">${analise.pontuacao.vantagensAplicaveis}</div></div><div class="kpi" style="flex:1"><div class="kpi-label">Desvantagens Aplicáveis</div><div class="kpi-value" style="color:var(--danger)">${analise.pontuacao.desvantagensAplicaveis}</div></div><div class="kpi" style="flex:1"><div class="kpi-label">Desvantagens Críticas</div><div class="kpi-value" style="color:var(--danger)">${analise.pontuacao.desvantagensCriticas}</div></div></div>`;
     $('tabVantagens').innerHTML = html;
   } catch(e) {
-    $('tabVantagens').innerHTML = `<div class="info-box danger">Erro: ${escapeHtml(e.message)}</div>`;
+    $('tabVantagens').innerHTML = `<div class="info-box danger">${escapeHtml(humanizarErro(e.message))}</div>`;
   }
 }
 
@@ -2061,7 +2189,7 @@ function renderDicas(d) {
         receitaBrutaAnual: d.receitaBrutaAnual,
         atividadeId: d.atividadeId,
         folhaPagamentoAnual: d.folhaPagamento || 0,
-        totalDespesasOperacionais: (d.totalDespesas || 0) + (d.folhaPagamento || 0),
+        totalDespesasOperacionais: d.totalDespesas || 0,
         creditosPISCOFINS: d.creditosPISCOFINS || 0,
         temEscrituracao: !!d.temEscrituracao,
         temEquipamentos: !!d.temEquipamentos,
@@ -2221,7 +2349,8 @@ function recalcProLabore() {
     // Render chart
     renderProLaboreChart(result);
   } catch(e) {
-    $('plResultados').innerHTML = `<div class="info-box danger">Erro na simulação: ${escapeHtml(e.message)}</div>`;
+    console.error('[IMPOST] Erro pró-labore:', e);
+    $('plResultados').innerHTML = `<div class="info-box danger">${escapeHtml(humanizarErro(e.message))}</div>`;
   }
 }
 
@@ -2372,7 +2501,7 @@ function recalcJCP() {
 
     $('jcpResultados').innerHTML = html;
   } catch(e) {
-    $('jcpResultados').innerHTML = `<div class="info-box danger">Erro: ${escapeHtml(e.message)}</div>`;
+    $('jcpResultados').innerHTML = `<div class="info-box danger">${escapeHtml(humanizarErro(e.message))}</div>`;
   }
 }
 
@@ -2397,15 +2526,19 @@ function recalcECD() {
       <div class="kpi"><div class="kpi-label">Limite Presumido</div><div class="kpi-value mono">${formatMoney(result.limitePresumido)}</div><div class="kpi-sub">Sem ECD</div></div>
       <div class="kpi"><div class="kpi-label">Limite Contabil</div><div class="kpi-value mono" style="color:var(--accent)">${formatMoney(result.limiteContabil)}</div><div class="kpi-sub">Com ECD</div></div>
       <div class="kpi"><div class="kpi-label">Distribuição Extra</div><div class="kpi-value" style="color:${result.distribuicaoExtra > 0 ? 'var(--success)' : 'var(--text3)'}">${formatMoney(result.distribuicaoExtra)}</div><div class="kpi-sub">${result.percentualGanho > 0 ? '+' + result.percentualGanho + '%' : 'Sem ganho'}</div></div>
-      <div class="kpi"><div class="kpi-label">Beneficio Liquido</div><div class="kpi-value" style="color:${result.valeAPena ? 'var(--success)' : 'var(--danger)'}; font-weight:700">${formatMoney(result.beneficioLiquido)}</div><div class="kpi-sub">${result.valeAPena ? 'VALE A PENA' : 'NAO COMPENSA'}</div></div>
+      <div class="kpi"><div class="kpi-label">Dist. Isenta Adicional (líq.)</div><div class="kpi-value" style="color:${result.valeAPena ? 'var(--success)' : 'var(--danger)'}; font-weight:700">${formatMoney(result.beneficioLiquido)}</div><div class="kpi-sub">${result.valeAPena ? 'VALE A PENA' : 'NAO COMPENSA'}</div></div>
     </div>`;
 
+    html += `<div style="margin-top:8px;padding:10px 14px;background:rgba(100,116,139,.08);border-left:3px solid var(--info);border-radius:4px;font-size:12px;color:var(--text2)">` +
+      `<strong>O que significa este valor:</strong> É o valor adicional que poderá ser distribuído aos sócios ` +
+      `<strong>sem incidência de IRPF</strong>, descontado o custo da escrituração. Não é uma redução direta de impostos da empresa — ` +
+      `é uma ampliação da distribuição isenta de lucros (Art. 725, §2º RIR/2018). A economia real depende da faixa de IRPF de cada sócio.</div>`;
     html += `<div class="info-box ${result.valeAPena ? 'success' : 'warn'}" style="margin-top:12px"><strong>Resultado:</strong> ${result.recomendacao}</div>`;
     html += `<div class="info-box info" style="margin-top:8px"><strong>Base legal:</strong> ${result.baseLegal}<br><small>Sem ECD, a distribuição isenta fica limitada à base PRESUMIDA. Com ECD (escrituração contábil completa), o limite passa a ser o lucro CONTÁBIL REAL — vantajoso quando a margem real supera a presunção.</small></div>`;
 
     $('ecdResultados').innerHTML = html;
   } catch(e) {
-    $('ecdResultados').innerHTML = `<div class="info-box danger">Erro: ${escapeHtml(e.message)}</div>`;
+    $('ecdResultados').innerHTML = `<div class="info-box danger">${escapeHtml(humanizarErro(e.message))}</div>`;
   }
 }
 
@@ -2544,7 +2677,7 @@ function recalcCaixaComp() {
     // Render chart
     renderCaixaCompChart(result);
   } catch(e) {
-    $('cxResultados').innerHTML = `<div class="info-box danger">Erro: ${escapeHtml(e.message)}</div>`;
+    $('cxResultados').innerHTML = `<div class="info-box danger">${escapeHtml(humanizarErro(e.message))}</div>`;
   }
 }
 
@@ -2646,7 +2779,8 @@ function renderBreakeven(d) {
     $('tabBreakeven').innerHTML = html;
     renderBreakevenChart(resultado);
   } catch(e) {
-    $('tabBreakeven').innerHTML = '<div class="wz-card"><p style="color:var(--danger)">Erro ao calcular break-even: ' + escapeHtml(e.message) + '</p></div>';
+    console.error('[IMPOST] Erro break-even:', e);
+    $('tabBreakeven').innerHTML = '<div class="wz-card"><p style="color:var(--danger)">' + escapeHtml(humanizarErro(e.message)) + '</p></div>';
   }
 }
 
@@ -2804,6 +2938,16 @@ function renderCalendario(d) {
       <p style="font-size:11px;color:var(--text3)">CSRF Retencoes: 5952 (PIS 0,65% + COFINS 3% + CSLL 1%). Dispensa: pagamentos &#8804; R$ 5.000/mes ao mesmo fornecedor.</p>
     </div>`;
 
+    // Nota explicativa: diferença entre total do calendário e carga tributária total
+    const cargaTotalConsolidado = anual && anual.consolidacao ? anual.consolidacao.cargaTributariaTotal : 0;
+    const diffCalendario = Math.abs(t.total - cargaTotalConsolidado);
+    if (diffCalendario > 1) {
+      html += `<div style="margin-top:12px;padding:10px 14px;background:rgba(255,243,205,.1);border-left:4px solid #FFC107;border-radius:4px;font-size:12px;color:var(--text2)">` +
+        `<strong style="color:#FFC107">Nota:</strong> O total do calendário (${formatMoney(t.total)}) pode diferir da carga tributária consolidada (${formatMoney(cargaTotalConsolidado)}) ` +
+        `devido a acréscimos de SELIC no parcelamento de quotas, arredondamentos trimestrais ou diferenças no rateio mensal do INSS patronal (GPS/eSocial). ` +
+        `A carga na aba <strong>Anual</strong> é o valor de referência.</div>`;
+    }
+
     // Obrigações Acessórias com prazos
     const obrigacoes = LucroPresumido.OBRIGACOES_ACESSORIAS;
     if (obrigacoes) {
@@ -2842,7 +2986,8 @@ function renderCalendario(d) {
     $('tabCalendario').innerHTML = html;
     renderCalendarioChart(resultado);
   } catch(e) {
-    $('tabCalendario').innerHTML = '<div class="wz-card"><p style="color:var(--danger)">Erro ao gerar calendário: ' + escapeHtml(e.message) + '</p></div>';
+    console.error('[IMPOST] Erro calendário:', e);
+    $('tabCalendario').innerHTML = '<div class="wz-card"><p style="color:var(--danger)">' + escapeHtml(humanizarErro(e.message)) + '</p></div>';
   }
 }
 
@@ -3094,7 +3239,7 @@ function salvarEstudo() {
       alert('Erro ao salvar no navegador (armazenamento cheio ou indisponivel). Tente exportar como PDF ou CSV.');
     }
   } catch(e) {
-    alert('Erro ao salvar: ' + e.message);
+    console.error('[IMPOST] Erro ao salvar:', e); alert('Erro ao salvar o estudo. Tente novamente.');
   }
 }
 
@@ -3186,7 +3331,7 @@ function carregarEstudo() {
     updateSidebar();
     alert('Estudo carregado! Salvo em: ' + new Date(study.ts).toLocaleString('pt-BR'));
   } catch(e) {
-    alert('Erro ao carregar: ' + e.message);
+    console.error('[IMPOST] Erro ao carregar:', e); alert('Erro ao carregar o estudo salvo. Os dados podem estar corrompidos.');
   }
 }
 
@@ -3219,8 +3364,8 @@ function exportPDF() {
       setTimeout(function() { var ps = document.getElementById('printStyle'); if (ps) ps.remove(); if (disclaimer.parentNode) disclaimer.remove(); }, 1000);
     }
   } catch(e) {
-    console.error('Erro PDF:', e);
-    if (confirm('Erro ao gerar PDF: ' + e.message + '\n\nDeseja usar a impressao do navegador como alternativa?')) {
+    console.error('[IMPOST] Erro PDF:', e);
+    if (confirm('Erro ao gerar o PDF.\n\nDeseja usar a impressao do navegador como alternativa?')) {
       window.print();
     }
   }
@@ -3282,7 +3427,7 @@ function exportCSV() {
     a.click();
     URL.revokeObjectURL(url);
   } catch(e) {
-    alert('Erro ao exportar: ' + e.message);
+    console.error('[IMPOST] Erro ao exportar:', e); alert('Erro ao exportar o arquivo. Tente novamente.');
   }
 }
 
@@ -3363,7 +3508,7 @@ if (_originalExportPDF) {
       btn.style.pointerEvents = 'none';
       setTimeout(() => {
         try { _originalExportPDF(); }
-        catch(e) { alert('Erro ao gerar PDF: ' + e.message); console.error(e); }
+        catch(e) { console.error('[IMPOST] Erro PDF:', e); alert('Erro ao gerar o PDF. Tente novamente ou exporte como CSV.'); }
         finally {
           setTimeout(() => {
             btn.innerHTML = orig;
