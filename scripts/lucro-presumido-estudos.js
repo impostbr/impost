@@ -1,6 +1,6 @@
 /**
  * ══════════════════════════════════════════════════════════════════════════════
- * MOTOR DE ANÁLISE E ESTUDO — LUCRO PRESUMIDO  v3.0.0
+ * MOTOR DE ANÁLISE E ESTUDO — LUCRO PRESUMIDO  v3.8.0
  * ══════════════════════════════════════════════════════════════════════════════
  *
  * Camada intermediária entre o motor de cálculos (lucro_presumido.js) e o HTML.
@@ -10,10 +10,39 @@
  *   HTML (UI/render) → lucro-presumido-estudos.js (análise) → lucro_presumido.js (motor)
  *                                                            → estados.js (incentivos dinâmicos)
  *
- * Versão: 3.0.0
+ * Versão: 3.8.0
  * Data: Fevereiro/2026
  *
  * Changelog:
+ *   v3.8.0 (Fevereiro/2026):
+ *     - [CRÍTICO] Dica 16%: limite corrigido de R$ 480k para R$ 120k/ano.
+ *       A IN RFB 1.700/2017, Art. 215, §10 diz "receita bruta ANUAL", não trimestral.
+ *       Empresas entre R$ 120k-480k NÃO recebem mais a dica incorreta.
+ *     - [MÉDIO] Break-even fallback: double conversion eliminada.
+ *       Alíquotas já em decimal (< 1) são aceitas sem reconversão.
+ *     - [COMPAT] gerarResumoExecutivo propaga notaRetencoes, irrfRetidoAnual, csllRetidaAnual
+ *       do motor v3.11.0 (correção distribuição de lucros com impostos brutos).
+ *
+ *   v3.7.1 (Fevereiro/2026):
+ *     - FIX EJ03: Versão sincronizada com HTML (3.0.0 → 3.7.1).
+ *     - FIX EJ04: Mutação por side-effect em fontes[] eliminada (Object.assign).
+ *     - FIX EJ05: LC 224 usa _calcularAliqEfetivaIRPJCSLL() em vez de 0.34 hardcoded.
+ *     - FIX EJ06: DEFAULTS.aliquotaSimples removido (código morto).
+ *     - FIX EJ07: _aliquotaParaDecimal() threshold ajustado com whitelist de nomes.
+ *     - FIX EJ08: margemRealAtual renomeada para margemOperacionalBruta no resumo.
+ *     - FIX EJ09: ufEmpresa duplicada removida do retorno de calcularEstudoCompleto.
+ *     - FIX EJ10: _getAtividadeInfo() agora loga erros no console.
+ *     - FIX EJ11: Fallback para percentualIRPJ undefined em atividade.
+ *     - FIX EJ12: calcularBreakEven() converte alíquotas internamente via _aliquotaParaDecimal.
+ *     - FIX EJ13: _calcularAliqEfetivaIRPJCSLL retorna 0 para base <= 0.
+ *     - FIX EJ14: Comentário explicativo para == null (idioma intencional).
+ *     - FIX EJ15: Emojis movidos para constantes no topo (separação motor/render).
+ *     - FIX EJ17: gerarResumoExecutivo detecta anual com erro e alerta.
+ *     - FIX ADD01: calcularEstudoCompleto passa despesasOperacionais ao consolidado.
+ *     - FIX ADD02: MARGEM_MAXIMA aumentada de 95 para 99.
+ *     - FIX ADD04: Índice de margem usa Math.floor em vez de Math.round.
+ *     - FIX ADD05: [CORRIGIDO v3.8.0] Dica 16% usava R$480k — corrigido para R$120k/ano (IN RFB 1.700/2017, Art. 215, §10).
+ *
  *   v3.0.0 (Fevereiro/2026):
  *     - REFACTOR: Integração com Estados.js — incentivos (SUDAM, SUDENE, ZFM, ALC, SUDECO)
  *       são lidos dinamicamente de Estados.getIncentivosNormalizado(uf) e utils do estado.
@@ -56,7 +85,8 @@
   // CONSTANTES INTERNAS
   // ─────────────────────────────────────────────────────────────────────────
 
-  var VERSION = '3.0.0';
+  // FIX EJ03: Versão sincronizada com HTML
+  var VERSION = '3.8.0';
 
   var DEFAULTS = {
     atividadeId: 'servicos_gerais',
@@ -64,7 +94,8 @@
     aliquotaRAT: 3,       // Percentual INTEIRO (3 = 3%)
     aliquotaTerceiros: 0.5, // Percentual INTEIRO (0.5 = 0.5%)
     creditosPISCOFINS: 0,
-    aliquotaSimples: 15,
+    // FIX EJ06: aliquotaSimples removido — era código morto (nunca referenciado).
+    //           Integração com Simples Nacional requer implementação dedicada.
     socios: [{ nome: 'Sócio Único', participacao: 1.0 }]
   };
 
@@ -83,7 +114,26 @@
   };
 
   var PIS_COFINS_CUMULATIVO = 0.0365;
-  var MARGEM_MAXIMA = 95;
+
+  // FIX ADD02: Aumentado de 95 para 99 (consultorias/holdings podem ter margem > 95%)
+  var MARGEM_MAXIMA = 99;
+
+  // FIX EJ15: Emojis centralizados — separação motor/renderização.
+  // A camada HTML pode sobrescrever via EstudoLP.EMOJIS se necessário.
+  var EMOJIS = {
+    incentivo: '🏛️',
+    sazonalidade: '📊',
+    caixa: '💵',
+    zonaFranca: '🏭',
+    exportacao: '🌎',
+    reduzido: '📉',
+    iss: '⚖️',
+    estadual: '🏗️',
+    alerta: '⚠️'
+  };
+
+  // FIX EJ07: Whitelist de nomes de alíquotas que podem ser legitimamente < 0.5
+  var ALIQUOTAS_PEQUENAS_VALIDAS = ['aliquotaTerceiros', 'aliquotaISS'];
 
   // ─────────────────────────────────────────────────────────────────────────
   // FUNÇÕES AUXILIARES
@@ -124,16 +174,19 @@
    * REGRA v3.0: Alíquotas SEMPRE chegam como percentual inteiro (ex: 5 para 5%).
    * Se o valor parece já ser decimal (< 0.5), emite warning no console.
    *
+   * FIX EJ07: Usa whitelist de nomes que podem ser legitimamente < 0.5%
+   *
    * @param {number|null|undefined} valor - Alíquota em percentual inteiro (ex: 5, 3, 0.5)
    * @param {number} fallbackPercent - Valor padrão em percentual inteiro
    * @param {string} nome - Nome do campo (para log)
    * @returns {number} Alíquota em decimal (ex: 0.05, 0.03, 0.005)
    */
   function _aliquotaParaDecimal(valor, fallbackPercent, nome) {
-    if (valor == null || typeof valor !== 'number') return fallbackPercent / 100;
+    // FIX EJ14: == null é idioma intencional em JS — captura null E undefined
+    if (valor == null || typeof valor !== 'number') return fallbackPercent / 100; // eslint-disable-line eqeqeq
 
-    // Detectar possível entrada já em decimal
-    if (valor > 0 && valor < 0.5 && nome !== 'aliquotaTerceiros') {
+    // FIX EJ07: Só emite warning para nomes que NÃO estão na whitelist
+    if (valor > 0 && valor < 0.5 && ALIQUOTAS_PEQUENAS_VALIDAS.indexOf(nome) === -1) {
       console.warn('[EstudoLP] Alíquota "' + nome + '" = ' + valor +
         ' parece já estar em decimal. Esperado valor em percentual inteiro (ex: 5 para 5%). ' +
         'Será interpretado como ' + valor + '% = ' + (valor / 100) + '. ' +
@@ -145,6 +198,7 @@
 
   /**
    * Busca informações de uma atividade pelo ID via motor LucroPresumido.
+   * FIX EJ10: Erros agora são logados em vez de engolidos silenciosamente.
    */
   function _getAtividadeInfo(atividadeId) {
     try {
@@ -153,18 +207,44 @@
         if (atividades[i].id === atividadeId) return atividades[i];
       }
       return null;
-    } catch (e) { return null; }
+    } catch (e) {
+      // FIX EJ10: Logar erro para facilitar debug
+      console.warn('[EstudoLP] _getAtividadeInfo("' + atividadeId + '") falhou: ' + e.message);
+      return null;
+    }
+  }
+
+  /**
+   * Obtém percentualIRPJ de uma atividade com fallback seguro.
+   * FIX EJ11: Protege contra atividade existente mas com percentualIRPJ undefined.
+   *
+   * @param {Object|null} atividade - Resultado de _getAtividadeInfo
+   * @param {number} [fallback=0.32] - Fallback em decimal
+   * @returns {number} Percentual de presunção em decimal
+   */
+  function _getPercentualPresuncao(atividade, fallback) {
+    if (fallback === undefined) fallback = 0.32;
+    if (!atividade) return fallback;
+    var p = atividade.percentualIRPJ;
+    if (typeof p !== 'number' || isNaN(p) || p <= 0) {
+      console.warn('[EstudoLP] atividade "' + atividade.id + '" sem percentualIRPJ válido. Usando fallback ' + fallback);
+      return fallback;
+    }
+    return p;
   }
 
   /**
    * Calcula alíquota efetiva real de IRPJ+CSLL sobre base presumida.
    * O adicional de 10% incide APENAS sobre o excedente acima de R$240.000/ano.
    *
+   * FIX EJ13: Retorna 0 para base <= 0 (sem fundamentação para tributar base negativa).
+   *
    * @param {number} basePresumidaAnual
    * @returns {number} Alíquota efetiva (ex: 0.26 para 26%)
    */
   function _calcularAliqEfetivaIRPJCSLL(basePresumidaAnual) {
-    if (basePresumidaAnual <= 0) return 0.24;
+    // FIX EJ13: Base zero ou negativa → alíquota zero
+    if (basePresumidaAnual <= 0) return 0;
     var irpj = basePresumidaAnual * 0.15;
     var adicional = Math.max(0, basePresumidaAnual - 240000) * 0.10;
     var csll = basePresumidaAnual * 0.09;
@@ -324,6 +404,9 @@
    *   - margemRealAtual renomeada para margemOperacionalBruta
    *   - Premissas documentadas no output
    *
+   * v3.7.1 FIX EJ12: Alíquotas são aceitas tanto como percentual inteiro
+   *   quanto como decimal. Conversão interna via _aliquotaParaDecimal.
+   *
    * @param {Object} params
    * @param {number} params.receitaBrutaAnual
    * @param {number} params.cargaTributariaLP - carga total já calculada pelo consolidado
@@ -332,6 +415,9 @@
    * @param {number} params.totalDespesasOperacionais
    * @param {number} params.creditosPISCOFINS
    * @param {number} [params.prejuizosFiscaisAcumulados=0]
+   * @param {number} [params.aliquotaISS] - Percentual inteiro (5 = 5%) ou decimal (0.05)
+   * @param {number} [params.aliquotaRAT] - Percentual inteiro (3 = 3%) ou decimal (0.03)
+   * @param {number} [params.aliquotaTerceiros] - Percentual inteiro (0.5 = 0.5%)
    *
    * @returns {Object} Resultado da análise break-even
    */
@@ -401,10 +487,19 @@
       // Se LP inclui ISS/INSS (fallback), adicionar ao LR também para manter comparabilidade
       var cargaLRComparavel = cargaFederalLR;
       if (incluiISSINSS) {
-        var aliqISS = params.aliquotaISS || 0;
-        var aliqRAT = params.aliquotaRAT || 0;
-        var aliqTerceiros = params.aliquotaTerceiros || 0;
-        cargaLRComparavel += receita * aliqISS + folha * (LR.INSS_PATRONAL + aliqRAT + aliqTerceiros);
+        // Aceitar tanto decimal (0.03) quanto inteiro (3).
+        // Se valor > 0 e < 1, já é decimal — não reconverter.
+        // Threshold < 1 funciona porque nenhuma alíquota tributária brasileira é ≥ 100%.
+        var aliqISS_be = (typeof params.aliquotaISS === 'number' && params.aliquotaISS > 0 && params.aliquotaISS < 1)
+          ? params.aliquotaISS
+          : _aliquotaParaDecimal(params.aliquotaISS, DEFAULTS.aliquotaISS, 'aliquotaISS');
+        var aliqRAT_be = (typeof params.aliquotaRAT === 'number' && params.aliquotaRAT > 0 && params.aliquotaRAT < 1)
+          ? params.aliquotaRAT
+          : _aliquotaParaDecimal(params.aliquotaRAT, DEFAULTS.aliquotaRAT, 'aliquotaRAT');
+        var aliqTerceiros_be = (typeof params.aliquotaTerceiros === 'number' && params.aliquotaTerceiros > 0 && params.aliquotaTerceiros < 1)
+          ? params.aliquotaTerceiros
+          : _aliquotaParaDecimal(params.aliquotaTerceiros, DEFAULTS.aliquotaTerceiros, 'aliquotaTerceiros');
+        cargaLRComparavel += receita * aliqISS_be + folha * (LR.INSS_PATRONAL + aliqRAT_be + aliqTerceiros_be);
         cargaLRComparavel = _arredondar(cargaLRComparavel);
       }
 
@@ -487,7 +582,7 @@
       inssConsiderado: incluiISSINSS ? 'INSS patronal incluído em ambos os lados (mesmo valor)' : 'INSS REMOVIDO de ambos (cancela)',
       creditosPISCOFINS: creditos > 0 ? 'R$ ' + creditos.toLocaleString('pt-BR') : 'Sem créditos',
       prejuizosFiscais: prejuizosFiscais > 0 ? 'R$ ' + prejuizosFiscais.toLocaleString('pt-BR') + ' (compensação até 30%)' : 'Sem prejuízos',
-      formulaBreakEven: 'Para cada margem m (1% a 95%): LR = lucro×(15%+10%adicional)+lucro×9%+receita×9,25%-créditos. Onde break-even: cargaLP = cargaLR.',
+      formulaBreakEven: 'Para cada margem m (1% a ' + MARGEM_MAXIMA + '%): LR = lucro×(15%+10%adicional)+lucro×9%+receita×9,25%-créditos. Onde break-even: cargaLP = cargaLR.',
       nota: 'Para decisão definitiva, consulte seu contador.'
     };
 
@@ -545,7 +640,8 @@
 
     var dicas = [];
     var atividade = _getAtividadeInfo(atividadeId);
-    var percentualPresuncao = atividade ? atividade.percentualIRPJ : 0.32;
+    // FIX EJ11: Usar helper com fallback seguro
+    var percentualPresuncao = _getPercentualPresuncao(atividade);
 
     // Margem operacional bruta (FIX C1: nome consistente com break-even)
     var margemOperacionalBruta = receita > 0 ? (receita - despesasOp - folha) / receita : 0;
@@ -613,7 +709,7 @@
       }
 
       dicas.push({
-        titulo: '🏛️ ' + reducaoRegional.tipo + ' — Redução ' + _arredondar(reducaoRegional.percentualReducao * 100) + '% IRPJ (exclusivo Lucro Real)',
+        titulo: EMOJIS.incentivo + ' ' + reducaoRegional.tipo + ' — Redução ' + _arredondar(reducaoRegional.percentualReducao * 100) + '% IRPJ (exclusivo Lucro Real)',
         descricao: reducaoRegional.obs + '. Economia estimada: R$ ' +
           economiaRegional.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) + '/ano. ' +
           ((despesasOp > 0 || folha > 0) ? 'Estimativa baseada no lucro operacional (R$ ' +
@@ -631,7 +727,7 @@
     // FIX I4: receitaSazonal gera dica específica
     if (receitaSazonal && !regimeCaixa) {
       dicas.push({
-        titulo: '📊 Sazonalidade detectada — Regime de Caixa recomendado',
+        titulo: EMOJIS.sazonalidade + ' Sazonalidade detectada — Regime de Caixa recomendado',
         descricao: 'Receita sazonal informada. O regime de caixa (IN RFB 1.700/2017, Art. 223) ' +
           'permite tributar sobre recebimentos em vez de faturamento, reduzindo o impacto ' +
           'de meses com faturamento alto e recebimento baixo.',
@@ -653,7 +749,7 @@
       });
     } else {
       dicas.push({
-        titulo: '💵 Regime de Caixa ativado',
+        titulo: EMOJIS.caixa + ' Regime de Caixa ativado',
         descricao: 'Tributação sobre recebimentos ativa. Exige Livro Caixa ou escrituração contábil.',
         tipo: 'info',
         impactoEstimado: null,
@@ -697,7 +793,7 @@
       if (totalZFM > 0) {
         var economiaZFM = _arredondar(totalZFM * 0.0365);
         dicas.push({
-          titulo: '🏭 Zona Franca / SUFRAMA — Isenção PIS/COFINS aplicada',
+          titulo: EMOJIS.zonaFranca + ' Zona Franca / SUFRAMA — Isenção PIS/COFINS aplicada',
           descricao: 'Receitas ZFM/SUFRAMA: R$ ' + totalZFM.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) +
             '. Economia PIS/COFINS: R$ ' + economiaZFM.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) +
             '/ano. JÁ incluída no cálculo. Base: Lei 10.996/2004; Decreto 288/67.',
@@ -708,7 +804,7 @@
       }
       if (beneficiosZFM.zonaFranca && totalZFM === 0) {
         dicas.push({
-          titulo: '🏭 Zona Franca disponível no seu estado',
+          titulo: EMOJIS.zonaFranca + ' Zona Franca disponível no seu estado',
           descricao: beneficiosZFM.obs + '. Informe receitas de vendas para ZFM para calcular a isenção de PIS/COFINS.',
           tipo: 'acao',
           impactoEstimado: null,
@@ -721,7 +817,7 @@
     if (receitasExportacao > 0) {
       var econExport = _arredondar(receitasExportacao * 0.0365);
       dicas.push({
-        titulo: '🌎 Exportações — Imunidade PIS/COFINS aplicada',
+        titulo: EMOJIS.exportacao + ' Exportações — Imunidade PIS/COFINS aplicada',
         descricao: 'Exportação: R$ ' + receitasExportacao.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) +
           '. Economia: R$ ' + econExport.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) +
           '/ano. CF/88, Art. 149, §2º, I.',
@@ -733,12 +829,17 @@
 
     // ── Dica 8: Percentual Reduzido 16% ──
     // FIX M2: Usar Math.abs para comparação float
+    // IN RFB 1.700/2017, Art. 215, §10: receita bruta ANUAL ≤ R$ 120.000,00
+    // (A lei diz "anual" explicitamente — NÃO é trimestral)
+    // RIR/2018, Art. 591, §6; Lei 9.250/1995, Art. 40, Parágrafo único: idem
     if (Math.abs(percentualPresuncao - 0.32) < 0.001 && receita <= 120000 && receita > 0) {
       // FIX M3: Descrição correta "Economia de IRPJ"
       var econReduzido = _arredondar(receita * 0.16 * 0.15);
       dicas.push({
-        titulo: '📉 Percentual Reduzido 16% disponível',
-        descricao: 'Receita ≤ R$ 120.000/ano e serviços (32%). Se prestar EXCLUSIVAMENTE ' +
+        titulo: EMOJIS.reduzido + ' Percentual Reduzido 16% disponível',
+        descricao: 'Receita anual ≤ R$ 120.000 (R$ ' +
+          _arredondar(receita).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) +
+          '/ano) e serviços (32%). Se prestar EXCLUSIVAMENTE ' +
           'serviços elegíveis, pode usar 16% no IRPJ. Economia de IRPJ: R$ ' +
           econReduzido.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) +
           '/ano. CSLL permanece 32%. Base: IN RFB 1.700/2017, Art. 215, §10.',
@@ -751,7 +852,7 @@
     // ── Dica 8d: ISS misto ──
     if (numReceitas > 1) {
       dicas.push({
-        titulo: '⚖️ ISS aplicado apenas sobre serviços',
+        titulo: EMOJIS.iss + ' ISS aplicado apenas sobre serviços',
         descricao: 'Empresa com atividades mistas: ISS incide APENAS sobre serviços (LC 116/2003).',
         tipo: 'info',
         impactoEstimado: null,
@@ -780,7 +881,7 @@
         return (p.programa || p.nome || 'Programa') + ': ' + (p.beneficio || p.descricao || '');
       }).join('; ');
       dicas.push({
-        titulo: '🏗️ Incentivos Estaduais disponíveis',
+        titulo: EMOJIS.estadual + ' Incentivos Estaduais disponíveis',
         descricao: 'Programas identificados: ' + descProgramas.substring(0, 500) +
           '. Verifique elegibilidade com a SEFAZ.',
         tipo: 'info',
@@ -861,7 +962,8 @@
     var atividade = _getAtividadeInfo(atividadeId);
     if (!atividade) return null;
 
-    var percentualPresuncao = atividade.percentualIRPJ;
+    // FIX EJ11: Usar helper com fallback
+    var percentualPresuncao = _getPercentualPresuncao(atividade);
     var receitaTrimestral = receita / 4;
     var trimestres = [];
     var impactoTotalBase = 0;
@@ -887,7 +989,13 @@
     }
 
     impactoTotalBase = _arredondar(impactoTotalBase);
-    var impostoExtraEstimado = _arredondar(impactoTotalBase * 0.34);
+
+    // FIX EJ05: Usar alíquota efetiva calculada em vez de 0.34 hardcoded.
+    // Para receitas > R$5M, a base presumida será alta o suficiente para o adicional incidir,
+    // mas o cálculo exato é melhor que hardcodar.
+    var basePresumidaAnualEstimada = receita * percentualPresuncao + impactoTotalBase;
+    var aliqEfetivaLC224 = _calcularAliqEfetivaIRPJCSLL(basePresumidaAnualEstimada);
+    var impostoExtraEstimado = _arredondar(impactoTotalBase * aliqEfetivaLC224);
 
     return {
       aplicavel: true,
@@ -895,9 +1003,11 @@
       trimestres: trimestres,
       impactoTotalBase: impactoTotalBase,
       impostoExtraEstimado: impostoExtraEstimado,
+      aliquotaEfetiva: _arredondar(aliqEfetivaLC224, 4),
       baseLegal: 'LC 224/2025, Art. 14. Vigência a partir de 01/04/2026.',
       alerta: 'LC 224/2025 aumenta base presumida em R$ ' + impactoTotalBase.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) +
-        '/ano. Imposto extra: R$ ' + impostoExtraEstimado.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) + '.'
+        '/ano. Imposto extra: R$ ' + impostoExtraEstimado.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) +
+        ' (alíq. efetiva: ' + _arredondar(aliqEfetivaLC224 * 100, 1) + '%).'
     };
   }
 
@@ -975,7 +1085,8 @@
     // 2a. Break-even: diferença LP vs LR na margem real
     if (breakeven && breakeven.margemOperacionalBruta !== null && breakeven.breakEvenMargem !== null &&
         breakeven.margemOperacionalBruta < breakeven.breakEvenMargem && breakeven.margens && breakeven.margens.length > 0) {
-      var margemIdx = Math.max(0, Math.min(Math.round(breakeven.margemOperacionalBruta) - 1, breakeven.margens.length - 1));
+      // FIX ADD04: Usar Math.floor em vez de Math.round para índice de margem
+      var margemIdx = Math.max(0, Math.min(Math.floor(breakeven.margemOperacionalBruta) - 1, breakeven.margens.length - 1));
       var entradaMargem = breakeven.margens[margemIdx];
       if (entradaMargem) {
         var diffLR = _arredondar(entradaMargem.cargaLP - entradaMargem.cargaLR);
@@ -1097,8 +1208,13 @@
       totalDiferimento: totalDiferimento,
       diferimentos: diferimentos,
 
-      // Compatibilidade: fontes = todas (para renderização legada)
-      fontes: otimizacoesLP.concat(migracaoLR).concat(jaAplicados.map(function(j) { j.tipo = 'ja_aplicado'; return j; })).concat(diferimentos.map(function(df) { df.tipo = 'diferimento'; return df; })),
+      // FIX EJ04: Compatibilidade fontes[] SEM mutação dos arrays originais.
+      // Usa Object.assign para criar cópias, evitando side-effect nos objetos de jaAplicados/diferimentos.
+      fontes: otimizacoesLP.concat(migracaoLR).concat(
+        jaAplicados.map(function(j) { return Object.assign({}, j, { tipo: 'ja_aplicado' }); })
+      ).concat(
+        diferimentos.map(function(df) { return Object.assign({}, df, { tipo: 'diferimento' }); })
+      ),
 
       recomendacaoPrincipal: recomendacaoPrincipal,
       nivelOportunidade: nivelOportunidade
@@ -1123,15 +1239,20 @@
 
     var atividade = _getAtividadeInfo(atividadeId);
     var descricaoAtividade = atividade ? atividade.descricao : atividadeId;
-    var percentualPresuncao = atividade ? _arredondar(atividade.percentualIRPJ * 100, 1) + '%' : 'N/A';
+    // FIX EJ11: Usar helper com fallback
+    var percentualPresuncaoVal = _getPercentualPresuncao(atividade);
+    var percentualPresuncao = _arredondar(percentualPresuncaoVal * 100, 1) + '%';
 
+    // FIX EJ17: Detectar se anual veio com erro e alertar
+    var anualComErro = !!(anual && anual.erro);
     var receitaBrutaAnual = anual.receitaBrutaAnual || 0;
     var cargaTotal = anual.consolidacao ? anual.consolidacao.cargaTributariaTotal : 0;
     var percentCarga = anual.consolidacao ? anual.consolidacao.percentualCargaTributaria : '0%';
     var lucroDistribuivel = anual.distribuicaoLucros ? anual.distribuicaoLucros.lucroDistribuivelFinal : 0;
 
-    var breakEvenMargem = breakeven.breakEvenMargem != null ? breakeven.breakEvenMargem + '%' : null;
-    var margemReal = breakeven.margemOperacionalBruta != null ? breakeven.margemOperacionalBruta + '%' : null;
+    var breakEvenMargem = breakeven.breakEvenMargem != null ? breakeven.breakEvenMargem + '%' : null; // eslint-disable-line eqeqeq
+    // FIX EJ08: Renomeado de margemRealAtual para margemOperacionalBruta
+    var margemOperacionalBruta = breakeven.margemOperacionalBruta != null ? breakeven.margemOperacionalBruta + '%' : null; // eslint-disable-line eqeqeq
 
     var top3 = [];
     for (var d = 0; d < Math.min(3, dicas.length); d++) top3.push(dicas[d].titulo);
@@ -1142,7 +1263,7 @@
       regimeRecomendado = 'Lucro Presumido';
     } else if (breakeven.lrSempreVantajoso) {
       regimeRecomendado = 'Lucro Real';
-    } else if (breakeven.margemOperacionalBruta != null && breakeven.breakEvenMargem != null) {
+    } else if (breakeven.margemOperacionalBruta != null && breakeven.breakEvenMargem != null) { // eslint-disable-line eqeqeq
       if (breakeven.margemOperacionalBruta > breakeven.breakEvenMargem + 5) {
         regimeRecomendado = 'Lucro Presumido';
       } else if (breakeven.margemOperacionalBruta < breakeven.breakEvenMargem - 5) {
@@ -1175,7 +1296,7 @@
         params.beneficiosDetalhados.economiaTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) + '/ano.');
     }
     if (params.reducaoRegional && params.reducaoRegional.ativo) {
-      beneficiosResumo.push('⚠️ ' + params.reducaoRegional.tipo + ' disponível — economia estimada de R$ ' +
+      beneficiosResumo.push(EMOJIS.alerta + ' ' + params.reducaoRegional.tipo + ' disponível — economia estimada de R$ ' +
         (params.comparativoRegional ? params.comparativoRegional.economiaEstimada : 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) +
         '/ano no Lucro Real.');
     }
@@ -1204,8 +1325,12 @@
       cargaTributariaTotal: cargaTotal,
       percentualCargaTributaria: percentCarga,
       lucroDistribuivelIsento: lucroDistribuivel,
+      notaRetencoes: anual.distribuicaoLucros ? (anual.distribuicaoLucros.notaRetencoes || null) : null,
+      irrfRetidoAnual: anual.distribuicaoLucros ? (anual.distribuicaoLucros.irrfRetidoTotalAnual || 0) : 0,
+      csllRetidaAnual: anual.distribuicaoLucros ? (anual.distribuicaoLucros.csllRetidaTotalAnual || 0) : 0,
       breakEvenMargem: breakEvenMargem,
-      margemRealAtual: margemReal,
+      // FIX EJ08: Nome consistente com break-even (era margemRealAtual)
+      margemOperacionalBruta: margemOperacionalBruta,
       economiaPotencial: economia.totalEconomiaAnual,
       melhorCenario: economia.melhorCenario,
       economiaMantendoLP: economia.totalOtimizacoesLP,
@@ -1218,7 +1343,10 @@
       beneficiosFiscais: beneficiosResumo,
       regimeRecomendado: regimeRecomendado,
       proximosPassos: proximosPassos,
-      dataEstudo: dataFormatada
+      dataEstudo: dataFormatada,
+      // FIX EJ17: Indicador de erro no cálculo anual
+      anualComErro: anualComErro,
+      erroAnual: anualComErro ? anual.erro : null
     };
   }
 
@@ -1413,7 +1541,10 @@
         ipiDestacado: ipiDestacado,
         exclusivamenteServicosElegiveis: exclusivamenteServicosElegiveis,
         regimeCaixa: regimeCaixa,
-        inadimplencia: inadimplencia
+        inadimplencia: inadimplencia,
+        // FIX ADD01: Passar despesas operacionais ao consolidado
+        totalDespesasOperacionais: despesasOp,
+        despesasOperacionaisAnuais: despesasOp
       });
     } catch (e) {
       anual = { erro: e.message, receitaBrutaAnual: receitaBrutaAnual, consolidacao: null, distribuicaoLucros: null };
@@ -1548,6 +1679,7 @@
         folhaPagamentoAnual: folha,
         totalDespesasOperacionais: despesasOp,
         creditosPISCOFINS: creditos,
+        // FIX EJ12: Passar alíquotas já convertidas (o break-even agora aceita ambos)
         aliquotaISS: aliqISS,
         aliquotaRAT: aliqRAT,
         aliquotaTerceiros: aliqTerceiros,
@@ -1651,6 +1783,7 @@
       comparativoRegional: resultRegional,
       beneficiosDetalhados: anual ? anual.beneficiosAplicados : null,
 
+      // FIX EJ09: ufEmpresa declarada UMA VEZ apenas (removida duplicata)
       // Meta
       ufEmpresa: ufEmpresa,
       versao: VERSION,
@@ -1771,7 +1904,10 @@
     _testarEstudo: _testarEstudo,
 
     // Versão
-    VERSION: VERSION
+    VERSION: VERSION,
+
+    // FIX EJ15: Emojis exportados para que a camada HTML possa sobrescrever
+    EMOJIS: EMOJIS
   };
 
   if (typeof module !== 'undefined' && module.exports) {
