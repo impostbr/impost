@@ -1,6 +1,6 @@
 /**
  * ══════════════════════════════════════════════════════════════════════════════
- * MOTOR DE ANÁLISE E ESTUDO — LUCRO PRESUMIDO  v3.8.0
+ * MOTOR DE ANÁLISE E ESTUDO — LUCRO PRESUMIDO  v1.0.0
  * ══════════════════════════════════════════════════════════════════════════════
  *
  * Camada intermediária entre o motor de cálculos (lucro_presumido.js) e o HTML.
@@ -10,10 +10,17 @@
  *   HTML (UI/render) → lucro-presumido-estudos.js (análise) → lucro_presumido.js (motor)
  *                                                            → estados.js (incentivos dinâmicos)
  *
- * Versão: 3.8.0
+ * Versão: 1.0.0
  * Data: Fevereiro/2026
  *
  * Changelog:
+ *   v1.0.0 (Fevereiro/2026) — RELEASE COMERCIAL:
+ *     - Auditoria final de segurança e acessibilidade
+ *     - Versão pública unificada para lançamento SaaS
+ *     - Nenhuma mensagem técnica ou nome de função exposto ao usuário final
+ *     - Todos os retornos de erro mapeados em humanizarErro()
+ *     - Função _testarEstudo() mantida apenas para uso interno de QA
+ *
  *   v3.8.0 (Fevereiro/2026):
  *     - [CRÍTICO] Dica 16%: limite corrigido de R$ 480k para R$ 120k/ano.
  *       A IN RFB 1.700/2017, Art. 215, §10 diz "receita bruta ANUAL", não trimestral.
@@ -85,8 +92,8 @@
   // CONSTANTES INTERNAS
   // ─────────────────────────────────────────────────────────────────────────
 
-  // FIX EJ03: Versão sincronizada com HTML
-  var VERSION = '3.8.0';
+  // v1.0.0: Release comercial — versão pública unificada
+  var VERSION = '1.0.0';
 
   var DEFAULTS = {
     atividadeId: 'servicos_gerais',
