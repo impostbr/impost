@@ -1,12 +1,19 @@
-/**
- * ══════════════════════════════════════════════════════════════════════════════
- * MOTOR DE CÁLCULO FISCAL — LUCRO PRESUMIDO
- * ══════════════════════════════════════════════════════════════════════════════
- *
- * AGROGEO BRASIL - Geotecnologia e Consultoria Ambiental
- * Autor: Luis Fernando | Proprietário AGROGEO BRASIL
- * Versão: 3.10.0
+/** IMPOST. Inteligência em Modelagem de Otimização Tributária
+ * Versão: 3.11.0
  * Data: Fevereiro/2026
+ *
+ * Changelog v3.11.0:
+ *   - AUDITORIA v3 (8 correções):
+ *   - [CRÍTICO] Distribuição de lucros isentos: agora usa impostos BRUTOS (irpjBruto + csllBruta)
+ *     em vez de líquidos (irpjDevido + csllDevida). IN RFB 1.700/2017, Art. 238.
+ *     Novos campos: totalIRPJCSLLBruto, irrfRetidoTotalAnual, csllRetidaTotalAnual, notaRetencoes.
+ *   - [MÉDIO] Quotas agora recebem TAXA_SELIC_MENSAL_ESTIMADA — juros estimados visíveis.
+ *   - [MÉDIO] Regime de caixa: fatorCaixa limitado a 1.0 (IN RFB 1.700/2017, Art. 223).
+ *   - [BAIXO] simulacaoRapida: ISS com guard contra formato inteiro (5 → 0.05).
+ *   - [BAIXO] JCP comparativo: INSS/IRPF agora calculados mensalmente (÷12) e anualizados (×12).
+ *   - [INFO] LC 224: nota explicativa sobre cálculo simplificado do adicional.
+ *   - [INFO] ISS consolidado: guard defensivo contra aliquotaISS em formato inteiro.
+ *   - [INFO] Nota documentando que despesasOperacionais não afetam base do LP.
  *
  * Changelog v3.10.0:
  *   - AUDITORIA MOTOR v2: 15 achados corrigidos (BUG-01 a BUG-15).
@@ -219,7 +226,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** Versão do motor — usada em todos os retornos e no PDF. */
-const VERSION = '3.10.0';
+const VERSION = '3.11.0';
 
 /**
  * Limite máximo de receita bruta anual para elegibilidade ao Lucro Presumido.
@@ -489,6 +496,7 @@ function calcularBasePresumidaLC224(params) {
   const impostoAdicionalIRPJExtra = impactoNaBase * ALIQUOTA_ADICIONAL_IRPJ;
   const impostoCSLLExtra = impactoNaBase * ALIQUOTA_CSLL;
   const impostoEstimadoExtra = _arredondar(impostoIRPJExtra + impostoAdicionalIRPJExtra + impostoCSLLExtra);
+  const notaCalculoLC224 = 'Estimativa simplificada — o adicional de 10% pode incidir apenas sobre a parcela da base que excede R$ 60.000/trimestre. Consulte o cálculo trimestral completo para valores exatos.';
 
   return {
     basePresumida: basePresumidaTotal,
@@ -498,6 +506,7 @@ function calcularBasePresumidaLC224(params) {
     excedenteDoTrimestre: excedenteDoTrimestre,
     impactoLC224: impactoNaBase,
     impostoEstimadoExtra: impostoEstimadoExtra,
+    notaCalculo: notaCalculoLC224,
     lc224Aplicavel: excedenteDoTrimestre > 0
   };
 }
@@ -1696,6 +1705,7 @@ function calcularLucroPresumidoTrimestral(params) {
 
   // ── Passo 7: Alíquota Efetiva ──
   const totalImpostos = irpjDevido + csllDevida;
+  const totalImpostosBrutos = irpjBruto + csllBruta; // Para distribuição de lucros (IN RFB 1.700/2017, Art. 238)
   const aliquotaEfetivaReceita = receitaBrutaAjustada > 0
     ? _arredondar((totalImpostos / receitaBrutaAjustada) * 100, 2)
     : 0;
@@ -1704,8 +1714,8 @@ function calcularLucroPresumidoTrimestral(params) {
     : 0;
 
   // ── Passo 8: Quotas de Parcelamento ──
-  const quotasIRPJ = _calcularQuotas(irpjDevido);
-  const quotasCSLL = _calcularQuotas(csllDevida);
+  const quotasIRPJ = _calcularQuotas(irpjDevido, TAXA_SELIC_MENSAL_ESTIMADA);
+  const quotasCSLL = _calcularQuotas(csllDevida, TAXA_SELIC_MENSAL_ESTIMADA);
 
   // ── Passo 9: Distribuição de Lucros Isentos ──
   // FIX (Erro 3): Usar basePresumidaIRPJ (sem adições obrigatórias) em vez de baseCalculoIRPJ.
@@ -1713,7 +1723,8 @@ function calcularLucroPresumidoTrimestral(params) {
   // Adições obrigatórias (Art. 595 RIR/2018) são tributadas integralmente e NÃO geram lucro distribuível isento.
   // NOTA: Este valor considera apenas IRPJ+CSLL (trimestral).
   // Para cálculo completo incluindo PIS/COFINS, use calcularAnualConsolidado().
-  const lucroDistribuidoPresumido = _arredondar(Math.max(0, basePresumidaIRPJ - totalImpostos));
+  const lucroDistribuidoPresumido = _arredondar(Math.max(0, basePresumidaIRPJ - totalImpostosBrutos));
+  // IN RFB 1.700/2017, Art. 238: desconta imposto BRUTO (antes de retenções na fonte)
 
   return {
     // Resumo
@@ -1736,6 +1747,7 @@ function calcularLucroPresumidoTrimestral(params) {
       csllRetidaFonte,
       csllDevida,
       totalIRPJCSLL: _arredondar(irpjDevido + csllDevida),
+      totalIRPJCSLLBruto: _arredondar(irpjBruto + csllBruta),
       aliquotaEfetivaReceita: `${aliquotaEfetivaReceita}%`,
       aliquotaEfetivaBase: `${aliquotaEfetivaBase}%`,
       lucroDistribuidoPresumido,
@@ -2003,7 +2015,8 @@ function calcularAnualConsolidado(params) {
     // Regime de Caixa: ajustar receitas proporcionalmente ao recebimento
     let trimestreParams = { ...t };
     if (usarRegimeCaixa && receitaTrimestre > 0) {
-      const fatorCaixa = recebimentosTrimestre[i] / receitaTrimestre;
+      const fatorCaixa = Math.min(1, recebimentosTrimestre[i] / receitaTrimestre);
+      // IN RFB 1.700/2017, Art. 223: receita reconhecida limitada ao faturado no período
       trimestreParams.receitas = (t.receitas || []).map(r => ({
         ...r,
         valor: _arredondar((r.valor || 0) * fatorCaixa)
@@ -2031,6 +2044,9 @@ function calcularAnualConsolidado(params) {
 
   const totalIRPJ = resultadosTrimestres.reduce((s, t) => s + t.irpjDevido, 0);
   const totalCSLL = resultadosTrimestres.reduce((s, t) => s + t.csllDevida, 0);
+  // Totais BRUTOS para cálculo de distribuição de lucros (IN RFB 1.700/2017, Art. 238)
+  const totalIRPJBruto = resultadosTrimestres.reduce((s, t) => s + (t.irpjBruto || t.irpjDevido), 0);
+  const totalCSLLBruta = resultadosTrimestres.reduce((s, t) => s + (t.csllBruta || t.csllDevida), 0);
   const receitaBrutaAnual = resultadosTrimestres.reduce((s, t) => s + t.receitaBrutaAjustada, 0);
 
   // ── Cálculos Mensais (PIS + COFINS) ──
@@ -2068,7 +2084,8 @@ function calcularAnualConsolidado(params) {
     }
   }
 
-  const issAnual = _arredondar(receitaServicosAnual * aliquotaISS);
+  const aliqISSEfetiva = aliquotaISS > 1 ? aliquotaISS / 100 : aliquotaISS;
+  const issAnual = _arredondar(receitaServicosAnual * aliqISSEfetiva);
 
   // ── INSS Patronal — Separar folha CLT de pró-labore (Lei 8.212/91) ──
   // Art. 22, I e II → Folha CLT: 20% patronal + RAT + Terceiros
@@ -2116,8 +2133,9 @@ function calcularAnualConsolidado(params) {
   //   - Para posição conservadora, use incluirPISCOFINSNaDistribuicao = true.
   const basePresumidaAnual = resultadosTrimestres.reduce((s, t) => s + (t.basePresumidaOriginalIRPJ || t.basePresumidaIRPJ), 0);
   const basePresumidaAnualComLC224 = resultadosTrimestres.reduce((s, t) => s + t.basePresumidaIRPJ, 0);
-  const tributosDistribuicao = _arredondar(totalIRPJ + totalCSLL);
-  const tributosDistribuicaoConservador = _arredondar(totalIRPJ + totalCSLL + totalPIS + totalCOFINS);
+  const tributosDistribuicao = _arredondar(totalIRPJBruto + totalCSLLBruta);
+  // IN RFB 1.700/2017, Art. 238: desconta imposto BRUTO (inclui IRRF/CSLL retidos na fonte)
+  const tributosDistribuicaoConservador = _arredondar(totalIRPJBruto + totalCSLLBruta + totalPIS + totalCOFINS);
   const lucroDistribuivelPresumido = _arredondar(Math.max(0, basePresumidaAnual - tributosDistribuicao));
   const lucroDistribuivelConservador = _arredondar(Math.max(0, basePresumidaAnual - tributosDistribuicaoConservador));
 
@@ -2152,7 +2170,7 @@ function calcularAnualConsolidado(params) {
       ativo: receitas && receitas.length > 0,
       receitaServicos: _arredondar(receitaServicosAnual),
       receitaComercio: _arredondar(receitaBrutaAnual - receitaServicosAnual),
-      economiaISS: _arredondar((receitaBrutaAnual - receitaServicosAnual) * aliquotaISS),
+      economiaISS: _arredondar((receitaBrutaAnual - receitaServicosAnual) * aliqISSEfetiva),
       nota: 'ISS incide apenas sobre serviços (LC 116/2003).'
     },
     inssSeparado: {
@@ -2237,7 +2255,7 @@ function calcularAnualConsolidado(params) {
       cofins: { anual: _arredondar(totalCOFINS), meses: resultadosMeses.map(m => m.cofins.devida) },
       iss: {
         anual: issAnual,
-        aliquota: `${(aliquotaISS * 100).toFixed(1)}%`,
+        aliquota: `${(aliqISSEfetiva * 100).toFixed(1)}%`,
         receitaBaseServicos: _arredondar(receitaServicosAnual),
         receitaComercioIndustria: _arredondar(receitaBrutaAnual - receitaServicosAnual),
         nota: 'ISS incide apenas sobre receitas de serviços (LC 116/2003). Receitas de comércio/indústria recolhem ICMS, não ISS.'
@@ -2265,7 +2283,8 @@ function calcularAnualConsolidado(params) {
       issAnual,
       inssPatronalAnual,
       cargaTributariaTotal,
-      percentualCargaTributaria: `${percentualCarga}%`
+      percentualCargaTributaria: `${percentualCarga}%`,
+      notaDespesas: 'No Lucro Presumido, despesas operacionais NÃO afetam a base de cálculo (que é presumida por lei). O campo despesasOperacionais é utilizado apenas no break-even comparativo com Lucro Real.'
     },
 
     distribuicaoLucros: {
@@ -2285,6 +2304,12 @@ function calcularAnualConsolidado(params) {
       porSocio: distribuicaoPorSocio,
       baseLegal: 'IN RFB 1.700/2017, Art. 238; RIR/2018, Art. 725 — Lucros distribuídos com isenção: base presumida diminuída de IRPJ e CSLL devidos.',
       notaDivergencia: 'Há divergência interpretativa: Art. 725 RIR/2018 menciona IRPJ+CSLL; IN RFB 1.700/2017, Art. 238 menciona todos os impostos e contribuições. O campo lucroDistribuivelConservador desconta também PIS/COFINS.',
+      tributosDescontadosBrutos: tributosDistribuicao,
+      irrfRetidoTotalAnual: _arredondar(totalIRPJBruto - totalIRPJ),
+      csllRetidaTotalAnual: _arredondar(totalCSLLBruta - totalCSLL),
+      notaRetencoes: (totalIRPJBruto - totalIRPJ > 0 || totalCSLLBruta - totalCSLL > 0)
+        ? 'IRRF e CSLL retidos na fonte são antecipações do imposto total. O lucro distribuível isento é calculado descontando o imposto BRUTO (antes de deduções de retenções), conforme IN RFB 1.700/2017, Art. 238.'
+        : null,
       // DIVERGÊNCIA 1 FIX: Alerta explícito sobre risco de distribuição acima do lucro contábil
       alertaDistribuicao: lucroDistribuivelContabil === null
         ? 'ATENÇÃO: O lucro distribuível isento foi calculado com base na presunção fiscal (IN SRF 93/97, Art. 48), pois não há escrituração contábil completa (ECD). Se o lucro contábil real da empresa for INFERIOR à base presumida, distribuir o valor total pode configurar distribuição acima do lucro efetivo, com risco de tributação do excedente como rendimento tributável do sócio (IRPF). Recomenda-se manter escrituração contábil para comprovar o lucro real.'
@@ -3447,8 +3472,9 @@ function simulacaoRapida(receitaBrutaTrimestral, atividadeId = 'servicos_gerais'
 
   // C5 FIX: ISS estimado quando alíquota informada (somente para atividades de serviço)
   const isServico = atividadeIRPJ.percentual >= 0.16;
-  const issEstimado = (aliquotaISS > 0 && isServico)
-    ? _arredondar(receitaBrutaTrimestral * aliquotaISS)
+  const aliqISSNormalizada = aliquotaISS > 1 ? aliquotaISS / 100 : aliquotaISS;
+  const issEstimado = (aliqISSNormalizada > 0 && isServico)
+    ? _arredondar(receitaBrutaTrimestral * aliqISSNormalizada)
     : 0;
   const cargaTotalEstimada = _arredondar(totalTributosFederais + issEstimado);
 
@@ -3471,8 +3497,8 @@ function simulacaoRapida(receitaBrutaTrimestral, atividadeId = 'servicos_gerais'
     cargaTotalEstimada,
     aliquotaEfetiva: `${aliquotaEfetivaFederal}%`,
     aliquotaEfetivaTotal: `${aliquotaEfetivaTotal}%`,
-    observacao: aliquotaISS > 0
-      ? `Carga total estimada inclui ISS de ${(aliquotaISS * 100).toFixed(1)}% sobre receita de serviços.`
+    observacao: aliqISSNormalizada > 0
+      ? `Carga total estimada inclui ISS de ${(aliqISSNormalizada * 100).toFixed(1)}% sobre receita de serviços.`
       : `ISS não incluído. Carga total real = tributos federais (${aliquotaEfetivaFederal}%) + ISS municipal sobre serviços. Use calcularLucroPresumidoTrimestral() para cálculo completo.`,
     versaoMotor: VERSION,
     dataBase: '2026-02'
@@ -5080,12 +5106,18 @@ function simularJCP(params) {
   const irrfRetido = _arredondar(jcpPermitido * aliquota);
   const jcpLiquido = _arredondar(jcpPermitido - irrfRetido);
 
-  // Comparativo: mesmo valor bruto via pró-labore
+  // Comparativo: mesmo valor bruto via pró-labore (dividido em 12 meses para cálculos corretos)
   const mesmoValorBruto = jcpPermitido;
-  const inssPatronalPL = calcularINSSPatronal(mesmoValorBruto);
-  const inssRetidoPL = calcularINSSSocio(mesmoValorBruto);
-  const irpfPL = calcularIRPFProLabore2026(mesmoValorBruto, inssRetidoPL, 0);
-  const liquidoViaProlabore = _arredondar(mesmoValorBruto - inssRetidoPL - irpfPL.irFinal);
+  const proLaboreMensalEquiv = _arredondar(mesmoValorBruto / 12);
+  // Calcular encargos mensais usando tabelas MENSAIS
+  const inssRetidoMensal = calcularINSSSocio(proLaboreMensalEquiv);
+  const irpfMensal = calcularIRPFProLabore2026(proLaboreMensalEquiv, inssRetidoMensal, 0);
+  const inssPatronalMensal = calcularINSSPatronal(proLaboreMensalEquiv);
+  // Anualizar os resultados (×12)
+  const inssRetidoPL = _arredondar(inssRetidoMensal * 12);
+  const irpfAnualPL = _arredondar(irpfMensal.irFinal * 12);
+  const inssPatronalPL = _arredondar(inssPatronalMensal * 12);
+  const liquidoViaProlabore = _arredondar(mesmoValorBruto - inssRetidoPL - irpfAnualPL);
   const custoTotalProlabore = _arredondar(mesmoValorBruto + inssPatronalPL);
 
   // Via distribuição isenta (custo zero)
