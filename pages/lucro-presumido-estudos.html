@@ -3,11 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Estudo Lucro Presumido v3.7.1 | IMPOST.</title>
-<meta name="description" content="Ferramenta completa para estudo e simulação do Lucro Presumido: cálculo de IRPJ, CSLL, PIS/COFINS, distribuição de lucros, break-even e calendário tributário.">
-<meta property="og:title" content="Estudo Lucro Presumido | IMPOST.">
-<meta property="og:description" content="Simulador tributário para Lucro Presumido com cálculos detalhados, comparativos e recomendações.">
-<meta name="robots" content="noindex, nofollow">
+<title>Estudo Lucro Presumido | IMPOST.</title>
+<meta name="description" content="Simulador tributário completo para Lucro Presumido: IRPJ, CSLL, PIS/COFINS, distribuição de lucros, break-even, calendário tributário e otimização fiscal.">
+<meta name="version" content="1.0">
+<meta property="og:title" content="Estudo Lucro Presumido — Simulador Tributário | IMPOST.">
+<meta property="og:description" content="Simulador tributário completo para Lucro Presumido com cálculos detalhados, comparativos e recomendações de otimização fiscal.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://impost.com.br/pages/lucro-presumido-estudos.html">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='28' font-size='28'>📊</text></svg>" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
@@ -80,6 +82,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);line-height:
 .st-label{font-size:10px;color:var(--text3);margin-top:5px;text-align:center;white-space:nowrap;font-weight:500}
 .st-item.active .st-label{color:var(--accent);font-weight:600}
 .st-item.done .st-label{color:var(--success)}
+.st-item.locked{opacity:.4;cursor:not-allowed}
 .st-line{flex:1;height:2px;background:var(--border);min-width:16px;margin:0 2px;margin-bottom:18px}
 .st-line.done{background:var(--success)}
 
@@ -230,6 +233,7 @@ select.fm-input{cursor:pointer;appearance:none;background-image:url("data:image/
 
 /* EXPORT SECTION */
 .export-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px}
+button.export-card{font-family:var(--font);font-size:inherit;color:var(--text)}
 .export-card{background:var(--surface);border-radius:var(--rl);padding:24px;text-align:center;cursor:pointer;transition:var(--t);border:1px solid var(--border-l)}
 .export-card:hover{border-color:var(--accent);transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,0,0,.3)}
 .export-icon{font-size:32px;margin-bottom:8px}
@@ -292,6 +296,21 @@ select.fm-input{cursor:pointer;appearance:none;background-image:url("data:image/
 .chart-grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px}
 @media(max-width:700px){.chart-grid-2{grid-template-columns:1fr}}
 </style>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebApplication",
+  "name": "IMPOST. — Estudo Lucro Presumido",
+  "description": "Simulador tributário completo para Lucro Presumido com cálculos detalhados, comparativos e recomendações.",
+  "applicationCategory": "FinanceApplication",
+  "operatingSystem": "Web",
+  "offers": {
+    "@type": "Offer",
+    "price": "0",
+    "priceCurrency": "BRL"
+  }
+}
+</script>
 </head>
 <body>
 
@@ -369,7 +388,7 @@ select.fm-input{cursor:pointer;appearance:none;background-image:url("data:image/
   <div class="st-line"></div>
   <div class="st-item" data-step="5" onclick="goToStep(5)"><div class="st-num">5</div><div class="st-label">Resultados</div></div>
   <div class="st-line"></div>
-  <div class="st-item" data-step="6" onclick="goToStep(6)"><div class="st-num">6</div><div class="st-label">Exportar</div></div>
+  <div class="st-item locked" data-step="6" onclick="goToStep(6)"><div class="st-num">6</div><div class="st-label">Exportar</div></div>
 </div>
 
 <!-- ═══════════════════════════════════════════════════ -->
@@ -384,18 +403,18 @@ select.fm-input{cursor:pointer;appearance:none;background-image:url("data:image/
 
   <div class="fm-grid fm-2">
     <div class="fm-group">
-      <label> Razão Social</label>
+      <label for="razaoSocial">Razão Social</label>
       <input class="fm-input" id="razaoSocial" placeholder="Nome da empresa">
     </div>
     <div class="fm-group">
-      <label>CNPJ</label>
+      <label for="cnpj">CNPJ</label>
       <input class="fm-input" id="cnpj" placeholder="XX.XXX.XXX/XXXX-XX" maxlength="18">
     </div>
   </div>
 
   <div class="sec-title">CNAE Principal</div>
   <div class="fm-group">
-    <label>Buscar CNAE <span class="tt" data-tip="Digite o código CNAE ou uma descrição da atividade. Ex: 7119, consultoria, restaurante">?</span></label>
+    <label for="cnaeBusca">Buscar CNAE <span class="tt" data-tip="Digite o código CNAE ou uma descrição da atividade. Ex: 7119, consultoria, restaurante">?</span></label>
     <input class="fm-input" id="cnaeBusca" placeholder="Digite o código ou descrição da atividade..." autocomplete="off">
     <div class="search-results" id="cnaeResults"></div>
     <div id="cnaeInfo" style="display:none"></div>
@@ -412,19 +431,19 @@ select.fm-input{cursor:pointer;appearance:none;background-image:url("data:image/
   <div class="sec-title">Localização</div>
   <div class="fm-grid fm-2">
     <div class="fm-group">
-      <label>Estado (UF) <span class="tt" data-tip="Selecione o estado para carregar dados tributários (ICMS, incentivos fiscais, sublimite Simples)">?</span></label>
+      <label for="estado">Estado (UF) <span class="tt" data-tip="Selecione o estado para carregar dados tributários (ICMS, incentivos fiscais, sublimite Simples)">?</span></label>
       <select class="fm-input" id="estado"><option value="">Selecione o estado...</option></select>
       <div id="estadoInfo"></div>
     </div>
     <div class="fm-group">
-      <label>Município</label>
+      <label for="municipio">Município</label>
       <select class="fm-input" id="municipio" disabled><option value="">Selecione o estado primeiro...</option></select>
       <div id="municipioInfo"></div>
     </div>
   </div>
   <div class="fm-grid fm-2" style="margin-top:12px">
     <div class="fm-group">
-      <label>Alíquota ISS (%) <span class="tt" data-tip="Mínimo 2%, máximo 5% (LC 116/2003). Ajustável manualmente.">?</span></label>
+      <label for="aliquotaISS">Alíquota ISS (%) <span class="tt" data-tip="Mínimo 2%, máximo 5% (LC 116/2003). Ajustável manualmente.">?</span></label>
       <div class="fm-prefix"><span>%</span><input class="fm-input" id="aliquotaISS" type="number" min="2" max="5" step="0.1" value="5"></div>
     </div>
   </div>
@@ -432,11 +451,11 @@ select.fm-input{cursor:pointer;appearance:none;background-image:url("data:image/
   <div class="sec-title">Dados Complementares</div>
   <div class="fm-grid fm-2">
     <div class="fm-group">
-      <label>Data de Constituição</label>
+      <label for="dataConstituicao">Data de Constituição</label>
       <input class="fm-input" id="dataConstituicao" type="date">
     </div>
     <div class="fm-group">
-      <label>Porte da Empresa <span class="tt" data-tip="ME: Receita até R$ 360.000/ano. EPP: até R$ 4.800.000/ano. Demais: acima.">?</span></label>
+      <label for="porte">Porte da Empresa <span class="tt" data-tip="ME: Receita até R$ 360.000/ano. EPP: até R$ 4.800.000/ano. Demais: acima.">?</span></label>
       <select class="fm-input" id="porte">
         <option value="ME">ME - Microempresa</option>
         <option value="EPP">EPP - Empresa de Pequeno Porte</option>
@@ -459,11 +478,11 @@ select.fm-input{cursor:pointer;appearance:none;background-image:url("data:image/
 
   <div class="fm-grid fm-2">
     <div class="fm-group">
-      <label>Receita bruta do ano anterior <span class="tt" data-tip="Receita bruta total no ano-calendário anterior. Limite: R$ 78.000.000,00 (Lei 9.718/1998, Art. 13)">?</span></label>
+      <label for="receitaAnterior">Receita bruta do ano anterior <span class="tt" data-tip="Receita bruta total no ano-calendário anterior. Limite: R$ 78.000.000,00 (Lei 9.718/1998, Art. 13)">?</span></label>
       <div class="fm-prefix"><span>R$</span><input class="fm-input money" id="receitaAnterior" placeholder="0,00"></div>
     </div>
     <div class="fm-group">
-      <label>Meses de atividade no ano anterior</label>
+      <label for="mesesAtividade">Meses de atividade no ano anterior</label>
       <select class="fm-input" id="mesesAtividade">
         <option value="12" selected>12 meses (ano completo)</option>
         <option value="11">11 meses</option><option value="10">10 meses</option>
@@ -517,28 +536,28 @@ select.fm-input{cursor:pointer;appearance:none;background-image:url("data:image/
 
     <div class="sec-title">Deduções da Receita Bruta</div>
     <div class="fm-grid fm-3">
-      <div class="fm-group"><label>Devoluções de vendas</label><div class="fm-prefix"><span>R$</span><input class="fm-input money" id="devolucoes" placeholder="0,00"></div></div>
-      <div class="fm-group"><label>Vendas canceladas</label><div class="fm-prefix"><span>R$</span><input class="fm-input money" id="cancelamentos" placeholder="0,00"></div></div>
-      <div class="fm-group"><label>Descontos incondicionais</label><div class="fm-prefix"><span>R$</span><input class="fm-input money" id="descontos" placeholder="0,00"></div></div>
+      <div class="fm-group"><label for="devolucoes">Devoluções de vendas</label><div class="fm-prefix"><span>R$</span><input class="fm-input money" id="devolucoes" placeholder="0,00"></div></div>
+      <div class="fm-group"><label for="cancelamentos">Vendas canceladas</label><div class="fm-prefix"><span>R$</span><input class="fm-input money" id="cancelamentos" placeholder="0,00"></div></div>
+      <div class="fm-group"><label for="descontos">Descontos incondicionais</label><div class="fm-prefix"><span>R$</span><input class="fm-input money" id="descontos" placeholder="0,00"></div></div>
     </div>
 
     <div class="sec-title">Adições Obrigatórias à Base (Art. 595 RIR/2018) <span class="tt" data-tip="Estas receitas são adicionadas INTEGRALMENTE à base de cálculo (100%), não passam pela presunção.">?</span></div>
     <div class="fm-grid fm-2">
-      <div class="fm-group"><label>Ganhos de capital</label><div class="fm-prefix"><span>R$</span><input class="fm-input money" id="ganhosCapital" placeholder="0,00"></div></div>
-      <div class="fm-group"><label>Rendimentos financeiros</label><div class="fm-prefix"><span>R$</span><input class="fm-input money" id="rendFinanceiros" placeholder="0,00"></div></div>
-      <div class="fm-group"><label>JCP recebido</label><div class="fm-prefix"><span>R$</span><input class="fm-input money" id="jcpRecebido" placeholder="0,00"></div></div>
-      <div class="fm-group"><label>Multas contratuais recebidas</label><div class="fm-prefix"><span>R$</span><input class="fm-input money" id="multasContratuais" placeholder="0,00"></div></div>
-      <div class="fm-group"><label>Receitas financeiras diversas</label><div class="fm-prefix"><span>R$</span><input class="fm-input money" id="recFinDiversas" placeholder="0,00"></div></div>
-      <div class="fm-group"><label>Valores recuperados</label><div class="fm-prefix"><span>R$</span><input class="fm-input money" id="valoresRecuperados" placeholder="0,00"></div></div>
-      <div class="fm-group"><label>Demais receitas</label><div class="fm-prefix"><span>R$</span><input class="fm-input money" id="demaisReceitas" placeholder="0,00"></div></div>
+      <div class="fm-group"><label for="ganhosCapital">Ganhos de capital</label><div class="fm-prefix"><span>R$</span><input class="fm-input money" id="ganhosCapital" placeholder="0,00"></div></div>
+      <div class="fm-group"><label for="rendFinanceiros">Rendimentos financeiros</label><div class="fm-prefix"><span>R$</span><input class="fm-input money" id="rendFinanceiros" placeholder="0,00"></div></div>
+      <div class="fm-group"><label for="jcpRecebido">JCP recebido</label><div class="fm-prefix"><span>R$</span><input class="fm-input money" id="jcpRecebido" placeholder="0,00"></div></div>
+      <div class="fm-group"><label for="multasContratuais">Multas contratuais recebidas</label><div class="fm-prefix"><span>R$</span><input class="fm-input money" id="multasContratuais" placeholder="0,00"></div></div>
+      <div class="fm-group"><label for="recFinDiversas">Receitas financeiras diversas</label><div class="fm-prefix"><span>R$</span><input class="fm-input money" id="recFinDiversas" placeholder="0,00"></div></div>
+      <div class="fm-group"><label for="valoresRecuperados">Valores recuperados</label><div class="fm-prefix"><span>R$</span><input class="fm-input money" id="valoresRecuperados" placeholder="0,00"></div></div>
+      <div class="fm-group"><label for="demaisReceitas">Demais receitas</label><div class="fm-prefix"><span>R$</span><input class="fm-input money" id="demaisReceitas" placeholder="0,00"></div></div>
     </div>
 
     <div class="sec-title">Retenções na Fonte</div>
     <div class="fm-grid fm-2">
-      <div class="fm-group"><label>IRRF retido (anual)</label><div class="fm-prefix"><span>R$</span><input class="fm-input money" id="irrfRetido" placeholder="0,00"></div></div>
-      <div class="fm-group"><label>CSLL retida (anual)</label><div class="fm-prefix"><span>R$</span><input class="fm-input money" id="csllRetida" placeholder="0,00"></div></div>
-      <div class="fm-group"><label>PIS retido (anual)</label><div class="fm-prefix"><span>R$</span><input class="fm-input money" id="pisRetido" placeholder="0,00"></div></div>
-      <div class="fm-group"><label>COFINS retida (anual)</label><div class="fm-prefix"><span>R$</span><input class="fm-input money" id="cofinsRetida" placeholder="0,00"></div></div>
+      <div class="fm-group"><label for="irrfRetido">IRRF retido (anual)</label><div class="fm-prefix"><span>R$</span><input class="fm-input money" id="irrfRetido" placeholder="0,00"></div></div>
+      <div class="fm-group"><label for="csllRetida">CSLL retida (anual)</label><div class="fm-prefix"><span>R$</span><input class="fm-input money" id="csllRetida" placeholder="0,00"></div></div>
+      <div class="fm-group"><label for="pisRetido">PIS retido (anual)</label><div class="fm-prefix"><span>R$</span><input class="fm-input money" id="pisRetido" placeholder="0,00"></div></div>
+      <div class="fm-group"><label for="cofinsRetida">COFINS retida (anual)</label><div class="fm-prefix"><span>R$</span><input class="fm-input money" id="cofinsRetida" placeholder="0,00"></div></div>
     </div>
   </div>
 
@@ -568,35 +587,35 @@ select.fm-input{cursor:pointer;appearance:none;background-image:url("data:image/
 
   <div class="sec-title">Folha de Pagamento e Encargos</div>
   <div class="fm-grid fm-3">
-    <div class="fm-group"><label>Folha de pagamento anual <span class="tt" data-tip="Total bruto anual (salários + pró-labore). Usado para calcular INSS patronal e Fator R do Simples.">?</span></label><div class="fm-prefix"><span>R$</span><input class="fm-input money" id="folhaPagamento" placeholder="0,00"></div></div>
-    <div class="fm-group"><label>Alíquota RAT (%)</label><div class="fm-prefix"><span>%</span><input class="fm-input" id="aliquotaRAT" type="number" min="1" max="3" step="0.1" value="3"></div></div>
-    <div class="fm-group"><label>Contribuição a terceiros (%)</label><div class="fm-prefix"><span>%</span><input class="fm-input" id="aliquotaTerceiros" type="number" min="0" max="5.8" step="0.1" value="0.5"></div></div>
+    <div class="fm-group"><label for="folhaPagamento">Folha de pagamento anual <span class="tt" data-tip="Total bruto anual (salários + pró-labore). Usado para calcular INSS patronal e Fator R do Simples.">?</span></label><div class="fm-prefix"><span>R$</span><input class="fm-input money" id="folhaPagamento" placeholder="0,00"></div></div>
+    <div class="fm-group"><label for="aliquotaRAT">Alíquota RAT (%)</label><div class="fm-prefix"><span>%</span><input class="fm-input" id="aliquotaRAT" type="number" min="1" max="3" step="0.1" value="3"></div></div>
+    <div class="fm-group"><label for="aliquotaTerceiros">Contribuição a terceiros (%)</label><div class="fm-prefix"><span>%</span><input class="fm-input" id="aliquotaTerceiros" type="number" min="0" max="5.8" step="0.1" value="0.5"></div></div>
   </div>
 
   <div class="sec-title">Despesas Operacionais Anuais</div>
   <div class="fm-tip" style="margin-bottom:10px">Detalhamento para estimativa de lucro real. Total será calculado automaticamente.</div>
   <div class="desp-grid">
-    <div class="fm-group"><label>Aluguel</label><div class="fm-prefix"><span>R$</span><input class="fm-input money desp" id="despAluguel" placeholder="0,00"></div></div>
-    <div class="fm-group"><label>Energia / Água / Telefone</label><div class="fm-prefix"><span>R$</span><input class="fm-input money desp" id="despUtilidades" placeholder="0,00"></div></div>
-    <div class="fm-group"><label>Combustível e manutenção</label><div class="fm-prefix"><span>R$</span><input class="fm-input money desp" id="despCombustivel" placeholder="0,00"></div></div>
-    <div class="fm-group"><label>Material de consumo</label><div class="fm-prefix"><span>R$</span><input class="fm-input money desp" id="despMaterial" placeholder="0,00"></div></div>
-    <div class="fm-group"><label>Serviços de terceiros</label><div class="fm-prefix"><span>R$</span><input class="fm-input money desp" id="despServicos" placeholder="0,00"></div></div>
-    <div class="fm-group"><label>Pro-labore</label><div class="fm-prefix"><span>R$</span><input class="fm-input money desp" id="despProlabore" placeholder="0,00"></div></div>
-    <div class="fm-group"><label>Salários e encargos</label><div class="fm-prefix"><span>R$</span><input class="fm-input money desp" id="despSalarios" placeholder="0,00"></div></div>
-    <div class="fm-group"><label>Depreciação</label><div class="fm-prefix"><span>R$</span><input class="fm-input money desp" id="despDepreciacao" placeholder="0,00"></div></div>
-    <div class="fm-group"><label>Outras despesas</label><div class="fm-prefix"><span>R$</span><input class="fm-input money desp" id="despOutras" placeholder="0,00"></div></div>
+    <div class="fm-group"><label for="despAluguel">Aluguel</label><div class="fm-prefix"><span>R$</span><input class="fm-input money desp" id="despAluguel" placeholder="0,00"></div></div>
+    <div class="fm-group"><label for="despUtilidades">Energia / Água / Telefone</label><div class="fm-prefix"><span>R$</span><input class="fm-input money desp" id="despUtilidades" placeholder="0,00"></div></div>
+    <div class="fm-group"><label for="despCombustivel">Combustível e manutenção</label><div class="fm-prefix"><span>R$</span><input class="fm-input money desp" id="despCombustivel" placeholder="0,00"></div></div>
+    <div class="fm-group"><label for="despMaterial">Material de consumo</label><div class="fm-prefix"><span>R$</span><input class="fm-input money desp" id="despMaterial" placeholder="0,00"></div></div>
+    <div class="fm-group"><label for="despServicos">Serviços de terceiros</label><div class="fm-prefix"><span>R$</span><input class="fm-input money desp" id="despServicos" placeholder="0,00"></div></div>
+    <div class="fm-group"><label for="despProlabore">Pro-labore</label><div class="fm-prefix"><span>R$</span><input class="fm-input money desp" id="despProlabore" placeholder="0,00"></div></div>
+    <div class="fm-group"><label for="despSalarios">Salários e encargos</label><div class="fm-prefix"><span>R$</span><input class="fm-input money desp" id="despSalarios" placeholder="0,00"></div></div>
+    <div class="fm-group"><label for="despDepreciacao">Depreciação</label><div class="fm-prefix"><span>R$</span><input class="fm-input money desp" id="despDepreciacao" placeholder="0,00"></div></div>
+    <div class="fm-group"><label for="despOutras">Outras despesas</label><div class="fm-prefix"><span>R$</span><input class="fm-input money desp" id="despOutras" placeholder="0,00"></div></div>
   </div>
   <div class="fm-group" style="margin-top:10px">
-    <label>Total Despesas Operacionais</label>
+    <label for="totalDespesas">Total Despesas Operacionais</label>
     <div class="fm-prefix"><span>R$</span><input class="fm-input" id="totalDespesas" readonly style="font-weight:700;color:var(--accent)"></div>
   </div>
 
   <div class="sec-title">Dados para Comparação de Regimes</div>
   <div class="fm-grid fm-2">
-    <div class="fm-group"><label>Créditos PIS/COFINS estimados (Lucro Real) <span class="tt" data-tip="Estimativa de créditos sobre insumos no regime não-cumulativo. Reduz o PIS/COFINS no Lucro Real.">?</span></label><div class="fm-prefix"><span>R$</span><input class="fm-input money" id="creditosPISCOFINS" placeholder="0,00"></div></div>
-    <div class="fm-group"><label>Alíquota efetiva Simples Nacional (%) <span class="tt" data-tip="Se a empresa for elegível ao Simples, informe a alíquota efetiva estimada para comparação.">?</span></label><div class="fm-prefix"><span>%</span><input class="fm-input" id="aliquotaSimples" type="number" min="4" max="33" step="0.1" value="15"></div></div>
-    <div class="fm-group"><label>Lucro contábil efetivo (R$) <span class="tt" data-tip="Lucro apurado pela contabilidade. Se informado e houver escrituração completa, permite distribuir lucros acima da base presumida.">?</span></label><div class="fm-prefix"><span>R$</span><input class="fm-input money" id="lucroContabil" placeholder="0,00 (opcional)"></div></div>
-    <div class="fm-group"><label>Prejuízos fiscais acumulados (R$)</label><div class="fm-prefix"><span>R$</span><input class="fm-input money" id="prejuizosFiscais" placeholder="0,00"></div></div>
+    <div class="fm-group"><label for="creditosPISCOFINS">Créditos PIS/COFINS estimados (Lucro Real) <span class="tt" data-tip="Estimativa de créditos sobre insumos no regime não-cumulativo. Reduz o PIS/COFINS no Lucro Real.">?</span></label><div class="fm-prefix"><span>R$</span><input class="fm-input money" id="creditosPISCOFINS" placeholder="0,00"></div></div>
+    <div class="fm-group"><label for="aliquotaSimples">Alíquota efetiva Simples Nacional (%) <span class="tt" data-tip="Se a empresa for elegível ao Simples, informe a alíquota efetiva estimada para comparação.">?</span></label><div class="fm-prefix"><span>%</span><input class="fm-input" id="aliquotaSimples" type="number" min="4" max="33" step="0.1" value="15"></div></div>
+    <div class="fm-group"><label for="lucroContabil">Lucro contábil efetivo (R$) <span class="tt" data-tip="Lucro apurado pela contabilidade. Se informado e houver escrituração completa, permite distribuir lucros acima da base presumida.">?</span></label><div class="fm-prefix"><span>R$</span><input class="fm-input money" id="lucroContabil" placeholder="0,00 (opcional)"></div></div>
+    <div class="fm-group"><label for="prejuizosFiscais">Prejuízos fiscais acumulados (R$)</label><div class="fm-prefix"><span>R$</span><input class="fm-input money" id="prejuizosFiscais" placeholder="0,00"></div></div>
   </div>
 
   <div class="sec-title">Características da Empresa</div>
@@ -675,31 +694,31 @@ select.fm-input{cursor:pointer;appearance:none;background-image:url("data:image/
     <div><div class="wz-title">Exportação e Relatório</div><div class="wz-sub">Salve, exporte ou imprima seu estudo tributário</div></div>
   </div>
   <div class="export-grid">
-    <div class="export-card" id="btnExportPDF" onclick="exportPDF()">
+    <button type="button" class="export-card" id="btnExportPDF" onclick="exportPDF()">
       <div class="export-icon">&#128196;</div>
       <div class="export-label">Exportar PDF</div>
       <div class="export-desc">Relatório profissional completo</div>
-    </div>
-    <div class="export-card" onclick="exportCSV()">
+    </button>
+    <button type="button" class="export-card" onclick="exportCSV()">
       <div class="export-icon">&#128202;</div>
       <div class="export-label">Exportar CSV</div>
       <div class="export-desc">Planilha CSV compatível com Excel</div>
-    </div>
-    <div class="export-card" onclick="window.print()">
+    </button>
+    <button type="button" class="export-card" onclick="window.print()">
       <div class="export-icon">&#128424;</div>
       <div class="export-label">Imprimir</div>
       <div class="export-desc">Layout otimizado para impressão</div>
-    </div>
-    <div class="export-card" onclick="salvarEstudo()">
+    </button>
+    <button type="button" class="export-card" onclick="salvarEstudo()">
       <div class="export-icon">&#128190;</div>
       <div class="export-label">Salvar Estudo</div>
       <div class="export-desc">Salvar no navegador (localStorage)</div>
-    </div>
-    <div class="export-card" onclick="novoEstudo()">
+    </button>
+    <button type="button" class="export-card" onclick="novoEstudo()">
       <div class="export-icon">&#128260;</div>
       <div class="export-label">Novo Estudo</div>
       <div class="export-desc">Limpar tudo e recomeçar</div>
-    </div>
+    </button>
   </div>
 </div>
 </section>
@@ -922,6 +941,30 @@ function humanizarErro(msg) {
 // ─────────────────────────────────────────────────────────────────────────
 function goToStep(n) {
   if (n < 1 || n > App.totalSteps) return;
+
+  // Bloquear Step 6 se resultados não foram calculados
+  if (n === 6 && !App.results.anual) {
+    alert('Calcule os resultados primeiro (etapa 5) antes de exportar.');
+    return;
+  }
+  // Bloquear Step 5 via clique direto no stepper se não há receita
+  if (n === 5 && App.currentStep < 5) {
+    gatherFormData();
+    if (!App.formData.receitaBrutaAnual || App.formData.receitaBrutaAnual <= 0) {
+      alert('Informe ao menos uma receita na etapa financeira antes de calcular.');
+      return;
+    }
+  }
+
+  // Loading visual para step 5 (cálculos pesados)
+  if (n === 5) {
+    var mainArea = document.querySelector('.main-area');
+    if (mainArea) { mainArea.style.opacity = '0.6'; mainArea.style.pointerEvents = 'none'; }
+  }
+
+  // Scroll instantâneo antes de trocar painel (evita flash branco)
+  window.scrollTo({ top: 0, behavior: 'instant' });
+
   // Mark previous steps done
   const items = $$('.st-item');
   const lines = $$('.st-line');
@@ -934,10 +977,18 @@ function goToStep(n) {
   lines.forEach((el, i) => {
     el.classList.toggle('done', i < n - 1);
   });
-  // Show panel
-  $$('.wz-panel').forEach(p => p.classList.remove('active'));
-  const panel = $('step' + n);
-  if (panel) panel.classList.add('active');
+
+  // Show panel via requestAnimationFrame para evitar flash branco
+  requestAnimationFrame(function() {
+    $$('.wz-panel').forEach(p => p.classList.remove('active'));
+    const panel = $('step' + n);
+    if (panel) panel.classList.add('active');
+
+    // Restaurar opacidade
+    var mainArea = document.querySelector('.main-area');
+    if (mainArea) { mainArea.style.opacity = '1'; mainArea.style.pointerEvents = 'auto'; }
+  });
+
   App.currentStep = n;
   // Nav buttons
   $('btnPrev').disabled = n === 1;
@@ -957,18 +1008,29 @@ function goToStep(n) {
   // Run calculations when entering step 5
   if (n === 5) runAllCalculations();
   updateSidebar();
-  window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 function validarStep(step) {
   var erros = [];
   if (step === 1) {
-    // CNPJ: se preenchido, deve ser válido
+    // Razão Social obrigatória
+    var razaoSocial = ($('razaoSocial').value || '').trim();
+    if (!razaoSocial) {
+      erros.push('Razão Social é obrigatória.');
+    }
+    // CNPJ obrigatório e válido
     var cnpjVal = ($('cnpj').value || '').replace(/\D/g, '');
-    if (cnpjVal.length > 0 && cnpjVal.length < 14) {
+    if (cnpjVal.length === 0) {
+      erros.push('CNPJ é obrigatório.');
+    } else if (cnpjVal.length < 14) {
       erros.push('CNPJ incompleto — deve ter 14 dígitos.');
-    } else if (cnpjVal.length === 14 && !validateCNPJ(cnpjVal)) {
+    } else if (!validateCNPJ(cnpjVal)) {
       erros.push('CNPJ inválido — dígitos verificadores não conferem.');
+    }
+    // CNAE Principal obrigatório
+    var cnaePrincipal = ($('cnaePrincipal').value || '').trim();
+    if (!cnaePrincipal) {
+      erros.push('Selecione o CNAE principal da empresa.');
     }
   }
   if (step === 3) {
@@ -1436,13 +1498,13 @@ function buildTrimestralForms() {
       <tbody id="tbodyRecTrim${q}"></tbody></table>
       <button class="btn-add-row" onclick="addLinhaReceita('tbodyRecTrim${q}')">+ Adicionar Atividade</button>
       <div class="fm-grid fm-2" style="margin-top:12px">
-        <div class="fm-group"><label>Devoluções</label><div class="fm-prefix"><span>R$</span><input class="fm-input money" id="trimDev${q}" placeholder="0,00"></div></div>
-        <div class="fm-group"><label>Cancelamentos</label><div class="fm-prefix"><span>R$</span><input class="fm-input money" id="trimCanc${q}" placeholder="0,00"></div></div>
-        <div class="fm-group"><label>Descontos incondicionais</label><div class="fm-prefix"><span>R$</span><input class="fm-input money" id="trimDesc${q}" placeholder="0,00"></div></div>
-        <div class="fm-group"><label>Ganhos de capital</label><div class="fm-prefix"><span>R$</span><input class="fm-input money" id="trimGanhos${q}" placeholder="0,00"></div></div>
-        <div class="fm-group"><label>Rendimentos financeiros</label><div class="fm-prefix"><span>R$</span><input class="fm-input money" id="trimRendFin${q}" placeholder="0,00"></div></div>
-        <div class="fm-group"><label>IRRF retido</label><div class="fm-prefix"><span>R$</span><input class="fm-input money" id="trimIRRF${q}" placeholder="0,00"></div></div>
-        <div class="fm-group"><label>CSLL retida</label><div class="fm-prefix"><span>R$</span><input class="fm-input money" id="trimCSLL${q}" placeholder="0,00"></div></div>
+        <div class="fm-group"><label for="trimDev${q}">Devoluções</label><div class="fm-prefix"><span>R$</span><input class="fm-input money" id="trimDev${q}" placeholder="0,00"></div></div>
+        <div class="fm-group"><label for="trimCanc${q}">Cancelamentos</label><div class="fm-prefix"><span>R$</span><input class="fm-input money" id="trimCanc${q}" placeholder="0,00"></div></div>
+        <div class="fm-group"><label for="trimDesc${q}">Descontos incondicionais</label><div class="fm-prefix"><span>R$</span><input class="fm-input money" id="trimDesc${q}" placeholder="0,00"></div></div>
+        <div class="fm-group"><label for="trimGanhos${q}">Ganhos de capital</label><div class="fm-prefix"><span>R$</span><input class="fm-input money" id="trimGanhos${q}" placeholder="0,00"></div></div>
+        <div class="fm-group"><label for="trimRendFin${q}">Rendimentos financeiros</label><div class="fm-prefix"><span>R$</span><input class="fm-input money" id="trimRendFin${q}" placeholder="0,00"></div></div>
+        <div class="fm-group"><label for="trimIRRF${q}">IRRF retido</label><div class="fm-prefix"><span>R$</span><input class="fm-input money" id="trimIRRF${q}" placeholder="0,00"></div></div>
+        <div class="fm-group"><label for="trimCSLL${q}">CSLL retida</label><div class="fm-prefix"><span>R$</span><input class="fm-input money" id="trimCSLL${q}" placeholder="0,00"></div></div>
       </div>
     </div>`;
   }
@@ -1689,6 +1751,9 @@ function runAllCalculations() {
     }
     renderCalendario(d);
     updateSidebar();
+    // Desbloquear Step 6 no stepper após cálculos
+    var step6Item = document.querySelector('.st-item[data-step="6"]');
+    if (step6Item) step6Item.classList.remove('locked');
   } catch(e) {
     console.error('Erro nos calculos:', e);
     console.error('[IMPOST] Erro nos cálculos:', e);
@@ -1716,7 +1781,7 @@ function renderSimulacao(d) {
         <div class="kpi"><div class="kpi-label">Total Tributos Federais</div><div class="kpi-value" style="color:var(--danger)">${formatMoney(sim.totalTributosFederais)}</div><div class="kpi-sub">IRPJ + CSLL + PIS + COFINS</div></div>
         <div class="kpi"><div class="kpi-label">Alíquota Efetiva Federal</div><div class="kpi-value" style="color:var(--info)">${sim.aliquotaEfetiva}</div><div class="kpi-sub">Não inclui ISS nem INSS patronal</div></div>
       </div>
-      <div class="info-box info" style="margin-top:12px"><strong>Atividade:</strong> ${sim.atividade}<br>${sim.observacao}</div>
+      <div class="info-box info" style="margin-top:12px"><strong>Atividade:</strong> ${sim.atividade}<br>${((sim.observacao || '').indexOf('()') !== -1 || (sim.observacao || '').indexOf('Use ') !== -1) ? 'Para carga tributária completa incluindo ISS, consulte as abas Trimestral e Anual.' : escapeHtml(sim.observacao)}</div>
       <div style="margin-top:16px;padding:12px;background:rgba(100,116,139,.08);border-radius:6px;border-left:3px solid var(--text3)">
         <p style="font-size:10px;color:var(--text3);line-height:1.5;margin:0"><strong>AVISO LEGAL:</strong> Os cálculos apresentados são estimativas baseadas na legislação vigente (RIR/2018, IN RFB 1.700/2017, LC 224/2025) e nos dados informados pelo usuário. Este sistema NÃO substitui a orientação de um contador ou advogado tributarista. Os resultados devem ser validados por profissional habilitado antes de qualquer tomada de decisão fiscal. O IMPOST não se responsabiliza por decisões tomadas com base exclusivamente nesta simulação.</p>
       </div>`;
@@ -3135,7 +3200,19 @@ function loadAutoSave() {
     const d = saved.data;
     if (d.razaoSocial) $('razaoSocial').value = d.razaoSocial;
     if (d.cnpj) $('cnpj').value = d.cnpj;
-    if (d.estado) { $('estado').value = d.estado; onEstadoChange(); }
+    if (d.estado) {
+      $('estado').value = d.estado;
+      onEstadoChange().then(function() {
+        if (d.municipio) {
+          $('municipio').value = d.municipio;
+          onMunicipioChange();
+        }
+      }).catch(function() {
+        if (d.municipio) {
+          setTimeout(function() { $('municipio').value = d.municipio; onMunicipioChange(); }, 2000);
+        }
+      });
+    }
     if (d.aliquotaISS) $('aliquotaISS').value = d.aliquotaISS;
     if (d.porte) $('porte').value = d.porte;
     // Restore money fields
@@ -3225,7 +3302,7 @@ function loadAutoSave() {
 function salvarEstudo() {
   try {
     gatherFormData();
-    const study = { ts: Date.now(), version: '2.2', formData: App.formData, results: {} };
+    const study = { ts: Date.now(), version: '1.0', formData: App.formData, results: {} };
     // Store all serializable result data
     var resultKeys = ['simulacao','trimestral','piscofins','anual','proLabore','jcp','ecd','caixaComp','breakeven','calendario'];
     resultKeys.forEach(function(key) {
@@ -3253,7 +3330,19 @@ function carregarEstudo() {
     // Dados basicos
     if (d.razaoSocial) $('razaoSocial').value = d.razaoSocial;
     if (d.cnpj) $('cnpj').value = d.cnpj;
-    if (d.estado) { $('estado').value = d.estado; onEstadoChange(); }
+    if (d.estado) {
+      $('estado').value = d.estado;
+      onEstadoChange().then(function() {
+        if (d.municipio) {
+          $('municipio').value = d.municipio;
+          onMunicipioChange();
+        }
+      }).catch(function() {
+        if (d.municipio) {
+          setTimeout(function() { $('municipio').value = d.municipio; onMunicipioChange(); }, 2000);
+        }
+      });
+    }
     if (d.aliquotaISS) $('aliquotaISS').value = d.aliquotaISS;
     if (d.porte) $('porte').value = d.porte;
     // Financeiros
