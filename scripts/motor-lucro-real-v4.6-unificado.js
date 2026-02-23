@@ -1098,13 +1098,14 @@ function calcularIRPJLucroReal(dados) {
   const _ta = Number(totalAdicoes || dados.adicoes) || 0;
   const _te = Number(totalExclusoes || dados.exclusoes) || 0;
   const _sp = Number(saldoPrejuizoFiscal || dados.prejuizoFiscal || dados.prejuizo) || 0;
-  // ═══ FIX ERRO #1: Derivar numMeses de periodoApuracao/apuracaoLR quando presente ═══
-  // Corrige bug onde callers passavam numMeses=12 mesmo para apuração trimestral,
-  // zerando o adicional de IRPJ (limite = R$ 240k em vez de R$ 60k/trimestre)
-  const _periodoApuracao = dados.periodoApuracao || dados.apuracaoLR;
-  const _nm = (_periodoApuracao === 'trimestral' || _periodoApuracao === 'TRIMESTRAL')
-    ? 3
-    : (Number(numMeses || dados.meses) || 12);
+  // ═══ FIX v5.7: _nm reflete o período da BASE PASSADA, não a forma de apuração ═══
+  // O antigo FIX ERRO #1 derivava _nm de periodoApuracao/apuracaoLR, mas isso causava
+  // bug quando o chamador passava o lucro real ANUAL consolidado com apuracaoLR='trimestral':
+  //   _nm=3 → limiteAdicional=60.000 (ERRADO, deveria ser 240.000 para base anual)
+  //   Inflava o adicional de 10% em R$ 18.000.
+  // Agora _nm vem exclusivamente de numMeses (ou dados.meses/dados.numMeses).
+  // Callers que calculam um trimestre isolado devem passar numMeses=3 explicitamente.
+  const _nm = Number(numMeses || dados.meses || dados.numMeses) || 12;
 
   const _id = Number(incentivosDedutiveis || dados.incentivos) || 0;
   const _rf = Number(retencoesFonte || dados.retencoes) || 0;
