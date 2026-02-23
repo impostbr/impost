@@ -75,7 +75,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);line-height:
 
 /* STEPPER */
 .stepper{display:flex;align-items:center;margin-bottom:28px;overflow-x:auto;padding-bottom:4px}
-.st-item{display:flex;flex-direction:column;align-items:center;min-width:72px;flex-shrink:0;cursor:pointer}
+.st-item{display:flex;flex-direction:column;align-items:center;min-width:72px;flex-shrink:0;cursor:pointer;background:none;border:none;padding:0;font:inherit;color:inherit;outline:none}
 .st-num{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;background:var(--surface);border:2px solid var(--border);color:var(--text3);transition:var(--t)}
 .st-item.active .st-num{background:var(--accent);border-color:var(--accent);color:#000;box-shadow:0 2px 12px rgba(245,158,11,.35)}
 .st-item.done .st-num{background:var(--success);border-color:var(--success);color:#fff}
@@ -378,17 +378,17 @@ button.export-card{font-family:var(--font);font-size:inherit;color:var(--text)}
 
 <!-- STEPPER -->
 <div class="stepper" id="stepper">
-  <div class="st-item active" data-step="1" onclick="goToStep(1)"><div class="st-num">1</div><div class="st-label">Empresa</div></div>
+  <button type="button" class="st-item active" data-step="1" onclick="goToStep(1)" aria-label="Etapa 1: Empresa"><div class="st-num">1</div><div class="st-label">Empresa</div></button>
   <div class="st-line"></div>
-  <div class="st-item" data-step="2" onclick="goToStep(2)"><div class="st-num">2</div><div class="st-label">Elegibilidade</div></div>
+  <button type="button" class="st-item" data-step="2" onclick="goToStep(2)" aria-label="Etapa 2: Elegibilidade"><div class="st-num">2</div><div class="st-label">Elegibilidade</div></button>
   <div class="st-line"></div>
-  <div class="st-item" data-step="3" onclick="goToStep(3)"><div class="st-num">3</div><div class="st-label">Financeiro</div></div>
+  <button type="button" class="st-item" data-step="3" onclick="goToStep(3)" aria-label="Etapa 3: Financeiro"><div class="st-num">3</div><div class="st-label">Financeiro</div></button>
   <div class="st-line"></div>
-  <div class="st-item" data-step="4" onclick="goToStep(4)"><div class="st-num">4</div><div class="st-label">Complementar</div></div>
+  <button type="button" class="st-item" data-step="4" onclick="goToStep(4)" aria-label="Etapa 4: Complementar"><div class="st-num">4</div><div class="st-label">Complementar</div></button>
   <div class="st-line"></div>
-  <div class="st-item" data-step="5" onclick="goToStep(5)"><div class="st-num">5</div><div class="st-label">Resultados</div></div>
+  <button type="button" class="st-item" data-step="5" onclick="goToStep(5)" aria-label="Etapa 5: Resultados"><div class="st-num">5</div><div class="st-label">Resultados</div></button>
   <div class="st-line"></div>
-  <div class="st-item locked" data-step="6" onclick="goToStep(6)"><div class="st-num">6</div><div class="st-label">Exportar</div></div>
+  <button type="button" class="st-item locked" data-step="6" onclick="goToStep(6)" aria-label="Etapa 6: Exportar"><div class="st-num">6</div><div class="st-label">Exportar</div></button>
 </div>
 
 <!-- ═══════════════════════════════════════════════════ -->
