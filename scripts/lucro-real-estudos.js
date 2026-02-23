@@ -1,6 +1,6 @@
 /**
  * ╔══════════════════════════════════════════════════════════════════════════════╗
- * ║  LUCRO REAL — ESTUDOS TRIBUTÁRIOS  v3.5.1  (ARQUIVO UNIFICADO)            ║
+ * ║  LUCRO REAL — ESTUDOS TRIBUTÁRIOS  v3.6.0  (ARQUIVO UNIFICADO)            ║
  * ║  Wizard 7 etapas + Motor de diagnóstico + Exportação PDF/Excel            ║
  * ║  100% LUCRO REAL — Sem comparativo com Simples/Presumido                   ║
  * ║  Motor: cruza respostas do usuário com LucroRealMap (LR.calcular.*)        ║
@@ -20,10 +20,32 @@
  *   window.IMPOSTExport      — alias de compatibilidade para exportação
  *
  * IMPOST. — Inteligência em Modelagem de Otimização Tributária
- * Versão: 3.5.2 | Data: Fevereiro/2026
+ * Versão: 3.6.0 | Data: Fevereiro/2026
  *
  * NOTA: Este arquivo unifica os antigos lucro-real-estudos.js + lucro-real-estudos-export.js
  *       Não é mais necessário carregar o arquivo de exportação separadamente.
+ *
+ * CHANGELOG v3.6.0 (Fevereiro/2026) — AUDITORIA EXTERNA:
+ *   ACHADO 2+3+10 — Referências legais unificadas: Art. 358 §1º/Art. 357/Art. 311 → Art. 315 RIR/2018
+ *                    para gratificações e pró-labore (7 locais corrigidos).
+ *   ACHADO 5+6 — 0.34 fixo → _econFiscal() marginal em 14 recomendações (incl. economiaDepreciacao).
+ *                Evita superestimação em até 41,7% para lucro ≤ R$ 240k. Nova função _econFiscal().
+ *   ACHADO 7 — Base CSLL separada: _calcTotalAdicoesCSLL() usada via _diferencaAdicoesCSLL para
+ *              excluir gratificações de adm. estatutários da base CSLL (IN 1.700/17, Anexo I, item 85).
+ *   ACHADO 8 — Economia de conversão de gratificação: removida parcela CSLL fantasma (gratificações
+ *              já são dedutíveis para CSLL, economia é SÓ de IRPJ).
+ *   ACHADO 4+12 — CONVERTER_GRATIFICACAO: agora calcula economia líquida (IRPJ - encargos).
+ *                 Se custo previdenciário > economia IRPJ, recomendação muda para Alerta.
+ *                 Texto menciona FGTS, RAT/FAP, Terceiros (33-36%) e PLR como alternativa.
+ *                 PROLABORE: esclarece que sócios sem CLT pagam só INSS 20% (sem FGTS/RAT).
+ *   ACHADO 9 — SUDAM/SUDENE: Art. 627-637 → Art. 612-613 (5 locais + relatório + Excel).
+ *   ACHADO 11 — CSLL fallback em alertas: 0.09 fixo → _csllAliq() (LC 224/2025).
+ *   ACHADO 15 — Subcapitalização: Art. 249-251 → Lei 12.249/2010, Art. 24-25; RIR Art. 979-980 (6 locais).
+ *   ACHADO 16 — Base negativa CSLL: Art. 580-586 → Lei 9.065/95, Art. 16; IN RFB 1.700/2017.
+ *   ACHADO 1 (IRRF JCP 17,5%) — VERIFICADO CORRETO: LC 224/2025, Art. 8º majorou IRRF JCP p/ 17,5% a partir de 2026.
+ *   ACHADO 13+14 — JÁ CORRIGIDOS em v3.5.2 (_irpj trimestral + motor JCP).
+ *   MELHORIA — Disclaimer de cumulatividade marginal adicionado à Seção 7 (oportunidades).
+ *              Explica que economias individuais não são aditivas quando implementadas em conjunto.
  *
  * CHANGELOG v3.5.2 (Fevereiro/2026) — AUDITORIA v4.6:
  *   ERRO 1 (CRÍTICO) — _irpj() parametrizada para apuração trimestral.
@@ -123,7 +145,7 @@
   // ═══════════════════════════════════════════════════════════════════════════
   //  CONSTANTES E HELPERS
   // ═══════════════════════════════════════════════════════════════════════════
-  const VERSAO = "3.5.2";
+  const VERSAO = "3.6.0";
   const LS_KEY_DADOS = "impost_lr_dados";
   const LS_KEY_STEP = "impost_lr_step";
   const LS_KEY_RESULTADOS = "impost_lr_resultados";
@@ -166,6 +188,21 @@
     if (!ehFinanceira) return 0.09;
     var _ano = parseInt(anoBase) || new Date().getFullYear();
     return (_ano >= 2025 && _ano <= 2027) ? 0.12 : 0.15;
+  }
+  /**
+   * Economia fiscal marginal: calcula impacto incremental real de uma dedução/exclusão.
+   * FIX AUDITORIA: Substitui 0.34 fixo que superestimava economia para lucro ≤ R$ 240k.
+   * @param {number} valor - Valor da dedução/exclusão
+   * @param {number} lucroReal - Lucro real final corrente
+   * @param {boolean} [trimestral] - Se apuração trimestral
+   * @param {number} [aliqCSLL] - Alíquota CSLL efetiva (default 0.09)
+   */
+  function _econFiscal(valor, lucroReal, trimestral, aliqCSLL) {
+    if (!valor || valor <= 0) return 0;
+    var lr = Math.max(lucroReal || 0, 0);
+    var econIRPJ = _irpj(lr, trimestral) - _irpj(Math.max(lr - valor, 0), trimestral);
+    var econCSLL = valor * (aliqCSLL || 0.09);
+    return _r(econIRPJ + econCSLL);
   }
   /** Sanitiza string para uso seguro em innerHTML — previne XSS */
   function _esc(s) {
@@ -1258,7 +1295,7 @@
     h += _field("temGratificacaoAdm", "Gratificações a administradores", "checkbox");
     h += _field("gratificacoesAdm", "Valor das gratificações", "money", {
       condition: "temGratificacaoAdm",
-      tip: "Indedutível (Art. 358, §1º). Estratégia: converter em pró-labore (dedutível).",
+      tip: "Indedutível p/ IRPJ (Art. 315 RIR/2018). Dedutível p/ CSLL (IN 1.700/17, Anexo I, item 85). Estratégia: converter em pró-labore.",
       extra: '<div class="wz-badge wz-badge-green" data-condition="temGratificacaoAdm" style="display:none">💡 Converter para pró-labore economiza <span id="econGratif"></span></div>',
     });
 
@@ -1408,7 +1445,7 @@
       tip: "100% indedutível (Art. 13, VII Lei 9.249)",
     });
     h += _field("jurosVinculadasExterior", "Juros pagos a pessoa vinculada no exterior", "money", {
-      tip: "Sujeito a regras de subcapitalização (Art. 249-251)",
+      tip: "Sujeito a regras de subcapitalização (Lei 12.249/2010, Art. 24-25; RIR/2018, Art. 979-980)",
     });
 
     h += _autoCalcBox("calcCustos");
@@ -1549,7 +1586,7 @@
     // ── Subcapitalização e Operações Vinculadas ──
     h += _sectionTitle("Subcapitalização e Operações Vinculadas");
     h += _infoBox(
-      "Dívidas com pessoas vinculadas estão sujeitas a limites de dedutibilidade de juros (Art. 249-251 RIR/2018). Juros que excederem os limites são indedutíveis.",
+      "Dívidas com pessoas vinculadas estão sujeitas a limites de dedutibilidade de juros (Lei 12.249/2010, Art. 24-25; RIR/2018, Art. 979-980). Juros que excederem os limites são indedutíveis.",
       "wz-info-warning"
     );
     h += _row(
@@ -2651,6 +2688,14 @@
       _n(d.outrasAdicoes);
   }
 
+  /**
+   * FIX AUDITORIA Achado 7: Adições para CSLL EXCLUEM gratificações a administradores
+   * estatutários, que são dedutíveis para CSLL (IN RFB 1.700/2017, Anexo I, item 85).
+   */
+  function _calcTotalAdicoesCSLL() {
+    return _calcTotalAdicoes() - _n(dadosEmpresa.gratificacoesAdm);
+  }
+
   function _calcTotalExclusoes() {
     var d = dadosEmpresa;
     return _n(d.dividendosRecebidos) + _n(d.mepPositivo) + _n(d.reversaoProvisoes) +
@@ -2939,7 +2984,7 @@
     if (_n(d.multasPunitivas) > 0) adicoesDetalhe.push({ desc: "Multas punitivas", valor: _n(d.multasPunitivas), artigo: "Art. 311, §5º", tipo: "D" });
     if (_n(d.brindes) > 0) adicoesDetalhe.push({ desc: "Brindes", valor: _n(d.brindes), artigo: "Art. 13, Lei 9.249", tipo: "D" });
     if (_n(d.alimentacaoSocios) > 0) adicoesDetalhe.push({ desc: "Alimentação de sócios/adm.", valor: _n(d.alimentacaoSocios), artigo: "Art. 260, §ú, IV", tipo: "D" });
-    if (_n(d.gratificacoesAdm) > 0) adicoesDetalhe.push({ desc: "Gratificações a administradores", valor: _n(d.gratificacoesAdm), artigo: "Art. 358, §1º", tipo: "D" });
+    if (_n(d.gratificacoesAdm) > 0) adicoesDetalhe.push({ desc: "Gratificações a administradores", valor: _n(d.gratificacoesAdm), artigo: "Art. 315 RIR/2018", tipo: "D" });
     if (_n(d.doacoesIrregulares) > 0) adicoesDetalhe.push({ desc: "Doações fora dos limites legais", valor: _n(d.doacoesIrregulares), artigo: "Art. 377-385", tipo: "D" });
     if (_n(d.despesasSemNF) > 0) adicoesDetalhe.push({ desc: "Despesas sem comprovante/NF", valor: _n(d.despesasSemNF), artigo: "Art. 311", tipo: "D" });
     if (_n(d.provisoesIndedutiveis) > 0) adicoesDetalhe.push({ desc: "Provisões não dedutíveis", valor: _n(d.provisoesIndedutiveis), artigo: "Art. 340-352", tipo: "T" });
@@ -3076,7 +3121,7 @@
       totalIndedutivelAuto += _provGar;
     }
     if (_n(d.gratificacoesAdm) > 0) {
-      despesasIndedutivelDetalhe.push({ desc: "Gratificações a administradores", valor: _n(d.gratificacoesAdm), artigo: "Art. 358, §1º" });
+      despesasIndedutivelDetalhe.push({ desc: "Gratificações a administradores", valor: _n(d.gratificacoesAdm), artigo: "Art. 315 RIR/2018" });
       // Já contabilizado nas adições existentes, não somar novamente
     }
     if (totalIndedutivelAuto > 0) {
@@ -3136,6 +3181,15 @@
     var baseCSLLFinal = compensacao
       ? (compensacao.resumo ? compensacao.resumo.baseCSLLFinal : lucroRealFinal)
       : lucroRealFinal;
+
+    // ═══ FIX AUDITORIA Achado 7: Gratificações a adm. estatutários são dedutíveis p/ CSLL ═══
+    // IN RFB 1.700/2017, Anexo I, item 85: "não aplicável à CSLL".
+    // A base da CSLL NÃO deve incluir gratificações como adição (diferente do IRPJ).
+    // Usa _calcTotalAdicoesCSLL() (= totalAdicoes - gratificacoesAdm) para consistência.
+    var _diferencaAdicoesCSLL = _r(_calcTotalAdicoes() - _calcTotalAdicoesCSLL());
+    if (_diferencaAdicoesCSLL > 0) {
+      baseCSLLFinal = _r(baseCSLLFinal - _diferencaAdicoesCSLL);
+    }
 
     // ═══ FIX: Atualizar LALUR com dados de compensação para rastreabilidade ═══
     lalur.lucroAntesCompensacao = lucroAjustado;
@@ -4050,7 +4104,8 @@
     var economiaPrejuizo = _safe(compensacao, 'resumo', 'economia', 'total');
     var economiaSUDAM = reducaoSUDAM;
     var economiaIncentivos = _safe(incentivosFiscais, 'economiaTotal');
-    var economiaDepreciacao = _safe(depreciacaoResult, 'economiaFiscal');
+    // FIX AUDITORIA: Economia depreciação recalculada com _econFiscal marginal (em vez do 0.34 fixo do depreciacaoResult)
+    var economiaDepreciacao = depreciacaoResult ? _econFiscal(depreciacaoResult.total, lucroRealFinal, _isTrimestral, _aliqCSLLEmpresa) : 0;
     var economiaPisCofins = pisCofinsResult.economiaCreditos || 0;
     // ═══ CORREÇÃO: Alíquotas efetiva (média) E marginal (incremental) ═══
     var _aliqEfetIRPJ = lucroRealFinal > 0
@@ -4059,9 +4114,11 @@
     var _aliqEfetCSLL = csllResult.aliquota || _aliqCSLLEmpresa;
     // Alíquota marginal: para exclusões/adições, a economia real é o impacto incremental
     // Usa _irpj() diferencial para capturar corretamente a faixa do adicional de 10%
+    // FIX AUDITORIA Achado 8: Gratificações são dedutíveis p/ CSLL (IN 1.700/17, Anexo I, item 85),
+    // portanto a economia de converter em pró-labore é APENAS de IRPJ (não há ganho de CSLL).
     var _gratAdm = _n(d.gratificacoesAdm);
     var economiaGratificacao = _gratAdm > 0
-      ? _r((_irpj(lucroRealFinal, _isTrimestral) - _irpj(lucroRealFinal - _gratAdm, _isTrimestral)) + _gratAdm * _aliqEfetCSLL)
+      ? _r(_irpj(lucroRealFinal, _isTrimestral) - _irpj(lucroRealFinal - _gratAdm, _isTrimestral))
       : 0;
     var economiaCPRBFinal = cprbResult ? cprbResult.economia : 0;
     // ═══ CORREÇÃO BUG CRÍTICO 1: PDD já reduz IRPJ/CSLL via exclusões LALUR — não contar 2x ═══
@@ -4846,7 +4903,7 @@
       // IRPJ+CSLL estimados para comparação (IRPJ marginal correto)
       var _laEst = Math.max(_calcLucroAjustado(), 0);
       var irpjEst = _irpj(_laEst, dadosEmpresa.apuracaoLR === "trimestral");
-      var csllEst = _r(_laEst * 0.09);
+      var csllEst = _r(_laEst * _csllAliq(d.ehFinanceira === true || d.ehFinanceira === "true", d.anoBase));
       if (totalRet > irpjEst + csllEst && irpjEst + csllEst > 0) {
         alertas.push({ tipo: "info", msg: "Retenções excedem imposto estimado — pode gerar saldo negativo (PER/DCOMP)" });
       }
@@ -4951,7 +5008,7 @@
           tipo: "Compensação", complexidade: "Baixa", risco: "Baixo",
           economiaAnual: econCSLL,
           descricao: "Base negativa de " + _m(_n(d.baseNegativaCSLL)) + " permite compensar até 30% da base de CSLL, economizando " + _m(econCSLL) + ".",
-          baseLegal: "Art. 580-586 do RIR/2018",
+          baseLegal: "Lei 9.065/95, Art. 16; IN RFB 1.700/2017 (análogo a Art. 580-586 RIR/2018 p/ IRPJ)",
           acaoRecomendada: "Manter controle no LACS. Verificar vedações.",
           prazoImplementacao: "Imediato",
           detalhes: {}
@@ -4968,7 +5025,7 @@
           tipo: "Redução", complexidade: "Média", risco: "Baixo",
           economiaAnual: econSudam,
           descricao: "Projeto SUDAM aprovado permite reduzir 75% do IRPJ sobre o lucro da exploração, economizando " + _m(econSudam) + "/ano.",
-          baseLegal: "Art. 627-637 do RIR/2018",
+          baseLegal: "Art. 612-613 do RIR/2018",
           acaoRecomendada: "Manter laudo constitutivo e reconhecimento da SRF atualizados.",
           prazoImplementacao: "Imediato",
           detalhes: ctx.sudamResult.resumo
@@ -4985,7 +5042,7 @@
           tipo: "Redução", complexidade: "Média", risco: "Baixo",
           economiaAnual: econSudene,
           descricao: "Projeto SUDENE aprovado permite reduzir 75% do IRPJ sobre o lucro da exploração, economizando " + _m(econSudene) + "/ano.",
-          baseLegal: "Art. 627-637 do RIR/2018",
+          baseLegal: "Art. 612-613 do RIR/2018",
           acaoRecomendada: "Manter laudo constitutivo e reconhecimento da SRF atualizados.",
           prazoImplementacao: "Imediato",
           detalhes: ctx.sudamResult.resumo
@@ -5004,7 +5061,7 @@
           tipo: "Potencial", complexidade: "Alta", risco: "Médio",
           economiaAnual: econPotencial,
           descricao: "A empresa está em área " + nomeSup + " mas NÃO tem projeto aprovado. Economia potencial de até " + _m(econPotencial) + "/ano com redução de 75% do IRPJ.",
-          baseLegal: "Art. 627-637 do RIR/2018",
+          baseLegal: "Art. 612-613 do RIR/2018",
           acaoRecomendada: "Consultar contador especializado para elaboração e protocolo do projeto junto à superintendência regional.",
           prazoImplementacao: "6 meses",
           detalhes: {}
@@ -5032,7 +5089,8 @@
     // #8 — Depreciação acelerada por turnos
     var turnosVal = parseInt(d.turnosOperacao) || 1;
     if (turnosVal > 1 && ctx.depreciacaoResult.depreciaNormal > 0) {
-      var econTurnos = _r((ctx.depreciacaoResult.depreciaAcelerada - ctx.depreciacaoResult.depreciaNormal) * 0.34);
+      var _difDepTurnos = _r(ctx.depreciacaoResult.depreciaAcelerada - ctx.depreciacaoResult.depreciaNormal);
+      var econTurnos = _econFiscal(_difDepTurnos, ctx.lucroRealFinal, ctx.trimestral, ctx.aliqEfetCSLL);
       if (econTurnos > 0) {
         ops.push({
           id: "DEPRECIACAO_TURNOS", titulo: "Depreciação Acelerada por Turnos",
@@ -5049,7 +5107,7 @@
 
     // #9 — Depreciação incentivada SUDAM/SUDENE
     if ((ctx.isSUDAM || ctx.isSUDENE) && _n(d.valorBensNovos) > 0) {
-      var econDepInc = _r(_n(d.valorBensNovos) * 0.34);
+      var econDepInc = _econFiscal(_n(d.valorBensNovos), ctx.lucroRealFinal, ctx.trimestral, ctx.aliqEfetCSLL);
       ops.push({
         id: "DEPRECIACAO_INCENTIVADA", titulo: "Depreciação Incentivada SUDAM/SUDENE (100%)",
         tipo: "Dedução", complexidade: "Média", risco: "Baixo",
@@ -5064,7 +5122,7 @@
 
     // #10 — Bens de pequeno valor
     if (_n(d.bensSmallValue) > 0) {
-      var econSmall = _r(_n(d.bensSmallValue) * 0.34);
+      var econSmall = _econFiscal(_n(d.bensSmallValue), ctx.lucroRealFinal, ctx.trimestral, ctx.aliqEfetCSLL);
       ops.push({
         id: "BENS_PEQUENO_VALOR", titulo: "Dedução Integral de Bens de Pequeno Valor",
         tipo: "Dedução", complexidade: "Baixa", risco: "Baixo",
@@ -5134,7 +5192,8 @@
 
     // #16 — Lei do Bem (P&D)
     if ((d.investePD === true || d.investePD === "true") && _n(d.valorPD) > 0) {
-      var econPD = _r(_n(d.valorPD) * 0.60 * 0.34);
+      var _basePD = _r(_n(d.valorPD) * 0.60);
+      var econPD = _econFiscal(_basePD, ctx.lucroRealFinal, ctx.trimestral, ctx.aliqEfetCSLL);
       ops.push({
         id: "LEI_BEM_PD", titulo: "Lei do Bem — Pesquisa & Desenvolvimento",
         tipo: "Exclusão", complexidade: "Média", risco: "Baixo",
@@ -5149,22 +5208,36 @@
 
     // #17 — Converter gratificação em pró-labore
     if ((d.temGratificacaoAdm === true || d.temGratificacaoAdm === "true") && _n(d.gratificacoesAdm) > 0) {
-      // CORREÇÃO ERRO 3: Usar _irpj diferencial (marginal) em vez de 0.34 fixo
+      // FIX AUDITORIA Achado 7+8: Economia é SÓ de IRPJ (gratificações já são dedutíveis p/ CSLL)
       var _gratVal = _n(d.gratificacoesAdm);
       var _lrCtx = ctx.lucroRealFinal || 0;
-      var _econIRPJGrat = _r(_irpj(Math.max(_lrCtx, 0), ctx.trimestral) - _irpj(Math.max(_lrCtx - _gratVal, 0), ctx.trimestral));
-      var _aliqCSLLGrat = ctx.aliqEfetCSLL || 0.09;
-      var econGrat = _r(_econIRPJGrat + _gratVal * _aliqCSLLGrat);
-      var _aliqMargGrat = _gratVal > 0 ? _r(econGrat / _gratVal * 100) : 34;
+      var econGrat = _r(_irpj(Math.max(_lrCtx, 0), ctx.trimestral) - _irpj(Math.max(_lrCtx - _gratVal, 0), ctx.trimestral));
+      // Custo previdenciário mínimo: INSS patronal 20%. Na prática, encargos totais (FGTS 8%, RAT/FAP ~1-3%,
+      // Terceiros ~5,8%) podem chegar a 33-36% sobre o valor, dependendo do enquadramento da empresa.
+      var _custoEncargosMin = _r(_gratVal * 0.20);
+      var _econLiquida = _r(econGrat - _custoEncargosMin);
+      var _aliqMargGrat = _gratVal > 0 ? _r(econGrat / _gratVal * 100) : 25;
+      // Se a economia não cobre nem o INSS patronal mínimo, mudar para Alerta (não recomendar)
+      var _tipoGrat = _econLiquida > 0 ? "Dedução" : "Alerta";
+      var _riscoGrat = _econLiquida > 0 ? "Médio" : "Alto";
+      var _descGrat = "Gratificação de " + _m(_gratVal) + " é indedutível para IRPJ (dedutível p/ CSLL — IN 1.700/17, Anexo I, item 85). ";
+      if (_econLiquida > 0) {
+        _descGrat += "Convertendo em pró-labore, economia líquida estimada de " + _m(_econLiquida) + " (IRPJ " + _m(econGrat) + " − encargos mín. " + _m(_custoEncargosMin) + "). ";
+      } else {
+        _descGrat += "⚠️ Conversão para pró-labore NÃO é vantajosa neste cenário: economia IRPJ de " + _m(econGrat) + " (" + _pp(_aliqMargGrat) + " marginal) é menor que o custo mínimo de encargos de " + _m(_custoEncargosMin) + " (INSS patronal 20%). ";
+      }
+      _descGrat += "Nota: encargos totais reais (FGTS 8%, RAT/FAP, Terceiros) podem chegar a 33-36%, reduzindo ainda mais o benefício. Avaliar PLR formal (Lei 10.101/2000) como alternativa — isenta de encargos previdenciários.";
       ops.push({
-        id: "CONVERTER_GRATIFICACAO", titulo: "Converter Gratificação de Administradores em Pró-labore",
-        tipo: "Dedução", complexidade: "Baixa", risco: "Baixo",
-        economiaAnual: econGrat,
-        descricao: "Gratificação de " + _m(_gratVal) + " é indedutível. Convertendo em pró-labore, economia de " + _m(econGrat) + " (" + _pp(_aliqMargGrat) + " marginal IRPJ+CSLL — passa a ser dedutível).",
-        baseLegal: "Art. 358, §1º do RIR/2018",
-        acaoRecomendada: "Alterar contrato social. Formalizar pró-labore mensal com folha de pagamento.",
-        prazoImplementacao: "30 dias",
-        detalhes: {}
+        id: "CONVERTER_GRATIFICACAO", titulo: _econLiquida > 0 ? "Converter Gratificação em Pró-labore" : "⚠️ Gratificação — Conversão Desvantajosa",
+        tipo: _tipoGrat, complexidade: "Média", risco: _riscoGrat,
+        economiaAnual: Math.max(_econLiquida, 0),
+        descricao: _descGrat,
+        baseLegal: "Art. 315 do RIR/2018",
+        acaoRecomendada: _econLiquida > 0
+          ? "Alterar contrato social. Formalizar pró-labore mensal. Levantar RAT/FAP real da empresa para cálculo preciso dos encargos."
+          : "Manter como gratificação OU avaliar PLR formal (Lei 10.101/2000). Consultar advogado trabalhista para enquadramento.",
+        prazoImplementacao: _econLiquida > 0 ? "30 dias" : "N/A",
+        detalhes: { economiaIRPJ: econGrat, custoINSSPatronal: _custoEncargosMin, econLiquida: _econLiquida, aliqMarginalIRPJ: _aliqMargGrat, nota: "Encargos reais podem incluir FGTS (8%), RAT/FAP (1-3%), Terceiros (~5,8%)" }
       });
     }
 
@@ -5284,16 +5357,19 @@
 
     // #23 — Pró-labore como dedução
     if ((parseInt(d.numSocios) || 0) > 0 && _n(d.proLabore) > 0) {
-      var econProLabore = _r(_n(d.proLabore) * 0.34);
+      var _plVal = _n(d.proLabore);
+      var econProLabore = _econFiscal(_plVal, ctx.lucroRealFinal, ctx.trimestral, ctx.aliqEfetCSLL);
+      // Pró-labore de sócios não tem FGTS/RAT/Terceiros — somente INSS patronal 20% (Lei 8.212/91)
+      var _custoINSSPL = _r(_plVal * 0.20);
       ops.push({
         id: "PROLABORE_DEDUCAO", titulo: "Pró-labore dos Sócios como Despesa Dedutível",
         tipo: "Dedução", complexidade: "Baixa", risco: "Baixo",
         economiaAnual: econProLabore,
-        descricao: "Pró-labore de " + _m(_n(d.proLabore)) + "/ano é despesa 100% dedutível no Lucro Real, gerando economia de " + _m(econProLabore) + ".",
-        baseLegal: "Art. 357 do RIR/2018",
-        acaoRecomendada: "Formalizar pró-labore em folha de pagamento. Recolher INSS e IRRF na fonte.",
+        descricao: "Pró-labore de " + _m(_plVal) + "/ano é despesa dedutível no Lucro Real (Art. 315), gerando economia fiscal de " + _m(econProLabore) + ". Requer registro em folha, periodicidade mensal e valor dentro de limites de razoabilidade. Custo: INSS patronal de 20% (" + _m(_custoINSSPL) + "). Nota: pró-labore de sócios sem vínculo CLT NÃO incide FGTS, RAT ou Terceiros — apenas INSS patronal (Lei 8.212/91, Art. 22, III).",
+        baseLegal: "Art. 315 do RIR/2018",
+        acaoRecomendada: "Formalizar pró-labore em folha de pagamento com deliberação em assembleia/contrato. Recolher INSS (20% patronal) e IRRF na fonte.",
         prazoImplementacao: "Imediato",
-        detalhes: {}
+        detalhes: { custoINSSPatronal: _custoINSSPL, econLiquidaEstimada: _r(econProLabore - _custoINSSPL) }
       });
     }
 
@@ -5301,7 +5377,7 @@
     var usaPrevidCompl = d.usaPrevidenciaComplementar === true || d.usaPrevidenciaComplementar === "true";
     if (!usaPrevidCompl && ctx.folhaPagamento > 0 && ctx.lucroRealFinal > 0) {
       var limPrevidCompl = _r(ctx.folhaPagamento * 0.20);
-      var econPrevidCompl = _r(limPrevidCompl * 0.34);
+      var econPrevidCompl = _econFiscal(limPrevidCompl, ctx.lucroRealFinal, ctx.trimestral, ctx.aliqEfetCSLL);
       if (econPrevidCompl > 500) {
         ops.push({
           id: "PREVIDENCIA_COMPLEMENTAR", titulo: "Previdência Complementar Patronal (não utilizada)",
@@ -5379,12 +5455,12 @@
       var limiteMaxDoacoes = _r((ctx.lucroOperacional || ctx.lucroLiquido) * 0.02);
       var faltaParaLimite = _r(limiteMaxDoacoes - doacoesAtual);
       if (faltaParaLimite > 0) {
-        var econDoacoes = _r(faltaParaLimite * 0.34);
+        var econDoacoes = _econFiscal(faltaParaLimite, ctx.lucroRealFinal, ctx.trimestral, ctx.aliqEfetCSLL);
         ops.push({
           id: "DOACOES_INCENTIVO", titulo: "Doações com Incentivo Fiscal — Utilizar Limite Completo",
           tipo: "Dedução", complexidade: "Baixa", risco: "Baixo",
           economiaAnual: econDoacoes,
-          descricao: "Doações operacionais atuais de " + _m(doacoesAtual) + " estão abaixo do limite de " + _m(limiteMaxDoacoes) + " (2% do lucro operacional). Margem de " + _m(faltaParaLimite) + " gera economia fiscal de " + _m(econDoacoes) + " (34%).",
+          descricao: "Doações operacionais atuais de " + _m(doacoesAtual) + " estão abaixo do limite de " + _m(limiteMaxDoacoes) + " (2% do lucro operacional). Margem de " + _m(faltaParaLimite) + " gera economia fiscal de " + _m(econDoacoes) + ".",
           baseLegal: "Art. 377-385 do RIR/2018",
           acaoRecomendada: "Realizar doações a entidades civis ou OSCIPs até o limite legal. Obter recibos e manter documentação.",
           prazoImplementacao: "30 dias",
@@ -5396,7 +5472,7 @@
     // #29 — Amortização de Goodwill
     if (_n(d.valorGoodwill) > 0 && ctx.goodwillResult) {
       var deducaoGoodwill = ctx.goodwillResult.amortizacaoAnual || _r(_n(d.valorGoodwill) * (12 / 60));
-      var econGoodwill = _r(deducaoGoodwill * 0.34);
+      var econGoodwill = _econFiscal(deducaoGoodwill, ctx.lucroRealFinal, ctx.trimestral, ctx.aliqEfetCSLL);
       ops.push({
         id: "GOODWILL_AMORTIZACAO", titulo: "Amortização de Goodwill — Dedução Fiscal",
         tipo: "Dedução", complexidade: "Média", risco: "Baixo",
@@ -5412,7 +5488,7 @@
     // #30 — Exaustão de Recursos Naturais
     if (_n(d.valorRecursosNaturais) > 0 && ctx.exaustaoResult) {
       var deducaoExaustao = ctx.exaustaoResult.exaustaoAnual || _r(_n(d.valorRecursosNaturais) * 0.20);
-      var econExaustao = _r(deducaoExaustao * 0.34);
+      var econExaustao = _econFiscal(deducaoExaustao, ctx.lucroRealFinal, ctx.trimestral, ctx.aliqEfetCSLL);
       ops.push({
         id: "EXAUSTAO_RECURSOS", titulo: "Exaustão de Recursos Naturais — Dedução Fiscal",
         tipo: "Dedução", complexidade: "Média", risco: "Baixo",
@@ -5428,7 +5504,7 @@
     // #31 — Despesas Pré-Operacionais Diferidas
     if (_n(d.despesasPreOperacionais) > 0 && ctx.preOperacionalResult) {
       var deducaoPreOp = ctx.preOperacionalResult.amortizacaoAnual || _r(_n(d.despesasPreOperacionais) / 5);
-      var econPreOp = _r(deducaoPreOp * 0.34);
+      var econPreOp = _econFiscal(deducaoPreOp, ctx.lucroRealFinal, ctx.trimestral, ctx.aliqEfetCSLL);
       ops.push({
         id: "PRE_OPERACIONAIS", titulo: "Despesas Pré-Operacionais — Amortização Diferida",
         tipo: "Dedução", complexidade: "Baixa", risco: "Baixo",
@@ -5444,13 +5520,13 @@
     // #32 — Subcapitalização — Alerta de Juros Indedutíveis
     if (ctx.subcapResult && ctx.subcapResult.excedeu) {
       var jurosIndedSubcap = ctx.subcapResult.jurosIndedutiveis || 0;
-      var econSubcapPotencial = _r(jurosIndedSubcap * 0.34);
+      var econSubcapPotencial = _econFiscal(jurosIndedSubcap, ctx.lucroRealFinal, ctx.trimestral, ctx.aliqEfetCSLL);
       ops.push({
         id: "SUBCAPITALIZACAO_ALERTA", titulo: "Subcapitalização — Juros Indedutíveis (Alerta)",
         tipo: "Risco", complexidade: "Alta", risco: "Alto",
         economiaAnual: econSubcapPotencial,
         descricao: "Juros de " + _m(jurosIndedSubcap) + " pagos a vinculadas excedem limites de subcapitalização e são INDEDUTÍVEIS. Reestruturar dívida pode recuperar dedutibilidade de " + _m(econSubcapPotencial) + ".",
-        baseLegal: "Art. 249-251 do RIR/2018",
+        baseLegal: "Lei 12.249/2010, Art. 24-25 (RIR/2018, Art. 979-980)",
         acaoRecomendada: "Reestruturar dívida para reduzir proporção dívida/PL dentro dos limites legais (2:1 geral, 30% paraíso fiscal).",
         prazoImplementacao: "90 dias",
         detalhes: ctx.subcapResult
@@ -5526,7 +5602,7 @@
     // #36 — Provisões Não Dedutíveis — Estratégia de Reversão
     if (_n(d.provisoesContingencias) > 0) {
       var totalProvisoes = _n(d.provisoesContingencias) + _n(d.provisoesGarantias);
-      var econFuturaProvisoes = _r(totalProvisoes * 0.34);
+      var econFuturaProvisoes = _econFiscal(totalProvisoes, ctx.lucroRealFinal, ctx.trimestral, ctx.aliqEfetCSLL);
       var descProvisao = "Provisões não dedutíveis de " + _m(totalProvisoes) + " geram adição ao LALUR no exercício corrente. ";
       descProvisao += "A reversão/utilização futura gera EXCLUSÃO do LALUR, resultando em economia fiscal futura de até " + _m(econFuturaProvisoes) + ".";
       var fundamentacao = "";
@@ -5580,7 +5656,7 @@
           avp: _n(d.ajusteValorPresente)
         });
         if (receitaFormal && receitaFormal.deducoesNaoAplicadas > 0) {
-          var econReceitaFormal = _r(receitaFormal.deducoesNaoAplicadas * 0.34);
+          var econReceitaFormal = _econFiscal(receitaFormal.deducoesNaoAplicadas, ctx.lucroRealFinal, ctx.trimestral, ctx.aliqEfetCSLL);
           ops.push({
             id: "RECEITA_BRUTA_FORMAL", titulo: "Receita Bruta — Deduções Não Aplicadas",
             tipo: "Dedução", complexidade: "Baixa", risco: "Baixo",
@@ -6650,7 +6726,7 @@
           }
         }
         sN3 += '</tbody></table>';
-        sN3 += '<div class="res-alerta res-alerta-info"><span class="res-alerta-icon">&#x1F535;</span><strong>Base Legal:</strong> Art. 249-251 do RIR/2018. <strong>Ação recomendada:</strong> Reestruturar dívida para reduzir proporção dívida/PL.</div>';
+        sN3 += '<div class="res-alerta res-alerta-info"><span class="res-alerta-icon">&#x1F535;</span><strong>Base Legal:</strong> Lei 12.249/2010, Art. 24-25 (RIR/2018, Art. 979-980). <strong>Ação recomendada:</strong> Reestruturar dívida para reduzir proporção dívida/PL.</div>';
       } else {
         sN3 += '<div class="res-alerta res-alerta-economia"><span class="res-alerta-icon">&#x1F7E2;</span>✅ Dívidas com vinculadas dentro dos limites de subcapitalização.</div>';
       }
@@ -6739,7 +6815,7 @@
         s4 += _linha('(-) Deduções por Incentivos Fiscais', r.irpj.deducaoIncentivos || r.incentivosFiscais.totalDeducaoFinal, 'Art. 641', 'res-sub res-economia');
       }
       if (r.reducaoSUDAM > 0) {
-        s4 += _linha('(-) Redução SUDAM/SUDENE (75%)', r.reducaoSUDAM, 'Art. 627-637', 'res-sub res-economia');
+        s4 += _linha('(-) Redução SUDAM/SUDENE (75%)', r.reducaoSUDAM, 'Art. 612-613', 'res-sub res-economia');
       }
       s4 += _linha('= IRPJ após Reduções', r.irpjAposReducao, '', 'res-subtotal');
       var totalIRRF = _n(d.irrfRetidoPrivado) + _n(d.irrfRetidoPublico);
@@ -6917,9 +6993,9 @@
       s6 += '<p style="font-size:0.82em;color:#8892b0;margin-bottom:8px;">Estratégias que você pode implementar para reduzir a carga:</p>';
       s6 += '<table class="res-table">';
       if (eco.jcp > 0) s6 += _linha('JCP — Juros sobre Capital Próprio', eco.jcp, 'Art. 355-358', 'res-economia');
-      if (eco.sudam > 0) s6 += _linha('Redução SUDAM/SUDENE (75%)', eco.sudam, 'Art. 627-637', 'res-economia');
+      if (eco.sudam > 0) s6 += _linha('Redução SUDAM/SUDENE (75%)', eco.sudam, 'Art. 612-613', 'res-economia');
       if (eco.incentivos > 0) s6 += _linha('Incentivos Fiscais (PAT, FIA, etc.)', eco.incentivos, 'Art. 641', 'res-economia');
-      if (eco.gratificacao > 0) s6 += _linha('Conversão Gratificação → Pró-labore', eco.gratificacao, 'Art. 358, §1º', 'res-economia');
+      if (eco.gratificacao > 0) s6 += _linha('Conversão Gratificação → Pró-labore', eco.gratificacao, 'Art. 315', 'res-economia');
       if (eco.cprb > 0) s6 += _linha('CPRB — Desoneração da Folha', eco.cprb, 'Lei 12.546/2011', 'res-economia');
       var subPlan = _r((eco.jcp || 0) + (eco.sudam || 0) + (eco.incentivos || 0) + (eco.gratificacao || 0) + (eco.cprb || 0));
       s6 += '<tr class="res-total res-economia"><td><strong>SUBTOTAL PLANEJAMENTO</strong></td><td class="res-valor"><strong>' + _m(subPlan) + '</strong></td></tr>';
@@ -7029,6 +7105,15 @@
         s7 += '</div>';
         s7 += '</div>';
       });
+    }
+    // Disclaimer: economias marginais individuais não são aditivas
+    if (ops.length > 1) {
+      s7 += '<div style="margin-top:16px;padding:12px 16px;background:#FFF9E6;border-left:4px solid #F39C12;border-radius:4px;font-size:0.88em;color:#666;">';
+      s7 += '<strong style="color:#F39C12;">⚠️ Nota sobre cumulatividade:</strong> As economias acima foram estimadas <em>individualmente</em>, ';
+      s7 += 'cada uma considerando o lucro real atual como ponto de partida. Se múltiplas estratégias forem implementadas simultaneamente, ';
+      s7 += 'a economia total combinada pode ser <strong>menor</strong> que a soma dos valores individuais, porque cada dedução subsequente opera ';
+      s7 += 'sobre uma base tributável já reduzida pelas anteriores. Para planejamento preciso, solicite simulação integrada com todas as ações desejadas.';
+      s7 += '</div>';
     }
     s7 += '</div>';
     html += _secao(7, 'Oportunidades de Economia (' + ops.length + ')', s7);
@@ -8762,7 +8847,7 @@
     incentivos: { nome: 'Incentivos Fiscais (PAT, Rouanet, etc.)', base: 'Legislação específica' },
     depreciacao: { nome: 'Economia Fiscal com Depreciação', base: 'Art. 317-323 RIR/2018' },
     pisCofinsCreditos: { nome: 'Créditos PIS/COFINS Não-Cumulativo', base: 'Art. 3º Lei 10.637/02 e 10.833/03' },
-    gratificacao: { nome: 'Conversão Gratificação → Pró-labore', base: 'Art. 311 RIR/2018' },
+    gratificacao: { nome: 'Conversão Gratificação → Pró-labore', base: 'Art. 315 RIR/2018' },
     cprb: { nome: 'Desoneração da Folha (CPRB)', base: 'Lei 12.546/2011' },
     pddFiscal: { nome: 'PDD — Provisão para Devedores Duvidosos', base: 'Art. 340-342 RIR/2018' }
   };
@@ -9773,7 +9858,7 @@
     if (r.subcapResult) {
       h += secaoTitulo('🏦', 'ANÁLISE DE SUBCAPITALIZAÇÃO');
       if (r.subcapResult.excedeu) {
-        h += alertaBox('critico', '<strong>Juros indedutíveis:</strong> ' + _m(r.subcapResult.jurosIndedutiveis || 0) + ' — Ação: reestruturar dívida (Art. 249-251)');
+        h += alertaBox('critico', '<strong>Juros indedutíveis:</strong> ' + _m(r.subcapResult.jurosIndedutiveis || 0) + ' — Ação: reestruturar dívida (Lei 12.249/2010, Art. 24-25)');
       } else {
         h += alertaBox('info', 'Dívidas com vinculadas dentro dos limites de subcapitalização.');
       }
@@ -10445,7 +10530,7 @@
         aba9.push(['Juros Indedutíveis', mv(r.subcapResult.jurosIndedutiveis || 0)]);
       }
       aba9.push([]);
-      aba9.push(['LIMITES DE SUBCAPITALIZAÇÃO (Art. 249-251)']);
+      aba9.push(['LIMITES DE SUBCAPITALIZAÇÃO (Lei 12.249/2010, Art. 24-25; RIR Art. 979-980)']);
       aba9.push(['Tipo', 'Regra', 'Artigo']);
       if (LR.subcapitalizacao) {
         if (LR.subcapitalizacao.vinculadaComParticipacao) {
