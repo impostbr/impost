@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>IMPOST. — Análise Tributária TEA v5.1 | Brasil 2026</title>
+    <title>IMPOST. — Comparador de Regimes Tributários v1.0 | Brasil 2026</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -437,7 +437,7 @@
         }
 
         /* ═══════════════════════════════════════════ */
-        /*  ISS HINT & MUNICÍPIO LOADING — v4.1       */
+        /*  ISS HINT & MUNICÍPIO LOADING — v1.0       */
         /* ═══════════════════════════════════════════ */
         .iss-hint {
             margin-top: 8px;
@@ -473,7 +473,7 @@
         #dicaBanner strong { color: var(--accent-bright); }
 
         /* ═══════════════════════════════════════════ */
-        /*  SÓCIOS CONFIG — NOVO v4.0                  */
+        /*  SÓCIOS CONFIG — v1.0                  */
         /* ═══════════════════════════════════════════ */
         #sociosSection {
             display: none;
@@ -950,7 +950,7 @@
         .info-row.total span:last-child { color: var(--accent-bright); font-size: 1rem; }
 
         /* ═══════════════════════════════════════════ */
-        /*  ALERTA R$ 50K — NOVO v4.0                  */
+        /*  ALERTA R$ 50K — v1.0                  */
         /* ═══════════════════════════════════════════ */
         .alerta-50k {
             display: flex;
@@ -979,7 +979,7 @@
         }
 
         /* ═══════════════════════════════════════════ */
-        /*  CENÁRIOS DE DISTRIBUIÇÃO — NOVO v4.0       */
+        /*  CENÁRIOS DE DISTRIBUIÇÃO — v1.0       */
         /* ═══════════════════════════════════════════ */
         .cenarios-card {
             border-color: rgba(22,163,74,0.18);
@@ -1160,7 +1160,106 @@
         .hidden { display: none !important; }
 
         /* ═══════════════════════════════════════════ */
-        /*  LUCRO REAL ADVANTAGES PANEL — v5.0         */
+        /*  CENÁRIOS COMPARADOR AVANÇADO — v1.0        */
+        /* ═══════════════════════════════════════════ */
+        .cenario-variacao {
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-sm);
+            padding: 14px 16px;
+            margin-bottom: 8px;
+            display: grid;
+            grid-template-columns: 80px 1fr 140px 120px;
+            gap: 12px;
+            align-items: center;
+            transition: all var(--transition-fast);
+        }
+        @media (max-width: 600px) {
+            .cenario-variacao {
+                grid-template-columns: 1fr;
+                gap: 6px;
+            }
+        }
+        .cenario-variacao:hover {
+            border-color: var(--accent);
+            background: var(--bg-card-hover);
+        }
+        .cenario-variacao.cenario-atual {
+            border-color: var(--accent);
+            background: rgba(22,163,74,0.04);
+        }
+        .cenario-variacao .cv-variacao {
+            font-family: var(--font-mono);
+            font-size: 0.95rem;
+            font-weight: 700;
+        }
+        .cenario-variacao .cv-variacao.positiva { color: var(--accent); }
+        .cenario-variacao .cv-variacao.negativa { color: var(--red); }
+        .cenario-variacao .cv-variacao.neutra { color: var(--blue); }
+        .cenario-variacao .cv-faturamento {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+        .cenario-variacao .cv-faturamento span {
+            font-family: var(--font-mono);
+            font-weight: 600;
+        }
+        .cenario-variacao .cv-regime {
+            font-size: 0.88rem;
+            font-weight: 700;
+            text-align: center;
+            padding: 4px 12px;
+            border-radius: 20px;
+        }
+        .cenario-variacao .cv-regime.simples { background: rgba(22,163,74,0.10); color: var(--accent-bright); }
+        .cenario-variacao .cv-regime.presumido { background: rgba(37,99,235,0.10); color: var(--blue); }
+        .cenario-variacao .cv-regime.lucro_real { background: rgba(124,58,237,0.10); color: var(--purple); }
+        .cenario-variacao .cv-carga {
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            font-weight: 600;
+            text-align: right;
+            color: var(--text-primary);
+        }
+        .cenarios-header-row {
+            display: grid;
+            grid-template-columns: 80px 1fr 140px 120px;
+            gap: 12px;
+            padding: 8px 16px;
+            font-size: 0.72rem;
+            font-weight: 700;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            border-bottom: 1px solid var(--border-subtle);
+            margin-bottom: 8px;
+        }
+        @media (max-width: 600px) {
+            .cenarios-header-row { display: none; }
+        }
+        .comparador-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(22,163,74,0.06);
+            border: 1px solid rgba(22,163,74,0.15);
+            border-radius: 20px;
+            padding: 4px 12px;
+            font-size: 0.72rem;
+            font-weight: 700;
+            color: var(--accent);
+            margin-top: 12px;
+        }
+        .comparador-badge code {
+            font-family: var(--font-mono);
+            background: rgba(22,163,74,0.10);
+            padding: 1px 6px;
+            border-radius: 4px;
+            font-size: 0.7rem;
+        }
+
+        /* ═══════════════════════════════════════════ */
+        /*  LUCRO REAL ADVANTAGES PANEL — v1.0         */
         /* ═══════════════════════════════════════════ */
         .lr-vantagens-card {
             background: linear-gradient(135deg, rgba(22,163,74,0.04), rgba(37,99,235,0.03));
@@ -1349,7 +1448,7 @@
         .obrig-item { padding: 3px 0; color: var(--text-secondary); }
 
         /* ═══════════════════════════════════════════ */
-        /*  ESTADO INFO PANEL — v5.0                   */
+        /*  ESTADO INFO PANEL — v1.0                   */
         /* ═══════════════════════════════════════════ */
         #estadoInfoPanel {
             display: none;
@@ -1555,7 +1654,7 @@
         }
 
         /* ═══════════════════════════════════════════ */
-        /*  PRINT STYLES — NOVO v4.0                   */
+        /*  PRINT STYLES — v1.0                   */
         /* ═══════════════════════════════════════════ */
         @media print {
             body { background: #fff; color: #111; }
@@ -1587,7 +1686,7 @@
             <div style="display:flex;align-items:center">
                 <a href="dashboard.html" class="logo">IMPOST<b>.</b></a>
                 <span class="nav-sep">|</span>
-                <span class="nav-sub">Análise Tributária</span>
+                <span class="nav-sub">Comparador de Regimes</span>
             </div>
             <a href="dashboard.html" class="btn-back">← Dashboard</a>
         </div>
@@ -1596,8 +1695,8 @@
     <div class="container">
         <!-- HEADER -->
         <div class="header">
-            <h1>IMPOST<span>.</span> <span class="version-badge">v5.1</span></h1>
-            <p>Inteligência em Modelagem de Otimização Tributária — Brasil 2026</p>
+            <h1>IMPOST<span>.</span> <span class="version-badge">v1.0</span></h1>
+            <p>Comparador Inteligente de Regimes Tributários — Brasil 2026</p>
         </div>
 
         <!-- LOADING -->
@@ -1825,7 +1924,7 @@
                     </div>
                 </div>
 
-                <!-- SEÇÃO SÓCIOS — NOVO v4.0 -->
+                <!-- SEÇÃO SÓCIOS — v1.0 -->
                 <div id="sociosSection">
                     <div class="socios-section-title">
                         👥 Configuração dos Sócios <span class="hint">(participação e pró-labore individual)</span>
@@ -2070,7 +2169,7 @@
 
             <!-- BOTÃO CALCULAR -->
             <button id="btnCalcular" class="btn-calcular" disabled>
-                Calcular Análise TEA Completa
+                Comparar Regimes Tributários
             </button>
         </div>
 
@@ -2086,6 +2185,7 @@
                 <button class="tab-btn" data-tab="tabPessoal">Pessoal</button>
                 <button class="tab-btn" data-tab="tabReforma">Reforma</button>
                 <button class="tab-btn" data-tab="tabProjecoes">Projeções</button>
+                <button class="tab-btn" data-tab="tabCenarios">Cenários</button>
             </div>
 
             <!-- Tab 1: Análise Tributária -->
@@ -2111,6 +2211,26 @@
 
             <!-- Tab 5: Projeções -->
             <div id="tabProjecoes" class="tab-content"></div>
+
+            <!-- Tab 6: Cenários (Motor Avançado) -->
+            <div id="tabCenarios" class="tab-content">
+                <div class="section">
+                    <div class="section-title">
+                        <span class="num">📊</span> Simulação de Cenários — Variação de Faturamento
+                    </div>
+                    <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:16px;">
+                        O motor avançado (<strong>ComparadorRegimes v1.0</strong>) simula como o regime ideal muda
+                        conforme seu faturamento varia. Inclui LC 224/2025, anterioridade nonagesimal da CSLL,
+                        IRPF progressivo dos sócios, retenções na fonte e custo contábil diferenciado.
+                    </p>
+                    <div id="cenariosResultado">
+                        <div style="text-align:center;padding:30px;color:var(--text-muted);">
+                            <p>Os cenários serão calculados automaticamente após o cálculo principal.</p>
+                            <p style="font-size:0.82rem;margin-top:8px;">Motor: <code style="font-family:var(--font-mono);background:var(--bg-deepest);padding:2px 6px;border-radius:4px;">comparador-regimes.js v1.0</code></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
 
             <!-- Action Buttons -->
             <div class="action-buttons">
@@ -2166,7 +2286,13 @@
     </script>
     <script src="../scripts/lucro_presumido.js"></script>
     <script src="../scripts/simples_nacional.js"></script>
+
+    <!-- ═══ Motor de Comparação de Regimes v1.0 (NOVO) ═══ -->
+    <script src="../scripts/comparador-regimes.js"></script>
+
+    <!-- ═══ Motor de Análise Original ═══ -->
     <script src="../scripts/analise.js"></script>
+
     <script src="../scripts/reforma-tributaria.js"></script>
     <script>
     /* ═══ Integração Reforma Tributária com analise.js ═══ */
@@ -2273,6 +2399,263 @@
         }
 
         function getSelectValue(id) {
+            var el = document.getElementById(id);
+            return el ? el.value : '';
+        }
+    })();
+    </script>
+
+    <!-- ═══ INTEGRAÇÃO COMPARADOR-REGIMES.JS → Motor de Cálculo Avançado ═══ -->
+    <script>
+    (function() {
+        'use strict';
+
+        /**
+         * Ponte entre a UI (analise.js) e o motor de cálculo (comparador-regimes.js)
+         * O ComparadorRegimes fornece cálculos mais precisos com LC 224/2025,
+         * RBT12 deslizante, IRPF progressivo dos sócios, retenções na fonte,
+         * e simulação de cenários.
+         */
+
+        // Aguardar carregamento do ComparadorRegimes
+        function waitForComparador(cb) {
+            if (window.ComparadorRegimes) return cb(window.ComparadorRegimes);
+            var attempts = 0;
+            var iv = setInterval(function() {
+                attempts++;
+                if (window.ComparadorRegimes) {
+                    clearInterval(iv);
+                    cb(window.ComparadorRegimes);
+                } else if (attempts > 50) {
+                    clearInterval(iv);
+                    console.warn('[ComparadorBridge] comparador-regimes.js não carregou após 5s.');
+                }
+            }, 100);
+        }
+
+        waitForComparador(function(CR) {
+            console.log('[ComparadorBridge] Motor v' + CR.VERSION + ' carregado com sucesso.');
+
+            // Expor globalmente para uso por analise.js e outros módulos
+            window._ComparadorRegimes = CR;
+
+            // ── Expor função de comparação avançada ──
+            window._compararRegimesAvancado = function(params) {
+                if (!CR || !CR.compararRegimes) return null;
+
+                try {
+                    // Coletar dados dos campos do formulário
+                    var fat = _parseMoneyField('inputFaturamento');
+                    var folha = _parseMoneyField('inputFolha');
+                    var proLabore = _parseMoneyField('inputProLabore');
+                    var cmv = _parseMoneyField('inputCMV');
+                    var despesas = _parseMoneyField('inputDespesas');
+                    var creditosPISCOFINS = _parseMoneyField('inputCreditosPISCOFINS');
+                    var patrimonio = _parseMoneyField('inputPatrimonioLiquido');
+                    var lucrosAcum = _parseMoneyField('inputLucrosAcumulados');
+                    var prejuizoFiscal = _parseMoneyField('inputPrejuizoFiscal');
+                    var baseNegCSLL = _parseMoneyField('inputBaseNegativaCSLL');
+                    var investAtivos = _parseMoneyField('inputInvestimentoAtivos');
+                    var custoContabLR = _parseMoneyField('inputCustoContabilLR') || 2000;
+
+                    var uf = _getSelectVal('selectEstado');
+                    var tipoAtiv = _getSelectVal('selectTipoAtividade');
+                    var numSocios = parseInt(document.getElementById('sliderSocios')?.value) || 1;
+                    var numFuncionarios = parseInt(document.getElementById('inputFuncionarios')?.value) || 0;
+                    var crescimento = parseInt(document.getElementById('sliderCrescimento')?.value) || 10;
+                    var pctOrgaoPublico = parseInt(document.getElementById('sliderOrgaoPublico')?.value) || 0;
+
+                    var cnaeCode = '';
+                    var cnaeInput = document.getElementById('inputCNAE');
+                    if (cnaeInput && cnaeInput.dataset.code) cnaeCode = cnaeInput.dataset.code;
+
+                    var issInput = document.getElementById('inputISS');
+                    var issRate = 5;
+                    if (issInput && issInput.value) {
+                        var iv = parseFloat(issInput.value.replace(',', '.'));
+                        if (!isNaN(iv) && iv > 0) issRate = iv;
+                    }
+
+                    // Checkboxes
+                    var checkSudam = document.getElementById('checkSudam')?.checked || false;
+                    var checkST = document.getElementById('checkST')?.checked || false;
+                    var checkInterestadual = document.getElementById('checkInterestadual')?.checked || false;
+
+                    // Seção 5 — Lucro Presumido
+                    var devolucoesLP = _parseMoneyField('inputDevolucoesLP');
+                    var descontosLP = _parseMoneyField('inputDescontosIncondLP');
+                    var ganhosCapLP = _parseMoneyField('inputGanhosCapitalLP');
+                    var rendFinLP = _parseMoneyField('inputRendimentosFinancLP');
+                    var irrfRetLP = _parseMoneyField('inputIRRFRetidoLP');
+                    var csllRetLP = _parseMoneyField('inputCSLLRetidaLP');
+
+                    // Impedimentos LP
+                    var checkInstFinanc = document.getElementById('checkInstFinanceira')?.checked || false;
+                    var checkFactoring = document.getElementById('checkFactoring')?.checked || false;
+                    var checkRendaExt = document.getElementById('checkRendaExterior')?.checked || false;
+                    var checkIsencaoIR = document.getElementById('checkIsencaoIR')?.checked || false;
+
+                    // Montar projeção 12 meses
+                    var projecaoMensal = [];
+                    for (var i = 0; i < 12; i++) {
+                        var fator = 1 + (crescimento / 100) * (i / 12);
+                        projecaoMensal.push(Math.round(fat * fator));
+                    }
+
+                    // Mapear tipo atividade
+                    var atividadeMap = {
+                        'Comércio': 'comercio',
+                        'Indústria': 'industria',
+                        'Serviço': 'servicos'
+                    };
+                    var atividade = atividadeMap[tipoAtiv] || 'servicos';
+
+                    // Pro-labore por sócio
+                    var proLaborePorSocio = numSocios > 0 ? Math.round(proLabore / numSocios) : proLabore;
+
+                    // Montar input para o comparador
+                    var input = {
+                        empresa: {
+                            cnae_principal: cnaeCode,
+                            atividade: atividade,
+                            uf: uf,
+                        },
+                        societaria: {
+                            quantidade_socios: numSocios,
+                            atividade_vedada_simples: false,
+                        },
+                        faturamento: {
+                            historico_mensal_12m: Array(12).fill(fat),
+                            projecao_mensal_12m: projecaoMensal,
+                            percentual_receita_pj: pctOrgaoPublico > 0 ? pctOrgaoPublico : 50,
+                            percentual_b2b: pctOrgaoPublico > 0 ? pctOrgaoPublico : 50,
+                        },
+                        folha: {
+                            salarios_mensal: folha - proLabore,
+                            pro_labore: [{ valor: proLaborePorSocio, quantidade: numSocios }],
+                        },
+                        custos_despesas: {
+                            csp_mensal: cmv,
+                            despesas_operacionais_mensal: despesas,
+                            despesas_elegiveis_credito_pis_cofins: creditosPISCOFINS,
+                        },
+                        tributos_locais: {
+                            aliquota_iss: issRate,
+                            substituicao_tributaria: checkST,
+                        },
+                        retencoes: {
+                            sofre_retencao_ir: pctOrgaoPublico > 0,
+                            sofre_retencao_pcc: pctOrgaoPublico > 0,
+                            percentual_receita_com_retencao: pctOrgaoPublico,
+                        },
+                        adicionais: {
+                            regime_lucro_real: _getSelectVal('selectApuracaoLR') || 'trimestral',
+                            custo_contabil_simples: 800,
+                            custo_contabil_presumido: 1500,
+                            custo_contabil_lucro_real: custoContabLR,
+                            patrimonio_liquido: patrimonio,
+                            lucros_acumulados: lucrosAcum,
+                            prejuizo_fiscal: prejuizoFiscal,
+                            base_negativa_csll: baseNegCSLL,
+                            investimento_ativos_12m: investAtivos,
+                            possui_incentivo_fiscal: checkSudam,
+                            incentivo_aprovado: checkSudam,
+                            percentual_reducao_irpj: checkSudam ? 75 : 0,
+                        },
+                    };
+
+                    // Override com params se fornecidos
+                    if (params) {
+                        Object.keys(params).forEach(function(key) {
+                            if (typeof params[key] === 'object' && input[key]) {
+                                Object.assign(input[key], params[key]);
+                            } else {
+                                input[key] = params[key];
+                            }
+                        });
+                    }
+
+                    var resultado = CR.compararRegimes(input);
+
+                    // Armazenar último resultado para uso por outros módulos
+                    window._lastComparadorResult = resultado;
+
+                    // Disparar evento para que outros scripts possam reagir
+                    window.dispatchEvent(new CustomEvent('comparador-calculado', { detail: resultado }));
+
+                    return resultado;
+                } catch (err) {
+                    console.error('[ComparadorBridge] Erro na comparação:', err);
+                    return null;
+                }
+            };
+
+            // ── Expor simulação de cenários ──
+            window._simularCenarios = function(variacoes) {
+                if (!CR || !CR.simularCenarios) return null;
+
+                var fat = _parseMoneyField('inputFaturamento');
+                var folha = _parseMoneyField('inputFolha');
+                var proLabore = _parseMoneyField('inputProLabore');
+                var cmv = _parseMoneyField('inputCMV');
+                var uf = _getSelectVal('selectEstado');
+                var tipoAtiv = _getSelectVal('selectTipoAtividade');
+                var numSocios = parseInt(document.getElementById('sliderSocios')?.value) || 1;
+                var proLaborePorSocio = numSocios > 0 ? Math.round(proLabore / numSocios) : proLabore;
+
+                var atividadeMap = { 'Comércio': 'comercio', 'Indústria': 'industria', 'Serviço': 'servicos' };
+
+                var input = {
+                    empresa: { atividade: atividadeMap[tipoAtiv] || 'servicos', uf: uf },
+                    faturamento: {
+                        historico_mensal_12m: Array(12).fill(fat),
+                        projecao_mensal_12m: Array(12).fill(fat),
+                    },
+                    folha: {
+                        salarios_mensal: folha - proLabore,
+                        pro_labore: [{ valor: proLaborePorSocio, quantidade: numSocios }],
+                    },
+                    custos_despesas: { csp_mensal: cmv },
+                };
+
+                return CR.simularCenarios(input, variacoes || [-30, -15, 0, 15, 30, 50]);
+            };
+
+            // ── Hook no botão calcular para rodar comparação avançada em paralelo ──
+            var btnCalc = document.getElementById('btnCalcular');
+            if (btnCalc) {
+                btnCalc.addEventListener('click', function() {
+                    // Executar comparação avançada após um pequeno delay
+                    // para dar tempo do analise.js processar primeiro
+                    setTimeout(function() {
+                        var resultado = window._compararRegimesAvancado();
+                        if (resultado && !resultado.erro) {
+                            console.log('[ComparadorBridge] Comparação avançada concluída.');
+                            console.log('[ComparadorBridge] Recomendação:', resultado.recomendacao);
+                            console.log('[ComparadorBridge] Ranking:', resultado.ranking);
+                            console.log('[ComparadorBridge] Economia:', resultado.economia);
+                        }
+                    }, 200);
+                });
+            }
+
+            console.log('[ComparadorBridge] Integração completa. APIs disponíveis:');
+            console.log('  → window._compararRegimesAvancado(params?)');
+            console.log('  → window._simularCenarios(variacoes?)');
+            console.log('  → window._ComparadorRegimes (API completa)');
+        });
+
+        // ── Helpers ──
+        function _parseMoneyField(id) {
+            var el = document.getElementById(id);
+            if (!el) return 0;
+            var v = el.value || '';
+            v = v.replace(/[^\d,.-]/g, '').replace(/\./g, '').replace(',', '.');
+            var n = parseFloat(v);
+            return isNaN(n) ? 0 : n;
+        }
+
+        function _getSelectVal(id) {
             var el = document.getElementById(id);
             return el ? el.value : '';
         }
@@ -2649,6 +3032,103 @@
         function setText(id, text) {
             var el = document.getElementById(id);
             if (el) el.textContent = text || '';
+        }
+
+        function formatNum(n) {
+            if (n == null) return '0';
+            return n.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+        }
+    })();
+    </script>
+
+    <!-- ═══ RENDERIZAÇÃO DE CENÁRIOS — Motor Avançado ═══ -->
+    <script>
+    (function() {
+        'use strict';
+
+        var nomesRegime = {
+            'simples': 'Simples Nacional',
+            'presumido': 'Lucro Presumido',
+            'lucro_real': 'Lucro Real',
+        };
+        var classesRegime = {
+            'simples': 'simples',
+            'presumido': 'presumido',
+            'lucro_real': 'lucro_real',
+        };
+
+        // Escutar quando a comparação avançada é calculada
+        window.addEventListener('comparador-calculado', function(e) {
+            if (!e.detail || e.detail.erro) return;
+            renderizarCenariosAvancados();
+        });
+
+        // Também observar quando resultArea fica visível
+        var obs = new MutationObserver(function() {
+            var ra = document.getElementById('resultArea');
+            if (ra && ra.style.display !== 'none') {
+                setTimeout(renderizarCenariosAvancados, 500);
+            }
+        });
+        var ra = document.getElementById('resultArea');
+        if (ra) obs.observe(ra, { attributes: true, attributeFilter: ['style'] });
+
+        function renderizarCenariosAvancados() {
+            var container = document.getElementById('cenariosResultado');
+            if (!container) return;
+            if (!window._simularCenarios) {
+                container.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-muted);">Motor de cenários não disponível.</div>';
+                return;
+            }
+
+            try {
+                var cenarios = window._simularCenarios([-30, -20, -10, 0, 10, 20, 30, 50]);
+                if (!cenarios || cenarios.length === 0) {
+                    container.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-muted);">Sem dados suficientes para simular cenários.</div>';
+                    return;
+                }
+
+                var html = '';
+
+                // Header
+                html += '<div class="cenarios-header-row">';
+                html += '  <span>Variação</span>';
+                html += '  <span>Faturamento Anual</span>';
+                html += '  <span style="text-align:center;">Regime Ideal</span>';
+                html += '  <span style="text-align:right;">Carga Anual</span>';
+                html += '</div>';
+
+                cenarios.forEach(function(c) {
+                    var isAtual = c.variacao_percentual === 0;
+                    var rowClass = 'cenario-variacao' + (isAtual ? ' cenario-atual' : '');
+                    var varClass = c.variacao_percentual > 0 ? 'positiva' : c.variacao_percentual < 0 ? 'negativa' : 'neutra';
+                    var varText = c.variacao_percentual >= 0 ? '+' + c.variacao_percentual + '%' : c.variacao_percentual + '%';
+                    var regimeClass = classesRegime[c.recomendacao] || 'presumido';
+                    var regimeNome = nomesRegime[c.recomendacao] || c.recomendacao;
+
+                    html += '<div class="' + rowClass + '">';
+                    html += '  <div class="cv-variacao ' + varClass + '">' + varText + (isAtual ? ' ✦' : '') + '</div>';
+                    html += '  <div class="cv-faturamento">R$ <span>' + formatNum(c.faturamento_projetado) + '</span>/ano</div>';
+                    html += '  <div class="cv-regime ' + regimeClass + '">' + regimeNome + '</div>';
+                    if (c.carga_tributaria_anual != null) {
+                        html += '  <div class="cv-carga">R$ ' + formatNum(c.carga_tributaria_anual) + '</div>';
+                    } else {
+                        html += '  <div class="cv-carga">—</div>';
+                    }
+                    html += '</div>';
+                });
+
+                // Badge do motor
+                html += '<div class="comparador-badge">';
+                html += '  ✓ Calculado pelo motor <code>comparador-regimes.js v1.0</code>';
+                html += '</div>';
+
+                container.innerHTML = html;
+
+            } catch (err) {
+                console.error('[CenarioRenderer] Erro:', err);
+                container.innerHTML = '<div style="text-align:center;padding:20px;color:var(--red);">Erro ao simular cenários: ' + err.message + '</div>';
+            }
         }
 
         function formatNum(n) {
