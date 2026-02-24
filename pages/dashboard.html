@@ -9,68 +9,49 @@
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
     <style>
         :root {
-            /* === PALETTE === */
             --white: #ffffff;
             --bg-body: #f0f4f8;
             --bg-card: #ffffff;
             --bg-sidebar: #0f172a;
             --bg-sidebar-hover: #1e293b;
-
             --blue: #2e86de;
             --blue-light: #e8f4fd;
             --blue-dark: #1a5fa8;
-
             --green: #10b981;
             --green-light: #ecfdf5;
             --green-dark: #059669;
-
             --orange: #f59e0b;
             --orange-light: #fffbeb;
             --orange-dark: #d97706;
-
             --red: #ef4444;
             --red-light: #fef2f2;
             --red-dark: #dc2626;
-
             --purple: #7c3aed;
             --purple-light: #f3f0ff;
-
             --cyan: #06b6d4;
             --cyan-light: #ecfeff;
-
             --pink: #ec4899;
             --pink-light: #fdf2f8;
-
             --text-primary: #0f172a;
             --text-secondary: #475569;
             --text-muted: #94a3b8;
             --text-inverse: #f8fafc;
-
             --border: #e2e8f0;
             --border-hover: #cbd5e1;
-
             --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
             --shadow-md: 0 4px 12px rgba(0,0,0,0.06);
             --shadow-lg: 0 8px 30px rgba(0,0,0,0.08);
             --shadow-xl: 0 20px 60px rgba(0,0,0,0.1);
-
             --font-body: 'Plus Jakarta Sans', system-ui, sans-serif;
             --font-mono: 'Space Mono', monospace;
-
             --radius-sm: 10px;
             --radius-md: 14px;
             --radius-lg: 20px;
             --radius-xl: 24px;
-
             --transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
-
-        *, *::before, *::after {
-            margin: 0; padding: 0; box-sizing: border-box;
-        }
-
+        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
         html { scroll-behavior: smooth; }
-
         body {
             font-family: var(--font-body);
             background: var(--bg-body);
@@ -79,8 +60,6 @@
             -webkit-font-smoothing: antialiased;
             overflow-x: hidden;
         }
-
-        /* === ANIMATED BACKGROUND === */
         .bg-decor {
             position: fixed; top: 0; left: 0; right: 0; bottom: 0;
             pointer-events: none; z-index: 0; overflow: hidden;
@@ -108,16 +87,12 @@
             33% { transform: translate(30px, -40px) scale(1.05); }
             66% { transform: translate(-20px, 20px) scale(0.95); }
         }
-
-        /* === MAIN WRAPPER === */
         .wrapper {
             position: relative; z-index: 1;
             max-width: 1200px;
             margin: 0 auto;
             padding: 32px 40px 60px;
         }
-
-        /* === HEADER === */
         .header {
             display: flex;
             justify-content: space-between;
@@ -125,10 +100,7 @@
             margin-bottom: 48px;
             animation: fadeSlideDown 0.6s ease-out;
         }
-
-        .logo {
-            display: flex; align-items: center; gap: 14px;
-        }
+        .logo { display: flex; align-items: center; gap: 14px; }
         .logo-mark {
             width: 52px; height: 52px;
             border-radius: var(--radius-md);
@@ -137,8 +109,7 @@
             font-weight: 800; font-size: 15px; color: var(--white);
             letter-spacing: -0.5px;
             box-shadow: 0 4px 16px rgba(16,185,129,0.35);
-            position: relative;
-            overflow: hidden;
+            position: relative; overflow: hidden;
         }
         .logo-mark::after {
             content: '';
@@ -154,10 +125,7 @@
             font-size: 12px; color: var(--text-muted);
             font-weight: 500; letter-spacing: 0.3px;
         }
-
-        .header-right {
-            display: flex; align-items: center; gap: 10px;
-        }
+        .header-right { display: flex; align-items: center; gap: 10px; }
         .badge {
             padding: 7px 14px; border-radius: 50px;
             font-size: 11px; font-weight: 700;
@@ -185,8 +153,6 @@
             0%, 100% { opacity: 1; transform: scale(1); }
             50% { opacity: 0.5; transform: scale(0.85); }
         }
-
-        /* === HERO === */
         .hero {
             text-align: center;
             margin-bottom: 52px;
@@ -210,8 +176,6 @@
             max-width: 560px; margin: 0 auto;
             line-height: 1.7; font-weight: 400;
         }
-
-        /* === SECTION LABEL === */
         .section-label {
             display: flex; align-items: center; gap: 16px;
             margin-bottom: 24px;
@@ -232,8 +196,6 @@
             background: var(--bg-body);
             border-radius: 50px;
         }
-
-        /* === CARDS GRID === */
         .cards-grid {
             display: grid;
             gap: 20px;
@@ -242,8 +204,6 @@
         .grid-3 { grid-template-columns: repeat(3, 1fr); }
         .grid-4 { grid-template-columns: repeat(4, 1fr); }
         .grid-5 { grid-template-columns: repeat(5, 1fr); }
-
-        /* === CARD BASE === */
         .card {
             background: var(--bg-card);
             border: 1px solid var(--border);
@@ -262,8 +222,6 @@
             transform: translateY(-6px);
             box-shadow: var(--shadow-xl);
         }
-
-        /* Color stripe on top */
         .card::before {
             content: '';
             position: absolute;
@@ -272,11 +230,7 @@
             border-radius: var(--radius-lg) var(--radius-lg) 0 0;
             transition: height var(--transition);
         }
-        .card:hover::before {
-            height: 5px;
-        }
-
-        /* Subtle corner glow on hover */
+        .card:hover::before { height: 5px; }
         .card::after {
             content: '';
             position: absolute;
@@ -287,15 +241,8 @@
             transition: opacity var(--transition);
             pointer-events: none;
         }
-        .card:hover::after {
-            opacity: 1;
-        }
-
-        /* === CARD FEATURED (análise) === */
-        .card-featured {
-            padding: 32px 28px;
-        }
-
+        .card:hover::after { opacity: 1; }
+        .card-featured { padding: 32px 28px; }
         .card-icon-wrap {
             width: 52px; height: 52px;
             border-radius: var(--radius-sm);
@@ -304,10 +251,7 @@
             margin-bottom: 18px;
             transition: transform var(--transition);
         }
-        .card:hover .card-icon-wrap {
-            transform: scale(1.08);
-        }
-
+        .card:hover .card-icon-wrap { transform: scale(1.08); }
         .card-num {
             font-family: var(--font-mono);
             font-size: 11px;
@@ -316,25 +260,18 @@
             margin-bottom: 14px;
             letter-spacing: 1px;
         }
-
         .card-title {
             font-size: 17px; font-weight: 700;
             letter-spacing: -0.3px;
             margin-bottom: 8px;
             color: var(--text-primary);
         }
-        .card-featured .card-title {
-            font-size: 19px;
-        }
-
+        .card-featured .card-title { font-size: 19px; }
         .card-desc {
             font-size: 13px; color: var(--text-secondary);
             line-height: 1.65; flex: 1;
         }
-        .card-featured .card-desc {
-            font-size: 14px;
-        }
-
+        .card-featured .card-desc { font-size: 14px; }
         .card-tags {
             display: flex; flex-wrap: wrap; gap: 6px;
             margin-top: 16px;
@@ -344,7 +281,6 @@
             padding: 4px 10px; border-radius: 50px;
             letter-spacing: 0.3px;
         }
-
         .card-footer {
             margin-top: 20px;
             display: flex; align-items: center; justify-content: space-between;
@@ -364,10 +300,7 @@
             width: 16px; height: 16px;
             transition: transform var(--transition);
         }
-        .card:hover .card-arrow svg {
-            transform: translateX(3px);
-        }
-
+        .card:hover .card-arrow svg { transform: translateX(3px); }
         .card-status {
             padding: 4px 10px;
             border-radius: 50px;
@@ -379,9 +312,6 @@
         .status-dev { background: var(--orange-light); color: var(--orange-dark); }
         .status-new { background: var(--pink-light); color: var(--pink); }
 
-        /* === CARD COLOR THEMES === */
-
-        /* Green - Análise CNPJ */
         .card-analise::before { background: linear-gradient(90deg, var(--green), var(--green-dark)); }
         .card-analise .card-icon-wrap { background: var(--green-light); }
         .card-analise .tag { background: var(--green-light); color: var(--green-dark); }
@@ -389,7 +319,6 @@
         .card-analise::after { background: radial-gradient(circle, rgba(16,185,129,0.08), transparent 70%); }
         .card-analise:hover { border-color: rgba(16,185,129,0.3); }
 
-        /* Pink - Análise PF */
         .card-pf::before { background: linear-gradient(90deg, var(--pink), #be185d); }
         .card-pf .card-icon-wrap { background: var(--pink-light); }
         .card-pf .tag { background: var(--pink-light); color: var(--pink); }
@@ -397,7 +326,6 @@
         .card-pf::after { background: radial-gradient(circle, rgba(236,72,153,0.08), transparent 70%); }
         .card-pf:hover { border-color: rgba(236,72,153,0.3); }
 
-        /* Cyan - Consultor CNAE */
         .card-consultor::before { background: linear-gradient(90deg, var(--cyan), #0891b2); }
         .card-consultor .card-icon-wrap { background: var(--cyan-light); }
         .card-consultor .tag { background: var(--cyan-light); color: #0891b2; }
@@ -433,42 +361,6 @@
         .card-mei::after { background: radial-gradient(circle, rgba(20,184,166,0.08), transparent 70%); }
         .card-mei:hover { border-color: rgba(20,184,166,0.3); }
 
-        /* Blue - Simulação */
-        .card-simulacao::before { background: linear-gradient(90deg, var(--blue), var(--blue-dark)); }
-        .card-simulacao .card-icon-wrap { background: var(--blue-light); }
-        .card-simulacao .card-arrow { color: var(--blue); }
-        .card-simulacao::after { background: radial-gradient(circle, rgba(46,134,222,0.08), transparent 70%); }
-        .card-simulacao:hover { border-color: rgba(46,134,222,0.3); }
-
-        /* Purple - CNAEs */
-        .card-cnaes::before { background: linear-gradient(90deg, var(--purple), #5b21b6); }
-        .card-cnaes .card-icon-wrap { background: var(--purple-light); }
-        .card-cnaes .card-arrow { color: var(--purple); }
-        .card-cnaes::after { background: radial-gradient(circle, rgba(124,58,237,0.08), transparent 70%); }
-        .card-cnaes:hover { border-color: rgba(124,58,237,0.3); }
-
-        /* Orange - Municípios */
-        .card-municipios::before { background: linear-gradient(90deg, var(--orange), var(--orange-dark)); }
-        .card-municipios .card-icon-wrap { background: var(--orange-light); }
-        .card-municipios .card-arrow { color: var(--orange); }
-        .card-municipios::after { background: radial-gradient(circle, rgba(245,158,11,0.08), transparent 70%); }
-        .card-municipios:hover { border-color: rgba(245,158,11,0.3); }
-
-        /* Red - Relatório */
-        .card-relatorio::before { background: linear-gradient(90deg, var(--red), var(--red-dark)); }
-        .card-relatorio .card-icon-wrap { background: var(--red-light); }
-        .card-relatorio .card-arrow { color: var(--red); }
-        .card-relatorio::after { background: radial-gradient(circle, rgba(239,68,68,0.08), transparent 70%); }
-        .card-relatorio:hover { border-color: rgba(239,68,68,0.3); }
-
-        /* Green dark - Legislação */
-        .card-legislacao::before { background: linear-gradient(90deg, #065f46, #047857); }
-        .card-legislacao .card-icon-wrap { background: #ecfdf5; }
-        .card-legislacao .card-arrow { color: #047857; }
-        .card-legislacao::after { background: radial-gradient(circle, rgba(4,120,87,0.08), transparent 70%); }
-        .card-legislacao:hover { border-color: rgba(4,120,87,0.3); }
-
-        /* === FOOTER === */
         .footer {
             text-align: center;
             padding: 24px 0 0;
@@ -483,9 +375,7 @@
             text-decoration: none;
             font-weight: 600;
         }
-        .footer a:hover {
-            text-decoration: underline;
-        }
+        .footer a:hover { text-decoration: underline; }
         .footer-brand {
             font-weight: 800;
             font-size: 13px;
@@ -493,7 +383,6 @@
             letter-spacing: -0.3px;
         }
 
-        /* === STAGGER ANIMATIONS === */
         @keyframes fadeSlideDown {
             from { opacity: 0; transform: translateY(-16px); }
             to { opacity: 1; transform: translateY(0); }
@@ -502,12 +391,10 @@
             from { opacity: 0; transform: translateY(20px); }
             to { opacity: 1; transform: translateY(0); }
         }
-
         .section-anim { animation: fadeSlideUp 0.5s ease-out both; }
         .section-anim:nth-child(1) { animation-delay: 0.15s; }
         .section-anim:nth-child(2) { animation-delay: 0.25s; }
         .section-anim:nth-child(3) { animation-delay: 0.35s; }
-
         .card { animation: fadeSlideUp 0.5s ease-out both; }
         .cards-grid .card:nth-child(1) { animation-delay: 0.2s; }
         .cards-grid .card:nth-child(2) { animation-delay: 0.3s; }
@@ -517,7 +404,6 @@
         .cards-grid .card:nth-child(6) { animation-delay: 0.7s; }
         .cards-grid .card:nth-child(7) { animation-delay: 0.8s; }
 
-        /* === RESPONSIVE === */
         @media (max-width: 1024px) {
             .grid-3 { grid-template-columns: repeat(2, 1fr); }
             .grid-4 { grid-template-columns: repeat(2, 1fr); }
@@ -536,8 +422,6 @@
             .hero h1 { font-size: 26px; }
             .header-right { flex-wrap: wrap; }
         }
-
-        /* === KEYBOARD HINT === */
         .kbd-hint {
             position: fixed;
             bottom: 20px; right: 20px;
@@ -553,10 +437,7 @@
             transition: all var(--transition);
             pointer-events: none;
         }
-        .kbd-hint.show {
-            opacity: 1;
-            transform: translateY(0);
-        }
+        .kbd-hint.show { opacity: 1; transform: translateY(0); }
         kbd {
             display: inline-block;
             padding: 2px 6px;
@@ -576,7 +457,7 @@
 
 <div class="wrapper">
 
-    <!-- ═══ HEADER ═══ -->
+    <!-- HEADER -->
     <header class="header">
         <div class="logo">
             <div class="logo-mark">IM</div>
@@ -586,18 +467,18 @@
             </div>
         </div>
         <div class="header-right">
-            <div class="badge badge-version">v2.0 · Fev/2026</div>
+            <div class="badge badge-version">v1.0 · Fev/2026</div>
             <div class="badge badge-status"><span class="badge-dot"></span> Brasil</div>
         </div>
     </header>
 
-    <!-- ═══ HERO ═══ -->
+    <!-- HERO -->
     <div class="hero">
         <h1>Calculadora Tributária <span class="hl">Inteligente</span></h1>
         <p>Compare regimes tributários, simule cenários e descubra a melhor opção fiscal para sua empresa ou pessoa física.</p>
     </div>
 
-    <!-- ═══ SEÇÃO: ANÁLISE TRIBUTÁRIA ═══ -->
+    <!-- SEÇÃO: ANÁLISE TRIBUTÁRIA -->
     <div class="section-label section-anim">
         <span class="line"></span>
         <span class="text">Análise Tributária</span>
@@ -605,19 +486,19 @@
     </div>
 
     <div class="cards-grid grid-3" style="margin-bottom:40px">
-        <a class="card card-analise card-featured" href="analise.html">
+        <a class="card card-analise card-featured" href="comparador-de-regime.html">
             <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">
                 <div class="card-num">01</div>
                 <span class="card-status status-ready">Pronto</span>
             </div>
-            <div class="card-icon-wrap">🏢</div>
-            <div class="card-title">Análise Inicial — CNPJ</div>
-            <div class="card-desc">Compare Simples Nacional, Lucro Presumido e Lucro Real. Cálculo completo com CNAE, Fator R, SUDAM e impacto no bolso do sócio.</div>
+            <div class="card-icon-wrap">⚖️</div>
+            <div class="card-title">Comparador de Regimes</div>
+            <div class="card-desc">Compare Simples Nacional, Lucro Presumido e Lucro Real. Cálculo completo com CNAE, Fator R, SUDAM, LC 224/2025 e simulação de cenários.</div>
             <div class="card-tags">
                 <span class="tag">Simples Nacional</span>
                 <span class="tag">Lucro Presumido</span>
                 <span class="tag">Lucro Real</span>
-                <span class="tag">Fator R</span>
+                <span class="tag">Cenários</span>
             </div>
             <div class="card-footer">
                 <div class="card-arrow">
@@ -672,7 +553,7 @@
         </a>
     </div>
 
-    <!-- ═══ SEÇÃO: ESTUDOS DETALHADOS ═══ -->
+    <!-- SEÇÃO: ESTUDOS DETALHADOS -->
     <div class="section-label section-anim">
         <span class="line"></span>
         <span class="text">Estudos Detalhados</span>
@@ -769,7 +650,7 @@
         </a>
     </div>
 
-    <!-- ═══ FOOTER ═══ -->
+    <!-- FOOTER -->
     <footer class="footer">
         <div class="footer-inner">
             <span class="footer-brand">IMPOST.</span> — Inteligência em Modelagem e Otimização Tributária<br>
@@ -780,13 +661,11 @@
 
 </div>
 
-<!-- Keyboard hint -->
 <div class="kbd-hint" id="kbdHint">
     <kbd>Alt</kbd> + <kbd>1-8</kbd> navegar &nbsp;|&nbsp; <kbd>Alt</kbd> + <kbd>B</kbd> sidebar
 </div>
 
 <script>
-// Show keyboard hint briefly
 setTimeout(() => {
     const hint = document.getElementById('kbdHint');
     if (hint) { hint.classList.add('show'); }
