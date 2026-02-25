@@ -1,6 +1,6 @@
 /**
  * ╔══════════════════════════════════════════════════════════════════════════════╗
- * ║  LUCRO REAL — MAPEAMENTO UNIFICADO DE DADOS  v3.4 (AUDITORIA 02/2026)  ║
+ * ║  LUCRO REAL — MAPEAMENTO UNIFICADO DE DADOS  v3.5 (AUDITORIA 02/2026)  ║
  * ║  Fonte única de verdade para alimentar qualquer HTML ou JS                 ║
  * ║  Base Legal: RIR/2018 (Decreto 9.580/2018) + Lei 12.973/2014              ║
  * ║  Ano-Base: 2026                                                           ║
@@ -35,6 +35,7 @@
  * ║    - Motor DEVE adicionar somente no LALUR, não no LACS                   ║
  * ║    - Ref: Art. 315 (IRPJ) / IN 1.700/17 Anexo I item 85 (CSLL)         ║
  * ║    - Severidade: MÉDIA                                                    ║
+ * ║    - [REV] v3.5: REVERTIDO — ver CORREÇÕES v3.5 FIX #2 abaixo           ║
  * ║                                                                            ║
  * ║  [FIX #6] Presunção Inst. Financeiras — CSLL efetiva variável            ║
  * ║    - aliquotaEfetivaCSLL = null (variável por tipo de instituição)        ║
@@ -45,6 +46,42 @@
  * ║  [VALIDADO] Tabela IRPF 2026 confere com Lei 15.270/2025                 ║
  * ║  [VALIDADO] Limite obrigatoriedade R$ 78M confere com Art. 257, I        ║
  * ║  [VALIDADO] Códigos DARF principais (spot-check OK)                       ║
+ * ╠══════════════════════════════════════════════════════════════════════════════╣
+ * ║  CORREÇÕES v3.5 (Alinhamento Auditoria Externa — 25/02/2026):            ║
+ * ║                                                                            ║
+ * ║  [FIX #1] BUG-004: etapa3.economia.total na compensação operacional       ║
+ * ║    - Adicionados campos csll: 0 e total: irpj no objeto economia          ║
+ * ║    - Consumidores que liam .total agora recebem valor correto              ║
+ * ║    - Severidade: BAIXA                                                     ║
+ * ║                                                                            ║
+ * ║  [FIX #2] BUG-002: Gratificações adm — LALUR E LACS (ambos indedutíveis) ║
+ * ║    - REVERTIDO FIX #5 da v3.4: adicionarNoLACS agora é TRUE               ║
+ * ║    - IN RFB 1.700/2017, Art. 52, V prevalece sobre Anexo I item 85       ║
+ * ║    - dedutivelCSLL do subtipo ADMINISTRADOR_ESTATUTARIO = false            ║
+ * ║    - Alinhamento com lucro-real-estudos.js v3.7.0                         ║
+ * ║    - Severidade: ALTA                                                      ║
+ * ║                                                                            ║
+ * ║  [FIX #3] CSLL financeiras no compensarIntegrado fallback                 ║
+ * ║    - Substituído 0.15 hardcoded por estrutura escalonada LC 224/2025      ║
+ * ║    - Novo parâmetro: tipoInstituicaoFinanceira                            ║
+ * ║    - Consistente com LR.calcular.csll() fallback                          ║
+ * ║    - Severidade: MÉDIA                                                     ║
+ * ║                                                                            ║
+ * ║  [FIX #4] compensarIntegrado fallback: adições CSLL separadas            ║
+ * ║    - Novos parâmetros opcionais: adicoesCSLL, exclusoesCSLL               ║
+ * ║    - baseCSLLCorrente pode diferir de lucroRealCorrente                   ║
+ * ║    - Compatível: se null, usa valores de IRPJ (comportamento anterior)    ║
+ * ║    - Severidade: MÉDIA                                                     ║
+ * ║                                                                            ║
+ * ║  [FIX #5] simulacaoCompleta fallback: ISS na carga total                  ║
+ * ║    - Novos parâmetros: issAnual, aliquotaISS                              ║
+ * ║    - ISS incluído em cargaTotalBruta e cargaTotalLiquida                  ║
+ * ║    - Campo iss{} no retorno para rastreabilidade                          ║
+ * ║    - Severidade: MÉDIA (alinhamento com estudos.js BUG-001)               ║
+ * ║                                                                            ║
+ * ║  [VALIDADO] IRRF JCP 17,5% — confirmado correto (LC 224/2025, Art. 8º)  ║
+ * ║    BUG-003 da auditoria foi um falso positivo. 17,5% é a alíquota        ║
+ * ║    vigente desde 01/01/2026. Nenhuma alteração necessária.                ║
  * ╠══════════════════════════════════════════════════════════════════════════════╣
  * ║  CORREÇÕES v3.3 (alinhamento com Motor v5.0 — riscos fiscais):            ║
  * ║                                                                            ║
@@ -395,20 +432,20 @@
       // v3.4 FIX — Adicionada flag para tratamento diferenciado LALUR/LACS
       tratamentoDiferenciado: true,  // ATENÇÃO: este item TEM tratamento diferente entre IRPJ e CSLL
       adicionarNoLALUR: true,        // Adicionar na Parte A do LALUR (indedutível p/ IRPJ)
-      adicionarNoLACS: false,        // NÃO adicionar no LACS (dedutível p/ CSLL — IN 1.700/17, Anexo I, item 85)
+      adicionarNoLACS: true,         // v3.5 FIX — Adicionar no LACS (indedutível p/ CSLL — IN RFB 1.700/2017, Art. 52, V)
       estrategia: 'Converter em pró-labore (dedutível) ou JCP. ATENÇÃO: (1) Gratificações a empregados em geral são '
-        + 'dedutíveis sem limite (IN 1.700/17, Art. 80). (2) Para CSLL, gratificações a administradores SÃO dedutíveis '
-        + '(IN 1.700/17, Anexo I, item 85 — "não aplicável à CSLL"). (3) Diretores-empregados CLT: tema controvertido '
-        + '— CARF tem decisões favoráveis à dedutibilidade (Ac. 1301003.760); STJ diverge (REsp 1.948.478/SP). '
-        + 'Avaliar risco antes de adicionar ou excluir. '
-        + 'MOTOR: Tratar LALUR e LACS separadamente — adicionar SOMENTE no LALUR, não no LACS.',
+        + 'dedutíveis sem limite (IN 1.700/17, Art. 80). (2) Para CSLL, gratificações a administradores são '
+        + 'INDEDUTÍVEIS (IN RFB 1.700/2017, Art. 52, V — auditoria 02/2026 corrigiu posição anterior). '
+        + '(3) Diretores-empregados CLT: tema controvertido — CARF tem decisões favoráveis à dedutibilidade '
+        + '(Ac. 1301003.760); STJ diverge (REsp 1.948.478/SP). Avaliar risco antes de adicionar ou excluir. '
+        + 'MOTOR: Adicionar no LALUR E no LACS (ambos indedutíveis).',
       subtipos: {
         ADMINISTRADOR_ESTATUTARIO: {
           descricao: 'Dirigente/administrador estatutário (sem vínculo CLT)',
           dedutivelIRPJ: false,
-          dedutivelCSLL: true,
-          artigo: 'Art. 315 (IRPJ) / IN 1.700/17, Anexo I, item 85 (CSLL)',
-          nota: 'Indedutível no LALUR (Parte A), mas NÃO adicionado no LACS (CSLL)'
+          dedutivelCSLL: false,   // v3.5 FIX — IN RFB 1.700/2017, Art. 52, V
+          artigo: 'Art. 315 (IRPJ) / IN RFB 1.700/2017, Art. 52, V (CSLL)',
+          nota: 'Indedutível no LALUR (Parte A) E no LACS (CSLL) — auditoria 02/2026'
         },
         DIRETOR_EMPREGADO_CLT: {
           descricao: 'Diretor com vínculo empregatício CLT e subordinação',
@@ -1903,16 +1940,23 @@
       if (LR._fallbackUsado.indexOf('compensarIntegrado') === -1) LR._fallbackUsado.push('compensarIntegrado');
       var d = Object.assign({
         lucroLiquido: 0, adicoes: 0, exclusoes: 0,
+        adicoesCSLL: null,      // v3.5: se null, usa d.adicoes (compatível)
+        exclusoesCSLL: null,    // v3.5: se null, usa d.exclusoes (compatível)
         saldoPrejuizoOperacional: 0,
         saldoPrejuizoNaoOperacional: 0,
         saldoBaseNegativaCSLL: 0,
         lucroNaoOperacional: 0,
         atividadeRural: false,
         trimestral: true,
-        financeira: false
+        financeira: false,
+        tipoInstituicaoFinanceira: null  // v3.5: para CSLL escalonada
       }, dados);
 
       var lucroAjustado = d.lucroLiquido + d.adicoes - d.exclusoes;
+      // v3.5 FIX BUG-002: base CSLL pode ter adições diferentes (ex: gratificações incluídas)
+      var adicoesCSLLEfetivas = (d.adicoesCSLL !== null && d.adicoesCSLL !== undefined) ? d.adicoesCSLL : d.adicoes;
+      var exclusoesCSLLEfetivas = (d.exclusoesCSLL !== null && d.exclusoesCSLL !== undefined) ? d.exclusoesCSLL : d.exclusoes;
+      var baseCSLLInicial = d.lucroLiquido + adicoesCSLLEfetivas - exclusoesCSLLEfetivas;
 
       var resultado = {
         etapa1_lucroAjustado: {
@@ -1960,7 +2004,7 @@
       }
 
       var lucroRealCorrente = lucroAjustado;
-      var baseCSLLCorrente = lucroAjustado;
+      var baseCSLLCorrente = baseCSLLInicial;  // v3.5: pode diferir do lucroAjustado
 
       // Helper local para IRPJ (fallback — usa limiar correto por período)
       var _limAdicFallback = d.trimestral ? LR.aliquotas.irpj.limiteAdicionalTrimestre : LR.aliquotas.irpj.limiteAdicionalAno;
@@ -2005,7 +2049,7 @@
           lucroRealAposCompensacao: _r(lucroRealCorrente - compOp),
           saldoPrejuizoRemanescente: _r(d.saldoPrejuizoOperacional - compOp),
           atividadeRural: d.atividadeRural,
-          economia: { irpj: _r(irpjSem - irpjCom) },
+          economia: { irpj: _r(irpjSem - irpjCom), csll: 0, total: _r(irpjSem - irpjCom) },
           artigo: d.atividadeRural ? 'Art. 583' : 'Art. 580'
         };
 
@@ -2019,8 +2063,22 @@
       if (baseCSLLCorrente > 0 && d.saldoBaseNegativaCSLL > 0) {
         var limCSLL = baseCSLLCorrente * 0.30;
         var compCSLL = Math.min(limCSLL, d.saldoBaseNegativaCSLL);
-        // v3.3 FIX E2#3: Alíquota CSLL dinâmica — 15% para financeiras (Lei 13.169/2015), 9% geral
-        var aliqCSLLComp = (d.financeira === true || d.financeira === 'true') ? 0.15 : 0.09;
+        // v3.5 FIX — Usar estrutura escalonada LC 224/2025 (consistente com LR.calcular.csll fallback)
+        var aliqCSLLComp;
+        if (d.financeira === true || d.financeira === 'true') {
+          var fin = LR.aliquotas.csll.financeiras;
+          var tipoMap = {
+            bancos: fin.bancos,
+            segurosPrivados: fin.segurosPrivados,
+            instituicoesPagamento: fin.instituicoesPagamento,
+            creditoFinanciamento: fin.creditoFinanciamento
+          };
+          aliqCSLLComp = (d.tipoInstituicaoFinanceira && tipoMap[d.tipoInstituicaoFinanceira])
+            ? tipoMap[d.tipoInstituicaoFinanceira]
+            : fin.bancos; // default conservador: 20%
+        } else {
+          aliqCSLLComp = LR.aliquotas.csll.geral; // 0.09
+        }
         var economiaCSLL = compCSLL * aliqCSLLComp;
 
         resultado.etapa4_compensacaoCSLL = {
@@ -2936,7 +2994,9 @@
         prejuizoFiscal: 0, baseNegativaCSLL: 0,
         patrimonioLiquido: 0, tjlp: null, lucrosAcumulados: 0,  // v3.3 FIX #3: Sem default
         retencoesFonte: 0, estimativasPagas: 0, numMeses: 12,
-        dadosPISCOFINS: null, retencoesPISCOFINS: 0
+        dadosPISCOFINS: null, retencoesPISCOFINS: 0,
+        issAnual: 0,        // v3.5: ISS informativo (já deduzido do lucroLiquido pelo chamador)
+        aliquotaISS: 0      // v3.5: alíquota ISS para referência
       }, empresa);
 
       var jcp = LR.calcular.jcp(e);
@@ -2969,9 +3029,10 @@
         pisCofinsLiquido = pisCofins.totalAPagar || 0;
       }
 
+      var issAnualVal = _r(e.issAnual || 0);
       var cargaIRPJ_CSLL = _r(irpjCom.irpjAPagar + csll.csllDevida);
-      var cargaTotalBruta = _r(cargaIRPJ_CSLL + pisCofinsBruto);
-      var cargaTotalLiquida = _r(cargaIRPJ_CSLL + Math.max(pisCofinsLiquido - e.retencoesPISCOFINS, 0));
+      var cargaTotalBruta = _r(cargaIRPJ_CSLL + pisCofinsBruto + issAnualVal);
+      var cargaTotalLiquida = _r(cargaIRPJ_CSLL + Math.max(pisCofinsLiquido - e.retencoesPISCOFINS, 0) + issAnualVal);
 
       // v3.3 FIX #7: Cenários com PIS/COFINS proporcional no fallback
       var cenariosFB = {};
@@ -3009,8 +3070,8 @@
           csllCenFB = csllCalcFB.csllDevida;
         }
 
-        var totalCenBrutoFB = _r(irpjCenFB + csllCenFB + pcCenBrutoFB);
-        var totalCenLiquidoFB = _r(irpjCenFB + csllCenFB + Math.max(pcCenFB - e.retencoesPISCOFINS, 0));
+        var totalCenBrutoFB = _r(irpjCenFB + csllCenFB + pcCenBrutoFB + issAnualVal);
+        var totalCenLiquidoFB = _r(irpjCenFB + csllCenFB + Math.max(pcCenFB - e.retencoesPISCOFINS, 0) + issAnualVal);
 
         cenariosFB[nomeCenFB] = {
           variacao: _r(varFB * 100) + '%',
@@ -3044,12 +3105,18 @@
             retencoesFonte: e.retencoesPISCOFINS,
             aPagar: _r(Math.max(pisCofinsLiquido - e.retencoesPISCOFINS, 0))
           } : null,
+          iss: {
+            valor: _r(e.issAnual || 0),
+            aliquota: e.aliquotaISS || 0,
+            nota: 'ISS já deduzido na DRE (CPC 47). Exibido aqui para carga tributária total.',
+            jaDeuzidoDRE: true
+          },
           total: cargaTotalLiquida,
           cargaTotalBruta: cargaTotalBruta,
-          cargaTotalBrutaDescricao: 'IRPJ + CSLL + PIS/COFINS débitos (antes de créditos e retenções)',
+          cargaTotalBrutaDescricao: 'IRPJ + CSLL + PIS/COFINS débitos + ISS (antes de créditos e retenções)',
           cargaTotalLiquida: cargaTotalLiquida,
-          cargaTotalLiquidaDescricao: 'IRPJ + CSLL + PIS/COFINS a pagar (após créditos e retenções)',
-          nota: 'A carga LÍQUIDA é o desembolso efetivo. A BRUTA inclui PIS/COFINS antes dos créditos.'
+          cargaTotalLiquidaDescricao: 'IRPJ + CSLL + PIS/COFINS a pagar + ISS (após créditos e retenções)',
+          nota: 'A carga LÍQUIDA é o desembolso efetivo. A BRUTA inclui PIS/COFINS antes dos créditos. ISS incluído em ambas.'
         },
         cenarios: cenariosFB,
         cenarioNota: 'PIS/COFINS recalculado proporcionalmente à receita em cada cenário.',
