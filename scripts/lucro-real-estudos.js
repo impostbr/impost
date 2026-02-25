@@ -1,6 +1,6 @@
 /**
  * ╔══════════════════════════════════════════════════════════════════════════════╗
- * ║  LUCRO REAL — ESTUDOS TRIBUTÁRIOS  v3.6.0  (ARQUIVO UNIFICADO)            ║
+ * ║  LUCRO REAL — ESTUDOS TRIBUTÁRIOS  v3.7.0  (ARQUIVO UNIFICADO)            ║
  * ║  Wizard 7 etapas + Motor de diagnóstico + Exportação PDF/Excel            ║
  * ║  100% LUCRO REAL — Sem comparativo com Simples/Presumido                   ║
  * ║  Motor: cruza respostas do usuário com LucroRealMap (LR.calcular.*)        ║
@@ -20,10 +20,33 @@
  *   window.IMPOSTExport      — alias de compatibilidade para exportação
  *
  * IMPOST. — Inteligência em Modelagem de Otimização Tributária
- * Versão: 3.6.0 | Data: Fevereiro/2026
+ * Versão: 3.7.0 | Data: Fevereiro/2026
  *
  * NOTA: Este arquivo unifica os antigos lucro-real-estudos.js + lucro-real-estudos-export.js
  *       Não é mais necessário carregar o arquivo de exportação separadamente.
+ *
+ * CHANGELOG v3.7.0 (Fevereiro/2026) — CORREÇÕES AUDITORIA EXTERNA (4 BUGS + 2 DESIGN):
+ *   BUG-001 (CRÍTICO) — ISS deduzido na DRE (CPC 47): receitaLiquida = RB - PIS/COFINS - ISS.
+ *                        Nova função _calcISSAnual() pré-calcula ISS. _calcLL() agora deduz ISS.
+ *                        DRE principal no PASSO 2 usa issAnualDRE antes do cálculo do lucroLiquido.
+ *                        Campo dre.issAnual adicionado para rastreabilidade.
+ *                        Impacto: ~R$48.840 a menos em IRPJ+CSLL no exemplo simulado.
+ *   BUG-002 (ALTO) — Base CSLL agora INCLUI gratificações a administradores como adição.
+ *                     IN RFB 1.700/2017, Art. 52, V: gratificações são indedutíveis para CSLL.
+ *                     _calcTotalAdicoesCSLL() neutralizada (retorna = _calcTotalAdicoes()).
+ *                     Bloco _diferencaAdicoesCSLL removido. baseCSLLFinal agora é consistente.
+ *                     Impacto: +R$2.160 na CSLL (correção subavaliação).
+ *   BUG-003 (MÉDIO) — IRRF JCP: constante IRRF_JCP_RATE = 0.175 criada no topo.
+ *                      LC 224/2025, Art. 8º confirma 17,5% a partir de 2026 — MANTIDO CORRETO.
+ *                      3 locais hardcoded substituídos pela constante. Facilita manutenção futura.
+ *   BUG-004 (BAIXO) — compensacao.etapa3.economia.total: NOTA para lucro-real-mapeamento.js.
+ *                      total deve ser = economia.irpj + economia.csll (atualmente retorna 0).
+ *   DESIGN-001 — economia separada em jaAplicada vs oportunidades.
+ *                cargaOtimizada = cargaBruta - economia.oportunidades (não mais economia.total).
+ *                economia.total mantido como soma de tudo para compatibilidade.
+ *   DESIGN-002 — PDD incluída em economia.jaAplicada (tratamento uniforme com depreciação).
+ *                totalPDDEcon agora usa o valor informativo (totalPDDInfo) em vez de 0.
+ *                Ambos (PDD e depreciação) são ajustes fiscais já realizados.
  *
  * CHANGELOG v3.6.0 (Fevereiro/2026) — AUDITORIA EXTERNA:
  *   ACHADO 2+3+10 — Referências legais unificadas: Art. 358 §1º/Art. 357/Art. 311 → Art. 315 RIR/2018
@@ -145,10 +168,14 @@
   // ═══════════════════════════════════════════════════════════════════════════
   //  CONSTANTES E HELPERS
   // ═══════════════════════════════════════════════════════════════════════════
-  const VERSAO = "3.6.0";
+  const VERSAO = "3.7.0";
   const LS_KEY_DADOS = "impost_lr_dados";
   const LS_KEY_STEP = "impost_lr_step";
   const LS_KEY_RESULTADOS = "impost_lr_resultados";
+
+  // ═══ BUG-003 FIX: Constante para IRRF JCP — LC 224/2025, Art. 8º (17,5% a partir de 2026) ═══
+  // Parametrizar por anoBase se necessário suportar 15% para exercícios anteriores a 2026.
+  var IRRF_JCP_RATE = 0.175;
 
   const $ = (id) => document.getElementById(id);
   const $$ = (sel) => document.querySelectorAll(sel);
@@ -2689,11 +2716,13 @@
   }
 
   /**
-   * FIX AUDITORIA Achado 7: Adições para CSLL EXCLUEM gratificações a administradores
-   * estatutários, que são dedutíveis para CSLL (IN RFB 1.700/2017, Anexo I, item 85).
+   * BUG-002 FIX: Gratificações a administradores são INDEDUTÍVEIS para CSLL
+   * (IN RFB 1.700/2017, Art. 52, V). Adições CSLL = Adições IRPJ.
+   * O item 85 do Anexo I refere-se a situação específica de entidades sem fins lucrativos.
+   * Para empresas Lucro Real regulares, gratificações são adição para AMBOS.
    */
   function _calcTotalAdicoesCSLL() {
-    return _calcTotalAdicoes() - _n(dadosEmpresa.gratificacoesAdm);
+    return _calcTotalAdicoes();
   }
 
   function _calcTotalExclusoes() {
@@ -2713,7 +2742,9 @@
     var pisCofDeb = _r(recTrib * _aliqPCPrev);
     var dep = _calcDepNormal();
     var recFin = _n(d.receitaFinanceiras) + _n(d.receitasFinanceirasEspeciais);
-    return _r(rb - pisCofDeb - _calcTotalCustos() - _calcTotalDespesas() - dep + recFin);
+    // BUG-001 FIX: Deduzir ISS da receita bruta (CPC 47 — imposto sobre receita)
+    var issAnualLL = _calcISSAnual();
+    return _r(rb - pisCofDeb - issAnualLL - _calcTotalCustos() - _calcTotalDespesas() - dep + recFin);
   }
 
   function _calcLucroAjustado() {
@@ -2734,6 +2765,31 @@
       _n(d.valorEdificios) * 0.04 + _n(d.valorDrones) * 0.20 +
       _n(d.valorTratores) * 0.25 + _n(d.valorSoftware) * 0.20 +
       _n(d.valorInstalacoes) * 0.10 + _n(d.valorOutrosBens) * 0.10;
+  }
+
+  /**
+   * BUG-001 FIX: Pré-calcula ISS anual para uso na DRE e _calcLL().
+   * Mesma lógica do PASSO 9 em analisar(), mas acessível como helper.
+   * CPC 47: ISS é dedução da receita bruta (como PIS/COFINS).
+   */
+  function _calcISSAnual() {
+    var d = dadosEmpresa;
+    var rb = _n(d.receitaBrutaAnual);
+    var recServicos = _n(d.receitaServicos) || (d.tipoAtividade && ('' + d.tipoAtividade).indexOf("SERVICO") >= 0 ? rb : 0);
+    if (!d.detalharReceita && !_n(d.receitaServicos) && !_n(d.receitaComercio)) {
+      if (!d.tipoAtividade || ('' + d.tipoAtividade).indexOf("COMERCIO") < 0) {
+        recServicos = rb;
+      }
+    }
+    var ehSUP = d.ehSUP === true || d.ehSUP === "true";
+    if (ehSUP) {
+      var issFixoProf = _n(d.issFixoPorProfissional) || 800;
+      var nProf = parseInt(d.numProfissionaisSUP) || 2;
+      return _r(issFixoProf * nProf);
+    }
+    var aliq = _n(d.issAliquota) || 5;
+    if (aliq > 0 && aliq < 1) aliq = _r(aliq * 100);
+    return _r(recServicos * aliq / 100);
   }
 
   function _calcBaseCreditos() {
@@ -2944,7 +3000,20 @@
     var _aliqPCDre = d.ehFinanceira ? 0.0465 : 0.0925;
     var pisCofinsDebitosDRE = _r(receitaTributavelDRE * _aliqPCDre);
 
-    var receitaLiquida = _r(receitaBruta - pisCofinsDebitosDRE);
+    // ═══ BUG-001 FIX: Pré-calcular ISS antes da DRE (CPC 47 — dedução da receita bruta) ═══
+    var _issAliqDRE = _n(d.issAliquota) || 5;
+    if (_issAliqDRE > 0 && _issAliqDRE < 1) _issAliqDRE = _r(_issAliqDRE * 100);
+    var ehSUP_DRE = d.ehSUP === true || d.ehSUP === "true";
+    var issAnualDRE;
+    if (ehSUP_DRE) {
+      var _issFixoProf = _n(d.issFixoPorProfissional) || 800;
+      var _nProf = parseInt(d.numProfissionaisSUP) || 2;
+      issAnualDRE = _r(_issFixoProf * _nProf);
+    } else {
+      issAnualDRE = _r(receitaServicos * _issAliqDRE / 100);
+    }
+
+    var receitaLiquida = _r(receitaBruta - pisCofinsDebitosDRE - issAnualDRE);
     var lucroBruto = _r(receitaLiquida - custosTotais);
     var lucroLiquido = _r(lucroBruto - despesasTotais - depNormalDRE + receitaFinanceiras);
     var margemLucro = receitaBruta > 0 ? _r(lucroLiquido / receitaBruta * 100) : 0;
@@ -2959,6 +3028,7 @@
       receitaAlugueis: _n(d.receitaAlugueis),
       outrasReceitas: _n(d.outrasReceitas),
       pisCofinsDebitos: pisCofinsDebitosDRE,
+      issAnual: issAnualDRE, // BUG-001 FIX: ISS deduzido da receita bruta (CPC 47)
       receitaLiquida: receitaLiquida,
       custosTotais: custosTotais,
       folhaPagamento: _n(d.folhaPagamentoAnual) || (_n(d.salariosBrutos) + _n(d.proLabore) + _n(d.inssPatronal) + _n(d.fgts) + _n(d.decimoTerceiro) + _n(d.feriasProvisao)),
@@ -3182,14 +3252,11 @@
       ? (compensacao.resumo ? compensacao.resumo.baseCSLLFinal : lucroRealFinal)
       : lucroRealFinal;
 
-    // ═══ FIX AUDITORIA Achado 7: Gratificações a adm. estatutários são dedutíveis p/ CSLL ═══
-    // IN RFB 1.700/2017, Anexo I, item 85: "não aplicável à CSLL".
-    // A base da CSLL NÃO deve incluir gratificações como adição (diferente do IRPJ).
-    // Usa _calcTotalAdicoesCSLL() (= totalAdicoes - gratificacoesAdm) para consistência.
-    var _diferencaAdicoesCSLL = _r(_calcTotalAdicoes() - _calcTotalAdicoesCSLL());
-    if (_diferencaAdicoesCSLL > 0) {
-      baseCSLLFinal = _r(baseCSLLFinal - _diferencaAdicoesCSLL);
-    }
+    // ═══ BUG-002 FIX: Bloco _diferencaAdicoesCSLL REMOVIDO ═══
+    // Gratificações a administradores são indedutíveis para CSLL (IN RFB 1.700/2017, Art. 52, V).
+    // baseCSLLFinal agora é idêntica à base IRPJ (sem subtração de gratificações).
+    // O antigo Achado 7 (v3.6.0) referenciava incorretamente o Anexo I, item 85,
+    // que se aplica apenas a entidades sem fins lucrativos.
 
     // ═══ FIX: Atualizar LALUR com dados de compensação para rastreabilidade ═══
     lalur.lucroAntesCompensacao = lucroAjustado;
@@ -3692,7 +3759,7 @@
             // Agora: calcula economia como IRPJ(sem JCP) - IRPJ(com JCP), capturando faixa correta.
             jcpResult.economiaIRPJ = _r(_irpj(Math.max(lucroRealFinal, 0), _isTrimestral) - _irpj(Math.max(lucroRealFinal - jcpResult.jcpDedutivel, 0), _isTrimestral));
             jcpResult.economiaCSLL = _r(jcpResult.jcpDedutivel * _aliqCSLLEmpresa);
-            jcpResult.custoIRRF = _r(jcpResult.jcpDedutivel * 0.175);
+            jcpResult.custoIRRF = _r(jcpResult.jcpDedutivel * IRRF_JCP_RATE);
             jcpResult.economiaLiquida = _r(jcpResult.economiaIRPJ + jcpResult.economiaCSLL - jcpResult.custoIRRF);
             console.warn('[IMPOST] Cap JCP aplicado: ' + _m(_jcpOriginal) + ' → ' + _m(_limiteCapJCP) + ' (' + jcpResult.limiteCapMotivo + ')');
           }
@@ -4089,7 +4156,7 @@
     if (jcpDedutivel > 0 && irpjResult.irpjSemJCP !== undefined && csllResult.csllSemJCP !== undefined) {
       var _econIRPJRealJCP = _r((irpjResult.irpjSemJCP || 0) - (irpjResult.irpjComJCP || 0));
       var _econCSLLRealJCP = _r((csllResult.csllSemJCP || 0) - (csllResult.csllComJCP || 0));
-      var _custoIRRFRealJCP = _r(jcpDedutivel * 0.175);
+      var _custoIRRFRealJCP = _r(jcpDedutivel * IRRF_JCP_RATE);
       economiaJCP = _r(Math.max(_econIRPJRealJCP + _econCSLLRealJCP - _custoIRRFRealJCP, 0));
       // Gravar detalhes no jcpResult para rastreabilidade
       if (jcpResult) {
@@ -4114,28 +4181,32 @@
     var _aliqEfetCSLL = csllResult.aliquota || _aliqCSLLEmpresa;
     // Alíquota marginal: para exclusões/adições, a economia real é o impacto incremental
     // Usa _irpj() diferencial para capturar corretamente a faixa do adicional de 10%
-    // FIX AUDITORIA Achado 8: Gratificações são dedutíveis p/ CSLL (IN 1.700/17, Anexo I, item 85),
-    // portanto a economia de converter em pró-labore é APENAS de IRPJ (não há ganho de CSLL).
+    // BUG-002 FIX: Gratificações são INdedutíveis para CSLL (IN 1.700/17, Art. 52, V).
+    // Converter em pró-labore gera economia de IRPJ E CSLL (não apenas IRPJ como antes).
     var _gratAdm = _n(d.gratificacoesAdm);
     var economiaGratificacao = _gratAdm > 0
-      ? _r(_irpj(lucroRealFinal, _isTrimestral) - _irpj(lucroRealFinal - _gratAdm, _isTrimestral))
+      ? _r((_irpj(lucroRealFinal, _isTrimestral) - _irpj(lucroRealFinal - _gratAdm, _isTrimestral)) + _gratAdm * _aliqEfetCSLL)
       : 0;
     var economiaCPRBFinal = cprbResult ? cprbResult.economia : 0;
-    // ═══ CORREÇÃO BUG CRÍTICO 1: PDD já reduz IRPJ/CSLL via exclusões LALUR — não contar 2x ═══
-    var totalPDDEcon = 0; // Valor zerado para eliminar dupla contagem
-    // PDD info: economia marginal (quanto IRPJ+CSLL seria MAIOR se não houvesse a exclusão PDD)
+    // ═══ DESIGN-002 FIX: PDD tratada uniformemente com depreciação ═══
+    // Ambos são ajustes fiscais já realizados (via exclusões no LALUR).
+    // Antes: totalPDDEcon = 0 (PDD excluída) mas depreciação incluída — tratamento inconsistente.
+    // Agora: totalPDDEcon = totalPDDInfo (economia marginal já realizada via exclusões LALUR).
     var _totalPDDBruto = _n(d.perdasCreditos6Meses) + _n(d.perdasCreditosJudicial) + _n(d.perdasCreditosFalencia);
     var totalPDDInfo = _totalPDDBruto > 0
       ? _r((_irpj(lucroRealFinal + _totalPDDBruto, _isTrimestral) - _irpj(lucroRealFinal, _isTrimestral)) + _totalPDDBruto * _aliqEfetCSLL)
       : 0;
+    var totalPDDEcon = totalPDDInfo; // DESIGN-002: incluir PDD (uniforme com depreciação)
 
-    // ═══ CORREÇÃO ERRO BAIXO #8: Separar economias REALIZADAS vs OPORTUNIDADE ═══
-    // Economias realizadas: já refletidas nos cálculos efetivos
-    var economiasRealizadas = _r(economiaJCP + economiaPrejuizo + economiaSUDAM + economiaIncentivos + economiaDepreciacao + economiaPisCofins + economiaCPRBFinal);
-    // Economias de oportunidade: potenciais, dependem de implementação
-    var economiasOportunidade = _r(economiaGratificacao + totalPDDEcon);
+    // ═══ DESIGN-001 FIX: Separar economias JÁ APLICADAS vs OPORTUNIDADES FUTURAS ═══
+    // jaAplicada: itens já embutidos no cálculo (compensação PF, créditos PIS/COFINS, depreciação, BN CSLL, PDD, SUDAM, incentivos, CPRB)
+    // oportunidades: economia adicional implementável (JCP, gratificação)
+    var economiasJaAplicada = _r(economiaPrejuizo + economiaSUDAM + economiaIncentivos + economiaDepreciacao + economiaPisCofins + economiaCPRBFinal + totalPDDEcon);
+    var economiasOportunidade = _r(economiaJCP + economiaGratificacao);
+    // economiasRealizadas mantido como alias para compatibilidade
+    var economiasRealizadas = economiasJaAplicada;
     // Total inclui ambas para manter compatibilidade
-    var totalEconomias = _r(economiasRealizadas + economiasOportunidade);
+    var totalEconomias = _r(economiasJaAplicada + economiasOportunidade);
 
     // ── CORREÇÃO BUG-02: Garantir que totalEconomias nunca seja 0 quando há economias individuais ──
     // Se totalEconomias resultou em 0 mas há economias individuais calculadas, recalcular diretamente
@@ -4156,7 +4227,9 @@
     var pisCofinsLiquido = _r(Math.max(pisCofinsResult.totalAPagarBruto - _n(d.pisRetido) - _n(d.cofinsRetido), 0));
     var pisCofinsParaCargaBruta = pisCofinsResult.totalAPagarBruto || pisCofinsLiquido;
     var cargaBruta = _r(irpjBruto + csllResult.csllDevida + pisCofinsParaCargaBruta + issAnual);
-    var cargaOtimizada = _r(Math.max(cargaBruta - totalEconomias, 0));
+    // ═══ DESIGN-001 FIX: cargaOtimizada usa APENAS oportunidades (não economias já aplicadas) ═══
+    // cargaBruta já reflete itens jaAplicada, subtrair novamente causaria dupla contagem.
+    var cargaOtimizada = _r(Math.max(cargaBruta - economiasOportunidade, 0));
     var aliquotaEfetiva = receitaBruta > 0 ? _r(cargaBruta / receitaBruta * 100) : 0;
     var aliquotaOtimizada = receitaBruta > 0 ? _r(cargaOtimizada / receitaBruta * 100) : 0;
 
@@ -4677,11 +4750,13 @@
         // ═══ FIX BUG #5: pddFiscalInfo = impacto fiscal com alíquotas efetivas (pode diferir de oportunidade que usa mesmas alíquotas agora) ═══
         pddFiscalInfo: totalPDDInfo, // valor informativo: perdas × (alíqEfetIRPJ + alíqEfetCSLL). Já incluso via exclusões LALUR.
         total: totalEconomias,
-        // ═══ CORREÇÃO #8: Separar economias realizadas vs oportunidade ═══
-        realizadas: economiasRealizadas,
-        oportunidade: economiasOportunidade,
+        // ═══ DESIGN-001 FIX: Separar economias já aplicadas vs oportunidades futuras ═══
+        jaAplicada: economiasJaAplicada,  // itens já embutidos no cálculo (compensação PF, créditos PIS/COFINS, depreciação, PDD, SUDAM, etc.)
+        oportunidades: economiasOportunidade, // economia adicional implementável (JCP, gratificação)
+        realizadas: economiasRealizadas, // alias retrocompatível (= jaAplicada)
+        oportunidade: economiasOportunidade, // alias retrocompatível
         tipoGratificacao: "OPORTUNIDADE",
-        tipoPDD: "OPORTUNIDADE"
+        tipoPDD: "JA_APLICADA"
       },
 
       // ═══ CORREÇÃO #5/#9: Resultados com JCP deduzido ═══
@@ -7642,7 +7717,7 @@
       sAliq += '</table></div>';
       sAliq += '<div class="res-detail-card"><h3>JCP e Compensação</h3>';
       sAliq += '<table class="res-table">';
-      sAliq += '<tr><td>IRRF sobre JCP <span class="res-artigo">' + (aliqJCP.artigoBase || '') + '</span></td><td class="res-valor">' + _p(aliqJCP.irrfAliquota || 0.175) + '</td></tr>';
+      sAliq += '<tr><td>IRRF sobre JCP <span class="res-artigo">' + (aliqJCP.artigoBase || '') + '</span></td><td class="res-valor">' + _p(aliqJCP.irrfAliquota || IRRF_JCP_RATE) + '</td></tr>';
       sAliq += '<tr><td>Trava compensação <span class="res-artigo">' + (aliqComp.artigoBase || '') + '</span></td><td class="res-valor">' + _p(aliqComp.trava30 || 0.30) + '</td></tr>';
       sAliq += '</table></div>';
       sAliq += '</div>';
