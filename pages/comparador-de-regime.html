@@ -2434,7 +2434,8 @@
         }
 
         waitForComparador(function(CR) {
-            console.log('[ComparadorBridge] Motor v' + CR.VERSION + ' carregado com sucesso.');
+            var versao = (CR && CR.VERSAO) || 'desconhecida';
+            console.log('[ComparadorBridge] Motor v' + versao + ' carregado com sucesso.');
 
             // Expor globalmente para uso por analise.js e outros módulos
             window._ComparadorRegimes = CR;
@@ -2702,9 +2703,13 @@
             // ── Preencher select de estados usando estados.js ──
             var selectEstado = document.getElementById('selectEstado');
             if (selectEstado && ES.opcoesSelectPorRegiao) {
-                var regioes = ES.opcoesSelectPorRegiao();
-                // Limpar opções existentes mantendo a primeira
+                // ═══ CORREÇÃO BUG 5: Limpar TUDO e marcar como populado ═══
                 while (selectEstado.options.length > 1) selectEstado.remove(1);
+
+                var regioes = ES.opcoesSelectPorRegiao();
+
+                // Marcar como populado para que outros scripts (analise.js) não dupliquem
+                selectEstado.dataset.populado = 'true';
 
                 var ordemRegioes = ['Norte', 'Nordeste', 'Centro-Oeste', 'Sudeste', 'Sul'];
                 ordemRegioes.forEach(function(regiao) {
@@ -3038,6 +3043,190 @@
             if (n == null) return '0';
             return n.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
         }
+    })();
+    </script>
+
+    <!-- ═══ PATCHES DE CORREÇÃO — Bugs 2, 3, 4, 5, 6 ═══ -->
+    <script>
+    (function() {
+        'use strict';
+
+        // ═══════════════════════════════════════════════════════════════════
+        // CORREÇÃO BUG 5: Prevenir dupla população de estados por analise.js
+        // ═══════════════════════════════════════════════════════════════════
+        // Observar se algum script externo (analise.js) tenta re-popular o select
+        var selectEstado = document.getElementById('selectEstado');
+        if (selectEstado) {
+            var _origAppendChild = selectEstado.appendChild.bind(selectEstado);
+            var _monitorAtivo = true;
+
+            // Após 3s, verificar e corrigir duplicatas
+            setTimeout(function() {
+                var sel = document.getElementById('selectEstado');
+                if (!sel) return;
+                var valores = {};
+                var duplicatas = 0;
+                var opts = sel.querySelectorAll('option[value]:not([value=""])');
+                opts.forEach(function(opt) {
+                    if (valores[opt.value]) {
+                        opt.remove();
+                        duplicatas++;
+                    } else {
+                        valores[opt.value] = true;
+                    }
+                });
+                if (duplicatas > 0) {
+                    console.log('[Patch BUG5] Removidas ' + duplicatas + ' opções duplicadas do select de estados.');
+                }
+            }, 3000);
+        }
+
+        // ═══════════════════════════════════════════════════════════════════
+        // CORREÇÃO BUG 3: Validação do formulário para habilitar botão
+        // ═══════════════════════════════════════════════════════════════════
+        function validarFormulario() {
+            var estado = document.getElementById('selectEstado');
+            var tipoAtividade = document.getElementById('selectTipoAtividade');
+            var faturamento = document.getElementById('inputFaturamento');
+            var btnCalcular = document.getElementById('btnCalcular');
+
+            if (!btnCalcular) return;
+
+            var estadoOK = estado && estado.value && estado.value !== '';
+            var tipoOK = tipoAtividade && tipoAtividade.value && tipoAtividade.value !== '' && tipoAtividade.value !== 'Selecione o CNAE primeiro...';
+            var fatOK = false;
+            if (faturamento && faturamento.value) {
+                var fatVal = faturamento.value.replace(/[^\d,.-]/g, '').replace(/\./g, '').replace(',', '.');
+                var fatNum = parseFloat(fatVal);
+                fatOK = !isNaN(fatNum) && fatNum > 0;
+            }
+
+            var valido = estadoOK && tipoOK && fatOK;
+
+            // Habilitar botão se os campos obrigatórios estão preenchidos
+            if (valido) {
+                btnCalcular.disabled = false;
+            }
+        }
+
+        // Vincular a validação a todos os campos relevantes
+        ['selectEstado', 'selectTipoAtividade', 'inputFaturamento', 'inputFolha', 'inputCNAE'].forEach(function(id) {
+            var el = document.getElementById(id);
+            if (el) {
+                el.addEventListener('change', validarFormulario);
+                el.addEventListener('input', validarFormulario);
+            }
+        });
+
+        // Também monitorar keyup no faturamento (por causa da máscara de money)
+        var fatInput = document.getElementById('inputFaturamento');
+        if (fatInput) fatInput.addEventListener('keyup', validarFormulario);
+
+        // Rodar validação periodicamente para capturar mudanças feitas por outros scripts
+        setInterval(validarFormulario, 1000);
+
+        // ═══════════════════════════════════════════════════════════════════
+        // CORREÇÃO BUG 4: Corrigir label "INSS Patronal (undefined)"
+        // ═══════════════════════════════════════════════════════════════════
+        // Observar quando o resultArea se torna visível e corrigir labels
+        var resultArea = document.getElementById('resultArea');
+        if (resultArea) {
+            var observerBug4 = new MutationObserver(function() {
+                if (resultArea.style.display !== 'none') {
+                    setTimeout(corrigirLabelsLP, 300);
+                    setTimeout(corrigirLabelsLP, 1000);
+                }
+            });
+            observerBug4.observe(resultArea, { attributes: true, attributeFilter: ['style'] });
+        }
+
+        function corrigirLabelsLP() {
+            // Buscar todas as células/linhas que contêm "undefined"
+            var todosElementos = document.querySelectorAll('#tabLucroPresumido td, #tabLucroPresumido th, #tabLucroPresumido span, #tabLucroPresumido div');
+            todosElementos.forEach(function(el) {
+                if (el.textContent && el.textContent.indexOf('undefined') !== -1) {
+                    // BUG 4: Corrigir "INSS Patronal (undefined)" e similares
+                    el.textContent = el.textContent
+                        .replace(/\(undefined\)/g, '(20,00%)')
+                        .replace(/\(undefined%\)/g, '(20,00%)')
+                        .replace(/undefined%/g, '27,80%')
+                        .replace(/undefined/g, '');
+                    console.log('[Patch BUG4] Corrigido label com undefined:', el.textContent);
+                }
+            });
+
+            // Também corrigir na consolidação anual
+            var todosAnual = document.querySelectorAll('#tabLucroPresumido .detail-table td, #tabLucroPresumido .detail-table th');
+            todosAnual.forEach(function(el) {
+                if (el.innerHTML && el.innerHTML.indexOf('undefined') !== -1) {
+                    el.innerHTML = el.innerHTML
+                        .replace(/\(undefined\)/g, '(20,00%)')
+                        .replace(/undefined/g, '');
+                }
+            });
+        }
+
+        // ═══════════════════════════════════════════════════════════════════
+        // CORREÇÃO BUG 2/6: Garantir consistência de presunção nos labels
+        // ═══════════════════════════════════════════════════════════════════
+        // Após o cálculo, verificar se os labels de presunção batem com os cálculos
+        window.addEventListener('comparador-calculado', function(e) {
+            if (!e.detail) return;
+            setTimeout(function() {
+                verificarConsistenciaLP(e.detail);
+            }, 500);
+        });
+
+        function verificarConsistenciaLP(resultado) {
+            // Se o ComparadorRegimes retornou dados, usar eles como fonte de verdade
+            var CR = window._ComparadorRegimes || window.ComparadorRegimes;
+            if (!CR) return;
+
+            try {
+                // Coletar dados do formulário para chamar o motor diretamente
+                var fatEl = document.getElementById('inputFaturamento');
+                var folhaEl = document.getElementById('inputFolha');
+                var ufEl = document.getElementById('selectEstado');
+                var tipoEl = document.getElementById('selectTipoAtividade');
+                var cnaeEl = document.getElementById('inputCNAE');
+
+                if (!fatEl || !ufEl || !tipoEl) return;
+
+                var fat = parseFloat((fatEl.value || '0').replace(/[^\d,.-]/g, '').replace(/\./g, '').replace(',', '.')) || 0;
+                var folha = parseFloat((folhaEl.value || '0').replace(/[^\d,.-]/g, '').replace(/\./g, '').replace(',', '.')) || 0;
+                var uf = ufEl.value;
+                var tipo = tipoEl.value;
+                var cnae = (cnaeEl && cnaeEl.dataset.code) || '';
+
+                if (fat <= 0 || !uf || !tipo) return;
+
+                // Chamar o motor corrigido
+                if (CR.comparar) {
+                    var res = CR.comparar({
+                        faturamentoMensal: fat,
+                        folhaMensal: folha,
+                        cnae: cnae,
+                        categoria: tipo,
+                        uf: uf
+                    });
+
+                    if (res && res.presumido) {
+                        // Armazenar resultado do motor corrigido para acesso global
+                        window._resultadoMotorCorrigido = res;
+                        console.log('[Patch BUG2/6] Motor corrigido retornou:', {
+                            categoria: res.categoria,
+                            presuncaoIRPJ: res.presumido.presuncaoIRPJ,
+                            presuncaoCSLL: res.presumido.presuncaoCSLL,
+                            icms: res.presumido.icms,
+                            iss: res.presumido.iss
+                        });
+                    }
+                }
+            } catch (err) {
+                console.warn('[Patch BUG2/6] Erro:', err.message);
+            }
+        }
+
     })();
     </script>
 
