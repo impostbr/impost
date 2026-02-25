@@ -450,9 +450,9 @@
         DIRETOR_EMPREGADO_CLT: {
           descricao: 'Diretor com vínculo empregatício CLT e subordinação',
           dedutivelIRPJ: 'CONTROVERTIDO',
-          dedutivelCSLL: true,
-          artigo: 'CARF Ac. 9101-004.773 / REsp 1.746.268/SP (STJ favorável) / REsp 1.948.478/SP (STJ desfavorável)',
-          nota: 'Risco médio — favorável no CARF, oscilante no STJ. Documentar subordinação CLT.'
+          dedutivelCSLL: 'CONTROVERTIDO',  // v3.5 FIX — alinhar com IRPJ (mesmo risco)
+          artigo: 'CARF Ac. 9101-004.773 / REsp 1.746.268/SP (favorável) / REsp 1.948.478/SP (desfavorável)',
+          nota: 'Risco médio — documentar subordinação CLT. Mesmo tratamento IRPJ/CSLL.'
         },
         EMPREGADO_GERAL: {
           descricao: 'Gratificações a empregados em geral (não administradores)',
@@ -3070,8 +3070,9 @@
           csllCenFB = csllCalcFB.csllDevida;
         }
 
-        var totalCenBrutoFB = _r(irpjCenFB + csllCenFB + pcCenBrutoFB + issAnualVal);
-        var totalCenLiquidoFB = _r(irpjCenFB + csllCenFB + Math.max(pcCenFB - e.retencoesPISCOFINS, 0) + issAnualVal);
+        var issValCen = (nomeCenFB === 'base') ? issAnualVal : _r(issAnualVal * fatorFB);
+        var totalCenBrutoFB = _r(irpjCenFB + csllCenFB + pcCenBrutoFB + issValCen);
+        var totalCenLiquidoFB = _r(irpjCenFB + csllCenFB + Math.max(pcCenFB - e.retencoesPISCOFINS, 0) + issValCen);
 
         cenariosFB[nomeCenFB] = {
           variacao: _r(varFB * 100) + '%',
