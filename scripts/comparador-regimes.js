@@ -826,10 +826,49 @@
       }
     }
 
-    const catNorm = (categoriaCNAE || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-    let catBase = 'servico';
-    if (catNorm.includes('comercio') || catNorm.includes('varejo') || catNorm.includes('atacado')) catBase = 'comercio';
-    else if (catNorm.includes('industria') || catNorm.includes('fabricacao') || catNorm.includes('transformacao')) catBase = 'industria';
+    // ═══ CORREÇÃO BUG 1: Normalização robusta de categoria ═══
+    const catRaw = (categoriaCNAE || '').toString().trim();
+    const catNorm = catRaw
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')  // Remove acentos
+      .replace(/[^a-z0-9]/g, '');       // Remove tudo que não é alfanumérico
+
+    let catBase = 'servico'; // fallback padrão
+
+    // Match amplo para comércio
+    if (
+      catNorm.includes('comercio') ||
+      catNorm.includes('varejo') ||
+      catNorm.includes('atacado') ||
+      catNorm.includes('revenda') ||
+      catNorm.includes('loja') ||
+      catNorm === 'com' ||
+      catNorm === 'comercial' ||
+      catNorm === '1' ||
+      catNorm === 'i'
+    ) {
+      catBase = 'comercio';
+    }
+    // Match amplo para indústria
+    else if (
+      catNorm.includes('industria') ||
+      catNorm.includes('fabricacao') ||
+      catNorm.includes('fabricante') ||
+      catNorm.includes('transformacao') ||
+      catNorm.includes('manufatura') ||
+      catNorm === 'ind' ||
+      catNorm === 'industrial' ||
+      catNorm === '2' ||
+      catNorm === 'ii'
+    ) {
+      catBase = 'industria';
+    }
+
+    // Log de diagnóstico (remover em produção se quiser)
+    if (catBase === 'servico' && catRaw !== '' && !catNorm.includes('servico') && !catNorm.includes('prestacao')) {
+      console.warn(`[obterRegras] ⚠️ Categoria "${catRaw}" (normalizada: "${catNorm}") não reconhecida como comércio/indústria. Usando fallback "servico". Verifique se a UI está passando o valor correto.`);
+    }
 
     const padrao = CR.MAPEAMENTO_CATEGORIAS[catBase];
 
@@ -993,8 +1032,8 @@
 
     const irpjFinal = _r(irpj - reducaoIRPJ);
 
-    // v3: ISS ou ICMS com alíquota REAL do estado
-    const isServico = regras.tipoTributo === 'ISS' || regras.presuncaoIRPJ >= 0.32;
+    // ═══ CORREÇÃO BUG 6: Determinar ISS vs ICMS SOMENTE pelo tipoTributo ═══
+    const isServico = regras.tipoTributo === 'ISS';
     const iss = isServico ? faturamentoMensal * aliqISS : 0;
     // ICMS: alíquota real do estado, estimativa com créditos ~30% (compras com NF)
     const creditoICMS = opcoes.percentualCreditoICMS || 0.30;
@@ -1092,8 +1131,8 @@
 
     const irpjFinal = _r(irpj - reducaoIRPJ);
 
-    // ISS ou ICMS real
-    const isServico = regras.tipoTributo === 'ISS' || regras.presuncaoIRPJ >= 0.32;
+    // ═══ CORREÇÃO BUG 6: Determinar ISS vs ICMS SOMENTE pelo tipoTributo ═══
+    const isServico = regras.tipoTributo === 'ISS';
     const iss = isServico ? faturamentoMensal * aliqISS : 0;
     const creditoICMS = opcoes.percentualCreditoICMS || 0.30;
     const icms = !isServico ? faturamentoMensal * aliqICMS * (1 - creditoICMS) : 0;
