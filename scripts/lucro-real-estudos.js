@@ -30,6 +30,22 @@
  *                receitaLiqDisplay agora inclui ISS (consistente com dre.receitaLiquida).
  *                Antes: tabela mostrava Receita Líquida inflada (sem ISS) enquanto
  *                lucroLiquido final estava correto — cliente via inconsistência nos intermediários.
+ *   FIX (ALTA) — CORREÇÃO 1: REVERTER BUG-002 v3.7.0: Gratificações são DEDUTÍVEIS para CSLL.
+ *                IN RFB 1.700/2017, Anexo I, itens A162/A163 ("não aplicável" à CSLL).
+ *                Solução de Consulta Cosit nº 546/2017 + CSRF unânime.
+ *                _calcTotalAdicoesCSLL() restaurada (exclui gratificações da base CSLL).
+ *                Bloco _diferencaAdicoesCSLL restaurado. baseCSLLFinal agora é correta.
+ *                Parâmetro adicoesCSLL passado ao compensarIntegrado e csll().
+ *   FIX (MÉDIO) — CORREÇÃO 2: economiaGratificacao inflada no resumo.
+ *                 Economia agora é só IRPJ (sem CSLL fantasma) e líquida de INSS 20%.
+ *                 Consistente com seção de oportunidades (CONVERTER_GRATIFICACAO).
+ *   FIX (BAIXO) — CORREÇÃO 3: Display duplicado no LALUR (compensação de prejuízo).
+ *                 Removido segundo bloco que duplicava compensação já exibida.
+ *                 Adicionado fallback caso r.compensacao não exista mas lalur.compensacaoPrejuizo sim.
+ *   FIX (BAIXO) — CORREÇÃO 4: irpj.aliquotaEfetiva incorreta.
+ *                 Override: aliquotaEfetiva = irpjDevido / lucroRealFinal × 100.
+ *   FIX (BAIXO) — CORREÇÃO 5: Validação depreciacaoBensCredito <= depreciação contábil.
+ *                 Cap aplicado em _calcBaseCreditos() para evitar crédito PIS/COFINS inflado.
  *
  * CHANGELOG v3.7.0 (Fevereiro/2026) — CORREÇÕES AUDITORIA EXTERNA (4 BUGS + 2 DESIGN):
  *   BUG-001 (CRÍTICO) — ISS deduzido na DRE (CPC 47): receitaLiquida = RB - PIS/COFINS - ISS.
@@ -2715,12 +2731,16 @@
   }
 
   /**
-   * BUG-002 FIX: Gratificações a administradores são INDEDUTÍVEIS para CSLL
-   * (IN RFB 1.700/2017, Art. 52, V). Adições CSLL = Adições IRPJ.
-   * O item 85 do Anexo I refere-se apenas a entidades sem fins lucrativos.
+   * v3.7.1 REVERTER BUG-002: Gratificações NÃO são adição para CSLL.
+   * IN RFB 1.700/2017, Anexo I, itens A162/A163: "não aplicável" à CSLL.
+   * Solução de Consulta Cosit nº 546/2017: confirma dedutibilidade para CSLL.
+   * CSRF (1ª Câmara Superior): cancelou glosa de CSLL sobre gratificações.
+   * O Art. 52, V citado na v3.7.0 NÃO se aplica a gratificações.
    */
   function _calcTotalAdicoesCSLL() {
-    return _calcTotalAdicoes();
+    var d = dadosEmpresa;
+    // Todas as adições do IRPJ EXCETO gratificações a administradores
+    return _calcTotalAdicoes() - _n(d.gratificacoesAdm);
   }
 
   function _calcTotalExclusoes() {
@@ -2791,8 +2811,15 @@
 
   function _calcBaseCreditos() {
     var d = dadosEmpresa;
+    // v3.7.1: Validar depreciação para crédito PIS/COFINS (não pode exceder depreciação contábil)
+    var _depCredPC = _n(d.depreciacaoBensCredito);
+    var _depContabil = _calcDepNormal();
+    if (_depCredPC > _depContabil && _depContabil > 0) {
+      _depCredPC = _depContabil;
+      console.warn('[IMPOST] depreciacaoBensCredito limitada à depreciação contábil: ' + _depContabil);
+    }
     return _n(d.comprasMercadoriasAnual) + _n(d.energiaCredito) + _n(d.alugueisPJCredito) +
-      _n(d.leasingCredito) + _n(d.depreciacaoBensCredito) + _n(d.depreciacaoEdifCredito) +
+      _n(d.leasingCredito) + _depCredPC + _n(d.depreciacaoEdifCredito) +
       _n(d.freteVendasAnual) + _n(d.armazenagemCredito) + _n(d.valeTranspAlim) +
       _n(d.manutencaoMaquinas) + _n(d.devolucoesVendas) + _n(d.outrosCreditosPC) +
       _n(d.creditoEstoqueAbertura);
@@ -3043,6 +3070,7 @@
     //  PASSO 3 — Montar LALUR (LL + Adições - Exclusões = Lucro Ajustado)
     // ═══════════════════════════════════════════════════════════════════════
     var totalAdicoes = _calcTotalAdicoes();
+    var totalAdicoesCSLL = _calcTotalAdicoesCSLL(); // v3.7.1: sem gratificações p/ CSLL
     var totalExclusoes = _calcTotalExclusoes();
     var lucroAjustado = _r(lucroLiquido + totalAdicoes - totalExclusoes);
 
@@ -3225,6 +3253,7 @@
         compensacao = LR.calcular.compensarIntegrado({
           lucroLiquido: lucroLiquido,
           adicoes: totalAdicoes,
+          adicoesCSLL: totalAdicoesCSLL, // v3.7.1: sem gratificações p/ base CSLL
           exclusoes: totalExclusoes,
           saldoPrejuizoOperacional: prejuizoFiscal,
           saldoPrejuizoNaoOperacional: _n(d.prejuizoNaoOperacional),
@@ -3249,9 +3278,14 @@
       ? (compensacao.resumo ? compensacao.resumo.baseCSLLFinal : lucroRealFinal)
       : lucroRealFinal;
 
-    // ═══ BUG-002 FIX: Bloco _diferencaAdicoesCSLL REMOVIDO ═══
-    // Gratificações a administradores são indedutíveis para CSLL (IN RFB 1.700/2017, Art. 52, V).
-    // baseCSLLFinal agora é idêntica à base IRPJ (sem subtração de gratificações).
+    // ═══ v3.7.1 REVERTER BUG-002: Restaurar _diferencaAdicoesCSLL (v3.6.0) ═══
+    // Gratificações NÃO são adição para CSLL (IN RFB 1.700/2017, Anexo I, itens A162/A163).
+    // Solução de Consulta Cosit nº 546/2017 + CSRF unânime confirmam dedutibilidade p/ CSLL.
+    // A base CSLL é MENOR que a base IRPJ quando há gratificações a administradores.
+    var _diferencaAdicoesCSLL = _calcTotalAdicoes() - _calcTotalAdicoesCSLL(); // = gratificacoesAdm
+    if (_diferencaAdicoesCSLL > 0) {
+      baseCSLLFinal = _r(Math.max(baseCSLLFinal - _diferencaAdicoesCSLL, 0));
+    }
 
     // ═══ FIX: Atualizar LALUR com dados de compensação para rastreabilidade ═══
     lalur.lucroAntesCompensacao = lucroAjustado;
@@ -3418,6 +3452,12 @@
     // ═══ CORREÇÃO BUG 3: Gravar irpjAPagar corrigido (pós-SUDAM/subcap) no objeto ═══
     irpjResult.irpjAPagar = _r(irpjAposReducao - totalIRRF - estimIRPJPagas);
 
+    // v3.7.1 FIX: Recalcular aliquotaEfetiva IRPJ com fórmula correta
+    // aliquotaEfetiva = irpjDevido / lucroReal × 100 (não usar denominador diferente)
+    if (irpjResult && lucroRealFinal > 0) {
+      irpjResult.aliquotaEfetiva = _r(irpjResult.irpjDevido / lucroRealFinal * 100) + '%';
+    }
+
     // ═══════════════════════════════════════════════════════════════════════
     //  PASSO 7 — CSLL → LR.calcular.csll()
     // ═══════════════════════════════════════════════════════════════════════
@@ -3429,7 +3469,7 @@
       if (LR && LR.calcular && LR.calcular.csll) {
         csllResult = LR.calcular.csll({
           lucroLiquido: _csllUsarBaseCompensada ? baseCSLLFinal : lucroLiquido,
-          adicoes: _csllUsarBaseCompensada ? 0 : totalAdicoes,
+          adicoes: _csllUsarBaseCompensada ? 0 : totalAdicoesCSLL, // v3.7.1: sem gratificações
           exclusoes: _csllUsarBaseCompensada ? 0 : totalExclusoes,
           baseNegativa: _csllUsarBaseCompensada ? 0 : (vedaCompensacao ? 0 : baseNegCSLL),
           financeira: ehFinanceira,
@@ -4176,12 +4216,15 @@
     var _aliqEfetCSLL = csllResult.aliquota || _aliqCSLLEmpresa;
     // Alíquota marginal: para exclusões/adições, a economia real é o impacto incremental
     // Usa _irpj() diferencial para capturar corretamente a faixa do adicional de 10%
-    // BUG-002 FIX: Gratificações são INdedutíveis para CSLL (IN 1.700/17, Art. 52, V).
-    // Converter em pró-labore gera economia de IRPJ E CSLL (não apenas IRPJ como antes).
+    // v3.7.1 REVERTER BUG-002: Gratificações são DEDUTÍVEIS para CSLL (IN 1.700/17, Anexo I).
+    // Economia de converter em pró-labore é SÓ de IRPJ.
+    // Para o resumo, usar economia LÍQUIDA (IRPJ - encargos mínimos INSS 20%).
     var _gratAdm = _n(d.gratificacoesAdm);
-    var economiaGratificacao = _gratAdm > 0
-      ? _r((_irpj(lucroRealFinal, _isTrimestral) - _irpj(lucroRealFinal - _gratAdm, _isTrimestral)) + _gratAdm * _aliqEfetCSLL)
+    var _econIRPJGrat = _gratAdm > 0
+      ? _r(_irpj(lucroRealFinal, _isTrimestral) - _irpj(lucroRealFinal - _gratAdm, _isTrimestral))
       : 0;
+    var _custoINSSGrat = _r(_gratAdm * 0.20); // INSS patronal mínimo
+    var economiaGratificacao = _r(Math.max(_econIRPJGrat - _custoINSSGrat, 0));
     var economiaCPRBFinal = cprbResult ? cprbResult.economia : 0;
     // ═══ DESIGN-002 FIX: PDD tratada uniformemente com depreciação ═══
     // Ambos são ajustes fiscais já realizados (via exclusões no LALUR).
@@ -6677,12 +6720,12 @@
       if (comp.compensacaoEfetiva && comp.compensacaoEfetiva.prejuizoOperacional > 0) {
         s3 += _linha('(-) Compensação Prejuízo Fiscal (30%)', comp.compensacaoEfetiva.prejuizoOperacional, 'Art. 579-586 RIR/2018', 'res-sub res-economia');
       }
+    } else if (lalur.compensacaoPrejuizo > 0) {
+      // v3.7.1 Fallback: compensação direta sem módulo integrado
+      s3 += _linha('(-) Compensação Prejuízo Fiscal (30%)', lalur.compensacaoPrejuizo, 'Art. 580-582', 'res-sub res-economia');
     }
-    // ═══ FIX: Exibir compensação de prejuízo no LALUR do relatório ═══
-    if (lalur.compensacaoPrejuizo > 0) {
-      s3 += _linha('(-) Compensação de Prejuízos Fiscais (trava 30%)', -lalur.compensacaoPrejuizo, 'Art. 580-582', 'res-sub res-economia');
-    }
-    if (lalur.compensacaoBaseNegativa > 0 && lalur.compensacaoBaseNegativa !== lalur.compensacaoPrejuizo) {
+    // v3.7.1: Bloco duplicado REMOVIDO — a compensação já é exibida acima (via r.compensacao OU lalur fallback)
+    if (lalur.compensacaoBaseNegativa > 0 && lalur.compensacaoBaseNegativa !== (lalur.compensacaoPrejuizo || 0)) {
       s3 += _linha('(-) Compensação Base Negativa CSLL (trava 30%)', -lalur.compensacaoBaseNegativa, 'Art. 580', 'res-sub res-economia');
     }
     if (lalur.lucroRealFinal !== undefined && lalur.lucroRealFinal !== lalur.lucroAjustado) {
