@@ -35,7 +35,7 @@
  * ║    - Motor DEVE adicionar somente no LALUR, não no LACS                   ║
  * ║    - Ref: Art. 315 (IRPJ) / IN 1.700/17 Anexo I item 85 (CSLL)         ║
  * ║    - Severidade: MÉDIA                                                    ║
- * ║    - [REV] v3.5: REVERTIDO — ver CORREÇÕES v3.5 FIX #2 abaixo           ║
+ * ║    - [REV] v3.5: Revertido — flags restaurados ao original v3.4           ║
  * ║                                                                            ║
  * ║  [FIX #6] Presunção Inst. Financeiras — CSLL efetiva variável            ║
  * ║    - aliquotaEfetivaCSLL = null (variável por tipo de instituição)        ║
@@ -54,11 +54,11 @@
  * ║    - Consumidores que liam .total agora recebem valor correto              ║
  * ║    - Severidade: BAIXA                                                     ║
  * ║                                                                            ║
- * ║  [FIX #2] BUG-002: Gratificações adm — LALUR E LACS (ambos indedutíveis) ║
- * ║    - REVERTIDO FIX #5 da v3.4: adicionarNoLACS agora é TRUE               ║
- * ║    - IN RFB 1.700/2017, Art. 52, V prevalece sobre Anexo I item 85       ║
- * ║    - dedutivelCSLL do subtipo ADMINISTRADOR_ESTATUTARIO = false            ║
- * ║    - Alinhamento com lucro-real-estudos.js v3.7.0                         ║
+ * ║  [FIX #2] BUG-002: Gratificações adm — REVERTIDO para v3.4 original       ║
+ * ║    - REVERTIDO v3.5: adicionarNoLACS voltou a FALSE                       ║
+ * ║    - dedutivelCSLL de ADMINISTRADOR_ESTATUTARIO = true                    ║
+ * ║    - dedutivelCSLL de DIRETOR_EMPREGADO_CLT = true                        ║
+ * ║    - IN 1.700/17, Anexo I, item 85 + Cosit 546/2017 prevalece            ║
  * ║    - Severidade: ALTA                                                      ║
  * ║                                                                            ║
  * ║  [FIX #3] CSLL financeiras no compensarIntegrado fallback                 ║
@@ -432,27 +432,26 @@
       // v3.4 FIX — Adicionada flag para tratamento diferenciado LALUR/LACS
       tratamentoDiferenciado: true,  // ATENÇÃO: este item TEM tratamento diferente entre IRPJ e CSLL
       adicionarNoLALUR: true,        // Adicionar na Parte A do LALUR (indedutível p/ IRPJ)
-      adicionarNoLACS: true,         // v3.5 FIX — Adicionar no LACS (indedutível p/ CSLL — IN RFB 1.700/2017, Art. 52, V)
+      adicionarNoLACS: false,        // NÃO adicionar no LACS (dedutível p/ CSLL — IN 1.700/17, Anexo I, item 85)
       estrategia: 'Converter em pró-labore (dedutível) ou JCP. ATENÇÃO: (1) Gratificações a empregados em geral são '
         + 'dedutíveis sem limite (IN 1.700/17, Art. 80). (2) Para CSLL, gratificações a administradores são '
-        + 'INDEDUTÍVEIS (IN RFB 1.700/2017, Art. 52, V — auditoria 02/2026 corrigiu posição anterior). '
-        + '(3) Diretores-empregados CLT: tema controvertido — CARF tem decisões favoráveis à dedutibilidade '
-        + '(Ac. 1301003.760); STJ diverge (REsp 1.948.478/SP). Avaliar risco antes de adicionar ou excluir. '
-        + 'MOTOR: Adicionar no LALUR E no LACS (ambos indedutíveis).',
+        + 'DEDUTÍVEIS (IN 1.700/17, Anexo I, item 85 + Cosit 546/2017). '
+        + '(3) Diretores-empregados CLT: dedutíveis para CSLL (mesma base legal). '
+        + 'MOTOR: Adicionar APENAS no LALUR (IRPJ). NÃO adicionar no LACS (CSLL dedutível).',
       subtipos: {
         ADMINISTRADOR_ESTATUTARIO: {
           descricao: 'Dirigente/administrador estatutário (sem vínculo CLT)',
           dedutivelIRPJ: false,
-          dedutivelCSLL: false,   // v3.5 FIX — IN RFB 1.700/2017, Art. 52, V
-          artigo: 'Art. 315 (IRPJ) / IN RFB 1.700/2017, Art. 52, V (CSLL)',
-          nota: 'Indedutível no LALUR (Parte A) E no LACS (CSLL) — auditoria 02/2026'
+          dedutivelCSLL: true,            // IN 1.700/17, Anexo I, item 85 + Cosit 546/2017
+          artigo: 'Art. 315 (IRPJ) / IN 1.700/17, Anexo I, item 85 (CSLL)',
+          nota: 'Indedutível no LALUR (IRPJ). Dedutível para CSLL — NÃO adicionar no LACS.'
         },
         DIRETOR_EMPREGADO_CLT: {
           descricao: 'Diretor com vínculo empregatício CLT e subordinação',
           dedutivelIRPJ: 'CONTROVERTIDO',
-          dedutivelCSLL: 'CONTROVERTIDO',  // v3.5 FIX — alinhar com IRPJ (mesmo risco)
+          dedutivelCSLL: true,            // Dedutível para CSLL (mesma base legal)
           artigo: 'CARF Ac. 9101-004.773 / REsp 1.746.268/SP (favorável) / REsp 1.948.478/SP (desfavorável)',
-          nota: 'Risco médio — documentar subordinação CLT. Mesmo tratamento IRPJ/CSLL.'
+          nota: 'IRPJ: risco médio — documentar subordinação CLT. CSLL: dedutível (IN 1.700/17, Anexo I, item 85).'
         },
         EMPREGADO_GERAL: {
           descricao: 'Gratificações a empregados em geral (não administradores)',
