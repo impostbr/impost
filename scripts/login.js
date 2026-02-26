@@ -1,61 +1,54 @@
 // ═══════════════════════════════════════════════════════
-// IMPOST. — Login Page Controller
+// IMPOST. — Login Controller
+// Arquivo: pages/login.js
+// Depende de: scripts/firebase-config.js (carregado antes)
 // ═══════════════════════════════════════════════════════
 
-document.addEventListener('DOMContentLoaded', () => {
+(function () {
 
-  // ─── DOM refs ───
-  const form = document.getElementById('loginForm');
-  const emailInput = document.getElementById('email');
-  const passInput = document.getElementById('password');
-  const btnLogin = document.getElementById('btnLogin');
-  const btnGoogle = document.getElementById('btnGoogle');
-  const togglePass = document.getElementById('togglePass');
-  const eyeOpen = document.getElementById('eyeOpen');
-  const eyeClosed = document.getElementById('eyeClosed');
-  const formError = document.getElementById('formError');
-  const errorMsg = document.getElementById('errorMsg');
-  const toast = document.getElementById('toast');
-  const toastMsg = document.getElementById('toastMsg');
+  var auth = IMPOST_AUTH;
+  var googleProvider = IMPOST_GOOGLE_PROVIDER;
 
+  // Persistência padrão: SESSION
+  auth.setPersistence(firebase.auth.Auth.Persistence.SESSION);
 
-  // ═══ Firebase Config ═══
-  // Descomente e preencha com seus dados do Firebase Console:
-  //
-  // import { initializeApp } from "https://www.gstatic.com/firebasejs/11.4.0/firebase-app.js";
-  // import { getAuth, signInWithEmailAndPassword, signInWithPopup, GoogleAuthProvider }
-  //   from "https://www.gstatic.com/firebasejs/11.4.0/firebase-auth.js";
-  //
-  // const firebaseConfig = {
-  //   apiKey: "SUA_API_KEY",
-  //   authDomain: "impost-8b24d.firebaseapp.com",
-  //   projectId: "impost-8b24d",
-  //   storageBucket: "impost-8b24d.appspot.com",
-  //   messagingSenderId: "SEU_SENDER_ID",
-  //   appId: "SEU_APP_ID"
-  // };
-  //
-  // const app = initializeApp(firebaseConfig);
-  // const auth = getAuth(app);
-  // const googleProvider = new GoogleAuthProvider();
-
-
-  // ─── Password visibility toggle ───
-  togglePass.addEventListener('click', () => {
-    const isPassword = passInput.type === 'password';
-    passInput.type = isPassword ? 'text' : 'password';
-    eyeOpen.style.display = isPassword ? 'none' : 'block';
-    eyeClosed.style.display = isPassword ? 'block' : 'none';
+  // ─── Se já estiver logado, redireciona ───
+  auth.onAuthStateChanged(function (user) {
+    if (user) {
+      window.location.href = 'dashboard.html';
+    }
   });
 
+  // ─── DOM refs ───
+  var form = document.getElementById('loginForm');
+  var emailInput = document.getElementById('email');
+  var passInput = document.getElementById('password');
+  var btnLogin = document.getElementById('btnLogin');
+  var btnGoogle = document.getElementById('btnGoogle');
+  var togglePass = document.getElementById('togglePass');
+  var eyeOpen = document.getElementById('eyeOpen');
+  var eyeClosed = document.getElementById('eyeClosed');
+  var formError = document.getElementById('formError');
+  var errorMsg = document.getElementById('errorMsg');
+  var toast = document.getElementById('toast');
+  var toastMsg = document.getElementById('toastMsg');
+  var rememberCb = document.getElementById('remember');
+  var forgotLink = document.getElementById('forgotLink');
 
-  // ─── Error helpers ───
+  // ─── Password toggle ───
+  togglePass.addEventListener('click', function () {
+    var isPw = passInput.type === 'password';
+    passInput.type = isPw ? 'text' : 'password';
+    eyeOpen.style.display = isPw ? 'none' : 'block';
+    eyeClosed.style.display = isPw ? 'block' : 'none';
+  });
+
+  // ─── Helpers ───
   function showError(msg) {
     errorMsg.textContent = msg;
     formError.classList.add('show');
-    // re-trigger shake animation
     formError.style.animation = 'none';
-    formError.offsetHeight; // reflow
+    formError.offsetHeight;
     formError.style.animation = '';
   }
 
@@ -63,159 +56,145 @@ document.addEventListener('DOMContentLoaded', () => {
     formError.classList.remove('show');
   }
 
-
-  // ─── Toast notification ───
-  function showToast(msg, duration = 3000) {
+  function showToast(msg, ms) {
     toastMsg.textContent = msg;
     toast.classList.add('show');
-    setTimeout(() => toast.classList.remove('show'), duration);
+    setTimeout(function () { toast.classList.remove('show'); }, ms || 3000);
   }
 
-
-  // ─── Set loading state ───
-  function setLoading(loading) {
-    if (loading) {
-      btnLogin.classList.add('loading');
-      btnLogin.disabled = true;
-    } else {
-      btnLogin.classList.remove('loading');
-      btnLogin.disabled = false;
-    }
+  function setLoading(on) {
+    btnLogin.classList.toggle('loading', on);
+    btnLogin.disabled = on;
   }
 
-
-  // ─── Validate form inputs ───
-  function validateForm(email, password) {
+  function validateForm(email, pw) {
     if (!email) {
       showError('Informe o e-mail');
       emailInput.focus();
       return false;
     }
-
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       showError('E-mail inválido');
       emailInput.focus();
       return false;
     }
-
-    if (!password) {
+    if (!pw) {
       showError('Informe a senha');
       passInput.focus();
       return false;
     }
-
-    if (password.length < 6) {
+    if (pw.length < 6) {
       showError('A senha deve ter pelo menos 6 caracteres');
       passInput.focus();
       return false;
     }
-
     return true;
   }
 
-
-  // ─── Handle Firebase Auth errors ───
   function handleAuthError(err) {
-    const code = err.code || '';
-    const errorMap = {
-      'auth/user-not-found': 'E-mail ou senha inválidos',
-      'auth/wrong-password': 'E-mail ou senha inválidos',
-      'auth/invalid-credential': 'E-mail ou senha inválidos',
-      'auth/invalid-email': 'E-mail inválido',
-      'auth/user-disabled': 'Conta desativada. Entre em contato com o suporte.',
-      'auth/too-many-requests': 'Muitas tentativas. Tente novamente em alguns minutos.',
+    var code = err.code || '';
+    var map = {
+      'auth/user-not-found':       'E-mail ou senha inválidos',
+      'auth/wrong-password':       'E-mail ou senha inválidos',
+      'auth/invalid-credential':   'E-mail ou senha inválidos',
+      'auth/invalid-email':        'E-mail inválido',
+      'auth/user-disabled':        'Conta desativada. Entre em contato com o suporte.',
+      'auth/too-many-requests':    'Muitas tentativas. Tente novamente em alguns minutos.',
       'auth/network-request-failed': 'Erro de conexão. Verifique sua internet.',
       'auth/popup-closed-by-user': 'Login cancelado.',
-      'auth/account-exists-with-different-credential': 'Já existe uma conta com este e-mail usando outro método de login.',
+      'auth/popup-blocked':        'Popup bloqueado. Permita popups para este site.',
+      'auth/account-exists-with-different-credential': 'Já existe conta com este e-mail usando outro método.'
     };
-
-    showError(errorMap[code] || 'Erro ao fazer login. Tente novamente.');
+    showError(map[code] || 'Erro: ' + (err.message || 'tente novamente'));
+    console.error('Auth Error:', code, err.message);
   }
 
+  function getPersistence() {
+    return rememberCb.checked
+      ? firebase.auth.Auth.Persistence.LOCAL
+      : firebase.auth.Auth.Persistence.SESSION;
+  }
 
-  // ─── Redirect after login ───
   function onLoginSuccess(user) {
-    showToast('Login realizado com sucesso!');
-    console.log('Usuário autenticado:', user?.email || user);
-
-    setTimeout(() => {
-      // Redirecionar para o dashboard
+    showToast('Bem-vindo, ' + (user.displayName || user.email) + '!');
+    console.log('Login OK:', user.email, user.uid);
+    setTimeout(function () {
       window.location.href = 'dashboard.html';
-    }, 1000);
+    }, 1200);
   }
 
-
-  // ═══ Form Submit — Email/Senha ═══
-  form.addEventListener('submit', async (e) => {
+  // ═══ LOGIN — Email/Senha ═══
+  form.addEventListener('submit', function (e) {
     e.preventDefault();
     hideError();
-
-    const email = emailInput.value.trim();
-    const password = passInput.value;
-
-    if (!validateForm(email, password)) return;
+    var email = emailInput.value.trim();
+    var pw = passInput.value;
+    if (!validateForm(email, pw)) return;
 
     setLoading(true);
-
-    try {
-      // ══════════════════════════════════════════════
-      // MODO DEMO — Substitua pelo Firebase Auth real
-      // ══════════════════════════════════════════════
-      await new Promise(resolve => setTimeout(resolve, 1800));
-      onLoginSuccess({ email });
-
-      // ══════════════════════════════════════════════
-      // FIREBASE AUTH — Descomente para produção:
-      // ══════════════════════════════════════════════
-      // const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      // const user = userCredential.user;
-      // const token = await user.getIdToken();
-      // sessionStorage.setItem('authToken', token);
-      // onLoginSuccess(user);
-
-    } catch (err) {
-      handleAuthError(err);
-    } finally {
-      setLoading(false);
-    }
+    auth.setPersistence(getPersistence())
+      .then(function () {
+        return auth.signInWithEmailAndPassword(email, pw);
+      })
+      .then(function (cred) {
+        onLoginSuccess(cred.user);
+      })
+      .catch(function (err) {
+        handleAuthError(err);
+      })
+      .finally(function () {
+        setLoading(false);
+      });
   });
 
-
-  // ═══ Google Sign-In ═══
-  btnGoogle.addEventListener('click', async () => {
+  // ═══ LOGIN — Google ═══
+  btnGoogle.addEventListener('click', function () {
     hideError();
-
-    try {
-      // ══════════════════════════════════════════════
-      // MODO DEMO
-      // ══════════════════════════════════════════════
-      showToast('Google Sign-In — integrar com Firebase Auth');
-
-      // ══════════════════════════════════════════════
-      // FIREBASE AUTH — Descomente para produção:
-      // ══════════════════════════════════════════════
-      // const result = await signInWithPopup(auth, googleProvider);
-      // const user = result.user;
-      // const token = await user.getIdToken();
-      // sessionStorage.setItem('authToken', token);
-      // onLoginSuccess(user);
-
-    } catch (err) {
-      handleAuthError(err);
-    }
+    auth.setPersistence(getPersistence())
+      .then(function () {
+        return auth.signInWithPopup(googleProvider);
+      })
+      .then(function (result) {
+        onLoginSuccess(result.user);
+      })
+      .catch(function (err) {
+        if (err.code !== 'auth/popup-closed-by-user') {
+          handleAuthError(err);
+        }
+      });
   });
 
+  // ═══ ESQUECEU A SENHA ═══
+  forgotLink.addEventListener('click', function (e) {
+    e.preventDefault();
+    var email = emailInput.value.trim();
 
-  // ─── Clear errors on input ───
+    if (!email) {
+      showError('Digite seu e-mail acima e clique em "Esqueceu a senha?" novamente');
+      emailInput.focus();
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      showError('Digite um e-mail válido');
+      emailInput.focus();
+      return;
+    }
+
+    auth.sendPasswordResetEmail(email)
+      .then(function () {
+        showToast('E-mail de recuperação enviado para ' + email, 5000);
+      })
+      .catch(function (err) {
+        if (err.code === 'auth/user-not-found') {
+          showError('Nenhuma conta encontrada com este e-mail');
+        } else {
+          handleAuthError(err);
+        }
+      });
+  });
+
+  // ─── Limpa erros ao digitar ───
   emailInput.addEventListener('input', hideError);
   passInput.addEventListener('input', hideError);
 
-
-  // ─── Enter key on password → submit ───
-  passInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-      form.dispatchEvent(new Event('submit'));
-    }
-  });
-
-});
+})();
