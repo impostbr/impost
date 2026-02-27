@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Planos — IMPOST.</title>
+    <meta name="description" content="Escolha seu plano IMPOST — Free ou Pro. Compare regimes tributários com inteligência.">
+    <link rel="icon" href="../assets/favicon.ico" type="image/x-icon">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Poppins:wght@600;700;800&display=swap" rel="stylesheet">
+    <style>
+        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --verde-900: #1b5e20; --verde-800: #2e7d32; --verde-700: #388e3c;
+            --verde-600: #43a047; --verde-500: #4caf50; --verde-400: #66bb6a;
+            --verde-300: #81c784; --verde-200: #a5d6a7; --verde-100: #c8e6c9;
+            --verde-50:  #e8f5e9;
+            --cinza-900: #212121; --cinza-800: #333333; --cinza-700: #555555;
+            --cinza-600: #666666; --cinza-500: #888888; --cinza-400: #aaaaaa;
+            --cinza-300: #cccccc; --cinza-200: #e0e0e0; --cinza-100: #f0f0f0;
+            --cinza-50:  #fafafa; --branco: #ffffff;
+            --font-display: 'Poppins', sans-serif;
+            --font-body: 'Inter', sans-serif;
+            --radius: 16px; --radius-sm: 10px;
+        }
+
+        html { scroll-behavior: smooth; }
+        body { font-family: var(--font-body); background: var(--cinza-50); color: var(--cinza-800); -webkit-font-smoothing: antialiased; }
+
+        /* ═══ HEADER ═══ */
+        .header {
+            background: var(--branco);
+            border-bottom: 1px solid var(--cinza-100);
+            padding: 16px 32px;
+            display: flex; align-items: center; justify-content: space-between;
+            position: sticky; top: 0; z-index: 100;
+        }
+        .header-logo {
+            font-family: var(--font-display); font-weight: 800; font-size: 1.4rem;
+            color: var(--verde-900); text-decoration: none; letter-spacing: -0.5px;
+        }
+        .header-logo span { color: var(--verde-400); }
+        .header-nav { display: flex; gap: 8px; }
+        .header-btn {
+            padding: 8px 20px; border-radius: 8px; font-family: var(--font-body);
+            font-size: 0.85rem; font-weight: 600; cursor: pointer; text-decoration: none;
+            transition: all 0.2s;
+        }
+        .header-btn-ghost { background: none; border: 1.5px solid var(--cinza-200); color: var(--cinza-700); }
+        .header-btn-ghost:hover { border-color: var(--cinza-300); background: var(--cinza-50); }
+        .header-btn-primary { background: var(--verde-700); border: none; color: var(--branco); }
+        .header-btn-primary:hover { background: var(--verde-800); }
+
+        /* ═══ HERO ═══ */
+        .hero {
+            text-align: center; padding: 64px 24px 48px;
+            background: linear-gradient(180deg, var(--branco) 0%, var(--cinza-50) 100%);
+        }
+        .hero-badge {
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 6px 16px; border-radius: 24px;
+            background: var(--verde-50); border: 1px solid var(--verde-200);
+            font-size: 0.78rem; font-weight: 600; color: var(--verde-800);
+            margin-bottom: 20px;
+        }
+        .hero h1 {
+            font-family: var(--font-display); font-size: 2.6rem; font-weight: 800;
+            color: var(--cinza-900); line-height: 1.2; margin-bottom: 16px;
+        }
+        .hero h1 em {
+            font-style: normal;
+            background: linear-gradient(135deg, var(--verde-700), var(--verde-500));
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .hero p {
+            font-size: 1.1rem; color: var(--cinza-600); max-width: 560px;
+            margin: 0 auto; line-height: 1.6;
+        }
+
+        /* ═══ TOGGLE MENSAL / ANUAL ═══ */
+        .toggle-container {
+            display: flex; align-items: center; justify-content: center;
+            gap: 14px; margin: 36px 0 8px;
+        }
+        .toggle-label {
+            font-size: 0.92rem; font-weight: 600; color: var(--cinza-500);
+            cursor: pointer; transition: color 0.3s;
+        }
+        .toggle-label.ativo { color: var(--cinza-900); }
+        .toggle-switch {
+            width: 52px; height: 28px; border-radius: 14px; cursor: pointer;
+            background: var(--cinza-300); position: relative; transition: background 0.3s;
+            border: none; padding: 0;
+        }
+        .toggle-switch.ativo { background: var(--verde-600); }
+        .toggle-switch::after {
+            content: ''; position: absolute; top: 3px; left: 3px;
+            width: 22px; height: 22px; border-radius: 50%;
+            background: var(--branco); box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .toggle-switch.ativo::after { transform: translateX(24px); }
+        .toggle-economia {
+            font-size: 0.75rem; font-weight: 700; color: var(--verde-700);
+            background: var(--verde-50); padding: 3px 10px; border-radius: 12px;
+        }
+
+        /* ═══ CARDS DE PLANOS ═══ */
+        .planos-grid {
+            display: grid; grid-template-columns: 1fr 1fr;
+            gap: 24px; max-width: 880px; margin: 40px auto 0; padding: 0 24px;
+        }
+
+        .plano-card {
+            background: var(--branco); border: 2px solid var(--cinza-200);
+            border-radius: var(--radius); padding: 36px 32px;
+            position: relative; transition: all 0.3s ease;
+        }
+        .plano-card:hover { box-shadow: 0 8px 30px rgba(0,0,0,0.08); }
+
+        .plano-card.destaque {
+            border-color: var(--verde-600);
+            box-shadow: 0 8px 40px rgba(27,94,32,0.15);
+            transform: scale(1.02);
+        }
+
+        .plano-badge-popular {
+            position: absolute; top: -14px; left: 50%; transform: translateX(-50%);
+            background: linear-gradient(135deg, var(--verde-700), var(--verde-500));
+            color: var(--branco); font-size: 0.75rem; font-weight: 700;
+            padding: 5px 20px; border-radius: 20px;
+            letter-spacing: 0.5px; white-space: nowrap;
+            box-shadow: 0 4px 12px rgba(27,94,32,0.3);
+        }
+
+        .plano-nome {
+            font-family: var(--font-display); font-size: 1.3rem; font-weight: 700;
+            color: var(--cinza-900); margin-bottom: 4px;
+        }
+        .plano-descricao {
+            font-size: 0.88rem; color: var(--cinza-500); margin-bottom: 24px;
+        }
+
+        .plano-preco-bloco { margin-bottom: 28px; min-height: 80px; }
+        .plano-preco {
+            font-family: var(--font-display); font-size: 2.8rem; font-weight: 800;
+            color: var(--cinza-900); line-height: 1;
+        }
+        .plano-preco-moeda {
+            font-size: 1.2rem; font-weight: 700; vertical-align: super;
+            color: var(--cinza-600);
+        }
+        .plano-preco-periodo {
+            font-size: 0.88rem; font-weight: 500; color: var(--cinza-500);
+        }
+        .plano-preco-detalhe {
+            font-size: 0.82rem; color: var(--cinza-400); margin-top: 4px;
+        }
+        .plano-preco-economia {
+            display: inline-block; margin-top: 6px;
+            font-size: 0.78rem; font-weight: 700; color: var(--verde-700);
+            background: var(--verde-50); padding: 3px 10px; border-radius: 12px;
+        }
+
+        .plano-btn {
+            display: block; width: 100%; padding: 14px 24px; border-radius: var(--radius-sm);
+            font-family: var(--font-body); font-size: 0.95rem; font-weight: 700;
+            cursor: pointer; text-align: center; text-decoration: none;
+            transition: all 0.2s; border: none; margin-bottom: 28px;
+        }
+        .plano-btn-free {
+            background: var(--cinza-100); color: var(--cinza-700);
+        }
+        .plano-btn-free:hover { background: var(--cinza-200); }
+
+        .plano-btn-pro {
+            background: linear-gradient(135deg, var(--verde-700), var(--verde-500));
+            color: var(--branco); box-shadow: 0 4px 14px rgba(27,94,32,0.3);
+        }
+        .plano-btn-pro:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(27,94,32,0.4);
+        }
+        .plano-btn .spinner {
+            display: none; width: 20px; height: 20px;
+            border: 2.5px solid rgba(255,255,255,0.3); border-top-color: #fff;
+            border-radius: 50%; animation: spin 0.7s linear infinite; margin: 0 auto;
+        }
+        .plano-btn.carregando .btn-texto { display: none; }
+        .plano-btn.carregando .spinner { display: block; }
+
+        .plano-divider {
+            height: 1px; background: var(--cinza-100); margin-bottom: 24px;
+        }
+
+        .plano-features-titulo {
+            font-size: 0.78rem; font-weight: 700; color: var(--cinza-400);
+            text-transform: uppercase; letter-spacing: 1px; margin-bottom: 16px;
+        }
+
+        .plano-feature {
+            display: flex; align-items: flex-start; gap: 10px;
+            padding: 8px 0; font-size: 0.88rem; color: var(--cinza-700);
+        }
+        .plano-feature svg { flex-shrink: 0; margin-top: 2px; }
+        .plano-feature.bloqueado { color: var(--cinza-400); }
+        .plano-feature.bloqueado svg { opacity: 0.4; }
+
+        /* ═══ FORMAS DE PAGAMENTO ═══ */
+        .pagamento-info {
+            text-align: center; padding: 40px 24px 20px;
+            max-width: 600px; margin: 0 auto;
+        }
+        .pagamento-titulo {
+            font-size: 0.82rem; font-weight: 600; color: var(--cinza-500);
+            margin-bottom: 16px; text-transform: uppercase; letter-spacing: 0.5px;
+        }
+        .pagamento-metodos {
+            display: flex; align-items: center; justify-content: center;
+            gap: 24px; flex-wrap: wrap;
+        }
+        .pagamento-metodo {
+            display: flex; align-items: center; gap: 8px;
+            font-size: 0.88rem; color: var(--cinza-600); font-weight: 500;
+        }
+        .pagamento-metodo-icone {
+            width: 36px; height: 36px; border-radius: 8px;
+            background: var(--branco); border: 1px solid var(--cinza-200);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.1rem;
+        }
+        .pagamento-seguro {
+            font-size: 0.78rem; color: var(--cinza-400); margin-top: 16px;
+        }
+
+        /* ═══ GARANTIA ═══ */
+        .garantia {
+            max-width: 680px; margin: 40px auto; padding: 0 24px;
+        }
+        .garantia-card {
+            background: var(--verde-50); border: 1.5px solid var(--verde-200);
+            border-radius: var(--radius); padding: 28px 32px;
+            text-align: center;
+        }
+        .garantia-icone { font-size: 2rem; margin-bottom: 12px; }
+        .garantia-titulo {
+            font-family: var(--font-display); font-size: 1.1rem; font-weight: 700;
+            color: var(--verde-900); margin-bottom: 8px;
+        }
+        .garantia-texto {
+            font-size: 0.9rem; color: var(--cinza-600); line-height: 1.6;
+            max-width: 480px; margin: 0 auto;
+        }
+
+        /* ═══ FAQ ═══ */
+        .faq { max-width: 680px; margin: 48px auto; padding: 0 24px 64px; }
+        .faq-titulo {
+            font-family: var(--font-display); font-size: 1.5rem; font-weight: 700;
+            color: var(--cinza-900); text-align: center; margin-bottom: 32px;
+        }
+        .faq-item {
+            border: 1.5px solid var(--cinza-200); border-radius: var(--radius-sm);
+            margin-bottom: 12px; overflow: hidden; background: var(--branco);
+            transition: border-color 0.2s;
+        }
+        .faq-item:hover { border-color: var(--cinza-300); }
+        .faq-pergunta {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 18px 20px; cursor: pointer; font-size: 0.92rem;
+            font-weight: 600; color: var(--cinza-800); background: none; border: none;
+            width: 100%; text-align: left; font-family: var(--font-body);
+            transition: color 0.2s;
+        }
+        .faq-pergunta:hover { color: var(--verde-700); }
+        .faq-seta {
+            transition: transform 0.3s; flex-shrink: 0; margin-left: 12px;
+        }
+        .faq-item.aberto .faq-seta { transform: rotate(180deg); }
+        .faq-resposta {
+            max-height: 0; overflow: hidden;
+            transition: max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .faq-item.aberto .faq-resposta { max-height: 300px; }
+        .faq-resposta-inner {
+            padding: 0 20px 18px; font-size: 0.88rem; color: var(--cinza-600);
+            line-height: 1.65;
+        }
+
+        /* ═══ FOOTER ═══ */
+        .footer {
+            background: var(--cinza-900); padding: 32px 24px;
+            text-align: center; color: rgba(255,255,255,0.5);
+            font-size: 0.82rem;
+        }
+        .footer a { color: var(--verde-300); text-decoration: none; }
+        .footer a:hover { text-decoration: underline; }
+
+        /* ═══ ANIMAÇÕES ═══ */
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .plano-card { animation: fadeUp 0.6s ease both; }
+        .plano-card:nth-child(2) { animation-delay: 0.15s; }
+
+        /* ═══ RESPONSIVO ═══ */
+        @media (max-width: 768px) {
+            .hero h1 { font-size: 1.8rem; }
+            .hero p { font-size: 0.95rem; }
+            .planos-grid { grid-template-columns: 1fr; max-width: 440px; }
+            .plano-card.destaque { transform: none; }
+            .header { padding: 14px 20px; }
+            .header-nav { gap: 4px; }
+            .header-btn { padding: 6px 14px; font-size: 0.8rem; }
+        }
+        @media (max-width: 480px) {
+            .hero { padding: 40px 16px 32px; }
+            .planos-grid { padding: 0 16px; }
+            .plano-card { padding: 28px 24px; }
+            .plano-preco { font-size: 2.2rem; }
+            .pagamento-metodos { gap: 16px; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- ═══ HEADER ═══ -->
+<header class="header">
+    <a href="../index.html" class="header-logo">IMPOST<span>.</span></a>
+    <nav class="header-nav">
+        <a href="dashboard.html" class="header-btn header-btn-ghost">Dashboard</a>
+        <button id="btn-logout" class="header-btn header-btn-ghost" style="display:none;">Sair</button>
+    </nav>
+</header>
+
+<!-- ═══ HERO ═══ -->
+<section class="hero">
+    <div class="hero-badge">
+        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z" transform="scale(0.58) translate(3,3)"/></svg>
+        Escolha seu plano
+    </div>
+    <h1>Otimize seus tributos<br>com <em>inteligência</em></h1>
+    <p>Compare regimes tributários, gere estudos detalhados e tome decisões informadas com dados reais.</p>
+
+    <!-- Toggle Mensal / Anual -->
+    <div class="toggle-container">
+        <span class="toggle-label ativo" id="label-mensal">Mensal</span>
+        <button class="toggle-switch" id="toggle-periodo" aria-label="Alternar mensal/anual"></button>
+        <span class="toggle-label" id="label-anual">Anual</span>
+        <span class="toggle-economia">Economize 33%</span>
+    </div>
+</section>
+
+<!-- ═══ CARDS DE PLANOS ═══ -->
+<section class="planos-grid">
+
+    <!-- FREE -->
+    <div class="plano-card">
+        <div class="plano-nome">Free</div>
+        <div class="plano-descricao">Para conhecer a plataforma</div>
+
+        <div class="plano-preco-bloco">
+            <div class="plano-preco">
+                <span class="plano-preco-moeda">R$</span> 0
+            </div>
+            <div class="plano-preco-periodo">para sempre</div>
+        </div>
+
+        <button class="plano-btn plano-btn-free" id="btn-free">
+            <span class="btn-texto">Continuar grátis</span>
+        </button>
+
+        <div class="plano-divider"></div>
+        <div class="plano-features-titulo">Inclui:</div>
+
+        <div class="plano-feature">
+            <svg width="16" height="16" fill="none" stroke="#43a047" stroke-width="2.5"><path d="M13 4L6 11 3 8"/></svg>
+            Dashboard com visão geral
+        </div>
+        <div class="plano-feature">
+            <svg width="16" height="16" fill="none" stroke="#43a047" stroke-width="2.5"><path d="M13 4L6 11 3 8"/></svg>
+            Consultor de CNAE básico
+        </div>
+        <div class="plano-feature">
+            <svg width="16" height="16" fill="none" stroke="#43a047" stroke-width="2.5"><path d="M13 4L6 11 3 8"/></svg>
+            Comparador de regimes (resumo)
+        </div>
+        <div class="plano-feature">
+            <svg width="16" height="16" fill="none" stroke="#43a047" stroke-width="2.5"><path d="M13 4L6 11 3 8"/></svg>
+            Análise PF básica
+        </div>
+        <div class="plano-feature bloqueado">
+            <svg width="16" height="16" fill="none" stroke="#ccc" stroke-width="2"><line x1="4" y1="4" x2="12" y2="12"/><line x1="12" y1="4" x2="4" y2="12"/></svg>
+            Estudos tributários completos
+        </div>
+        <div class="plano-feature bloqueado">
+            <svg width="16" height="16" fill="none" stroke="#ccc" stroke-width="2"><line x1="4" y1="4" x2="12" y2="12"/><line x1="12" y1="4" x2="4" y2="12"/></svg>
+            Relatórios em PDF
+        </div>
+        <div class="plano-feature bloqueado">
+            <svg width="16" height="16" fill="none" stroke="#ccc" stroke-width="2"><line x1="4" y1="4" x2="12" y2="12"/><line x1="12" y1="4" x2="4" y2="12"/></svg>
+            Simulador Reforma Tributária
+        </div>
+    </div>
+
+    <!-- PRO -->
+    <div class="plano-card destaque">
+        <div class="plano-badge-popular">✨ MAIS POPULAR</div>
+        <div class="plano-nome">Pro</div>
+        <div class="plano-descricao">Para contadores e empresários</div>
+
+        <div class="plano-preco-bloco">
+            <!-- Mensal (padrão visível) -->
+            <div id="preco-mensal">
+                <div class="plano-preco">
+                    <span class="plano-preco-moeda">R$</span> 49<span style="font-size:1.6rem;">,90</span>
+                </div>
+                <div class="plano-preco-periodo">por mês</div>
+            </div>
+            <!-- Anual (oculto) -->
+            <div id="preco-anual" style="display:none;">
+                <div class="plano-preco">
+                    <span class="plano-preco-moeda">R$</span> 33<span style="font-size:1.6rem;">,25</span>
+                </div>
+                <div class="plano-preco-periodo">por mês</div>
+                <div class="plano-preco-detalhe">R$ 399,00 cobrado anualmente</div>
+                <div class="plano-preco-economia">Economia de R$ 199,80/ano</div>
+            </div>
+        </div>
+
+        <button class="plano-btn plano-btn-pro" id="btn-pro">
+            <span class="btn-texto">Assinar agora</span>
+            <div class="spinner"></div>
+        </button>
+
+        <div class="plano-divider"></div>
+        <div class="plano-features-titulo">Tudo do Free, mais:</div>
+
+        <div class="plano-feature">
+            <svg width="16" height="16" fill="none" stroke="#43a047" stroke-width="2.5"><path d="M13 4L6 11 3 8"/></svg>
+            <strong>Calculadora LP completa</strong>
+        </div>
+        <div class="plano-feature">
+            <svg width="16" height="16" fill="none" stroke="#43a047" stroke-width="2.5"><path d="M13 4L6 11 3 8"/></svg>
+            <strong>Estudo de Lucro Presumido</strong>
+        </div>
+        <div class="plano-feature">
+            <svg width="16" height="16" fill="none" stroke="#43a047" stroke-width="2.5"><path d="M13 4L6 11 3 8"/></svg>
+            <strong>Estudo de Lucro Real</strong>
+        </div>
+        <div class="plano-feature">
+            <svg width="16" height="16" fill="none" stroke="#43a047" stroke-width="2.5"><path d="M13 4L6 11 3 8"/></svg>
+            <strong>Estudo de Simples Nacional</strong>
+        </div>
+        <div class="plano-feature">
+            <svg width="16" height="16" fill="none" stroke="#43a047" stroke-width="2.5"><path d="M13 4L6 11 3 8"/></svg>
+            Comparador detalhado com break-even
+        </div>
+        <div class="plano-feature">
+            <svg width="16" height="16" fill="none" stroke="#43a047" stroke-width="2.5"><path d="M13 4L6 11 3 8"/></svg>
+            Ficha tributária por estado
+        </div>
+        <div class="plano-feature">
+            <svg width="16" height="16" fill="none" stroke="#43a047" stroke-width="2.5"><path d="M13 4L6 11 3 8"/></svg>
+            Relatórios em PDF
+        </div>
+        <div class="plano-feature">
+            <svg width="16" height="16" fill="none" stroke="#43a047" stroke-width="2.5"><path d="M13 4L6 11 3 8"/></svg>
+            Simulador da Reforma Tributária
+        </div>
+        <div class="plano-feature">
+            <svg width="16" height="16" fill="none" stroke="#43a047" stroke-width="2.5"><path d="M13 4L6 11 3 8"/></svg>
+            Suporte prioritário
+        </div>
+    </div>
+</section>
+
+<!-- ═══ FORMAS DE PAGAMENTO ═══ -->
+<section class="pagamento-info">
+    <div class="pagamento-titulo">Formas de pagamento</div>
+    <div class="pagamento-metodos">
+        <div class="pagamento-metodo">
+            <div class="pagamento-metodo-icone">💳</div>
+            Cartão de crédito
+        </div>
+        <div class="pagamento-metodo">
+            <div class="pagamento-metodo-icone" style="color: #00BCAB; font-weight:800; font-size:0.85rem;">PIX</div>
+            PIX
+        </div>
+        <div class="pagamento-metodo">
+            <div class="pagamento-metodo-icone">📄</div>
+            Boleto bancário
+        </div>
+    </div>
+    <p class="pagamento-seguro">🔒 Pagamento seguro processado pelo Mercado Pago. Seus dados financeiros nunca passam pelo nosso servidor.</p>
+</section>
+
+<!-- ═══ GARANTIA ═══ -->
+<section class="garantia">
+    <div class="garantia-card">
+        <div class="garantia-icone">🛡️</div>
+        <div class="garantia-titulo">Garantia de 7 dias</div>
+        <p class="garantia-texto">
+            Não ficou satisfeito? Cancele em até 7 dias após a assinatura e devolvemos 100% do valor. Sem burocracia, sem perguntas.
+        </p>
+    </div>
+</section>
+
+<!-- ═══ FAQ ═══ -->
+<section class="faq">
+    <h2 class="faq-titulo">Perguntas frequentes</h2>
+
+    <div class="faq-item">
+        <button class="faq-pergunta">
+            Posso cancelar a qualquer momento?
+            <svg class="faq-seta" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6l4 4 4-4"/></svg>
+        </button>
+        <div class="faq-resposta"><div class="faq-resposta-inner">Sim! Você pode cancelar sua assinatura Pro a qualquer momento. Seu acesso continua até o final do período pago.</div></div>
+    </div>
+
+    <div class="faq-item">
+        <button class="faq-pergunta">
+            O que acontece quando meu plano Pro expira?
+            <svg class="faq-seta" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6l4 4 4-4"/></svg>
+        </button>
+        <div class="faq-resposta"><div class="faq-resposta-inner">Sua conta volta automaticamente para o plano Free. Você mantém acesso às funcionalidades gratuitas e seus dados ficam salvos.</div></div>
+    </div>
+
+    <div class="faq-item">
+        <button class="faq-pergunta">
+            Quais formas de pagamento são aceitas?
+            <svg class="faq-seta" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6l4 4 4-4"/></svg>
+        </button>
+        <div class="faq-resposta"><div class="faq-resposta-inner">Aceitamos cartão de crédito (Visa, Mastercard, Elo, Amex), PIX e boleto bancário, todos processados com segurança pelo Mercado Pago.</div></div>
+    </div>
+
+    <div class="faq-item">
+        <button class="faq-pergunta">
+            O IMPOST. substitui meu contador?
+            <svg class="faq-seta" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6l4 4 4-4"/></svg>
+        </button>
+        <div class="faq-resposta"><div class="faq-resposta-inner"><strong>Não.</strong> O IMPOST. é uma ferramenta de simulação e comparação de regimes tributários. Os resultados servem como ponto de partida para discussões com seu contador ou advogado. Sempre valide com um profissional habilitado antes de tomar decisões.</div></div>
+    </div>
+
+    <div class="faq-item">
+        <button class="faq-pergunta">
+            Posso trocar de mensal para anual (ou vice-versa)?
+            <svg class="faq-seta" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6l4 4 4-4"/></svg>
+        </button>
+        <div class="faq-resposta"><div class="faq-resposta-inner">Sim! Você pode alterar seu plano a qualquer momento na página "Minha Conta". Se migrar de mensal para anual, o valor já pago é descontado proporcionalmente.</div></div>
+    </div>
+</section>
+
+<!-- ═══ FOOTER ═══ -->
+<footer class="footer">
+    <p>IMPOST. © 2026 — <a href="../termos.html">Termos de Uso</a> · <a href="../privacidade.html">Política de Privacidade</a></p>
+</footer>
+
+<!-- ═══ SCRIPTS ═══ -->
+<script src="https://www.gstatic.com/firebasejs/11.4.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/11.4.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/11.4.0/firebase-firestore-compat.js"></script>
+<script src="../scripts/firebase-config.js"></script>
+
+<script>
+(function() {
+    "use strict";
+
+    // ═══ ESTADO ═══
+    var periodoAnual = false;
+
+    // ═══ TOGGLE MENSAL / ANUAL ═══
+    var toggle = document.getElementById("toggle-periodo");
+    var labelMensal = document.getElementById("label-mensal");
+    var labelAnual = document.getElementById("label-anual");
+    var precoMensal = document.getElementById("preco-mensal");
+    var precoAnual = document.getElementById("preco-anual");
+
+    toggle.addEventListener("click", function() {
+        periodoAnual = !periodoAnual;
+        toggle.classList.toggle("ativo", periodoAnual);
+        labelMensal.classList.toggle("ativo", !periodoAnual);
+        labelAnual.classList.toggle("ativo", periodoAnual);
+        precoMensal.style.display = periodoAnual ? "none" : "block";
+        precoAnual.style.display = periodoAnual ? "block" : "none";
+    });
+
+    // ═══ FAQ ACCORDION ═══
+    document.querySelectorAll(".faq-pergunta").forEach(function(btn) {
+        btn.addEventListener("click", function() {
+            var item = btn.closest(".faq-item");
+            var aberto = item.classList.contains("aberto");
+            // Fecha todos
+            document.querySelectorAll(".faq-item.aberto").forEach(function(i) {
+                i.classList.remove("aberto");
+            });
+            // Abre o clicado (se não estava aberto)
+            if (!aberto) item.classList.add("aberto");
+        });
+    });
+
+    // ═══ AUTH — Verificar se está logado ═══
+    var auth = IMPOST_AUTH;
+    var btnFree = document.getElementById("btn-free");
+    var btnPro = document.getElementById("btn-pro");
+    var btnLogout = document.getElementById("btn-logout");
+    var usuarioAtual = null;
+
+    auth.onAuthStateChanged(function(user) {
+        usuarioAtual = user;
+        if (user) {
+            btnLogout.style.display = "inline-flex";
+        }
+    });
+
+    // ═══ BOTÃO FREE — Ir pro dashboard ═══
+    btnFree.addEventListener("click", function() {
+        if (usuarioAtual) {
+            window.location.href = "dashboard.html";
+        } else {
+            window.location.href = "cadastro.html";
+        }
+    });
+
+    // ═══ BOTÃO PRO — Iniciar checkout Mercado Pago ═══
+    btnPro.addEventListener("click", function() {
+        if (!usuarioAtual) {
+            // Não logado → cadastrar primeiro
+            window.location.href = "cadastro.html";
+            return;
+        }
+
+        var plano = periodoAnual ? "anual" : "mensal";
+        iniciarCheckout(plano);
+    });
+
+    /**
+     * Inicia o processo de checkout via Cloud Function
+     * A Cloud Function cria a preferência no Mercado Pago
+     * e retorna a URL do checkout
+     */
+    async function iniciarCheckout(plano) {
+        btnPro.classList.add("carregando");
+
+        try {
+            var token = await usuarioAtual.getIdToken();
+
+            var response = await fetch(
+                "https://us-central1-impost-8b24d.cloudfunctions.net/criarAssinatura",
+                {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": "Bearer " + token
+                    },
+                    body: JSON.stringify({ periodo: plano })
+                }
+            );
+
+            var data = await response.json();
+
+            if (data.erro) {
+                alert("Erro: " + data.erro);
+                btnPro.classList.remove("carregando");
+                return;
+            }
+
+            // Redireciona para o checkout do Mercado Pago
+            if (data.init_point) {
+                window.location.href = data.init_point;
+            } else {
+                alert("Erro ao gerar link de pagamento. Tente novamente.");
+            }
+
+        } catch (error) {
+            console.error("Erro no checkout:", error);
+            alert("Erro de conexão. Verifique sua internet e tente novamente.");
+        }
+
+        btnPro.classList.remove("carregando");
+    }
+
+    // ═══ LOGOUT ═══
+    btnLogout.addEventListener("click", function() {
+        auth.signOut().then(function() {
+            window.location.href = "login.html";
+        });
+    });
+
+})();
+</script>
+
+</body>
+</html>
