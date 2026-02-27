@@ -1,14 +1,25 @@
 /**
  * ╔══════════════════════════════════════════════════════════════════════════════╗
- * ║  COMPARADOR INTELIGENTE DE REGIMES TRIBUTÁRIOS  v3.0.1                    ║
+ * ║  COMPARADOR INTELIGENTE DE REGIMES TRIBUTÁRIOS  v3.0.2                    ║
  * ║  Motor unificado: Simples Nacional × Lucro Presumido × Lucro Real         ║
  * ║  INTEGRADO COM ESTADOS.JS — Dados reais por UF                            ║
  * ║  Fonte única de verdade para o Consultor de CNAE                          ║
  * ╠══════════════════════════════════════════════════════════════════════════════╣
  * ║  AGROGEO BRASIL — Geotecnologia e Consultoria Ambiental                  ║
  * ║  Autor: Luis Fernando | Proprietário AGROGEO BRASIL                       ║
- * ║  Versão: 3.0.1 | Data: Fevereiro/2026                                    ║
+ * ║  Versão: 3.0.2 | Data: Fevereiro/2026                                    ║
  * ║  Localização: Novo Progresso, Pará (Amazônia Legal — SUDAM)              ║
+ * ╠══════════════════════════════════════════════════════════════════════════════╣
+ * ║  CORREÇÕES v3.0.2 (Auditoria final):                                     ║
+ * ║   🔧 comparar(): Aceita aliases (codigoCNAE→cnae, tipoAtividade→        ║
+ * ║      categoria) — evita undefined que forçava tudo para serviço          ║
+ * ║   🔧 comparar(): Comércio/Indústria agora recebem Anexo I/II correto    ║
+ * ║      (antes: Fator R era reaplicado indevidamente → Anexo V)            ║
+ * ║   🔧 comparar(): ICMS não mais zerado para LP/LR de comércio            ║
+ * ║   🔧 Todos opcoes numéricos usam _num() em vez de || (0 é válido)       ║
+ * ║      percentualCreditos: 0 agora gera crédito zero, não 30%             ║
+ * ║      percentualCreditoICMS: 0 agora gera crédito zero, não 30%          ║
+ * ║      margemLucro: 0 agora é aceito (caso extremo)                        ║
  * ╠══════════════════════════════════════════════════════════════════════════════╣
  * ║  CORREÇÕES v3.0.1 (Auditoria):                                           ║
  * ║   🔧 obterRegras: Fator R preserva default da categoria quando           ║
@@ -520,8 +531,8 @@
   // 1. CONSTANTES GLOBAIS UNIFICADAS
   // ═══════════════════════════════════════════════════════════════════════════
 
-  CR.VERSAO = '3.0.1';
-  CR.DATA_BASE = '2026-02-26';
+  CR.VERSAO = '3.0.2';
+  CR.DATA_BASE = '2026-02-27';
 
   /**
    * Limites de elegibilidade por regime.
@@ -816,6 +827,16 @@
 
   CR.helpers = { round: _r, formatarMoeda: _fmtBRL, formatarPercentual: _fmtPct };
 
+  /**
+   * Lê opção numérica de forma segura: 0 é um valor VÁLIDO.
+   * Só retorna fallback se valor for null, undefined ou NaN.
+   * Corrige o bug onde `opcoes.X || 0.30` transformava 0 em 0.30.
+   * @private
+   */
+  function _num(val, fallback) {
+    return (val != null && !isNaN(val)) ? val : fallback;
+  }
+
 
   // ═══════════════════════════════════════════════════════════════════════════
   // 7. OBTER REGRAS POR CNAE
@@ -1015,13 +1036,12 @@
     let icmsIssPorFora = 0;
     if (sublimiteAlerta) {
       if (regras.tipoTributo === 'ISS') {
-        const issReal = opcoes.aliquotaISS || (dadosUF ? (dadosUF.iss.aliquotaGeral || 0.05) : 0.05);
+        const issReal = _num(opcoes.aliquotaISS, null) || (dadosUF ? (dadosUF.iss.aliquotaGeral || 0.05) : 0.05);
         icmsIssPorFora = faturamentoMensal * issReal;
       } else {
-        const icmsReal = opcoes.aliquotaICMS || (dadosUF ? (dadosUF.icms.aliquotaPadrao || 0.18) : 0.18);
-        // ═══ CORREÇÃO BUG CRÉDITOS FIXOS ═══
-        // Antes: hardcoded 0.40 (60% crédito). Agora: usa percentual real do usuário.
-        const creditoICMS = opcoes.percentualCreditoICMS || 0.30;
+        const icmsReal = _num(opcoes.aliquotaICMS, null) || (dadosUF ? (dadosUF.icms.aliquotaPadrao || 0.18) : 0.18);
+        // ═══ CORREÇÃO: usa _num() — valor 0 é válido (sem créditos) ═══
+        const creditoICMS = _num(opcoes.percentualCreditoICMS, 0.30);
         icmsIssPorFora = faturamentoMensal * icmsReal * (1 - creditoICMS);
       }
     }
@@ -1059,10 +1079,10 @@
     const dadosUF = CR.extrairDadosEstado(uf);
     const fed = dadosUF.federal;
 
-    // v3: ISS real do estado (ou override manual)
-    const aliqISS = opcoes.aliquotaISS || dadosUF.iss.aliquotaGeral || 0.05;
+    // v3: ISS real do estado (ou override manual) — _num permite 0 como valor válido
+    const aliqISS = _num(opcoes.aliquotaISS, null) || dadosUF.iss.aliquotaGeral || 0.05;
     // v3: ICMS real do estado
-    const aliqICMS = opcoes.aliquotaICMS || dadosUF.icms.aliquotaEfetiva || dadosUF.icms.aliquotaPadrao || 0.18;
+    const aliqICMS = _num(opcoes.aliquotaICMS, null) || dadosUF.icms.aliquotaEfetiva || dadosUF.icms.aliquotaPadrao || 0.18;
 
     // Bases de cálculo mensais
     const baseIRPJ = faturamentoMensal * regras.presuncaoIRPJ;
@@ -1102,8 +1122,8 @@
     // ═══ CORREÇÃO BUG 6: Determinar ISS vs ICMS SOMENTE pelo tipoTributo ═══
     const isServico = regras.tipoTributo === 'ISS';
     const iss = isServico ? faturamentoMensal * aliqISS : 0;
-    // ICMS: alíquota real do estado, estimativa com créditos ~30% (compras com NF)
-    const creditoICMS = opcoes.percentualCreditoICMS || 0.30;
+    // ICMS: alíquota real do estado — _num permite crédito 0 (sem créditos)
+    const creditoICMS = _num(opcoes.percentualCreditoICMS, 0.30);
     const icms = !isServico ? faturamentoMensal * aliqICMS * (1 - creditoICMS) : 0;
 
     // v3: FECOP se aplicável e não serviço
@@ -1159,10 +1179,11 @@
     const dadosUF = CR.extrairDadosEstado(uf);
     const fed = dadosUF.federal;
 
-    const margemLucro = opcoes.margemLucro || 0.20;
-    const creditoEstimado = opcoes.percentualCreditos || 0.30;
-    const aliqISS = opcoes.aliquotaISS || dadosUF.iss.aliquotaGeral || 0.05;
-    const aliqICMS = opcoes.aliquotaICMS || dadosUF.icms.aliquotaEfetiva || dadosUF.icms.aliquotaPadrao || 0.18;
+    // ═══ CORREÇÃO BUG #3/#5: _num() permite valor 0 (||0.30 transformava 0 em 0.30) ═══
+    const margemLucro = _num(opcoes.margemLucro, 0.20);
+    const creditoEstimado = _num(opcoes.percentualCreditos, 0.30);
+    const aliqISS = _num(opcoes.aliquotaISS, null) || dadosUF.iss.aliquotaGeral || 0.05;
+    const aliqICMS = _num(opcoes.aliquotaICMS, null) || dadosUF.icms.aliquotaEfetiva || dadosUF.icms.aliquotaPadrao || 0.18;
 
     const lucro = faturamentoMensal * margemLucro;
 
@@ -1201,7 +1222,7 @@
     // ═══ CORREÇÃO BUG 6: Determinar ISS vs ICMS SOMENTE pelo tipoTributo ═══
     const isServico = regras.tipoTributo === 'ISS';
     const iss = isServico ? faturamentoMensal * aliqISS : 0;
-    const creditoICMS = opcoes.percentualCreditoICMS || 0.30;
+    const creditoICMS = _num(opcoes.percentualCreditoICMS, 0.30);
     const icms = !isServico ? faturamentoMensal * aliqICMS * (1 - creditoICMS) : 0;
 
     // FECOP
@@ -1259,14 +1280,14 @@
   // ═══════════════════════════════════════════════════════════════════════════
 
   CR.comparar = function (params) {
-    const {
-      faturamentoMensal,
-      folhaMensal = 0,
-      cnae,
-      categoria,
-      uf = 'SP',
-      opcoes = {}
-    } = params;
+    // ═══ CORREÇÃO v3.0.2: Aceitar nomes alternativos de parâmetros ═══
+    // Callers podem usar 'cnae' ou 'codigoCNAE', 'categoria' ou 'tipoAtividade'
+    const faturamentoMensal = params.faturamentoMensal;
+    const folhaMensal       = params.folhaMensal != null ? params.folhaMensal : 0;
+    const cnae              = params.cnae || params.codigoCNAE || '';
+    const categoria         = params.categoria || params.tipoAtividade || '';
+    const uf                = params.uf || 'SP';
+    const opcoes            = params.opcoes || {};
 
     // v3: Extrair dados reais do estado PRIMEIRO
     const dadosUF = CR.extrairDadosEstado(uf);
