@@ -1,14 +1,26 @@
 /**
  * ╔══════════════════════════════════════════════════════════════════════════════╗
- * ║  COMPARADOR INTELIGENTE DE REGIMES TRIBUTÁRIOS  v3.0.2                    ║
+ * ║  COMPARADOR INTELIGENTE DE REGIMES TRIBUTÁRIOS  v3.0.3                    ║
  * ║  Motor unificado: Simples Nacional × Lucro Presumido × Lucro Real         ║
  * ║  INTEGRADO COM ESTADOS.JS — Dados reais por UF                            ║
  * ║  Fonte única de verdade para o Consultor de CNAE                          ║
  * ╠══════════════════════════════════════════════════════════════════════════════╣
  * ║  AGROGEO BRASIL — Geotecnologia e Consultoria Ambiental                  ║
  * ║  Autor: Luis Fernando | Proprietário AGROGEO BRASIL                       ║
- * ║  Versão: 3.0.2 | Data: Fevereiro/2026                                    ║
+ * ║  Versão: 3.0.3 | Data: Fevereiro/2026                                    ║
  * ║  Localização: Novo Progresso, Pará (Amazônia Legal — SUDAM)              ║
+ * ╠══════════════════════════════════════════════════════════════════════════════╣
+ * ║  CORREÇÕES v3.0.3 (Bugs #3 e #5 — créditos dinâmicos):                   ║
+ * ║   🔧 BUG #3: PIS/COFINS créditos agora calculados a partir de            ║
+ * ║      opcoes.despesasElegiveis (valor absoluto) OU                         ║
+ * ║      opcoes.percentualCreditos (percentual). Antes: fixo 30%             ║
+ * ║   🔧 BUG #5: ICMS crédito agora calculado a partir de opcoes.cmv         ║
+ * ║      (valor absoluto do CMV) OU opcoes.percentualCreditoICMS              ║
+ * ║      (percentual). Antes: fixo 30%                                        ║
+ * ║   🔧 Novo helper _resolveCredito() para derivar % de valor absoluto      ║
+ * ║   🔧 calcularPresumido() e calcularReal(): aceitam cmv e                 ║
+ * ║      despesasElegiveis como valores absolutos em R$                       ║
+ * ║   🔧 calcularSimples() sublimite: ICMS crédito também usa CMV            ║
  * ╠══════════════════════════════════════════════════════════════════════════════╣
  * ║  CORREÇÕES v3.0.2 (Auditoria final):                                     ║
  * ║   🔧 comparar(): Aceita aliases (codigoCNAE→cnae, tipoAtividade→        ║
@@ -531,7 +543,7 @@
   // 1. CONSTANTES GLOBAIS UNIFICADAS
   // ═══════════════════════════════════════════════════════════════════════════
 
-  CR.VERSAO = '3.0.2';
+  CR.VERSAO = '3.0.3';
   CR.DATA_BASE = '2026-02-27';
 
   /**
@@ -837,6 +849,37 @@
     return (val != null && !isNaN(val)) ? val : fallback;
   }
 
+  /**
+   * Resolve crédito: aceita valor absoluto OU percentual.
+   * Prioridade: 1) valorAbsoluto/faturamento  2) percentual informado  3) fallback
+   *
+   * Exemplos:
+   *   _resolveCredito(10000, null, 50000, 0.30)  → 0.20 (10000/50000)
+   *   _resolveCredito(null, 0.25, 50000, 0.30)   → 0.25 (percentual informado)
+   *   _resolveCredito(null, null, 50000, 0.30)    → 0.30 (fallback)
+   *   _resolveCredito(0, null, 50000, 0.30)       → 0    (zero é válido: sem créditos)
+   *   _resolveCredito(null, 0, 50000, 0.30)       → 0    (zero é válido: sem créditos)
+   *
+   * @param {number|null} valorAbsoluto - Valor em R$ (ex: CMV, despesas elegíveis)
+   * @param {number|null} percentual - Percentual decimal (ex: 0.30 = 30%)
+   * @param {number} faturamento - Faturamento mensal para converter absoluto → %
+   * @param {number} fallback - Valor default se nenhum informado
+   * @returns {number} Percentual decimal (0 a 1)
+   * @private
+   */
+  function _resolveCredito(valorAbsoluto, percentual, faturamento, fallback) {
+    // 1) Valor absoluto informado → converte para percentual
+    if (valorAbsoluto != null && !isNaN(valorAbsoluto) && faturamento > 0) {
+      return Math.min(valorAbsoluto / faturamento, 1.0); // cap em 100%
+    }
+    // 2) Percentual informado diretamente
+    if (percentual != null && !isNaN(percentual)) {
+      return percentual;
+    }
+    // 3) Fallback
+    return fallback;
+  }
+
 
   // ═══════════════════════════════════════════════════════════════════════════
   // 7. OBTER REGRAS POR CNAE
@@ -1040,8 +1083,13 @@
         icmsIssPorFora = faturamentoMensal * issReal;
       } else {
         const icmsReal = _num(opcoes.aliquotaICMS, null) || (dadosUF ? (dadosUF.icms.aliquotaPadrao || 0.18) : 0.18);
-        // ═══ CORREÇÃO: usa _num() — valor 0 é válido (sem créditos) ═══
-        const creditoICMS = _num(opcoes.percentualCreditoICMS, 0.30);
+        // ═══ CORREÇÃO v3.0.3: ICMS crédito dinâmico (CMV → % → fallback) ═══
+        const creditoICMS = _resolveCredito(
+          _num(opcoes.cmv, null),
+          _num(opcoes.percentualCreditoICMS, null),
+          faturamentoMensal,
+          0.30
+        );
         icmsIssPorFora = faturamentoMensal * icmsReal * (1 - creditoICMS);
       }
     }
@@ -1119,11 +1167,16 @@
 
     const irpjFinal = _r(irpj - reducaoIRPJ);
 
-    // ═══ CORREÇÃO BUG 6: Determinar ISS vs ICMS SOMENTE pelo tipoTributo ═══
+    // ═══ CORREÇÃO BUG #5: ICMS crédito calculado a partir do CMV ═══
     const isServico = regras.tipoTributo === 'ISS';
     const iss = isServico ? faturamentoMensal * aliqISS : 0;
-    // ICMS: alíquota real do estado — _num permite crédito 0 (sem créditos)
-    const creditoICMS = _num(opcoes.percentualCreditoICMS, 0.30);
+    // Prioridade: cmv (R$) → percentualCreditoICMS (%) → fallback 30%
+    const creditoICMS = _resolveCredito(
+      _num(opcoes.cmv, null),                  // CMV em R$ (valor absoluto)
+      _num(opcoes.percentualCreditoICMS, null), // percentual decimal
+      faturamentoMensal,                        // base para conversão
+      0.30                                      // fallback: 30%
+    );
     const icms = !isServico ? faturamentoMensal * aliqICMS * (1 - creditoICMS) : 0;
 
     // v3: FECOP se aplicável e não serviço
@@ -1150,6 +1203,7 @@
       fecop: _r(fecopValor),
       presuncaoIRPJ: regras.presuncaoIRPJ,
       presuncaoCSLL: regras.presuncaoCSLL,
+      creditoICMSUsado: creditoICMS,
       aliqEfetiva: faturamentoMensal > 0 ? total / faturamentoMensal : 0,
       aliqEfetivaFormatada: faturamentoMensal > 0 ? _fmtPct(total / faturamentoMensal) : '0,00%',
       temIncentivo: temIncentivo,
@@ -1179,9 +1233,15 @@
     const dadosUF = CR.extrairDadosEstado(uf);
     const fed = dadosUF.federal;
 
-    // ═══ CORREÇÃO BUG #3/#5: _num() permite valor 0 (||0.30 transformava 0 em 0.30) ═══
+    // ═══ CORREÇÃO BUG #3: créditos PIS/COFINS dinâmicos ═══
+    // Prioridade: despesasElegiveis (R$) → percentualCreditos (%) → fallback 30%
     const margemLucro = _num(opcoes.margemLucro, 0.20);
-    const creditoEstimado = _num(opcoes.percentualCreditos, 0.30);
+    const creditoEstimado = _resolveCredito(
+      _num(opcoes.despesasElegiveis, null),   // valor absoluto em R$
+      _num(opcoes.percentualCreditos, null),   // percentual decimal
+      faturamentoMensal,                       // base para conversão
+      0.30                                     // fallback: 30%
+    );
     const aliqISS = _num(opcoes.aliquotaISS, null) || dadosUF.iss.aliquotaGeral || 0.05;
     const aliqICMS = _num(opcoes.aliquotaICMS, null) || dadosUF.icms.aliquotaEfetiva || dadosUF.icms.aliquotaPadrao || 0.18;
 
@@ -1219,10 +1279,16 @@
 
     const irpjFinal = _r(irpj - reducaoIRPJ);
 
-    // ═══ CORREÇÃO BUG 6: Determinar ISS vs ICMS SOMENTE pelo tipoTributo ═══
+    // ═══ CORREÇÃO BUG #5: ICMS crédito calculado a partir do CMV ═══
     const isServico = regras.tipoTributo === 'ISS';
     const iss = isServico ? faturamentoMensal * aliqISS : 0;
-    const creditoICMS = _num(opcoes.percentualCreditoICMS, 0.30);
+    // Prioridade: cmv (R$) → percentualCreditoICMS (%) → fallback 30%
+    const creditoICMS = _resolveCredito(
+      _num(opcoes.cmv, null),                  // CMV em R$ (valor absoluto)
+      _num(opcoes.percentualCreditoICMS, null), // percentual decimal
+      faturamentoMensal,                        // base para conversão
+      0.30                                      // fallback: 30%
+    );
     const icms = !isServico ? faturamentoMensal * aliqICMS * (1 - creditoICMS) : 0;
 
     // FECOP
@@ -1249,6 +1315,7 @@
       fecop: _r(fecopValor),
       margemLucroUsada: margemLucro,
       creditosPISCOFINSUsado: creditoEstimado,
+      creditoICMSUsado: creditoICMS,
       aliqEfetiva: faturamentoMensal > 0 ? total / faturamentoMensal : 0,
       aliqEfetivaFormatada: faturamentoMensal > 0 ? _fmtPct(total / faturamentoMensal) : '0,00%',
       temIncentivo: temIncentivo,
@@ -1829,7 +1896,7 @@
       vantagens.push({
         icone: '💳', titulo: 'Créditos de PIS/COFINS (não cumulativo)',
         descricao: 'Creditar insumos contra PIS/COFINS devidos. Economia estimada de ' +
-          _fmtBRL(_r((ctx.faturamentoMensal * 0.30) * 0.0925)) + '/mês.',
+          _fmtBRL(_r((ctx.faturamentoMensal * (ctx.real.creditosPISCOFINSUsado || 0.30)) * 0.0925)) + '/mês.',
         impacto: 'alto', baseLegal: 'Lei 10.637/02, Art. 3º; Lei 10.833/03, Art. 3º'
       });
       vantagens.push({
