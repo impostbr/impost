@@ -1,6 +1,6 @@
 // ═══════════════════════════════════════════════════════
 // IMPOST. — Login Controller
-// Arquivo: pages/login.js
+// Arquivo: scripts/login.js
 // Depende de: scripts/firebase-config.js (carregado antes)
 // ═══════════════════════════════════════════════════════
 
