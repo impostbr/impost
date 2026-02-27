@@ -1,14 +1,26 @@
 /**
  * ╔══════════════════════════════════════════════════════════════════════════════╗
- * ║  COMPARADOR INTELIGENTE DE REGIMES TRIBUTÁRIOS  v3.0                       ║
+ * ║  COMPARADOR INTELIGENTE DE REGIMES TRIBUTÁRIOS  v3.0.1                    ║
  * ║  Motor unificado: Simples Nacional × Lucro Presumido × Lucro Real         ║
  * ║  INTEGRADO COM ESTADOS.JS — Dados reais por UF                            ║
  * ║  Fonte única de verdade para o Consultor de CNAE                          ║
  * ╠══════════════════════════════════════════════════════════════════════════════╣
  * ║  AGROGEO BRASIL — Geotecnologia e Consultoria Ambiental                  ║
  * ║  Autor: Luis Fernando | Proprietário AGROGEO BRASIL                       ║
- * ║  Versão: 3.0.0 | Data: Fevereiro/2026                                    ║
+ * ║  Versão: 3.0.1 | Data: Fevereiro/2026                                    ║
  * ║  Localização: Novo Progresso, Pará (Amazônia Legal — SUDAM)              ║
+ * ╠══════════════════════════════════════════════════════════════════════════════╣
+ * ║  CORREÇÕES v3.0.1 (Auditoria):                                           ║
+ * ║   🔧 obterRegras: Fator R preserva default da categoria quando           ║
+ * ║      exceção não define explicitamente (era forçado false)               ║
+ * ║   🔧 obterRegras: tipoTributo inferido por anexo/presunção quando        ║
+ * ║      exceção não especifica (evita ICMS zerado em serviços)             ║
+ * ║   🔧 obterRegras: Matching CNAE funciona com/sem pontos                  ║
+ * ║      ("7119" agora encontra exceção "71.19")                             ║
+ * ║   🔧 calcularSimples: Aceita opcoes (crédito ICMS, ISS override)        ║
+ * ║   🔧 comparar: Propaga opcoes para calcularSimples                       ║
+ * ║   🔧 analisarCenarios: Propaga opcoes para comparar                      ║
+ * ║   🔧 Crédito ICMS sublimite: era hardcoded 0.40, agora usa opcoes       ║
  * ╠══════════════════════════════════════════════════════════════════════════════╣
  * ║  NOVIDADES v3.0:                                                          ║
  * ║   ✅ Integração total com estados.js — leitura de dados reais por UF     ║
@@ -508,8 +520,8 @@
   // 1. CONSTANTES GLOBAIS UNIFICADAS
   // ═══════════════════════════════════════════════════════════════════════════
 
-  CR.VERSAO = '3.0.0';
-  CR.DATA_BASE = '2026-02-11';
+  CR.VERSAO = '3.0.1';
+  CR.DATA_BASE = '2026-02-26';
 
   /**
    * Limites de elegibilidade por regime.
@@ -809,14 +821,51 @@
   // 7. OBTER REGRAS POR CNAE
   // ═══════════════════════════════════════════════════════════════════════════
 
+  /**
+   * Infere tipoTributo (ISS ou ICMS) a partir dos dados da exceção CNAE.
+   * Prioriza: 1) tipoTributo explícito da exceção, 2) inferência por anexo/presunção,
+   * 3) fallback para o padrão da categoria.
+   * @private
+   */
+  function _inferirTipoTributo(excecao, padrao) {
+    // Sem exceção → usa padrão da categoria
+    if (!excecao) return padrao.tipoTributo;
+
+    // Exceção define explicitamente → usa
+    if (excecao.tipoTributo) return excecao.tipoTributo;
+
+    // Inferir pelo anexo: I e II são comércio/indústria → ICMS
+    const anexo = excecao.anexo || padrao.anexo;
+    if (anexo === 'I' || anexo === 'II') return 'ICMS';
+
+    // Inferir pela presunção: categorias de comércio/indústria/transporte → ICMS
+    const presICMS = ['comercio_industria', 'combustivel', 'transporte_passageiros'];
+    if (excecao.presuncao && presICMS.includes(excecao.presuncao)) return 'ICMS';
+
+    // Demais serviços → ISS
+    return 'ISS';
+  }
+
   CR.obterRegras = function (codigoCNAE, categoriaCNAE) {
     const cod = (codigoCNAE || '').replace(/[^0-9.]/g, '');
 
-    const prefixos = [
-      cod.substring(0, 5),
-      cod.substring(0, 4),
-      cod.substring(0, 2)
-    ];
+    // ═══ CORREÇÃO BUG MATCHING CNAE ═══
+    // Gera prefixos COM e SEM ponto para cobrir ambos os formatos.
+    // Ex: "7119" → tenta "71.19", "71.1", "71" além de "7119", "711", "71"
+    const codSemPonto = cod.replace(/\./g, '');
+    const codComPonto = codSemPonto.length >= 4
+      ? codSemPonto.substring(0, 2) + '.' + codSemPonto.substring(2)
+      : cod;
+
+    // Prefixos para busca (ordem: mais específico → menos específico)
+    const prefixos = [];
+    // Com ponto (formato padrão do EXCECOES_CNAE)
+    if (codComPonto.length >= 5) prefixos.push(codComPonto.substring(0, 5)); // "71.19"
+    if (codComPonto.length >= 4) prefixos.push(codComPonto.substring(0, 4)); // "71.1"
+    // Sem ponto (fallback)
+    if (codSemPonto.length >= 4) prefixos.push(codSemPonto.substring(0, 4)); // "7119"
+    // Grupo (2 dígitos)
+    prefixos.push(codSemPonto.substring(0, 2)); // "71"
 
     let excecao = null;
     for (const prefixo of prefixos) {
@@ -876,12 +925,27 @@
       cnae: codigoCNAE,
       categoria: catBase,
       anexo: excecao ? (excecao.anexo || padrao.anexo) : padrao.anexo,
-      fatorR: excecao ? (excecao.fatorR === true) : padrao.fatorR,
+
+      // ═══ CORREÇÃO BUG FATOR R ═══
+      // Antes: excecao.fatorR === true → false se undefined (matava o padrão da categoria)
+      // Agora: só sobrescreve se a exceção DEFINIR explicitamente fatorR
+      fatorR: excecao
+        ? (typeof excecao.fatorR === 'boolean' ? excecao.fatorR : padrao.fatorR)
+        : padrao.fatorR,
+
       vedado: excecao ? (excecao.vedado === true) : false,
       presuncao: excecao ? (excecao.presuncao || padrao.presuncao) : padrao.presuncao,
       presuncaoIRPJ: 0,
       presuncaoCSLL: 0,
-      tipoTributo: excecao && excecao.tipoTributo ? excecao.tipoTributo : padrao.tipoTributo,
+
+      // ═══ CORREÇÃO BUG ICMS ZERADO ═══
+      // Antes: excecao sem tipoTributo herdava o padrão da CATEGORIA do usuário.
+      //   Ex: CNAE 81.21 (Limpeza/serviço) + categoria "Comércio" → tipoTributo='ICMS' → ISS=0
+      // Agora: exceção sem tipoTributo → infere do anexo/presunção da exceção.
+      //   Se anexo é I ou II, ou presunção é comercio_industria/combustivel → ICMS
+      //   Senão → ISS (serviço)
+      tipoTributo: _inferirTipoTributo(excecao, padrao),
+
       nota: excecao ? excecao.nota : '',
       fonte: excecao ? 'mapeamento' : 'categoria'
     };
@@ -900,7 +964,8 @@
   // 8. MOTOR DE CÁLCULO — SIMPLES NACIONAL (v3: usa sublimite real)
   // ═══════════════════════════════════════════════════════════════════════════
 
-  CR.calcularSimples = function (faturamentoMensal, folhaMensal, regras, dadosUF) {
+  CR.calcularSimples = function (faturamentoMensal, folhaMensal, regras, dadosUF, opcoes) {
+    opcoes = opcoes || {};
     const rbt12 = faturamentoMensal * 12;
 
     if (rbt12 > CR.LIMITES.simplesNacional.receitaBrutaAnual) return null;
@@ -950,12 +1015,14 @@
     let icmsIssPorFora = 0;
     if (sublimiteAlerta) {
       if (regras.tipoTributo === 'ISS') {
-        const issReal = dadosUF ? (dadosUF.iss.aliquotaGeral || 0.05) : 0.05;
+        const issReal = opcoes.aliquotaISS || (dadosUF ? (dadosUF.iss.aliquotaGeral || 0.05) : 0.05);
         icmsIssPorFora = faturamentoMensal * issReal;
       } else {
-        const icmsReal = dadosUF ? (dadosUF.icms.aliquotaPadrao || 0.18) : 0.18;
-        // Estimativa: ICMS por fora com créditos parciais
-        icmsIssPorFora = faturamentoMensal * icmsReal * 0.40;
+        const icmsReal = opcoes.aliquotaICMS || (dadosUF ? (dadosUF.icms.aliquotaPadrao || 0.18) : 0.18);
+        // ═══ CORREÇÃO BUG CRÉDITOS FIXOS ═══
+        // Antes: hardcoded 0.40 (60% crédito). Agora: usa percentual real do usuário.
+        const creditoICMS = opcoes.percentualCreditoICMS || 0.30;
+        icmsIssPorFora = faturamentoMensal * icmsReal * (1 - creditoICMS);
       }
     }
 
@@ -1207,8 +1274,8 @@
     // 1. Obter regras do CNAE
     const regras = CR.obterRegras(cnae, categoria);
 
-    // 2. Calcular cada regime (passando dadosUF para Simples)
-    const simples = CR.calcularSimples(faturamentoMensal, folhaMensal, regras, dadosUF);
+    // 2. Calcular cada regime (passando dadosUF e opcoes para Simples)
+    const simples = CR.calcularSimples(faturamentoMensal, folhaMensal, regras, dadosUF, opcoes);
     const presumido = CR.calcularPresumido(faturamentoMensal, folhaMensal, regras, uf, opcoes);
     const real = CR.calcularReal(faturamentoMensal, folhaMensal, regras, uf, opcoes);
 
@@ -1968,6 +2035,7 @@
     const {
       cnae, categoria, uf,
       percentualFolha = 0.40,
+      opcoes = {},
       faixas = [10_000, 30_000, 50_000, 100_000, 200_000, 300_000, 400_000, 500_000]
     } = params;
 
@@ -1978,7 +2046,8 @@
         folhaMensal: folha,
         cnae: cnae,
         categoria: categoria,
-        uf: uf
+        uf: uf,
+        opcoes: opcoes
       });
 
       return {
