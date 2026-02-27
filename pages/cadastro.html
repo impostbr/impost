@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Criar conta — IMPOST.</title>
+    <meta name="description" content="Crie sua conta gratuita no IMPOST — Inteligência em Modelagem de Otimização Tributária">
+    <link rel="icon" href="../assets/favicon.ico" type="image/x-icon">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@600;700;800&display=swap" rel="stylesheet">
+    <style>
+        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --verde-900: #1b5e20; --verde-800: #2e7d32; --verde-700: #388e3c;
+            --verde-600: #43a047; --verde-500: #4caf50; --verde-400: #66bb6a;
+            --verde-300: #81c784; --verde-200: #a5d6a7; --verde-100: #c8e6c9;
+            --verde-50:  #e8f5e9;
+            --cinza-900: #212121; --cinza-800: #333333; --cinza-700: #555555;
+            --cinza-600: #666666; --cinza-500: #888888; --cinza-400: #aaaaaa;
+            --cinza-300: #cccccc; --cinza-200: #e0e0e0; --cinza-100: #f0f0f0;
+            --cinza-50:  #fafafa; --branco: #ffffff;
+            --erro: #d32f2f; --erro-bg: #ffebee;
+            --sucesso: #388e3c; --sucesso-bg: #e8f5e9;
+            --amarelo: #f9a825; --amarelo-bg: #fff8e1;
+            --font-display: 'Poppins', sans-serif;
+            --font-body: 'Inter', sans-serif;
+            --sombra-sm: 0 1px 3px rgba(0,0,0,0.08);
+            --radius-sm: 6px; --radius-md: 10px;
+        }
+
+        html, body { height: 100%; font-family: var(--font-body); background: var(--cinza-50); color: var(--cinza-800); -webkit-font-smoothing: antialiased; }
+
+        /* ═══ LAYOUT ═══ */
+        .cadastro-container { display: flex; min-height: 100vh; }
+
+        .painel-branding {
+            flex: 0 0 45%; background: linear-gradient(160deg, var(--verde-900) 0%, var(--verde-700) 40%, var(--verde-600) 100%);
+            display: flex; flex-direction: column; justify-content: center; padding: 60px; position: relative; overflow: hidden;
+        }
+        .painel-branding::before { content: ''; position: absolute; top: -120px; right: -120px; width: 400px; height: 400px; border-radius: 50%; background: rgba(255,255,255,0.04); }
+        .painel-branding::after { content: ''; position: absolute; bottom: -80px; left: -80px; width: 300px; height: 300px; border-radius: 50%; background: rgba(255,255,255,0.03); }
+
+        .brand-logo { font-family: var(--font-display); font-weight: 800; font-size: 2.4rem; color: var(--branco); margin-bottom: 8px; letter-spacing: -0.5px; position: relative; z-index: 1; }
+        .brand-logo span { color: var(--verde-200); }
+        .brand-tagline { font-size: 0.95rem; color: rgba(255,255,255,0.75); margin-bottom: 48px; line-height: 1.5; position: relative; z-index: 1; }
+
+        .brand-features { list-style: none; position: relative; z-index: 1; }
+        .brand-features li { display: flex; align-items: flex-start; gap: 14px; margin-bottom: 24px; color: rgba(255,255,255,0.9); font-size: 0.92rem; line-height: 1.55; }
+        .brand-features li .feature-icon { flex-shrink: 0; width: 36px; height: 36px; border-radius: 10px; background: rgba(255,255,255,0.12); display: flex; align-items: center; justify-content: center; font-size: 1.1rem; margin-top: 2px; }
+        .brand-features li strong { color: var(--branco); font-weight: 600; }
+        .brand-versao { position: absolute; bottom: 32px; left: 60px; background: rgba(255,255,255,0.12); color: rgba(255,255,255,0.7); padding: 4px 12px; border-radius: 20px; font-size: 0.75rem; font-weight: 500; z-index: 1; }
+
+        .painel-form { flex: 0 0 55%; display: flex; align-items: center; justify-content: center; padding: 40px; background: var(--branco); }
+        .form-wrapper { width: 100%; max-width: 440px; }
+        .form-titulo { font-family: var(--font-display); font-size: 1.65rem; font-weight: 700; color: var(--cinza-900); margin-bottom: 6px; }
+        .form-subtitulo { font-size: 0.92rem; color: var(--cinza-600); margin-bottom: 32px; }
+
+        /* Botão Google */
+        .btn-google { width: 100%; display: flex; align-items: center; justify-content: center; gap: 12px; padding: 13px 20px; border: 1.5px solid var(--cinza-200); border-radius: var(--radius-md); background: var(--branco); font-family: var(--font-body); font-size: 0.92rem; font-weight: 500; color: var(--cinza-800); cursor: pointer; transition: all 0.2s ease; }
+        .btn-google:hover { background: var(--cinza-50); border-color: var(--cinza-300); box-shadow: var(--sombra-sm); }
+        .btn-google:disabled { opacity: 0.6; cursor: not-allowed; }
+        .btn-google svg { width: 20px; height: 20px; }
+
+        .divisor { display: flex; align-items: center; gap: 16px; margin: 24px 0; }
+        .divisor::before, .divisor::after { content: ''; flex: 1; height: 1px; background: var(--cinza-200); }
+        .divisor span { font-size: 0.82rem; color: var(--cinza-500); font-weight: 500; }
+
+        /* Campos */
+        .campo-grupo { margin-bottom: 20px; }
+        .campo-grupo label { display: block; font-size: 0.85rem; font-weight: 500; color: var(--cinza-800); margin-bottom: 6px; }
+        .campo-input-wrapper { position: relative; }
+        .campo-input { width: 100%; padding: 12px 16px; border: 1.5px solid var(--cinza-200); border-radius: var(--radius-md); font-family: var(--font-body); font-size: 0.92rem; color: var(--cinza-900); background: var(--branco); transition: all 0.2s ease; outline: none; }
+        .campo-input::placeholder { color: var(--cinza-400); }
+        .campo-input:focus { border-color: var(--verde-500); box-shadow: 0 0 0 3px rgba(76,175,80,0.12); }
+        .campo-input.campo-erro { border-color: var(--erro); box-shadow: 0 0 0 3px rgba(211,47,47,0.08); }
+        .campo-dica { font-size: 0.78rem; color: var(--cinza-500); margin-top: 5px; }
+        .campo-erro-msg { font-size: 0.78rem; color: var(--erro); margin-top: 5px; display: none; }
+
+        .btn-toggle-senha { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; color: var(--cinza-400); padding: 4px; display: flex; transition: color 0.2s; }
+        .btn-toggle-senha:hover { color: var(--cinza-700); }
+
+        /* ═══ BLOCO DE TERMOS — Destaque visual ═══ */
+        .bloco-termos {
+            background: var(--amarelo-bg);
+            border: 1.5px solid var(--amarelo);
+            border-radius: 12px;
+            padding: 16px 18px;
+            margin-bottom: 24px;
+        }
+
+        .bloco-termos-aviso {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            font-size: 0.82rem;
+            color: #795600;
+            font-weight: 500;
+            line-height: 1.45;
+            margin-bottom: 14px;
+        }
+
+        .bloco-termos-aviso .aviso-icone { flex-shrink: 0; font-size: 1rem; margin-top: 1px; }
+
+        .bloco-termos-check {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+        }
+
+        .bloco-termos-check input[type="checkbox"] {
+            width: 20px; height: 20px; margin-top: 2px;
+            accent-color: var(--verde-700); cursor: pointer; flex-shrink: 0;
+        }
+
+        .bloco-termos-check label {
+            font-size: 0.88rem; color: var(--cinza-800); line-height: 1.45; cursor: pointer;
+        }
+
+        .bloco-termos-check label a {
+            color: var(--verde-700); text-decoration: none; font-weight: 600;
+        }
+
+        .bloco-termos-check label a:hover { text-decoration: underline; }
+
+        .bloco-termos-assinatura {
+            font-size: 0.75rem;
+            color: var(--cinza-500);
+            margin-top: 10px;
+            padding-left: 30px;
+            line-height: 1.4;
+            display: none;
+        }
+
+        .bloco-termos-assinatura.visivel { display: block; }
+
+        /* Alertas */
+        .alerta-erro { display: none; background: var(--erro-bg); border: 1px solid rgba(211,47,47,0.15); border-left: 4px solid var(--erro); border-radius: var(--radius-sm); padding: 12px 16px; margin-bottom: 20px; font-size: 0.85rem; color: var(--erro); line-height: 1.4; align-items: center; gap: 10px; }
+        .alerta-erro.visivel { display: flex; }
+        .alerta-sucesso { display: none; background: var(--sucesso-bg); border: 1px solid rgba(56,142,60,0.15); border-left: 4px solid var(--sucesso); border-radius: var(--radius-sm); padding: 12px 16px; margin-bottom: 20px; font-size: 0.85rem; color: var(--sucesso); line-height: 1.4; align-items: center; gap: 10px; }
+        .alerta-sucesso.visivel { display: flex; }
+
+        /* Botão Submit */
+        .btn-cadastrar { width: 100%; padding: 14px 20px; background: var(--verde-700); color: var(--branco); border: none; border-radius: var(--radius-md); font-family: var(--font-body); font-size: 0.95rem; font-weight: 600; cursor: pointer; transition: all 0.2s ease; }
+        .btn-cadastrar:hover { background: var(--verde-800); box-shadow: 0 4px 14px rgba(56,142,60,0.3); }
+        .btn-cadastrar:disabled { opacity: 0.7; cursor: not-allowed; }
+        .btn-cadastrar .spinner { display: none; width: 20px; height: 20px; border: 2.5px solid rgba(255,255,255,0.3); border-top-color: var(--branco); border-radius: 50%; animation: spin 0.7s linear infinite; margin: 0 auto; }
+        .btn-cadastrar.carregando .btn-texto { display: none; }
+        .btn-cadastrar.carregando .spinner { display: block; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .link-login { text-align: center; margin-top: 24px; font-size: 0.88rem; color: var(--cinza-600); }
+        .link-login a { color: var(--verde-700); text-decoration: none; font-weight: 600; }
+        .link-login a:hover { text-decoration: underline; }
+
+        /* Força senha */
+        .senha-forca { display: none; margin-top: 8px; }
+        .senha-forca.visivel { display: block; }
+        .senha-forca-barra { height: 4px; border-radius: 2px; background: var(--cinza-200); overflow: hidden; }
+        .senha-forca-barra-inner { height: 100%; width: 0%; border-radius: 2px; transition: all 0.3s ease; }
+        .senha-forca-texto { font-size: 0.75rem; margin-top: 4px; font-weight: 500; }
+        .forca-fraca .senha-forca-barra-inner { width: 33%; background: var(--erro); }
+        .forca-fraca .senha-forca-texto { color: var(--erro); }
+        .forca-media .senha-forca-barra-inner { width: 66%; background: #f9a825; }
+        .forca-media .senha-forca-texto { color: #f9a825; }
+        .forca-forte .senha-forca-barra-inner { width: 100%; background: var(--verde-600); }
+        .forca-forte .senha-forca-texto { color: var(--verde-600); }
+
+        /* ═══ MODAL SIMPLES — Pra quem quiser ler ═══ */
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 9999; align-items: center; justify-content: center; padding: 20px; backdrop-filter: blur(3px); }
+        .modal-overlay.visivel { display: flex; }
+
+        .modal-termos { background: var(--branco); border-radius: 16px; width: 100%; max-width: 640px; max-height: 85vh; display: flex; flex-direction: column; box-shadow: 0 20px 60px rgba(0,0,0,0.25); animation: modalEntrar 0.3s ease; }
+        @keyframes modalEntrar { from { transform: translateY(30px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+        .modal-header { padding: 24px 28px 16px; border-bottom: 1px solid var(--cinza-100); display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+        .modal-header h2 { font-family: var(--font-display); font-size: 1.2rem; font-weight: 700; color: var(--cinza-900); display: flex; align-items: center; gap: 10px; }
+        .btn-fechar-modal { background: none; border: none; font-size: 1.5rem; color: var(--cinza-400); cursor: pointer; padding: 4px; line-height: 1; transition: color 0.2s; }
+        .btn-fechar-modal:hover { color: var(--cinza-700); }
+
+        .modal-tabs { display: flex; border-bottom: 1px solid var(--cinza-100); flex-shrink: 0; padding: 0 28px; }
+        .modal-tab { padding: 12px 20px; font-size: 0.88rem; font-weight: 600; color: var(--cinza-500); cursor: pointer; border: none; background: none; border-bottom: 3px solid transparent; transition: all 0.2s; font-family: var(--font-body); }
+        .modal-tab:hover { color: var(--cinza-800); }
+        .modal-tab.ativa { color: var(--verde-700); border-bottom-color: var(--verde-700); }
+
+        .modal-body { flex: 1; overflow-y: auto; padding: 24px 28px; font-size: 0.88rem; color: var(--cinza-700); line-height: 1.7; }
+        .modal-body::-webkit-scrollbar { width: 6px; }
+        .modal-body::-webkit-scrollbar-track { background: var(--cinza-50); }
+        .modal-body::-webkit-scrollbar-thumb { background: var(--cinza-300); border-radius: 3px; }
+        .modal-body h3 { font-family: var(--font-display); font-size: 1.05rem; font-weight: 700; color: var(--cinza-900); margin: 20px 0 10px; }
+        .modal-body h3:first-child { margin-top: 0; }
+        .modal-body p { margin-bottom: 10px; }
+        .modal-body ul { padding-left: 20px; margin: 8px 0 12px; }
+        .modal-body li { margin-bottom: 6px; }
+        .modal-body strong { color: var(--cinza-900); }
+        .modal-body .alerta-interno { background: var(--amarelo-bg); border: 1px solid var(--amarelo); border-radius: 10px; padding: 16px 20px; margin: 16px 0; }
+        .modal-body .alerta-interno p { color: #795600; font-weight: 500; margin: 0; }
+        .modal-body .alerta-vermelho { background: var(--erro-bg); border: 1px solid rgba(211,47,47,0.2); border-radius: 10px; padding: 16px 20px; margin: 16px 0; }
+        .modal-body .alerta-vermelho p { color: var(--erro); font-weight: 500; margin: 0; }
+
+        .tab-content { display: none; }
+        .tab-content.ativo { display: block; }
+
+        .modal-footer { padding: 16px 28px 24px; border-top: 1px solid var(--cinza-100); flex-shrink: 0; text-align: center; }
+        .btn-fechar-modal-footer { padding: 12px 32px; background: var(--verde-700); color: var(--branco); border: none; border-radius: var(--radius-md); font-family: var(--font-body); font-size: 0.92rem; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+        .btn-fechar-modal-footer:hover { background: var(--verde-800); }
+
+        /* Responsivo */
+        @media (max-width: 1024px) { .painel-branding { flex: 0 0 40%; padding: 40px; } .painel-form { flex: 0 0 60%; } }
+        @media (max-width: 768px) {
+            .cadastro-container { flex-direction: column; }
+            .painel-branding { flex: none; padding: 32px 24px; min-height: auto; }
+            .brand-features { display: none; }
+            .brand-tagline { margin-bottom: 0; }
+            .brand-versao { position: static; display: inline-block; margin-top: 16px; }
+            .painel-form { flex: 1; padding: 32px 24px; }
+            .form-wrapper { max-width: 100%; }
+            .modal-termos { max-height: 90vh; }
+            .modal-header, .modal-tabs, .modal-body, .modal-footer { padding-left: 20px; padding-right: 20px; }
+        }
+        @media (max-width: 480px) { .painel-branding { padding: 24px 20px; } .painel-form { padding: 24px 20px; } .form-titulo { font-size: 1.4rem; } .modal-tab { padding: 10px 12px; font-size: 0.82rem; } }
+    </style>
+</head>
+<body>
+
+<div class="cadastro-container">
+    <!-- PAINEL BRANDING -->
+    <div class="painel-branding">
+        <div class="brand-logo">IMPOST<span>.</span></div>
+        <p class="brand-tagline">Inteligência em Modelagem de<br>Otimização Tributária</p>
+        <ul class="brand-features">
+            <li><div class="feature-icon">📊</div><div>Compare <strong>Simples Nacional</strong>, <strong>Lucro Presumido</strong> e <strong>Lucro Real</strong> com dados reais por estado</div></li>
+            <li><div class="feature-icon">📈</div><div>Estudos tributários detalhados com <strong>break-even</strong>, economia e análise de cenários</div></li>
+            <li><div class="feature-icon">🏛️</div><div>Incentivos fiscais por UF — <strong>SUDAM</strong>, <strong>SUDENE</strong>, Zona Franca e mais</div></li>
+            <li><div class="feature-icon">⚖️</div><div>Alíquotas atualizadas e regras de <strong>JCP</strong>, <strong>PIS/COFINS</strong>, retenções e créditos</div></li>
+        </ul>
+        <div class="brand-versao">v3.7.1</div>
+    </div>
+
+    <!-- PAINEL FORMULÁRIO -->
+    <div class="painel-form">
+        <div class="form-wrapper">
+            <h1 class="form-titulo">Crie sua conta grátis</h1>
+            <p class="form-subtitulo">Comece a otimizar sua carga tributária agora mesmo</p>
+
+            <div class="alerta-erro" id="alerta-erro"><span>⚠️</span><span id="alerta-erro-msg"></span></div>
+            <div class="alerta-sucesso" id="alerta-sucesso"><span>✅</span><span>Conta criada com sucesso! Redirecionando...</span></div>
+
+            <button type="button" class="btn-google" id="btn-google">
+                <svg viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
+                Cadastrar com Google
+            </button>
+
+            <div class="divisor"><span>ou</span></div>
+
+            <form id="form-cadastro" novalidate>
+                <div class="campo-grupo">
+                    <label for="nome">Nome completo</label>
+                    <div class="campo-input-wrapper"><input type="text" class="campo-input" id="nome" placeholder="Seu nome completo" autocomplete="name" required></div>
+                    <p class="campo-erro-msg" id="nome-erro"></p>
+                </div>
+                <div class="campo-grupo">
+                    <label for="email">E-mail</label>
+                    <div class="campo-input-wrapper"><input type="email" class="campo-input" id="email" placeholder="seu@email.com" autocomplete="email" required></div>
+                    <p class="campo-erro-msg" id="email-erro"></p>
+                </div>
+                <div class="campo-grupo">
+                    <label for="senha">Senha</label>
+                    <div class="campo-input-wrapper">
+                        <input type="password" class="campo-input" id="senha" placeholder="Mínimo 8 caracteres" autocomplete="new-password" required>
+                        <button type="button" class="btn-toggle-senha" data-target="senha" aria-label="Mostrar senha"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
+                    </div>
+                    <div class="senha-forca" id="senha-forca"><div class="senha-forca-barra"><div class="senha-forca-barra-inner"></div></div><p class="senha-forca-texto" id="senha-forca-texto"></p></div>
+                    <p class="campo-dica">Mínimo 8 caracteres</p>
+                    <p class="campo-erro-msg" id="senha-erro"></p>
+                </div>
+                <div class="campo-grupo">
+                    <label for="confirmar-senha">Confirmar senha</label>
+                    <div class="campo-input-wrapper">
+                        <input type="password" class="campo-input" id="confirmar-senha" placeholder="Repita a senha" autocomplete="new-password" required>
+                        <button type="button" class="btn-toggle-senha" data-target="confirmar-senha" aria-label="Mostrar senha"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
+                    </div>
+                    <p class="campo-erro-msg" id="confirmar-senha-erro"></p>
+                </div>
+
+                <!-- ═══ BLOCO DE TERMOS — Caixa amarela com aviso claro ═══ -->
+                <div class="bloco-termos">
+                    <div class="bloco-termos-aviso">
+                        <span class="aviso-icone">⚠️</span>
+                        <span>Ao marcar a caixa abaixo, você está <strong>assinando digitalmente</strong> que concorda com nossos termos. O IMPOST. é apenas uma ferramenta de simulação e <strong>não substitui contador ou advogado</strong>.</span>
+                    </div>
+                    <div class="bloco-termos-check">
+                        <input type="checkbox" id="termos">
+                        <label for="termos">
+                            Concordo com os
+                            <a href="#" id="link-abrir-termos">Termos de Uso</a> e a
+                            <a href="#" id="link-abrir-privacidade">Política de Privacidade</a>
+                        </label>
+                    </div>
+                    <p class="bloco-termos-assinatura" id="termos-assinatura"></p>
+                </div>
+
+                <button type="submit" class="btn-cadastrar" id="btn-cadastrar">
+                    <span class="btn-texto">Criar conta grátis</span>
+                    <div class="spinner"></div>
+                </button>
+            </form>
+
+            <p class="link-login">Já tem conta? <a href="login.html">Entrar</a></p>
+        </div>
+    </div>
+</div>
+
+<!-- ═══ MODAL — Leitura opcional dos termos ═══ -->
+<div class="modal-overlay" id="modal-termos-overlay">
+    <div class="modal-termos">
+        <div class="modal-header">
+            <h2>📋 Termos e Privacidade</h2>
+            <button class="btn-fechar-modal" id="btn-fechar-modal" aria-label="Fechar">&times;</button>
+        </div>
+        <div class="modal-tabs">
+            <button class="modal-tab ativa" data-tab="termos">Termos de Uso</button>
+            <button class="modal-tab" data-tab="privacidade">Privacidade</button>
+        </div>
+        <div class="modal-body" id="modal-body">
+            <!-- TERMOS -->
+            <div class="tab-content ativo" id="tab-termos">
+                <div class="alerta-interno"><p>⚠️ <strong>ATENÇÃO:</strong> O IMPOST. é exclusivamente uma ferramenta de simulação tributária. Os resultados NÃO constituem recomendação contábil, consultoria tributária, parecer jurídico ou assessoria fiscal. NÃO substitui contador, advogado ou qualquer profissional habilitado.</p></div>
+                <h3>1. Aceitação dos Termos</h3><p>Ao criar conta e utilizar a plataforma IMPOST., você declara que leu, compreendeu e concorda com estes Termos de Uso.</p>
+                <h3>2. Natureza da Ferramenta</h3><p>O IMPOST. é uma <strong>ferramenta de simulação, modelagem e comparação de regimes tributários</strong>. Gera simulações numéricas, apresenta ideias de economias, compara regimes (Simples Nacional, Lucro Presumido, Lucro Real), cita referências legais e serve como ponto de partida para discussões com profissionais.</p>
+                <div class="alerta-vermelho"><p>🚫 O IMPOST. <strong>NÃO é escritório de contabilidade</strong>, <strong>NÃO é consultoria tributária</strong>, <strong>NÃO é assessoria jurídica</strong> e <strong>NÃO substitui nenhum profissional habilitado</strong>. NÃO fornece recomendações de regime, pareceres, laudos, consultoria individualizada ou garantia de exatidão.</p></div>
+                <h3>3. Isenção de Responsabilidade</h3><p>Os cálculos e resultados são apresentados "como estão" (as is), com finalidade <strong>exclusivamente informativa e educacional</strong>. O IMPOST. NÃO se responsabiliza por decisões tomadas com base nos resultados, prejuízos financeiros ou tributários, erros por dados incorretos, mudanças na legislação, interpretações equivocadas ou autuações fiscais.</p>
+                <div class="alerta-vermelho"><p>⚖️ O Usuário é <strong>integralmente responsável</strong> por validar todos os resultados com profissional habilitado (contador CRC e/ou advogado OAB) antes de qualquer decisão tributária.</p></div>
+                <h3>4. Referências Legais</h3><p>As referências legais citadas são material de apoio informativo. A legislação tributária sofre alterações frequentes e pode estar desatualizada.</p>
+                <div class="alerta-interno"><p>📚 <strong>Todas as referências legais podem e devem ser conferidas</strong> nas fontes oficiais (planalto.gov.br, normas.receita.fazenda.gov.br).</p></div>
+                <h3>5. Cadastro e Conta</h3><p>Informações verdadeiras, credenciais confidenciais, conta pessoal e intransferível.</p>
+                <h3>6. Planos</h3><p>Modelo Freemium. Independente do plano, a natureza informativa permanece inalterada.</p>
+                <h3>7. Uso Adequado</h3><p>NÃO usar para evasão fiscal, engenharia reversa, reprodução como pareceres, ou apresentação a terceiros como "consultoria profissional".</p>
+                <h3>8. Propriedade Intelectual</h3><p>Código, algoritmos, interface e marca são propriedade dos desenvolvedores. Dados do Usuário são do Usuário.</p>
+                <h3>9. Limitação de Responsabilidade</h3><p>Na máxima extensão da lei, NÃO haverá responsabilidade por danos diretos ou indiretos. Limite: valor pago nos últimos 12 meses.</p>
+                <h3>10. Legislação e Foro</h3><p>Leis brasileiras. Foro: Novo Progresso, Pará.</p>
+                <p style="margin-top:24px;color:var(--cinza-500);font-size:0.82rem;">Versão: <strong>2026.02.v1</strong></p>
+            </div>
+            <!-- PRIVACIDADE -->
+            <div class="tab-content" id="tab-privacidade">
+                <div class="alerta-interno"><p>🔒 O IMPOST. coleta apenas dados estritamente necessários. <strong>Não vendemos, compartilhamos ou comercializamos seus dados.</strong> Dados tributários dos cálculos não são armazenados permanentemente. O IMPOST. é ferramenta de simulação e não substitui profissionais.</p></div>
+                <h3>1. Informações Gerais</h3><p>Conforme LGPD (Lei 13.709/2018) e Marco Civil da Internet (Lei 12.965/2014).</p>
+                <h3>2. Dados Coletados</h3><p><strong>Fornecidos:</strong> nome, e-mail, senha (hash), telefone (opcional). <strong>Automáticos:</strong> IP, data/hora, navegador, páginas. <strong>Pagamento:</strong> processado direto no gateway — NÃO armazenamos dados de cartão.</p>
+                <h3>3. Dados Tributários nos Cálculos</h3>
+                <div class="alerta-vermelho"><p>⚠️ Os dados financeiros nos formulários são usados EXCLUSIVAMENTE para gerar a simulação. NÃO são enviados à Receita Federal, NÃO são compartilhados, NÃO são armazenados permanentemente.</p></div>
+                <h3>4. Uso dos Dados</h3><p>Para: autenticação, cálculos, conta/assinatura, comunicações transacionais, segurança, analytics agregados. NÃO para: publicidade, venda ou perfis comerciais.</p>
+                <h3>5. Compartilhamento</h3><p>Apenas com: Google Firebase (auth/banco), Stripe/Mercado Pago (pagamentos), GitHub Pages (hospedagem). <strong>Não vendemos dados.</strong></p>
+                <h3>6. Segurança</h3><p>TLS/HTTPS, senhas em hash, regras Firestore por UID. Dados de cálculo processados em memória sem gravação.</p>
+                <h3>7. Direitos LGPD</h3><p>Confirmação, acesso, correção, anonimização, eliminação, portabilidade, revogação e oposição. Contato: contato@impost.com.br (15 dias úteis).</p>
+                <h3>8. Retenção</h3><p>Conta ativa = dados mantidos. Exclusão em 30 dias após solicitação. Logs: 6 meses (Marco Civil).</p>
+                <h3>9. Menores</h3><p>Não destinado a menores de 18 anos.</p>
+                <p style="margin-top:24px;color:var(--cinza-500);font-size:0.82rem;">Versão: <strong>2026.02.v1</strong></p>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn-fechar-modal-footer" id="btn-fechar-modal-footer">Fechar</button>
+        </div>
+    </div>
+</div>
+
+<!-- SCRIPTS -->
+<script src="https://www.gstatic.com/firebasejs/11.4.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/11.4.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/11.4.0/firebase-firestore-compat.js"></script>
+<script src="../scripts/firebase-config.js"></script>
+<script src="../scripts/cadastro.js"></script>
+
+</body>
+</html>
