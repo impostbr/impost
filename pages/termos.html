@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Termos de Uso — IMPOST.</title>
+    <meta name="description" content="Termos de Uso da plataforma IMPOST — Inteligência em Modelagem de Otimização Tributária">
+    <link rel="icon" href="assets/favicon.ico" type="image/x-icon">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@600;700;800&display=swap" rel="stylesheet">
+    <style>
+        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --verde-900: #1b5e20;
+            --verde-800: #2e7d32;
+            --verde-700: #388e3c;
+            --verde-600: #43a047;
+            --verde-500: #4caf50;
+            --verde-400: #66bb6a;
+            --verde-200: #a5d6a7;
+            --verde-100: #c8e6c9;
+            --verde-50:  #e8f5e9;
+            --cinza-900: #212121;
+            --cinza-800: #333333;
+            --cinza-700: #555555;
+            --cinza-600: #666666;
+            --cinza-500: #888888;
+            --cinza-300: #cccccc;
+            --cinza-200: #e0e0e0;
+            --cinza-100: #f0f0f0;
+            --cinza-50:  #fafafa;
+            --branco:    #ffffff;
+            --erro:      #d32f2f;
+            --erro-bg:   #ffebee;
+            --amarelo:   #f9a825;
+            --amarelo-bg:#fff8e1;
+            --font-display: 'Poppins', sans-serif;
+            --font-body: 'Inter', sans-serif;
+        }
+
+        html { scroll-behavior: smooth; }
+
+        body {
+            font-family: var(--font-body);
+            background: var(--cinza-50);
+            color: var(--cinza-800);
+            -webkit-font-smoothing: antialiased;
+            line-height: 1.7;
+        }
+
+        /* ═══ HEADER ═══ */
+        .header {
+            background: linear-gradient(160deg, var(--verde-900) 0%, var(--verde-700) 100%);
+            padding: 0 40px;
+            height: 64px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+
+        .header-logo {
+            font-family: var(--font-display);
+            font-weight: 800;
+            font-size: 1.5rem;
+            color: var(--branco);
+            text-decoration: none;
+            letter-spacing: -0.5px;
+        }
+
+        .header-logo span { color: var(--verde-200); }
+
+        .header-nav { display: flex; gap: 24px; align-items: center; }
+
+        .header-nav a {
+            color: rgba(255,255,255,0.8);
+            text-decoration: none;
+            font-size: 0.88rem;
+            font-weight: 500;
+            transition: color 0.2s;
+        }
+
+        .header-nav a:hover { color: var(--branco); }
+
+        .header-nav .btn-voltar {
+            background: rgba(255,255,255,0.15);
+            padding: 8px 20px;
+            border-radius: 8px;
+            color: var(--branco);
+            font-weight: 600;
+        }
+
+        .header-nav .btn-voltar:hover { background: rgba(255,255,255,0.25); }
+
+        /* ═══ HERO BANNER ═══ */
+        .hero-legal {
+            background: linear-gradient(160deg, var(--verde-900) 0%, var(--verde-700) 50%, var(--verde-600) 100%);
+            padding: 60px 40px 48px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .hero-legal::before {
+            content: '';
+            position: absolute;
+            top: -100px;
+            right: -100px;
+            width: 350px;
+            height: 350px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.03);
+        }
+
+        .hero-legal h1 {
+            font-family: var(--font-display);
+            font-size: 2.2rem;
+            font-weight: 700;
+            color: var(--branco);
+            margin-bottom: 8px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .hero-legal p {
+            color: rgba(255,255,255,0.7);
+            font-size: 0.95rem;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* ═══ ALERTA DESTAQUE — DISCLAIMER PRINCIPAL ═══ */
+        .alerta-destaque {
+            max-width: 860px;
+            margin: -28px auto 0;
+            background: var(--amarelo-bg);
+            border: 2px solid var(--amarelo);
+            border-radius: 14px;
+            padding: 28px 32px;
+            position: relative;
+            z-index: 10;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+        }
+
+        .alerta-destaque-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        .alerta-destaque-header .icone {
+            font-size: 1.8rem;
+            flex-shrink: 0;
+        }
+
+        .alerta-destaque-header h2 {
+            font-family: var(--font-display);
+            font-size: 1.15rem;
+            font-weight: 700;
+            color: var(--cinza-900);
+        }
+
+        .alerta-destaque p {
+            font-size: 0.92rem;
+            color: var(--cinza-700);
+            line-height: 1.7;
+        }
+
+        .alerta-destaque strong { color: var(--cinza-900); }
+
+        /* ═══ CONTEÚDO PRINCIPAL ═══ */
+        .conteudo {
+            max-width: 860px;
+            margin: 40px auto 60px;
+            padding: 0 24px;
+        }
+
+        .secao {
+            background: var(--branco);
+            border-radius: 14px;
+            padding: 36px 40px;
+            margin-bottom: 24px;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+            border: 1px solid var(--cinza-100);
+        }
+
+        .secao-numero {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 32px;
+            height: 32px;
+            background: var(--verde-50);
+            color: var(--verde-700);
+            border-radius: 8px;
+            font-size: 0.85rem;
+            font-weight: 700;
+            margin-bottom: 12px;
+        }
+
+        .secao h2 {
+            font-family: var(--font-display);
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: var(--cinza-900);
+            margin-bottom: 16px;
+        }
+
+        .secao h3 {
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--cinza-800);
+            margin-top: 20px;
+            margin-bottom: 10px;
+        }
+
+        .secao p {
+            font-size: 0.92rem;
+            color: var(--cinza-700);
+            margin-bottom: 12px;
+        }
+
+        .secao p:last-child { margin-bottom: 0; }
+
+        .secao ul, .secao ol {
+            margin: 12px 0;
+            padding-left: 24px;
+        }
+
+        .secao li {
+            font-size: 0.92rem;
+            color: var(--cinza-700);
+            margin-bottom: 8px;
+            line-height: 1.6;
+        }
+
+        /* Caixa de destaque dentro das seções */
+        .destaque-box {
+            background: var(--verde-50);
+            border-left: 4px solid var(--verde-600);
+            border-radius: 0 10px 10px 0;
+            padding: 18px 24px;
+            margin: 16px 0;
+        }
+
+        .destaque-box p {
+            color: var(--verde-900);
+            font-weight: 500;
+        }
+
+        .destaque-box-vermelho {
+            background: var(--erro-bg);
+            border-left: 4px solid var(--erro);
+            border-radius: 0 10px 10px 0;
+            padding: 18px 24px;
+            margin: 16px 0;
+        }
+
+        .destaque-box-vermelho p {
+            color: var(--erro);
+            font-weight: 500;
+        }
+
+        .destaque-box-amarelo {
+            background: var(--amarelo-bg);
+            border-left: 4px solid var(--amarelo);
+            border-radius: 0 10px 10px 0;
+            padding: 18px 24px;
+            margin: 16px 0;
+        }
+
+        .destaque-box-amarelo p {
+            color: #795600;
+            font-weight: 500;
+        }
+
+        /* ═══ SUMÁRIO / TOC ═══ */
+        .toc {
+            background: var(--branco);
+            border-radius: 14px;
+            padding: 28px 36px;
+            margin-bottom: 24px;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+            border: 1px solid var(--cinza-100);
+        }
+
+        .toc h3 {
+            font-family: var(--font-display);
+            font-size: 1rem;
+            font-weight: 700;
+            color: var(--cinza-900);
+            margin-bottom: 14px;
+        }
+
+        .toc ol {
+            padding-left: 20px;
+            columns: 2;
+            column-gap: 32px;
+        }
+
+        .toc li {
+            font-size: 0.88rem;
+            margin-bottom: 8px;
+            break-inside: avoid;
+        }
+
+        .toc a {
+            color: var(--verde-700);
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .toc a:hover { text-decoration: underline; }
+
+        /* ═══ FOOTER ═══ */
+        .footer {
+            background: var(--cinza-900);
+            padding: 32px 40px;
+            text-align: center;
+        }
+
+        .footer p {
+            color: rgba(255,255,255,0.5);
+            font-size: 0.82rem;
+            margin-bottom: 4px;
+        }
+
+        .footer a {
+            color: var(--verde-400);
+            text-decoration: none;
+        }
+
+        .footer a:hover { text-decoration: underline; }
+
+        /* ═══ RESPONSIVO ═══ */
+        @media (max-width: 768px) {
+            .header { padding: 0 20px; }
+            .hero-legal { padding: 40px 20px 36px; }
+            .hero-legal h1 { font-size: 1.7rem; }
+            .alerta-destaque { margin: -20px 16px 0; padding: 22px 20px; }
+            .conteudo { padding: 0 16px; margin-top: 32px; }
+            .secao { padding: 28px 24px; }
+            .toc ol { columns: 1; }
+            .footer { padding: 24px 20px; }
+        }
+
+        @media (max-width: 480px) {
+            .header-nav a:not(.btn-voltar) { display: none; }
+            .hero-legal h1 { font-size: 1.4rem; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- ═══ HEADER ═══ -->
+<header class="header">
+    <a href="index.html" class="header-logo">IMPOST<span>.</span></a>
+    <nav class="header-nav">
+        <a href="privacidade.html">Privacidade</a>
+        <a href="pages/cadastro.html" class="btn-voltar">← Voltar ao cadastro</a>
+    </nav>
+</header>
+
+<!-- ═══ HERO ═══ -->
+<section class="hero-legal">
+    <h1>Termos de Uso</h1>
+    <p>Última atualização: Fevereiro de 2026</p>
+</section>
+
+<!-- ═══ ALERTA DISCLAIMER PRINCIPAL ═══ -->
+<div class="alerta-destaque">
+    <div class="alerta-destaque-header">
+        <span class="icone">⚠️</span>
+        <h2>ATENÇÃO — LEIA COM CUIDADO ANTES DE USAR</h2>
+    </div>
+    <p>
+        O IMPOST. é <strong>exclusivamente uma ferramenta de simulação e modelagem tributária</strong>. 
+        Os resultados, cálculos, comparações e sugestões apresentados <strong>NÃO constituem, em hipótese alguma, 
+        recomendação contábil, consultoria tributária, parecer jurídico ou assessoria fiscal</strong>. 
+        Esta ferramenta <strong>NÃO substitui</strong> o trabalho de um <strong>contador</strong>, 
+        <strong>advogado tributarista</strong> ou qualquer outro profissional habilitado. 
+        Todas as referências legais citadas nos cálculos (leis, decretos, instruções normativas) são fornecidas 
+        como <strong>referência informativa</strong> e <strong>devem ser conferidas</strong> pelo usuário ou por 
+        profissional competente antes de qualquer tomada de decisão.
+    </p>
+</div>
+
+<!-- ═══ CONTEÚDO ═══ -->
+<main class="conteudo">
+
+    <!-- Sumário -->
+    <nav class="toc">
+        <h3>📋 Sumário</h3>
+        <ol>
+            <li><a href="#s1">Aceitação dos Termos</a></li>
+            <li><a href="#s2">Natureza da Ferramenta</a></li>
+            <li><a href="#s3">Isenção de Responsabilidade</a></li>
+            <li><a href="#s4">Referências Legais</a></li>
+            <li><a href="#s5">Cadastro e Conta</a></li>
+            <li><a href="#s6">Planos e Assinaturas</a></li>
+            <li><a href="#s7">Uso Adequado</a></li>
+            <li><a href="#s8">Propriedade Intelectual</a></li>
+            <li><a href="#s9">Limitação de Responsabilidade</a></li>
+            <li><a href="#s10">Disponibilidade do Serviço</a></li>
+            <li><a href="#s11">Alterações nos Termos</a></li>
+            <li><a href="#s12">Legislação e Foro</a></li>
+            <li><a href="#s13">Contato</a></li>
+        </ol>
+    </nav>
+
+    <!-- 1 -->
+    <section class="secao" id="s1">
+        <div class="secao-numero">1</div>
+        <h2>Aceitação dos Termos</h2>
+        <p>
+            Ao criar uma conta, acessar ou utilizar a plataforma IMPOST. ("Plataforma"), disponível em 
+            <strong>impostbr.github.io/impost</strong>, você ("Usuário") declara que leu, compreendeu e 
+            concorda integralmente com estes Termos de Uso. Caso não concorde com qualquer disposição, 
+            não utilize a Plataforma.
+        </p>
+        <p>
+            A utilização continuada da Plataforma após eventuais alterações nestes Termos implica aceitação 
+            tácita das modificações.
+        </p>
+    </section>
+
+    <!-- 2 -->
+    <section class="secao" id="s2">
+        <div class="secao-numero">2</div>
+        <h2>Natureza da Ferramenta — O que o IMPOST. É e o que NÃO É</h2>
+
+        <h3>2.1 O que o IMPOST. É</h3>
+        <p>O IMPOST. é uma <strong>ferramenta digital de simulação, modelagem e comparação de regimes tributários brasileiros</strong>. Sua finalidade é:</p>
+        <ul>
+            <li>Gerar <strong>simulações numéricas</strong> com base nos dados informados pelo Usuário;</li>
+            <li>Apresentar <strong>ideias de possíveis economias tributárias</strong> para análise;</li>
+            <li>Fornecer <strong>comparações entre regimes</strong> (Simples Nacional, Lucro Presumido, Lucro Real) com indicadores como break-even, carga tributária estimada e cenários;</li>
+            <li>Citar <strong>referências legais</strong> (artigos de lei, decretos, instruções normativas) relacionadas aos cálculos apresentados;</li>
+            <li>Servir como <strong>ponto de partida</strong> para discussões com profissionais contábeis e jurídicos.</li>
+        </ul>
+
+        <h3>2.2 O que o IMPOST. NÃO É</h3>
+
+        <div class="destaque-box-vermelho">
+            <p>🚫 O IMPOST. <strong>NÃO é escritório de contabilidade</strong>, <strong>NÃO é consultoria tributária</strong>, <strong>NÃO é assessoria jurídica</strong> e <strong>NÃO é substituto para nenhum profissional habilitado</strong>.</p>
+        </div>
+
+        <p>A Plataforma <strong>NÃO fornece</strong>:</p>
+        <ul>
+            <li>Recomendações de qual regime tributário adotar;</li>
+            <li>Pareceres, laudos ou opiniões jurídicas;</li>
+            <li>Consultoria contábil ou fiscal individualizada;</li>
+            <li>Garantia de que os resultados apresentados refletem com exatidão a situação tributária real do Usuário;</li>
+            <li>Orientação profissional de qualquer espécie.</li>
+        </ul>
+
+        <div class="destaque-box-amarelo">
+            <p>💡 <strong>Em resumo:</strong> o IMPOST. é uma calculadora inteligente que mostra cenários e possibilidades. As decisões tributárias devem <strong>SEMPRE</strong> ser tomadas com orientação de um contador e/ou advogado tributarista.</p>
+        </div>
+    </section>
+
+    <!-- 3 -->
+    <section class="secao" id="s3">
+        <div class="secao-numero">3</div>
+        <h2>Isenção de Responsabilidade</h2>
+
+        <p><strong>3.1</strong> Os cálculos, simulações, comparações e quaisquer resultados gerados pela Plataforma são apresentados "como estão" (<em>as is</em>), com finalidade <strong>exclusivamente informativa e educacional</strong>.</p>
+
+        <p><strong>3.2</strong> O IMPOST. e seus desenvolvedores <strong>NÃO se responsabilizam</strong> por:</p>
+        <ul>
+            <li>Decisões tomadas pelo Usuário com base nos resultados da Plataforma;</li>
+            <li>Prejuízos financeiros, tributários, fiscais ou de qualquer natureza decorrentes do uso das simulações;</li>
+            <li>Erros nos cálculos causados por dados incorretos ou incompletos informados pelo Usuário;</li>
+            <li>Mudanças na legislação que tornem os cálculos desatualizados;</li>
+            <li>Interpretações equivocadas dos resultados por parte do Usuário;</li>
+            <li>Autuações, multas ou penalidades fiscais de qualquer espécie.</li>
+        </ul>
+
+        <div class="destaque-box-vermelho">
+            <p>⚖️ <strong>O Usuário é integralmente responsável</strong> por validar todos os resultados com profissional habilitado (contador registrado no CRC e/ou advogado inscrito na OAB) antes de tomar qualquer decisão tributária, fiscal ou empresarial.</p>
+        </div>
+
+        <p><strong>3.3</strong> A utilização da Plataforma implica que o Usuário compreende e aceita que está utilizando uma <strong>ferramenta de simulação</strong> — e não recebendo assessoria profissional.</p>
+    </section>
+
+    <!-- 4 -->
+    <section class="secao" id="s4">
+        <div class="secao-numero">4</div>
+        <h2>Referências Legais e Fontes</h2>
+
+        <p><strong>4.1</strong> A Plataforma cita referências legais (leis, decretos, instruções normativas, resoluções) vinculadas aos cálculos para fins de <strong>transparência e rastreabilidade</strong>.</p>
+
+        <p><strong>4.2</strong> Essas referências são fornecidas como <strong>material de apoio informativo</strong>. O Usuário declara estar ciente de que:</p>
+        <ul>
+            <li>A legislação tributária brasileira sofre <strong>alterações frequentes</strong> (novas leis, medidas provisórias, decisões judiciais, alterações de alíquotas);</li>
+            <li>As referências citadas podem estar <strong>desatualizadas</strong> no momento da consulta;</li>
+            <li>A interpretação de dispositivos legais depende de <strong>análise profissional especializada</strong> e do contexto específico de cada empresa;</li>
+            <li>Referências a incentivos fiscais (SUDAM, SUDENE, ZFM, etc.) requerem <strong>verificação de requisitos e vigência</strong> junto aos órgãos competentes.</li>
+        </ul>
+
+        <div class="destaque-box">
+            <p>📚 <strong>Todas as referências legais citadas pelo IMPOST. podem e devem ser conferidas</strong> pelo Usuário ou por profissional competente nas fontes oficiais (planalto.gov.br, normas.receita.fazenda.gov.br, etc.).</p>
+        </div>
+    </section>
+
+    <!-- 5 -->
+    <section class="secao" id="s5">
+        <div class="secao-numero">5</div>
+        <h2>Cadastro e Conta de Usuário</h2>
+
+        <p><strong>5.1</strong> Para acessar a Plataforma, o Usuário deve criar uma conta informando nome, e-mail e senha, ou autenticar-se via Google.</p>
+
+        <p><strong>5.2</strong> O Usuário é responsável por:</p>
+        <ul>
+            <li>Fornecer informações verdadeiras e atualizadas;</li>
+            <li>Manter a confidencialidade de suas credenciais de acesso;</li>
+            <li>Todas as atividades realizadas em sua conta.</li>
+        </ul>
+
+        <p><strong>5.3</strong> A conta é pessoal e intransferível. O compartilhamento de credenciais com terceiros é proibido e pode resultar em suspensão da conta.</p>
+
+        <p><strong>5.4</strong> O IMPOST. reserva-se o direito de suspender ou encerrar contas que violem estes Termos.</p>
+    </section>
+
+    <!-- 6 -->
+    <section class="secao" id="s6">
+        <div class="secao-numero">6</div>
+        <h2>Planos e Assinaturas</h2>
+
+        <p><strong>6.1</strong> A Plataforma opera no modelo <strong>Freemium</strong>:</p>
+        <ul>
+            <li><strong>Plano Gratuito (Free):</strong> acesso a funcionalidades básicas de simulação e consulta;</li>
+            <li><strong>Plano Pro (Assinatura):</strong> acesso a funcionalidades avançadas mediante pagamento recorrente.</li>
+        </ul>
+
+        <p><strong>6.2</strong> Os valores, formas de pagamento e condições do Plano Pro são apresentados na página de planos e podem ser alterados mediante aviso prévio de 30 dias.</p>
+
+        <p><strong>6.3</strong> O cancelamento da assinatura pode ser realizado a qualquer momento. O acesso ao Plano Pro permanece ativo até o fim do período já pago.</p>
+
+        <p><strong>6.4</strong> Independentemente do plano contratado, a natureza informativa e não vinculante dos resultados permanece inalterada — conforme seções 2 e 3 destes Termos.</p>
+    </section>
+
+    <!-- 7 -->
+    <section class="secao" id="s7">
+        <div class="secao-numero">7</div>
+        <h2>Uso Adequado da Plataforma</h2>
+
+        <p>O Usuário compromete-se a <strong>NÃO</strong>:</p>
+        <ul>
+            <li>Utilizar a Plataforma para fins ilícitos, fraudulentos ou de evasão fiscal;</li>
+            <li>Tentar acessar áreas restritas, sistemas internos ou dados de outros usuários;</li>
+            <li>Realizar engenharia reversa, descompilar ou copiar os motores de cálculo da Plataforma;</li>
+            <li>Utilizar bots, crawlers ou scripts automatizados para acessar a Plataforma em massa;</li>
+            <li>Reproduzir, distribuir ou comercializar os resultados como se fossem pareceres profissionais;</li>
+            <li>Apresentar os resultados da Plataforma a clientes ou terceiros como "consultoria", "parecer" ou "recomendação profissional".</li>
+        </ul>
+
+        <div class="destaque-box-amarelo">
+            <p>⚠️ Os resultados do IMPOST. são <strong>simulações para uso interno e análise</strong>. Apresentá-los a terceiros como "parecer contábil" ou "recomendação tributária" configura uso indevido.</p>
+        </div>
+    </section>
+
+    <!-- 8 -->
+    <section class="secao" id="s8">
+        <div class="secao-numero">8</div>
+        <h2>Propriedade Intelectual</h2>
+
+        <p><strong>8.1</strong> Todo o conteúdo da Plataforma — incluindo mas não se limitando ao código-fonte, algoritmos de cálculo, interface, textos, gráficos, identidade visual e marca IMPOST. — é de propriedade exclusiva dos desenvolvedores e está protegido pela legislação de propriedade intelectual.</p>
+
+        <p><strong>8.2</strong> Os dados informados pelo Usuário permanecem de propriedade do Usuário. A Plataforma utiliza esses dados exclusivamente para gerar as simulações solicitadas.</p>
+
+        <p><strong>8.3</strong> É proibida a reprodução, cópia, modificação ou distribuição de qualquer parte da Plataforma sem autorização expressa e por escrito.</p>
+    </section>
+
+    <!-- 9 -->
+    <section class="secao" id="s9">
+        <div class="secao-numero">9</div>
+        <h2>Limitação de Responsabilidade</h2>
+
+        <p><strong>9.1</strong> Na máxima extensão permitida pela legislação brasileira, o IMPOST. e seus desenvolvedores, sócios, colaboradores e afiliados <strong>NÃO serão responsáveis</strong> por quaisquer danos diretos, indiretos, incidentais, consequenciais, especiais ou punitivos decorrentes do uso ou da impossibilidade de uso da Plataforma.</p>
+
+        <p><strong>9.2</strong> Essa limitação aplica-se a, sem se limitar:</p>
+        <ul>
+            <li>Perdas financeiras ou tributárias baseadas em simulações;</li>
+            <li>Lucros cessantes;</li>
+            <li>Perda de dados;</li>
+            <li>Interrupções no serviço;</li>
+            <li>Danos decorrentes de interpretações equivocadas dos cálculos.</li>
+        </ul>
+
+        <p><strong>9.3</strong> Em nenhuma hipótese a responsabilidade total do IMPOST. excederá o valor pago pelo Usuário nos últimos 12 meses de assinatura.</p>
+    </section>
+
+    <!-- 10 -->
+    <section class="secao" id="s10">
+        <div class="secao-numero">10</div>
+        <h2>Disponibilidade do Serviço</h2>
+
+        <p><strong>10.1</strong> O IMPOST. empenhará esforços razoáveis para manter a Plataforma disponível, mas <strong>não garante</strong> disponibilidade ininterrupta, livre de erros ou livre de falhas.</p>
+
+        <p><strong>10.2</strong> O serviço poderá ser temporariamente interrompido para manutenção, atualizações ou por motivos de força maior.</p>
+
+        <p><strong>10.3</strong> As tabelas de alíquotas, faixas do Simples Nacional, valores de CSLL, IRPJ e demais parâmetros tributários são atualizados periodicamente, mas podem apresentar defasagem em relação à legislação vigente.</p>
+    </section>
+
+    <!-- 11 -->
+    <section class="secao" id="s11">
+        <div class="secao-numero">11</div>
+        <h2>Alterações nos Termos</h2>
+
+        <p><strong>11.1</strong> O IMPOST. reserva-se o direito de modificar estes Termos a qualquer momento. Modificações relevantes serão comunicadas por e-mail ou por aviso na Plataforma.</p>
+
+        <p><strong>11.2</strong> A data da última atualização será sempre exibida no topo desta página.</p>
+
+        <p><strong>11.3</strong> O uso continuado da Plataforma após alterações constitui aceitação dos novos Termos.</p>
+    </section>
+
+    <!-- 12 -->
+    <section class="secao" id="s12">
+        <div class="secao-numero">12</div>
+        <h2>Legislação Aplicável e Foro</h2>
+
+        <p><strong>12.1</strong> Estes Termos são regidos pelas leis da República Federativa do Brasil.</p>
+
+        <p><strong>12.2</strong> Para dirimir quaisquer controvérsias oriundas destes Termos, fica eleito o foro da comarca de Novo Progresso, Estado do Pará, com renúncia expressa a qualquer outro, por mais privilegiado que seja.</p>
+    </section>
+
+    <!-- 13 -->
+    <section class="secao" id="s13">
+        <div class="secao-numero">13</div>
+        <h2>Contato</h2>
+
+        <p>Para dúvidas, sugestões ou comunicações relacionadas a estes Termos:</p>
+
+        <div class="destaque-box">
+            <p>📧 E-mail: <strong>contato@impost.com.br</strong></p>
+            <p>🌐 Site: <strong>impostbr.github.io/impost</strong></p>
+        </div>
+    </section>
+
+</main>
+
+<!-- ═══ FOOTER ═══ -->
+<footer class="footer">
+    <p>IMPOST. — Inteligência em Modelagem de Otimização Tributária</p>
+    <p>
+        <a href="termos.html">Termos de Uso</a> · 
+        <a href="privacidade.html">Política de Privacidade</a>
+    </p>
+    <p style="margin-top: 8px;">© 2026 IMPOST. Todos os direitos reservados.</p>
+</footer>
+
+</body>
+</html>
