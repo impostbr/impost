@@ -2829,9 +2829,8 @@
 
             // Créditos
             var creditosPISCOFINS = parseMoney($('inputCreditosPISCOFINS'));
-            var creditoICMS = creditosPISCOFINS > 0 ? Math.min(creditosPISCOFINS / fat, 0.60) : 0.30;
 
-            // ═══ CHAMAR MOTOR ═══
+            // ═══ CHAMAR MOTOR (v3.0.3: passa valores absolutos — motor faz a conversão) ═══
             var res = CR.comparar({
                 faturamentoMensal: fat,
                 folhaMensal: folha,
@@ -2840,9 +2839,11 @@
                 uf: uf,
                 opcoes: {
                     margemLucro: margem,
-                    percentualCreditoICMS: creditoICMS,
                     aliquotaISS: issOverride,
-                    percentualCreditos: creditosPISCOFINS > 0 ? creditosPISCOFINS / fat : 0.30
+                    // v3.0.3: passa CMV para cálculo dinâmico de crédito ICMS (Bug #5)
+                    cmv: cmv > 0 ? cmv : null,
+                    // v3.0.3: passa despesas elegíveis para crédito PIS/COFINS (Bug #3)
+                    despesasElegiveis: creditosPISCOFINS > 0 ? creditosPISCOFINS : null
                 }
             });
 
