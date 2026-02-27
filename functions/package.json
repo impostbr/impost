@@ -1,0 +1,14 @@
+{
+  "name": "impost-functions",
+  "description": "IMPOST — Cloud Functions API (Cálculos + Mercado Pago)",
+  "version": "3.7.1",
+  "private": true,
+  "engines": {
+    "node": "18"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "firebase-functions": "^4.9.0",
+    "firebase-admin": "^11.11.0"
+  }
+}
