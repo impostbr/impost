@@ -590,6 +590,70 @@
       80% { transform: translateX(4px); }
     }
 
+    /* ─── Suggestion Banner (cross-navigation login ↔ cadastro) ─── */
+    .suggestion-banner {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-start;
+      gap: 0.75rem;
+      padding: 1rem 1.15rem;
+      background: linear-gradient(135deg, #e8f5e9 0%, #f1f8e9 100%);
+      border: 1px solid var(--green-200);
+      border-left: 4px solid var(--green-600);
+      border-radius: 10px;
+      margin-bottom: 1.25rem;
+      font-size: 0.84rem;
+      color: var(--gray-700);
+      line-height: 1.55;
+      opacity: 0;
+      transform: translateY(-8px);
+      transition: opacity 0.35s ease, transform 0.35s ease;
+    }
+
+    .suggestion-banner.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .suggestion-banner.suggestion-warn {
+      background: linear-gradient(135deg, #fff8e1 0%, #fff3e0 100%);
+      border-color: #ffe082;
+      border-left-color: #ffa000;
+    }
+
+    .suggestion-banner.suggestion-warn .suggestion-icon { color: #e65100; }
+    .suggestion-banner.suggestion-warn a { color: #e65100; font-weight: 600; }
+
+    .suggestion-icon {
+      flex-shrink: 0;
+      color: var(--green-700);
+      margin-top: 1px;
+    }
+
+    .suggestion-text { flex: 1; min-width: 180px; }
+    .suggestion-text strong { color: var(--gray-800); font-weight: 600; }
+
+    .suggestion-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      margin-top: 0.5rem;
+      padding: 0.45rem 1rem;
+      background: var(--green-700);
+      color: white;
+      font-size: 0.82rem;
+      font-weight: 600;
+      border-radius: 8px;
+      text-decoration: none;
+      white-space: nowrap;
+      transition: background 0.2s, transform 0.15s;
+    }
+
+    .suggestion-btn:hover {
+      background: var(--green-800);
+      transform: translateY(-1px);
+    }
+
     .version-badge {
       position: absolute;
       bottom: 24px;
