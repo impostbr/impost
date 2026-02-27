@@ -229,11 +229,73 @@
     }
 
     // ══════════════════════════════════════════════════════════════
-    // 8. ERROS FIREBASE
+    // 8. ERROS FIREBASE + BANNER INTELIGENTE
     // ══════════════════════════════════════════════════════════════
+
+    function mostrarBannerSugestao(tipo, email) {
+        // Remove banner anterior
+        var old = document.getElementById("suggestion-banner");
+        if (old) old.remove();
+
+        var banner = document.createElement("div");
+        banner.id = "suggestion-banner";
+        banner.className = "suggestion-banner";
+
+        var emailCodificado = encodeURIComponent(email || "");
+
+        if (tipo === "email-existe") {
+            banner.innerHTML =
+                '<div class="suggestion-icon">' +
+                    '<svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+                        '<path d="M10 1a9 9 0 1 0 0 18 9 9 0 0 0 0-18z"/><path d="M10 6v4M10 14h.01"/>' +
+                    '</svg>' +
+                '</div>' +
+                '<div class="suggestion-text">' +
+                    '<strong>Já existe uma conta com este e-mail.</strong><br>' +
+                    'Se for você, faça login para acessar a plataforma.' +
+                '</div>' +
+                '<a href="login.html' + (emailCodificado ? '?email=' + emailCodificado : '') + '" class="suggestion-btn">' +
+                    'Ir para o login' +
+                    '<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h8M8 4l3 3-3 3"/></svg>' +
+                '</a>';
+        } else if (tipo === "metodo-diferente") {
+            banner.className += " suggestion-warn";
+            banner.innerHTML =
+                '<div class="suggestion-icon">' +
+                    '<svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+                        '<path d="M10 1a9 9 0 1 0 0 18 9 9 0 0 0 0-18z"/><path d="M10 6v4M10 14h.01"/>' +
+                    '</svg>' +
+                '</div>' +
+                '<div class="suggestion-text">' +
+                    '<strong>Este e-mail já está vinculado a outro método de login.</strong><br>' +
+                    'Tente entrar com o Google, ou faça login com a senha cadastrada.' +
+                '</div>' +
+                '<a href="login.html' + (emailCodificado ? '?email=' + emailCodificado : '') + '" class="suggestion-btn">' +
+                    'Ir para o login' +
+                    '<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h8M8 4l3 3-3 3"/></svg>' +
+                '</a>';
+        }
+
+        // Insere antes do formulário
+        var formEl = document.getElementById("form-cadastro");
+        formEl.parentNode.insertBefore(banner, formEl);
+
+        // Anima entrada
+        requestAnimationFrame(function () {
+            banner.classList.add("visivel");
+        });
+
+        // Scroll suave até o banner
+        banner.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+
+    function esconderBannerSugestao() {
+        var banner = document.getElementById("suggestion-banner");
+        if (banner) banner.remove();
+    }
+
     function traduzirErroFirebase(code) {
         var erros = {
-            "auth/email-already-in-use": "Já existe uma conta com este e-mail. Faça login.",
             "auth/invalid-email": "E-mail inválido.",
             "auth/weak-password": "Senha muito fraca. Use no mínimo 8 caracteres.",
             "auth/operation-not-allowed": "Método de cadastro não permitido.",
@@ -241,10 +303,28 @@
             "auth/too-many-requests": "Muitas tentativas. Aguarde alguns minutos.",
             "auth/popup-blocked": "Popup bloqueado. Permita popups para este site.",
             "auth/popup-closed-by-user": "Popup fechado. Tente novamente.",
-            "auth/account-exists-with-different-credential": "Já existe conta com este e-mail usando outro método.",
             "auth/internal-error": "Erro interno. Tente novamente."
         };
         return erros[code] || "Ocorreu um erro inesperado. Tente novamente.";
+    }
+
+    /**
+     * Trata erros do Firebase — se for email duplicado,
+     * mostra banner inteligente em vez de erro genérico.
+     * Retorna true se tratou com banner (não precisa de alerta).
+     */
+    function tratarErroInteligente(code, email) {
+        if (code === "auth/email-already-in-use") {
+            esconderAlerta();
+            mostrarBannerSugestao("email-existe", email);
+            return true;
+        }
+        if (code === "auth/account-exists-with-different-credential") {
+            esconderAlerta();
+            mostrarBannerSugestao("metodo-diferente", email);
+            return true;
+        }
+        return false;
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -365,12 +445,15 @@
         try {
             mostrarLoading(true);
             esconderAlerta();
+            esconderBannerSugestao();
             await cadastrarComEmail(inputNome.value.trim(), inputEmail.value.trim(), inputSenha.value);
             mostrarAlertaSucesso();
             setTimeout(function () { window.location.href = "dashboard.html"; }, 1200);
         } catch (error) {
             console.error("Erro:", error);
-            mostrarAlertaErro(traduzirErroFirebase(error.code));
+            if (!tratarErroInteligente(error.code, inputEmail.value.trim())) {
+                mostrarAlertaErro(traduzirErroFirebase(error.code));
+            }
             mostrarLoading(false);
         }
     });
@@ -383,13 +466,15 @@
             return;
         }
         try {
-            mostrarLoading(true); esconderAlerta(); limparTodosErros();
+            mostrarLoading(true); esconderAlerta(); limparTodosErros(); esconderBannerSugestao();
             await cadastrarComGoogle();
             mostrarAlertaSucesso();
             setTimeout(function () { window.location.href = "dashboard.html"; }, 1200);
         } catch (error) {
             if (error.code !== "auth/popup-closed-by-user" && error.code !== "auth/cancelled-popup-request") {
-                mostrarAlertaErro(traduzirErroFirebase(error.code));
+                if (!tratarErroInteligente(error.code, "")) {
+                    mostrarAlertaErro(traduzirErroFirebase(error.code));
+                }
             }
             mostrarLoading(false);
         }
@@ -416,18 +501,34 @@
     });
 
     [inputNome, inputEmail, inputSenha, inputConfirmarSenha].forEach(function (input) {
-        input.addEventListener("input", function () { limparErroCampo(input.id); esconderAlerta(); });
+        input.addEventListener("input", function () { limparErroCampo(input.id); esconderAlerta(); esconderBannerSugestao(); });
     });
     inputSenha.addEventListener("input", atualizarForcaSenha);
 
     // ══════════════════════════════════════════════════════════════
     // 15. INIT
     // ══════════════════════════════════════════════════════════════
+
+    // Pré-preencher e-mail vindo do login (via ?email=)
+    function preencherEmailDaURL() {
+        try {
+            var params = new URLSearchParams(window.location.search);
+            var emailParam = params.get("email");
+            if (emailParam) {
+                inputEmail.value = decodeURIComponent(emailParam);
+                if (inputNome) inputNome.focus();
+                // Limpa a URL sem recarregar
+                window.history.replaceState({}, "", window.location.pathname);
+            }
+        } catch (e) { /* sem parâmetros */ }
+    }
+
     function init() {
         inicializarToggleSenha();
         verificarSessaoAtiva();
         capturarIP();
-        if (inputNome) inputNome.focus();
+        preencherEmailDaURL();
+        if (inputNome && !inputEmail.value) inputNome.focus();
         console.log("[IMPOST] Cadastro v" + TERMOS_VERSAO + " inicializado");
     }
 
