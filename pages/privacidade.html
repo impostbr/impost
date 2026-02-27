@@ -1,0 +1,796 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Política de Privacidade — IMPOST.</title>
+    <meta name="description" content="Política de Privacidade da plataforma IMPOST — Inteligência em Modelagem de Otimização Tributária">
+    <link rel="icon" href="assets/favicon.ico" type="image/x-icon">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@600;700;800&display=swap" rel="stylesheet">
+    <style>
+        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --verde-900: #1b5e20;
+            --verde-800: #2e7d32;
+            --verde-700: #388e3c;
+            --verde-600: #43a047;
+            --verde-500: #4caf50;
+            --verde-400: #66bb6a;
+            --verde-200: #a5d6a7;
+            --verde-100: #c8e6c9;
+            --verde-50:  #e8f5e9;
+            --cinza-900: #212121;
+            --cinza-800: #333333;
+            --cinza-700: #555555;
+            --cinza-600: #666666;
+            --cinza-500: #888888;
+            --cinza-300: #cccccc;
+            --cinza-200: #e0e0e0;
+            --cinza-100: #f0f0f0;
+            --cinza-50:  #fafafa;
+            --branco:    #ffffff;
+            --erro:      #d32f2f;
+            --erro-bg:   #ffebee;
+            --amarelo:   #f9a825;
+            --amarelo-bg:#fff8e1;
+            --azul:      #1976d2;
+            --azul-bg:   #e3f2fd;
+            --font-display: 'Poppins', sans-serif;
+            --font-body: 'Inter', sans-serif;
+        }
+
+        html { scroll-behavior: smooth; }
+
+        body {
+            font-family: var(--font-body);
+            background: var(--cinza-50);
+            color: var(--cinza-800);
+            -webkit-font-smoothing: antialiased;
+            line-height: 1.7;
+        }
+
+        /* ═══ HEADER ═══ */
+        .header {
+            background: linear-gradient(160deg, var(--verde-900) 0%, var(--verde-700) 100%);
+            padding: 0 40px;
+            height: 64px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+
+        .header-logo {
+            font-family: var(--font-display);
+            font-weight: 800;
+            font-size: 1.5rem;
+            color: var(--branco);
+            text-decoration: none;
+            letter-spacing: -0.5px;
+        }
+
+        .header-logo span { color: var(--verde-200); }
+
+        .header-nav { display: flex; gap: 24px; align-items: center; }
+
+        .header-nav a {
+            color: rgba(255,255,255,0.8);
+            text-decoration: none;
+            font-size: 0.88rem;
+            font-weight: 500;
+            transition: color 0.2s;
+        }
+
+        .header-nav a:hover { color: var(--branco); }
+
+        .header-nav .btn-voltar {
+            background: rgba(255,255,255,0.15);
+            padding: 8px 20px;
+            border-radius: 8px;
+            color: var(--branco);
+            font-weight: 600;
+        }
+
+        .header-nav .btn-voltar:hover { background: rgba(255,255,255,0.25); }
+
+        /* ═══ HERO ═══ */
+        .hero-legal {
+            background: linear-gradient(160deg, var(--verde-900) 0%, var(--verde-700) 50%, var(--verde-600) 100%);
+            padding: 60px 40px 48px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .hero-legal::before {
+            content: '';
+            position: absolute;
+            top: -100px;
+            left: -100px;
+            width: 350px;
+            height: 350px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.03);
+        }
+
+        .hero-legal h1 {
+            font-family: var(--font-display);
+            font-size: 2.2rem;
+            font-weight: 700;
+            color: var(--branco);
+            margin-bottom: 8px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .hero-legal p {
+            color: rgba(255,255,255,0.7);
+            font-size: 0.95rem;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* ═══ ALERTA DESTAQUE ═══ */
+        .alerta-destaque {
+            max-width: 860px;
+            margin: -28px auto 0;
+            background: var(--azul-bg);
+            border: 2px solid var(--azul);
+            border-radius: 14px;
+            padding: 28px 32px;
+            position: relative;
+            z-index: 10;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+        }
+
+        .alerta-destaque-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        .alerta-destaque-header .icone { font-size: 1.8rem; flex-shrink: 0; }
+
+        .alerta-destaque-header h2 {
+            font-family: var(--font-display);
+            font-size: 1.15rem;
+            font-weight: 700;
+            color: var(--cinza-900);
+        }
+
+        .alerta-destaque p {
+            font-size: 0.92rem;
+            color: var(--cinza-700);
+            line-height: 1.7;
+        }
+
+        .alerta-destaque strong { color: var(--cinza-900); }
+
+        /* ═══ CONTEÚDO ═══ */
+        .conteudo {
+            max-width: 860px;
+            margin: 40px auto 60px;
+            padding: 0 24px;
+        }
+
+        .secao {
+            background: var(--branco);
+            border-radius: 14px;
+            padding: 36px 40px;
+            margin-bottom: 24px;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+            border: 1px solid var(--cinza-100);
+        }
+
+        .secao-numero {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 32px;
+            height: 32px;
+            background: var(--verde-50);
+            color: var(--verde-700);
+            border-radius: 8px;
+            font-size: 0.85rem;
+            font-weight: 700;
+            margin-bottom: 12px;
+        }
+
+        .secao h2 {
+            font-family: var(--font-display);
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: var(--cinza-900);
+            margin-bottom: 16px;
+        }
+
+        .secao h3 {
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--cinza-800);
+            margin-top: 20px;
+            margin-bottom: 10px;
+        }
+
+        .secao p {
+            font-size: 0.92rem;
+            color: var(--cinza-700);
+            margin-bottom: 12px;
+        }
+
+        .secao p:last-child { margin-bottom: 0; }
+
+        .secao ul, .secao ol {
+            margin: 12px 0;
+            padding-left: 24px;
+        }
+
+        .secao li {
+            font-size: 0.92rem;
+            color: var(--cinza-700);
+            margin-bottom: 8px;
+            line-height: 1.6;
+        }
+
+        .destaque-box {
+            background: var(--verde-50);
+            border-left: 4px solid var(--verde-600);
+            border-radius: 0 10px 10px 0;
+            padding: 18px 24px;
+            margin: 16px 0;
+        }
+
+        .destaque-box p {
+            color: var(--verde-900);
+            font-weight: 500;
+        }
+
+        .destaque-box-vermelho {
+            background: var(--erro-bg);
+            border-left: 4px solid var(--erro);
+            border-radius: 0 10px 10px 0;
+            padding: 18px 24px;
+            margin: 16px 0;
+        }
+
+        .destaque-box-vermelho p {
+            color: var(--erro);
+            font-weight: 500;
+        }
+
+        .destaque-box-azul {
+            background: var(--azul-bg);
+            border-left: 4px solid var(--azul);
+            border-radius: 0 10px 10px 0;
+            padding: 18px 24px;
+            margin: 16px 0;
+        }
+
+        .destaque-box-azul p {
+            color: #0d47a1;
+            font-weight: 500;
+        }
+
+        .destaque-box-amarelo {
+            background: var(--amarelo-bg);
+            border-left: 4px solid var(--amarelo);
+            border-radius: 0 10px 10px 0;
+            padding: 18px 24px;
+            margin: 16px 0;
+        }
+
+        .destaque-box-amarelo p {
+            color: #795600;
+            font-weight: 500;
+        }
+
+        /* Tabela */
+        .tabela-dados {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 16px 0;
+            font-size: 0.88rem;
+        }
+
+        .tabela-dados thead {
+            background: var(--verde-50);
+        }
+
+        .tabela-dados th {
+            padding: 12px 16px;
+            text-align: left;
+            font-weight: 600;
+            color: var(--verde-900);
+            border-bottom: 2px solid var(--verde-200);
+        }
+
+        .tabela-dados td {
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--cinza-100);
+            color: var(--cinza-700);
+            vertical-align: top;
+        }
+
+        .tabela-dados tr:last-child td {
+            border-bottom: none;
+        }
+
+        /* ═══ SUMÁRIO ═══ */
+        .toc {
+            background: var(--branco);
+            border-radius: 14px;
+            padding: 28px 36px;
+            margin-bottom: 24px;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+            border: 1px solid var(--cinza-100);
+        }
+
+        .toc h3 {
+            font-family: var(--font-display);
+            font-size: 1rem;
+            font-weight: 700;
+            color: var(--cinza-900);
+            margin-bottom: 14px;
+        }
+
+        .toc ol {
+            padding-left: 20px;
+            columns: 2;
+            column-gap: 32px;
+        }
+
+        .toc li {
+            font-size: 0.88rem;
+            margin-bottom: 8px;
+            break-inside: avoid;
+        }
+
+        .toc a {
+            color: var(--verde-700);
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .toc a:hover { text-decoration: underline; }
+
+        /* ═══ FOOTER ═══ */
+        .footer {
+            background: var(--cinza-900);
+            padding: 32px 40px;
+            text-align: center;
+        }
+
+        .footer p {
+            color: rgba(255,255,255,0.5);
+            font-size: 0.82rem;
+            margin-bottom: 4px;
+        }
+
+        .footer a {
+            color: var(--verde-400);
+            text-decoration: none;
+        }
+
+        .footer a:hover { text-decoration: underline; }
+
+        /* ═══ RESPONSIVO ═══ */
+        @media (max-width: 768px) {
+            .header { padding: 0 20px; }
+            .hero-legal { padding: 40px 20px 36px; }
+            .hero-legal h1 { font-size: 1.7rem; }
+            .alerta-destaque { margin: -20px 16px 0; padding: 22px 20px; }
+            .conteudo { padding: 0 16px; margin-top: 32px; }
+            .secao { padding: 28px 24px; }
+            .toc ol { columns: 1; }
+            .tabela-dados { font-size: 0.82rem; }
+            .tabela-dados th, .tabela-dados td { padding: 10px 12px; }
+            .footer { padding: 24px 20px; }
+        }
+
+        @media (max-width: 480px) {
+            .header-nav a:not(.btn-voltar) { display: none; }
+            .hero-legal h1 { font-size: 1.4rem; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- ═══ HEADER ═══ -->
+<header class="header">
+    <a href="index.html" class="header-logo">IMPOST<span>.</span></a>
+    <nav class="header-nav">
+        <a href="termos.html">Termos de Uso</a>
+        <a href="pages/cadastro.html" class="btn-voltar">← Voltar ao cadastro</a>
+    </nav>
+</header>
+
+<!-- ═══ HERO ═══ -->
+<section class="hero-legal">
+    <h1>Política de Privacidade</h1>
+    <p>Última atualização: Fevereiro de 2026</p>
+</section>
+
+<!-- ═══ ALERTA PRINCIPAL ═══ -->
+<div class="alerta-destaque">
+    <div class="alerta-destaque-header">
+        <span class="icone">🔒</span>
+        <h2>SEU COMPROMISSO COM A SUA PRIVACIDADE</h2>
+    </div>
+    <p>
+        O IMPOST. coleta apenas os dados <strong>estritamente necessários</strong> para o funcionamento da plataforma. 
+        <strong>Não vendemos, compartilhamos ou comercializamos seus dados pessoais com terceiros</strong>. 
+        Os dados tributários que você insere nos cálculos são processados para gerar simulações e 
+        <strong>não são armazenados permanentemente nem compartilhados</strong> com nenhuma entidade, 
+        órgão governamental ou empresa. Lembramos que o IMPOST. é uma ferramenta de simulação e 
+        <strong>não substitui a orientação de profissionais habilitados</strong> (contadores e advogados).
+    </p>
+</div>
+
+<!-- ═══ CONTEÚDO ═══ -->
+<main class="conteudo">
+
+    <!-- Sumário -->
+    <nav class="toc">
+        <h3>📋 Sumário</h3>
+        <ol>
+            <li><a href="#p1">Informações Gerais</a></li>
+            <li><a href="#p2">Dados que Coletamos</a></li>
+            <li><a href="#p3">Dados Tributários (Cálculos)</a></li>
+            <li><a href="#p4">Como Usamos seus Dados</a></li>
+            <li><a href="#p5">Com Quem Compartilhamos</a></li>
+            <li><a href="#p6">Armazenamento e Segurança</a></li>
+            <li><a href="#p7">Cookies e Tecnologias</a></li>
+            <li><a href="#p8">Seus Direitos (LGPD)</a></li>
+            <li><a href="#p9">Retenção de Dados</a></li>
+            <li><a href="#p10">Menores de Idade</a></li>
+            <li><a href="#p11">Alterações nesta Política</a></li>
+            <li><a href="#p12">Contato e DPO</a></li>
+        </ol>
+    </nav>
+
+    <!-- 1 -->
+    <section class="secao" id="p1">
+        <div class="secao-numero">1</div>
+        <h2>Informações Gerais</h2>
+
+        <p><strong>1.1</strong> Esta Política de Privacidade descreve como a plataforma IMPOST. ("Plataforma", "nós") coleta, utiliza, armazena e protege os dados pessoais dos usuários ("você", "Usuário").</p>
+
+        <p><strong>1.2</strong> Esta Política está em conformidade com a <strong>Lei Geral de Proteção de Dados Pessoais</strong> (Lei nº 13.709/2018 — LGPD), o <strong>Marco Civil da Internet</strong> (Lei nº 12.965/2014) e demais legislações aplicáveis.</p>
+
+        <p><strong>1.3</strong> Ao utilizar a Plataforma, você consente com a coleta e o tratamento de dados descritos nesta Política.</p>
+
+        <div class="destaque-box-azul">
+            <p>ℹ️ Reiteramos: o IMPOST. é uma <strong>ferramenta de simulação tributária</strong>. Não é escritório de contabilidade, não é consultoria jurídica e não substitui profissionais habilitados. Seus dados são tratados exclusivamente para viabilizar o uso da ferramenta.</p>
+        </div>
+    </section>
+
+    <!-- 2 -->
+    <section class="secao" id="p2">
+        <div class="secao-numero">2</div>
+        <h2>Dados que Coletamos</h2>
+
+        <h3>2.1 Dados fornecidos por você</h3>
+
+        <table class="tabela-dados">
+            <thead>
+                <tr>
+                    <th>Dado</th>
+                    <th>Finalidade</th>
+                    <th>Obrigatório</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Nome completo</td>
+                    <td>Identificação na plataforma e personalização</td>
+                    <td>Sim</td>
+                </tr>
+                <tr>
+                    <td>E-mail</td>
+                    <td>Autenticação, comunicações e recuperação de conta</td>
+                    <td>Sim</td>
+                </tr>
+                <tr>
+                    <td>Senha (hash)</td>
+                    <td>Autenticação segura — armazenada apenas em formato criptografado (hash)</td>
+                    <td>Sim</td>
+                </tr>
+                <tr>
+                    <td>Telefone</td>
+                    <td>Contato adicional (se fornecido)</td>
+                    <td>Não</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h3>2.2 Dados coletados automaticamente</h3>
+
+        <table class="tabela-dados">
+            <thead>
+                <tr>
+                    <th>Dado</th>
+                    <th>Finalidade</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Endereço IP</td>
+                    <td>Segurança, prevenção de fraude e geolocalização aproximada</td>
+                </tr>
+                <tr>
+                    <td>Data/hora de acesso</td>
+                    <td>Logs de segurança e analytics</td>
+                </tr>
+                <tr>
+                    <td>Tipo de navegador e dispositivo</td>
+                    <td>Otimização da experiência e suporte</td>
+                </tr>
+                <tr>
+                    <td>Páginas visitadas e ações</td>
+                    <td>Melhoria do produto e analytics agregados</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h3>2.3 Dados de pagamento</h3>
+        <p>Caso assine o Plano Pro, os dados de pagamento (cartão de crédito, PIX, etc.) são processados <strong>diretamente pelo gateway de pagamento</strong> (Stripe ou Mercado Pago). O IMPOST. <strong>NÃO armazena</strong> dados de cartão de crédito ou dados bancários em seus servidores.</p>
+    </section>
+
+    <!-- 3 -->
+    <section class="secao" id="p3">
+        <div class="secao-numero">3</div>
+        <h2>Dados Tributários Inseridos nos Cálculos</h2>
+
+        <div class="destaque-box-amarelo">
+            <p>⚠️ <strong>Esta seção é especialmente importante.</strong> Ela trata dos dados financeiros e tributários que você digita nos formulários de cálculo (faturamento, despesas, lucro, folha de pagamento, etc.).</p>
+        </div>
+
+        <p><strong>3.1</strong> Os dados tributários que você informa nos formulários de cálculo (faturamento bruto, despesas, folha de pagamento, patrimônio líquido, etc.) são utilizados <strong>exclusivamente</strong> para:</p>
+        <ul>
+            <li>Gerar a simulação ou estudo tributário solicitado naquela sessão;</li>
+            <li>Calcular os resultados comparativos entre regimes;</li>
+            <li>Exibir os resultados na tela para o Usuário.</li>
+        </ul>
+
+        <p><strong>3.2</strong> Esses dados <strong>NÃO são</strong>:</p>
+        <ul>
+            <li>Enviados para a Receita Federal, Secretarias de Fazenda ou qualquer órgão governamental;</li>
+            <li>Compartilhados com terceiros, parceiros comerciais ou anunciantes;</li>
+            <li>Utilizados para identificar ou perfilar o Usuário individualmente;</li>
+            <li>Armazenados permanentemente de forma identificável (podem ser processados em memória no servidor para gerar o cálculo e descartados após a resposta).</li>
+        </ul>
+
+        <div class="destaque-box">
+            <p>🔐 <strong>Os dados que você digita nos cálculos são seus e permanecem seus.</strong> O IMPOST. processa essas informações apenas para devolver o resultado da simulação. Não temos interesse nem intenção de armazenar seus dados financeiros.</p>
+        </div>
+
+        <p><strong>3.3</strong> Podemos armazenar <strong>metadados agregados e anônimos</strong> sobre o uso dos cálculos (ex.: "quantos cálculos de Lucro Presumido foram feitos nesta semana") para fins de melhoria do produto. Esses dados <strong>não identificam</strong> o Usuário nem seus valores financeiros.</p>
+    </section>
+
+    <!-- 4 -->
+    <section class="secao" id="p4">
+        <div class="secao-numero">4</div>
+        <h2>Como Usamos seus Dados</h2>
+
+        <p>Utilizamos os dados coletados para:</p>
+        <ul>
+            <li><strong>Prover o serviço:</strong> autenticação, processamento de cálculos, exibição de resultados;</li>
+            <li><strong>Gerenciar sua conta:</strong> plano, assinatura, preferências;</li>
+            <li><strong>Comunicações:</strong> e-mails transacionais (confirmação de cadastro, redefinição de senha, renovação de assinatura);</li>
+            <li><strong>Segurança:</strong> prevenção de fraude, detecção de acessos não autorizados;</li>
+            <li><strong>Melhoria do produto:</strong> analytics agregados para entender padrões de uso e melhorar funcionalidades;</li>
+            <li><strong>Obrigações legais:</strong> cumprimento de ordens judiciais ou requisições legais quando aplicável.</li>
+        </ul>
+
+        <div class="destaque-box-vermelho">
+            <p>🚫 <strong>NÃO utilizamos seus dados para:</strong> enviar publicidade de terceiros, vender a empresas, criar perfis para venda, ou qualquer finalidade que não as descritas acima.</p>
+        </div>
+    </section>
+
+    <!-- 5 -->
+    <section class="secao" id="p5">
+        <div class="secao-numero">5</div>
+        <h2>Com Quem Compartilhamos seus Dados</h2>
+
+        <p><strong>5.1</strong> Compartilhamos dados pessoais apenas com os seguintes prestadores de serviço, estritamente para viabilizar o funcionamento da Plataforma:</p>
+
+        <table class="tabela-dados">
+            <thead>
+                <tr>
+                    <th>Prestador</th>
+                    <th>Finalidade</th>
+                    <th>Dados compartilhados</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong>Google Firebase</strong></td>
+                    <td>Autenticação, banco de dados, hospedagem de funções</td>
+                    <td>E-mail, nome, UID, dados da conta</td>
+                </tr>
+                <tr>
+                    <td><strong>Stripe / Mercado Pago</strong></td>
+                    <td>Processamento de pagamentos</td>
+                    <td>Dados de pagamento (direto ao gateway)</td>
+                </tr>
+                <tr>
+                    <td><strong>GitHub Pages</strong></td>
+                    <td>Hospedagem do site estático</td>
+                    <td>Nenhum dado pessoal</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <p><strong>5.2</strong> Todos os prestadores acima possuem suas próprias políticas de privacidade e operam em conformidade com padrões de segurança de mercado.</p>
+
+        <p><strong>5.3</strong> <strong>Não vendemos, alugamos ou comercializamos dados pessoais</strong> em nenhuma circunstância.</p>
+
+        <p><strong>5.4</strong> Podemos divulgar dados pessoais se exigido por <strong>lei, ordem judicial ou requisição de autoridade competente</strong>, nos termos do Marco Civil da Internet e da LGPD.</p>
+    </section>
+
+    <!-- 6 -->
+    <section class="secao" id="p6">
+        <div class="secao-numero">6</div>
+        <h2>Armazenamento e Segurança</h2>
+
+        <p><strong>6.1</strong> Os dados pessoais da conta são armazenados no <strong>Google Firebase</strong> (servidores Google Cloud), com infraestrutura de segurança de nível empresarial incluindo:</p>
+        <ul>
+            <li>Criptografia em trânsito (TLS/HTTPS) e em repouso;</li>
+            <li>Autenticação gerenciada pelo Firebase Authentication;</li>
+            <li>Regras de segurança no Firestore que restringem acesso por Usuário;</li>
+            <li>Senhas armazenadas em formato hash (nunca em texto puro).</li>
+        </ul>
+
+        <p><strong>6.2</strong> Os dados de cálculo (faturamento, despesas, etc.) enviados para as Cloud Functions são processados em memória e <strong>não são gravados em banco de dados</strong> após a geração do resultado.</p>
+
+        <p><strong>6.3</strong> Apesar de empregar medidas razoáveis de segurança, nenhum sistema é 100% imune a falhas. O Usuário reconhece que a transmissão de dados pela internet envolve riscos inerentes.</p>
+    </section>
+
+    <!-- 7 -->
+    <section class="secao" id="p7">
+        <div class="secao-numero">7</div>
+        <h2>Cookies e Tecnologias Similares</h2>
+
+        <p><strong>7.1</strong> A Plataforma pode utilizar cookies e tecnologias similares para:</p>
+        <ul>
+            <li><strong>Cookies essenciais:</strong> manter sua sessão de login ativa;</li>
+            <li><strong>Cookies de preferências:</strong> lembrar configurações do Usuário;</li>
+            <li><strong>Cookies analíticos:</strong> analytics agregados de uso (sem identificação pessoal).</li>
+        </ul>
+
+        <p><strong>7.2</strong> Você pode configurar seu navegador para recusar cookies, mas isso pode afetar funcionalidades da Plataforma (como manter o login).</p>
+
+        <p><strong>7.3</strong> Não utilizamos cookies de publicidade ou rastreamento de terceiros para fins de marketing.</p>
+    </section>
+
+    <!-- 8 -->
+    <section class="secao" id="p8">
+        <div class="secao-numero">8</div>
+        <h2>Seus Direitos — LGPD</h2>
+
+        <p>Em conformidade com a Lei Geral de Proteção de Dados (Lei nº 13.709/2018), você tem direito a:</p>
+
+        <table class="tabela-dados">
+            <thead>
+                <tr>
+                    <th>Direito</th>
+                    <th>Descrição</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong>Confirmação e acesso</strong></td>
+                    <td>Saber se tratamos seus dados e acessar uma cópia</td>
+                </tr>
+                <tr>
+                    <td><strong>Correção</strong></td>
+                    <td>Corrigir dados incompletos, inexatos ou desatualizados</td>
+                </tr>
+                <tr>
+                    <td><strong>Anonimização ou eliminação</strong></td>
+                    <td>Solicitar anonimização, bloqueio ou eliminação de dados desnecessários</td>
+                </tr>
+                <tr>
+                    <td><strong>Portabilidade</strong></td>
+                    <td>Solicitar a transferência dos seus dados a outro fornecedor</td>
+                </tr>
+                <tr>
+                    <td><strong>Eliminação</strong></td>
+                    <td>Solicitar a exclusão de dados pessoais tratados com seu consentimento</td>
+                </tr>
+                <tr>
+                    <td><strong>Informação sobre compartilhamento</strong></td>
+                    <td>Saber com quais entidades seus dados são compartilhados</td>
+                </tr>
+                <tr>
+                    <td><strong>Revogação do consentimento</strong></td>
+                    <td>Retirar o consentimento a qualquer momento</td>
+                </tr>
+                <tr>
+                    <td><strong>Oposição</strong></td>
+                    <td>Opor-se ao tratamento de dados quando feito em desacordo com a LGPD</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div class="destaque-box">
+            <p>📧 Para exercer qualquer desses direitos, entre em contato pelo e-mail <strong>contato@impost.com.br</strong> com o assunto "LGPD — [seu direito]". Responderemos em até 15 dias úteis.</p>
+        </div>
+
+        <p>Você também tem o direito de apresentar reclamação à <strong>Autoridade Nacional de Proteção de Dados (ANPD)</strong> caso considere que o tratamento de seus dados viola a LGPD.</p>
+    </section>
+
+    <!-- 9 -->
+    <section class="secao" id="p9">
+        <div class="secao-numero">9</div>
+        <h2>Retenção de Dados</h2>
+
+        <p><strong>9.1</strong> Seus dados pessoais de conta (nome, e-mail) são mantidos enquanto sua conta estiver ativa.</p>
+
+        <p><strong>9.2</strong> Ao solicitar a exclusão da conta, removeremos seus dados pessoais em até <strong>30 dias</strong>, exceto quando a retenção for necessária para:</p>
+        <ul>
+            <li>Cumprimento de obrigações legais ou regulatórias;</li>
+            <li>Exercício regular de direitos em processo judicial ou administrativo;</li>
+            <li>Proteção do crédito (nos termos da legislação brasileira).</li>
+        </ul>
+
+        <p><strong>9.3</strong> Dados de cálculo (tributários) processados nas Cloud Functions não são retidos após a geração do resultado.</p>
+
+        <p><strong>9.4</strong> Logs de segurança (IP, data de acesso) podem ser retidos por até <strong>6 meses</strong> conforme o Marco Civil da Internet.</p>
+    </section>
+
+    <!-- 10 -->
+    <section class="secao" id="p10">
+        <div class="secao-numero">10</div>
+        <h2>Menores de Idade</h2>
+
+        <p>A Plataforma não é destinada a menores de 18 anos. Não coletamos intencionalmente dados de menores. Caso tenhamos conhecimento de que um menor nos forneceu dados pessoais, excluiremos essas informações prontamente.</p>
+    </section>
+
+    <!-- 11 -->
+    <section class="secao" id="p11">
+        <div class="secao-numero">11</div>
+        <h2>Alterações nesta Política</h2>
+
+        <p><strong>11.1</strong> Esta Política poderá ser atualizada periodicamente. Alterações relevantes serão comunicadas por e-mail ou aviso na Plataforma.</p>
+
+        <p><strong>11.2</strong> A data da última atualização será sempre exibida no topo desta página.</p>
+
+        <p><strong>11.3</strong> Recomendamos a leitura periódica desta Política para manter-se informado sobre como protegemos seus dados.</p>
+    </section>
+
+    <!-- 12 -->
+    <section class="secao" id="p12">
+        <div class="secao-numero">12</div>
+        <h2>Contato e Encarregado de Dados (DPO)</h2>
+
+        <p>Para questões sobre privacidade, exercício de direitos LGPD ou qualquer dúvida sobre esta Política:</p>
+
+        <div class="destaque-box">
+            <p>📧 E-mail: <strong>contato@impost.com.br</strong></p>
+            <p>📋 Assunto: <strong>LGPD — [descreva sua solicitação]</strong></p>
+            <p>🌐 Site: <strong>impostbr.github.io/impost</strong></p>
+        </div>
+
+        <p>Prazo de resposta: até <strong>15 dias úteis</strong> conforme LGPD.</p>
+    </section>
+
+</main>
+
+<!-- ═══ FOOTER ═══ -->
+<footer class="footer">
+    <p>IMPOST. — Inteligência em Modelagem de Otimização Tributária</p>
+    <p>
+        <a href="termos.html">Termos de Uso</a> · 
+        <a href="privacidade.html">Política de Privacidade</a>
+    </p>
+    <p style="margin-top: 8px;">© 2026 IMPOST. Todos os direitos reservados.</p>
+</footer>
+
+</body>
+</html>
