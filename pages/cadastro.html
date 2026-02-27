@@ -152,6 +152,35 @@
         .link-login a { color: var(--verde-700); text-decoration: none; font-weight: 600; }
         .link-login a:hover { text-decoration: underline; }
 
+        /* ═══ Banner de sugestão (cross-navigation) ═══ */
+        .suggestion-banner {
+            display: flex; flex-wrap: wrap; align-items: flex-start; gap: 12px;
+            padding: 14px 16px; background: linear-gradient(135deg, #e8f5e9 0%, #f1f8e9 100%);
+            border: 1px solid var(--verde-200); border-left: 4px solid var(--verde-600);
+            border-radius: var(--radius-md); margin-bottom: 20px;
+            font-size: 0.84rem; color: var(--cinza-700); line-height: 1.55;
+            opacity: 0; transform: translateY(-8px);
+            transition: opacity 0.35s ease, transform 0.35s ease;
+        }
+        .suggestion-banner.visivel { opacity: 1; transform: translateY(0); }
+        .suggestion-banner.suggestion-warn {
+            background: linear-gradient(135deg, #fff8e1 0%, #fff3e0 100%);
+            border-color: #ffe082; border-left-color: #ffa000;
+        }
+        .suggestion-banner.suggestion-warn .suggestion-icon { color: #e65100; }
+        .suggestion-icon { flex-shrink: 0; color: var(--verde-700); margin-top: 1px; }
+        .suggestion-text { flex: 1; min-width: 180px; }
+        .suggestion-text strong { color: var(--cinza-900); font-weight: 600; }
+        .suggestion-btn {
+            display: inline-flex; align-items: center; gap: 6px;
+            margin-top: 8px; padding: 8px 16px;
+            background: var(--verde-700); color: var(--branco);
+            font-size: 0.82rem; font-weight: 600; border-radius: 8px;
+            text-decoration: none; white-space: nowrap;
+            transition: background 0.2s, transform 0.15s;
+        }
+        .suggestion-btn:hover { background: var(--verde-900); transform: translateY(-1px); }
+
         /* Força senha */
         .senha-forca { display: none; margin-top: 8px; }
         .senha-forca.visivel { display: block; }
@@ -350,7 +379,7 @@
                 <h3>4. Uso dos Dados</h3><p>Para: autenticação, cálculos, conta/assinatura, comunicações transacionais, segurança, analytics agregados. NÃO para: publicidade, venda ou perfis comerciais.</p>
                 <h3>5. Compartilhamento</h3><p>Apenas com: Google Firebase (auth/banco), Stripe/Mercado Pago (pagamentos), GitHub Pages (hospedagem). <strong>Não vendemos dados.</strong></p>
                 <h3>6. Segurança</h3><p>TLS/HTTPS, senhas em hash, regras Firestore por UID. Dados de cálculo processados em memória sem gravação.</p>
-                <h3>7. Direitos LGPD</h3><p>Confirmação, acesso, correção, anonimização, eliminação, portabilidade, revogação e oposição. Contato: contato@impost.com.br (15 dias úteis).</p>
+                <h3>7. Direitos LGPD</h3><p>Confirmação, acesso, correção, anonimização, eliminação, portabilidade, revogação e oposição. Contato: <a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="f0939f9e8491849fb0999d809f8384de939f9dde9282">[email&#160;protected]</a> (15 dias úteis).</p>
                 <h3>8. Retenção</h3><p>Conta ativa = dados mantidos. Exclusão em 30 dias após solicitação. Logs: 6 meses (Marco Civil).</p>
                 <h3>9. Menores</h3><p>Não destinado a menores de 18 anos.</p>
                 <p style="margin-top:24px;color:var(--cinza-500);font-size:0.82rem;">Versão: <strong>2026.02.v1</strong></p>
@@ -363,11 +392,5 @@
 </div>
 
 <!-- SCRIPTS -->
-<script src="https://www.gstatic.com/firebasejs/11.4.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/11.4.0/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/11.4.0/firebase-firestore-compat.js"></script>
-<script src="../scripts/firebase-config.js"></script>
-<script src="../scripts/cadastro.js"></script>
-
-</body>
-</html>
+<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script src="https://www.gstatic.com/firebasejs/11.4.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/11.4.0/firebase-auth-co
