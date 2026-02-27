@@ -91,19 +91,106 @@
     return true;
   }
 
+  // ─── Banner de sugestão (cadastro / login cruzado) ───
+  function showSuggestionBanner(type, email) {
+    // Remove banner anterior se existir
+    var old = document.getElementById('suggestionBanner');
+    if (old) old.remove();
+
+    var banner = document.createElement('div');
+    banner.id = 'suggestionBanner';
+    banner.className = 'suggestion-banner';
+
+    var encodedEmail = encodeURIComponent(email || '');
+
+    if (type === 'no-account') {
+      banner.innerHTML =
+        '<div class="suggestion-icon">' +
+          '<svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+            '<circle cx="10" cy="10" r="9"/><path d="M10 6v4M10 14h.01"/>' +
+          '</svg>' +
+        '</div>' +
+        '<div class="suggestion-text">' +
+          '<strong>Não encontramos uma conta com este e-mail.</strong><br>' +
+          'Verifique o endereço digitado ou crie uma conta gratuitamente.' +
+        '</div>' +
+        '<a href="cadastro.html' + (encodedEmail ? '?email=' + encodedEmail : '') + '" class="suggestion-btn">' +
+          'Criar conta grátis' +
+          '<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h8M8 4l3 3-3 3"/></svg>' +
+        '</a>';
+    } else if (type === 'wrong-password') {
+      banner.className += ' suggestion-warn';
+      banner.innerHTML =
+        '<div class="suggestion-icon">' +
+          '<svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+            '<rect x="3" y="8" width="14" height="10" rx="2"/><path d="M6 8V5a4 4 0 0 1 8 0v3"/>' +
+          '</svg>' +
+        '</div>' +
+        '<div class="suggestion-text">' +
+          '<strong>Senha incorreta.</strong> Verifique e tente novamente, ou ' +
+          '<a href="#" id="forgotFromBanner">redefina sua senha</a>.' +
+        '</div>';
+    }
+
+    // Insere antes do formulário
+    var formEl = document.getElementById('loginForm');
+    formEl.parentNode.insertBefore(banner, formEl);
+
+    // Anima entrada
+    requestAnimationFrame(function () {
+      banner.classList.add('show');
+    });
+
+    // Link "redefina sua senha" dentro do banner
+    var forgotBannerLink = document.getElementById('forgotFromBanner');
+    if (forgotBannerLink) {
+      forgotBannerLink.addEventListener('click', function (e) {
+        e.preventDefault();
+        forgotLink.click();
+      });
+    }
+  }
+
+  function hideSuggestionBanner() {
+    var banner = document.getElementById('suggestionBanner');
+    if (banner) banner.remove();
+  }
+
   function handleAuthError(err) {
     var code = err.code || '';
+    var email = emailInput.value.trim();
+
+    // ─── Fluxo inteligente: e-mail não encontrado → sugerir cadastro ───
+    if (code === 'auth/user-not-found') {
+      hideError();
+      showSuggestionBanner('no-account', email);
+      return;
+    }
+
+    // ─── Fluxo inteligente: senha errada → sugerir recuperação ───
+    if (code === 'auth/wrong-password') {
+      hideError();
+      showSuggestionBanner('wrong-password', email);
+      return;
+    }
+
+    // ─── invalid-credential (Firebase v9+ combina user-not-found + wrong-password) ───
+    if (code === 'auth/invalid-credential') {
+      hideError();
+      showSuggestionBanner('no-account', email);
+      return;
+    }
+
+    // ─── Erros genéricos ───
+    hideSuggestionBanner();
     var map = {
-      'auth/user-not-found':       'E-mail ou senha inválidos',
-      'auth/wrong-password':       'E-mail ou senha inválidos',
-      'auth/invalid-credential':   'E-mail ou senha inválidos',
       'auth/invalid-email':        'E-mail inválido',
       'auth/user-disabled':        'Conta desativada. Entre em contato com o suporte.',
       'auth/too-many-requests':    'Muitas tentativas. Tente novamente em alguns minutos.',
       'auth/network-request-failed': 'Erro de conexão. Verifique sua internet.',
       'auth/popup-closed-by-user': 'Login cancelado.',
       'auth/popup-blocked':        'Popup bloqueado. Permita popups para este site.',
-      'auth/account-exists-with-different-credential': 'Já existe conta com este e-mail usando outro método.'
+      'auth/account-exists-with-different-credential': 'Já existe conta com este e-mail usando outro método de login. Tente com Google.'
     };
     showError(map[code] || 'Erro: ' + (err.message || 'tente novamente'));
     console.error('Auth Error:', code, err.message);
@@ -127,6 +214,7 @@
   form.addEventListener('submit', function (e) {
     e.preventDefault();
     hideError();
+    hideSuggestionBanner();
     var email = emailInput.value.trim();
     var pw = passInput.value;
     if (!validateForm(email, pw)) return;
@@ -194,7 +282,21 @@
   });
 
   // ─── Limpa erros ao digitar ───
-  emailInput.addEventListener('input', hideError);
-  passInput.addEventListener('input', hideError);
+  emailInput.addEventListener('input', function () { hideError(); hideSuggestionBanner(); });
+  passInput.addEventListener('input', function () { hideError(); hideSuggestionBanner(); });
+
+  // ─── Pré-preencher e-mail vindo do cadastro (via ?email=) ───
+  (function preencheDaURL() {
+    try {
+      var params = new URLSearchParams(window.location.search);
+      var emailParam = params.get('email');
+      if (emailParam) {
+        emailInput.value = decodeURIComponent(emailParam);
+        passInput.focus();
+        // Limpa a URL sem recarregar
+        window.history.replaceState({}, '', window.location.pathname);
+      }
+    } catch (e) { /* URL sem parâmetros, segue normal */ }
+  })();
 
 })();
