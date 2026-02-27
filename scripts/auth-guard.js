@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════════════════
-// IMPOST. — Auth Guard
+// IMPOST. — Auth Guard (v2 — corrigido)
 // Arquivo: scripts/auth-guard.js
 // Depende de: firebase-app-compat, firebase-auth-compat,
 //             firebase-firestore-compat, firebase-config.js
@@ -31,9 +31,18 @@
     // ══════════════════════════════════════════════════════════════
     // CONFIGURAÇÃO
     // ══════════════════════════════════════════════════════════════
-    var LOGIN_URL = "login.html";
-    var TIMEOUT_MS = 8000;             // Timeout para carregamento do auth
-    var MAX_RETRIES_FIRESTORE = 2;     // Tentativas de leitura no Firestore
+
+    // Detecta automaticamente o base path do projeto
+    // Funciona tanto em /pages/dashboard.html quanto em /index.html
+    var BASE_PATH = (function () {
+        var path = window.location.pathname;
+        var match = path.match(/^(\/impost\/)/);
+        return match ? match[1] : "/";
+    })();
+
+    var LOGIN_URL = BASE_PATH + "pages/login.html";
+    var TIMEOUT_MS = 8000;
+    var MAX_RETRIES_FIRESTORE = 2;
 
     // ══════════════════════════════════════════════════════════════
     // ESTADO GLOBAL
@@ -41,15 +50,17 @@
     window.IMPOST_USER = null;
     window.IMPOST_USER_DATA = null;
 
-    var auth = IMPOST_AUTH;
-    var db = firebase.firestore();
+    // CORREÇÃO: NÃO inicializar auth e db aqui no topo da IIFE.
+    // Se firebase-config.js atrasar, dá ReferenceError e quebra tudo.
+    // Inicializamos dentro de iniciarGuard() após verificar dependências.
+    var auth = null;
+    var db = null;
     var guardResolvido = false;
 
     // ══════════════════════════════════════════════════════════════
     // 1. OVERLAY DE CARREGAMENTO
     // ══════════════════════════════════════════════════════════════
     function criarOverlayCarregamento() {
-        // Verifica se já existe
         if (document.getElementById("impost-auth-overlay")) return;
 
         var overlay = document.createElement("div");
@@ -63,8 +74,8 @@
                 '<p class="impost-auth-msg">Verificando acesso...</p>' +
             '</div>';
 
-        // CSS inline para não depender de arquivo externo
         var style = document.createElement("style");
+        style.id = "impost-auth-overlay-style";
         style.textContent =
             "#impost-auth-overlay {" +
                 "position:fixed;inset:0;z-index:99999;" +
@@ -105,6 +116,8 @@
         overlay.classList.add("saindo");
         setTimeout(function () {
             if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+            var style = document.getElementById("impost-auth-overlay-style");
+            if (style && style.parentNode) style.parentNode.removeChild(style);
         }, 450);
     }
 
@@ -112,7 +125,6 @@
     // 2. REDIRECIONAR PARA LOGIN
     // ══════════════════════════════════════════════════════════════
     function redirecionarParaLogin() {
-        // Salva a URL atual para redirect após login (opcional futuro)
         try {
             sessionStorage.setItem("impost_redirect", window.location.href);
         } catch (e) { /* sessionStorage indisponível */ }
@@ -131,9 +143,7 @@
                 if (docSnap.exists) {
                     return docSnap.data();
                 }
-                // Documento não existe (login Google antigo sem cadastro.js)
-                // Cria documento mínimo para não quebrar
-                console.warn("[Auth Guard] Documento do usuário não encontrado. Criando perfil mínimo.");
+                console.warn("[Auth Guard] Documento não encontrado. Criando perfil mínimo.");
                 var user = auth.currentUser;
                 var dadosMinimos = {
                     nome: (user && user.displayName) || "",
@@ -163,7 +173,7 @@
                     .then(function () { return dadosMinimos; });
             })
             .catch(function (err) {
-                console.error("[Auth Guard] Erro ao carregar Firestore (tentativa " + tentativa + "):", err);
+                console.error("[Auth Guard] Erro Firestore (tentativa " + tentativa + "):", err);
                 if (tentativa < MAX_RETRIES_FIRESTORE) {
                     return new Promise(function (resolve) {
                         setTimeout(function () {
@@ -171,7 +181,6 @@
                         }, 1000 * tentativa);
                     });
                 }
-                // Retorna dados mínimos offline para não bloquear a página
                 console.warn("[Auth Guard] Usando dados mínimos (offline).");
                 return {
                     nome: (auth.currentUser && auth.currentUser.displayName) || "",
@@ -187,8 +196,10 @@
     // 4. ATUALIZAR ÚLTIMO LOGIN
     // ══════════════════════════════════════════════════════════════
     function atualizarUltimoLogin(uid) {
+        var user = auth.currentUser;
         db.collection("users").doc(uid).update({
-            ultimoLogin: firebase.firestore.FieldValue.serverTimestamp()
+            ultimoLogin: firebase.firestore.FieldValue.serverTimestamp(),
+            emailVerificado: (user && user.emailVerified) || false
         }).catch(function (err) {
             console.warn("[Auth Guard] Erro ao atualizar ultimoLogin:", err);
         });
@@ -201,7 +212,10 @@
         var evento = new CustomEvent("impost-user-ready", {
             detail: { user: user, dados: dados }
         });
+        // CORREÇÃO: dispara em ambos para compatibilidade
+        // (user-service.js escuta em document)
         document.dispatchEvent(evento);
+        window.dispatchEvent(evento);
         console.log("[Auth Guard] Usuário pronto:", dados.nome || user.email, "| Plano:", dados.plano || "free");
     }
 
@@ -209,9 +223,22 @@
     // 6. GUARD PRINCIPAL
     // ══════════════════════════════════════════════════════════════
     function iniciarGuard() {
+        // CORREÇÃO: verificar dependências AQUI, não no topo da IIFE
+        if (typeof IMPOST_AUTH === "undefined") {
+            console.error("[Auth Guard] IMPOST_AUTH não encontrado. Verifique se firebase-config.js carregou antes.");
+            return;
+        }
+        if (typeof firebase === "undefined" || typeof firebase.firestore !== "function") {
+            console.error("[Auth Guard] Firebase Firestore SDK não encontrado.");
+            return;
+        }
+
+        // CORREÇÃO: inicializar AGORA que temos certeza das dependências
+        auth = IMPOST_AUTH;
+        db = firebase.firestore();
+
         criarOverlayCarregamento();
 
-        // Timeout de segurança — se o auth demorar demais
         var timeout = setTimeout(function () {
             if (!guardResolvido) {
                 console.error("[Auth Guard] Timeout — redirecionando para login.");
@@ -220,36 +247,25 @@
         }, TIMEOUT_MS);
 
         auth.onAuthStateChanged(function (user) {
-            // Evita executar mais de uma vez
             if (guardResolvido) return;
             guardResolvido = true;
             clearTimeout(timeout);
 
-            // ─── Não logado → redireciona ───
             if (!user) {
                 redirecionarParaLogin();
                 return;
             }
 
-            // ─── Logado → carrega dados ───
             carregarDadosUsuario(user.uid)
                 .then(function (dados) {
-                    // Disponibiliza globalmente
                     window.IMPOST_USER = user;
                     window.IMPOST_USER_DATA = dados;
-
-                    // Atualiza último login (fire and forget)
                     atualizarUltimoLogin(user.uid);
-
-                    // Dispara evento para a página
                     dispararEventoReady(user, dados);
-
-                    // Remove overlay de carregamento
                     removerOverlay();
                 })
                 .catch(function (err) {
                     console.error("[Auth Guard] Erro fatal:", err);
-                    // Mesmo com erro, deixa acessar com dados mínimos
                     window.IMPOST_USER = user;
                     window.IMPOST_USER_DATA = { plano: "free", nome: user.displayName || "", email: user.email || "" };
                     dispararEventoReady(user, window.IMPOST_USER_DATA);
@@ -266,6 +282,10 @@
      * Faz logout e redireciona para login
      */
     window.IMPOST_LOGOUT = function () {
+        if (!auth) {
+            window.location.href = LOGIN_URL;
+            return;
+        }
         auth.signOut().then(function () {
             window.IMPOST_USER = null;
             window.IMPOST_USER_DATA = null;
@@ -283,9 +303,8 @@
      *      headers: { "Authorization": "Bearer " + token }
      */
     window.IMPOST_GET_TOKEN = function () {
-        var user = auth.currentUser;
-        if (!user) return Promise.reject(new Error("Usuário não logado"));
-        return user.getIdToken();
+        if (!auth || !auth.currentUser) return Promise.reject(new Error("Usuário não logado"));
+        return auth.currentUser.getIdToken();
     };
 
     // ══════════════════════════════════════════════════════════════
