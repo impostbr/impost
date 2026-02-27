@@ -1,16 +1,16 @@
 // ═══════════════════════════════════════════════════════════════════════
-// IMPOST. — User Service (Controle de Plano Free / Pro)
+// IMPOST. — User Service (v2 — corrigido)
 // Arquivo: scripts/user-service.js
 // Depende de: auth-guard.js (carregado antes)
 // ═══════════════════════════════════════════════════════════════════════
 //
-// Funções disponíveis globalmente:
+// Funções disponíveis globalmente via IMPOST_PLANO:
 //
 //   IMPOST_PLANO.temAcessoPro()
 //     → boolean — true se plano é "pro" ou "trial" válido
 //
-//   IMPOST_PLANO.verificarAcessoOuUpgrade()
-//     → boolean — retorna true se tem acesso Pro, ou mostra modal upgrade
+//   IMPOST_PLANO.verificarAcessoOuUpgrade(mensagem?)
+//     → boolean — retorna true se tem acesso, ou mostra modal upgrade
 //
 //   IMPOST_PLANO.mostrarModalUpgrade(mensagem?)
 //     → void — abre modal de upgrade com CTA para planos.html
@@ -35,10 +35,6 @@
 //   <a href="lucro-real-estudos.html" data-pro="true">
 //       Estudo de Lucro Real 🔒
 //   </a>
-//
-//   <div class="card" data-pro="true" data-pro-msg="Relatórios em PDF">
-//       ... conteúdo Pro ...
-//   </div>
 // ═══════════════════════════════════════════════════════════════════════
 
 (function () {
@@ -47,8 +43,19 @@
     // ══════════════════════════════════════════════════════════════
     // CONFIGURAÇÃO
     // ══════════════════════════════════════════════════════════════
-    var PLANOS_URL = "planos.html";
+
+    // CORREÇÃO: usar path absoluto para funcionar em qualquer profundidade
+    var BASE_PATH = (function () {
+        var path = window.location.pathname;
+        var match = path.match(/^(\/impost\/)/);
+        return match ? match[1] : "/";
+    })();
+
+    var PLANOS_URL = BASE_PATH + "pages/planos.html";
     var CSS_INJETADO = false;
+
+    // CORREÇÃO: referência ao handler de Escape para poder removê-lo
+    var escapeHandler = null;
 
     // ══════════════════════════════════════════════════════════════
     // 1. VERIFICAÇÃO DE PLANO
@@ -81,11 +88,9 @@
         if (plano === "pro") return true;
 
         if (plano === "trial") {
-            // Verifica expiração
             if (!dados.planoExpira) return true; // trial sem data = ativo
 
             var expira;
-            // Firestore Timestamp tem .toDate()
             if (dados.planoExpira && typeof dados.planoExpira.toDate === "function") {
                 expira = dados.planoExpira.toDate();
             } else if (dados.planoExpira instanceof Date) {
@@ -119,6 +124,7 @@
         CSS_INJETADO = true;
 
         var style = document.createElement("style");
+        style.id = "impost-user-service-style";
         style.textContent =
             /* ─── Modal Overlay ─── */
             "#impost-upgrade-overlay {" +
@@ -316,13 +322,6 @@
         overlay.addEventListener("click", function (e) {
             if (e.target === overlay) fecharModalUpgrade();
         });
-
-        // Fechar com Esc
-        document.addEventListener("keydown", function handler(e) {
-            if (e.key === "Escape") {
-                fecharModalUpgrade();
-            }
-        });
     }
 
     function mostrarModalUpgrade(mensagem) {
@@ -334,6 +333,21 @@
         if (msgEl && mensagem) {
             msgEl.innerHTML =
                 'O recurso <strong>"' + mensagem + '"</strong> faz parte do plano <strong>IMPOST. Pro</strong>.';
+        } else if (msgEl && !mensagem) {
+            // CORREÇÃO: resetar mensagem padrão se não passou mensagem
+            // (evita mensagem antiga persistir de chamada anterior)
+            msgEl.innerHTML = 'Este recurso faz parte do plano <strong>IMPOST. Pro</strong>.';
+        }
+
+        // CORREÇÃO: adicionar listener de Escape apenas ao abrir,
+        // e guardar referência para remover ao fechar
+        if (!escapeHandler) {
+            escapeHandler = function (e) {
+                if (e.key === "Escape") {
+                    fecharModalUpgrade();
+                }
+            };
+            document.addEventListener("keydown", escapeHandler);
         }
 
         // Abre com animação
@@ -350,6 +364,12 @@
         if (overlay) {
             overlay.classList.remove("visivel");
         }
+
+        // CORREÇÃO: remover listener de Escape ao fechar
+        if (escapeHandler) {
+            document.removeEventListener("keydown", escapeHandler);
+            escapeHandler = null;
+        }
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -362,9 +382,6 @@
      *   - Bloqueia o elemento (pointer-events: none, opacidade)
      *   - Adiciona badge "PRO 🔒"
      *   - Clique no badge abre modal de upgrade
-     *
-     * Se o usuário TEM plano Pro:
-     *   - Não faz nada (elementos ficam normais)
      */
     function aplicarBloqueiosPro() {
         if (temAcessoPro()) return; // Nada a fazer
@@ -372,70 +389,62 @@
         injetarCSS();
 
         var elementos = document.querySelectorAll('[data-pro="true"]');
-        elementos.forEach(function (el) {
-            // Evita aplicar duas vezes
-            if (el.hasAttribute("data-pro-bloqueado")) return;
-            el.setAttribute("data-pro-bloqueado", "true");
+        for (var i = 0; i < elementos.length; i++) {
+            (function (el) {
+                // Evita aplicar duas vezes
+                if (el.hasAttribute("data-pro-bloqueado")) return;
+                el.setAttribute("data-pro-bloqueado", "true");
 
-            // Determina o tipo de badge
-            var tagName = el.tagName.toLowerCase();
-            var isInline = (tagName === "a" || tagName === "button" || tagName === "span");
-            var msgFeature = el.getAttribute("data-pro-msg") || "";
+                var tagName = el.tagName.toLowerCase();
+                var isInline = (tagName === "a" || tagName === "button" || tagName === "span");
+                var msgFeature = el.getAttribute("data-pro-msg") || "";
 
-            if (isInline) {
-                // Badge inline (ao lado do texto)
-                var badgeInline = document.createElement("span");
-                badgeInline.className = "impost-pro-inline";
-                badgeInline.innerHTML =
+                var svgCadeado =
                     '<svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">' +
                         '<rect x="2" y="5" width="6" height="5" rx="1"/>' +
                         '<path d="M3 5V3.5a2 2 0 0 1 4 0V5"/>' +
                     '</svg> PRO';
-                el.appendChild(badgeInline);
 
-                // Click handler — intercepta no badge
-                badgeInline.addEventListener("click", function (e) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    mostrarModalUpgrade(msgFeature);
-                });
+                if (isInline) {
+                    var badgeInline = document.createElement("span");
+                    badgeInline.className = "impost-pro-inline";
+                    badgeInline.innerHTML = svgCadeado;
+                    el.appendChild(badgeInline);
 
-                // Também intercepta clique no elemento inteiro
-                el.addEventListener("click", function (e) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    mostrarModalUpgrade(msgFeature);
-                });
+                    badgeInline.addEventListener("click", function (e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        mostrarModalUpgrade(msgFeature);
+                    });
 
-            } else {
-                // Badge posicionado (canto superior direito)
-                // Garantir posição relative no pai
-                var computedPos = window.getComputedStyle(el).position;
-                if (computedPos === "static") el.style.position = "relative";
+                    el.addEventListener("click", function (e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        mostrarModalUpgrade(msgFeature);
+                    });
+                } else {
+                    var computedPos = window.getComputedStyle(el).position;
+                    if (computedPos === "static") el.style.position = "relative";
 
-                var badge = document.createElement("div");
-                badge.className = "impost-pro-badge";
-                badge.innerHTML =
-                    '<svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">' +
-                        '<rect x="2" y="5" width="6" height="5" rx="1"/>' +
-                        '<path d="M3 5V3.5a2 2 0 0 1 4 0V5"/>' +
-                    '</svg> PRO';
-                el.appendChild(badge);
+                    var badge = document.createElement("div");
+                    badge.className = "impost-pro-badge";
+                    badge.innerHTML = svgCadeado;
+                    el.appendChild(badge);
 
-                badge.addEventListener("click", function (e) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    mostrarModalUpgrade(msgFeature);
-                });
+                    badge.addEventListener("click", function (e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        mostrarModalUpgrade(msgFeature);
+                    });
 
-                // Clique no elemento inteiro
-                el.addEventListener("click", function (e) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    mostrarModalUpgrade(msgFeature);
-                });
-            }
-        });
+                    el.addEventListener("click", function (e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        mostrarModalUpgrade(msgFeature);
+                    });
+                }
+            })(elementos[i]);
+        }
 
         var total = elementos.length;
         if (total > 0) {
@@ -462,7 +471,6 @@
     // ══════════════════════════════════════════════════════════════
 
     document.addEventListener("impost-user-ready", function () {
-        // Aplica bloqueios automaticamente ao carregar
         aplicarBloqueiosPro();
     });
 
