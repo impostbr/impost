@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════════════════
-// IMPOST. — User Service (v2 — corrigido)
+// IMPOST. — User Service (v3 — 4 planos + controle PDF)
 // Arquivo: scripts/user-service.js
 // Depende de: auth-guard.js (carregado antes)
 // ═══════════════════════════════════════════════════════════════════════
@@ -7,10 +7,16 @@
 // Funções disponíveis globalmente via IMPOST_PLANO:
 //
 //   IMPOST_PLANO.temAcessoPro()
-//     → boolean — true se plano é "pro" ou "trial" válido
+//     → boolean — true se plano é "pf", "pro", "escritorio" ou "trial" válido
+//
+//   IMPOST_PLANO.temAcessoPDF()
+//     → boolean — true se plano é "pro", "escritorio" ou "trial" válido
 //
 //   IMPOST_PLANO.verificarAcessoOuUpgrade(mensagem?)
-//     → boolean — retorna true se tem acesso, ou mostra modal upgrade
+//     → boolean — retorna true se tem acesso Pro, ou mostra modal upgrade
+//
+//   IMPOST_PLANO.verificarPDFOuUpgrade(mensagem?)
+//     → boolean — retorna true se tem acesso PDF, ou mostra modal upgrade
 //
 //   IMPOST_PLANO.mostrarModalUpgrade(mensagem?)
 //     → void — abre modal de upgrade com CTA para planos.html
@@ -19,7 +25,7 @@
 //     → void — fecha o modal de upgrade
 //
 //   IMPOST_PLANO.getPlano()
-//     → string — "free" | "pro" | "trial"
+//     → string — "free" | "pf" | "pro" | "escritorio" | "trial"
 //
 //   IMPOST_PLANO.getNomeUsuario()
 //     → string — nome do usuário ou e-mail como fallback
@@ -27,7 +33,14 @@
 //   IMPOST_PLANO.aplicarBloqueiosPro()
 //     → void — escaneia [data-pro] no DOM e aplica cadeados
 //
-// USO NO HTML para bloquear elementos Pro:
+// HIERARQUIA DE PLANOS:
+//   free       → Bloqueado em estudos/calculadoras e PDF
+//   pf         → Liberado em estudos/calculadoras, Bloqueado em PDF
+//   pro        → Tudo liberado
+//   escritorio → Tudo liberado
+//   trial      → Tudo liberado (temporário, 7 dias)
+//
+// USO NO HTML para bloquear elementos Pro (estudos/calculadoras):
 //   <button data-pro="true" data-pro-msg="Comparador detalhado">
 //       Comparar regimes
 //   </button>
@@ -35,6 +48,11 @@
 //   <a href="lucro-real-estudos.html" data-pro="true">
 //       Estudo de Lucro Real 🔒
 //   </a>
+//
+// USO FUTURO para bloquear elementos PDF:
+//   <button data-pdf="true" data-pro-msg="Relatório em PDF">
+//       Gerar PDF
+//   </button>
 // ═══════════════════════════════════════════════════════════════════════
 
 (function () {
@@ -76,30 +94,65 @@
     }
 
     /**
-     * Verifica se o usuário tem acesso Pro ativo.
-     * - plano "pro" → sempre true
-     * - plano "trial" → true se não expirou
-     * - plano "free" → false
+     * Verifica se o trial ainda está ativo (não expirou).
+     * Reutilizado por temAcessoPro() e temAcessoPDF().
+     */
+    function trialValido(dados) {
+        if (!dados.planoExpira) return true; // trial sem data = ativo
+
+        var expira;
+        if (dados.planoExpira && typeof dados.planoExpira.toDate === "function") {
+            expira = dados.planoExpira.toDate();
+        } else if (dados.planoExpira instanceof Date) {
+            expira = dados.planoExpira;
+        } else {
+            expira = new Date(dados.planoExpira);
+        }
+
+        return expira > new Date();
+    }
+
+    /**
+     * Verifica se o usuário tem acesso Pro ativo (estudos e calculadoras).
+     * - plano "pf"         → true
+     * - plano "pro"        → true
+     * - plano "escritorio"  → true
+     * - plano "trial"      → true se não expirou
+     * - plano "free"       → false
      */
     function temAcessoPro() {
         var dados = getDadosUsuario();
         var plano = dados.plano || "free";
 
+        if (plano === "pf") return true;
         if (plano === "pro") return true;
+        if (plano === "escritorio") return true;
 
         if (plano === "trial") {
-            if (!dados.planoExpira) return true; // trial sem data = ativo
+            return trialValido(dados);
+        }
 
-            var expira;
-            if (dados.planoExpira && typeof dados.planoExpira.toDate === "function") {
-                expira = dados.planoExpira.toDate();
-            } else if (dados.planoExpira instanceof Date) {
-                expira = dados.planoExpira;
-            } else {
-                expira = new Date(dados.planoExpira);
-            }
+        return false;
+    }
 
-            return expira > new Date();
+    /**
+     * Verifica se o usuário tem acesso a relatórios em PDF.
+     * Mais restritivo que temAcessoPro() — plano "pf" NÃO tem PDF.
+     * - plano "pro"        → true
+     * - plano "escritorio"  → true
+     * - plano "trial"      → true se não expirou
+     * - plano "pf"         → false
+     * - plano "free"       → false
+     */
+    function temAcessoPDF() {
+        var dados = getDadosUsuario();
+        var plano = dados.plano || "free";
+
+        if (plano === "pro") return true;
+        if (plano === "escritorio") return true;
+
+        if (plano === "trial") {
+            return trialValido(dados);
         }
 
         return false;
@@ -112,6 +165,17 @@
     function verificarAcessoOuUpgrade(mensagem) {
         if (temAcessoPro()) return true;
         mostrarModalUpgrade(mensagem);
+        return false;
+    }
+
+    /**
+     * Verifica acesso a PDF. Se não tiver, mostra o modal de upgrade.
+     * Retorna true se tem acesso, false se bloqueou.
+     */
+    function verificarPDFOuUpgrade(mensagem) {
+        if (temAcessoPDF()) return true;
+        var msg = mensagem || "Relatórios em PDF estão disponíveis a partir do plano Pro";
+        mostrarModalUpgrade(msg);
         return false;
     }
 
@@ -458,7 +522,9 @@
 
     window.IMPOST_PLANO = {
         temAcessoPro: temAcessoPro,
+        temAcessoPDF: temAcessoPDF,
         verificarAcessoOuUpgrade: verificarAcessoOuUpgrade,
+        verificarPDFOuUpgrade: verificarPDFOuUpgrade,
         mostrarModalUpgrade: mostrarModalUpgrade,
         fecharModalUpgrade: fecharModalUpgrade,
         getPlano: getPlano,
@@ -474,6 +540,6 @@
         aplicarBloqueiosPro();
     });
 
-    console.log("[User Service] Inicializado. Aguardando impost-user-ready...");
+    console.log("[User Service] v3 inicializado. Aguardando impost-user-ready...");
 
 })();
