@@ -405,17 +405,51 @@
                 termosAceite: gerarRegistroAceite()
             });
         } else {
-            await docRef.update({ ultimoLogin: firebase.firestore.FieldValue.serverTimestamp() });
+            // Documento já existe — atualizar aceite se estava faltando
+            var dados = docSnap.data();
+            var updateData = {
+                ultimoLogin: firebase.firestore.FieldValue.serverTimestamp()
+            };
+            // Se o aceite estava inválido/ausente, salvar o novo aceite
+            if (!dados.termosAceite || dados.termosAceite.aceito !== true) {
+                updateData.termosAceite = gerarRegistroAceite();
+            }
+            await docRef.update(updateData);
         }
         return user;
     }
 
     // ══════════════════════════════════════════════════════════════
-    // 13. SESSÃO ATIVA
+    // 13. SESSÃO ATIVA — CORREÇÃO: verificar Firestore antes de redirecionar
     // ══════════════════════════════════════════════════════════════
     function verificarSessaoAtiva() {
         IMPOST_AUTH.onAuthStateChanged(function (user) {
-            if (user) window.location.href = "dashboard.html";
+            if (user) {
+                // Verificar se já tem documento COM aceite válido no Firestore
+                IMPOST_DB.collection("users").doc(user.uid).get()
+                    .then(function (docSnap) {
+                        if (docSnap.exists) {
+                            var dados = docSnap.data();
+                            if (dados.termosAceite && dados.termosAceite.aceito === true) {
+                                // Tem aceite válido → pode ir pro dashboard
+                                window.location.href = "dashboard.html";
+                            }
+                            // Não tem aceite → fica no cadastro para aceitar os termos
+                            // (preenche o nome e e-mail automaticamente)
+                            if (user.displayName && inputNome && !inputNome.value) {
+                                inputNome.value = user.displayName;
+                            }
+                            if (user.email && inputEmail && !inputEmail.value) {
+                                inputEmail.value = user.email;
+                            }
+                        }
+                        // Documento não existe → fica no cadastro normalmente
+                    })
+                    .catch(function (err) {
+                        console.warn("[Cadastro] Erro ao verificar sessão:", err);
+                        // Erro de rede → fica no cadastro por segurança
+                    });
+            }
         });
     }
 
