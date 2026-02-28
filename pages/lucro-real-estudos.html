@@ -1514,9 +1514,9 @@
   <script src="../scripts/dados/municipios.js" onerror="console.warn('[IMPOST] municipios.js não carregado — municípios indisponíveis'); window._depFalha = (window._depFalha||[]); window._depFalha.push('municipios.js');"></script>
   <!-- 3. Motor fiscal unificado v4.6 (cálculos puros, sem dependência) -->
   <!-- v3.3 FIX E3#1: onerror handler para motor fiscal — ativa fallback silencioso -->
-  <script src="../scripts/calculadoras/motor-lucro-real-v4.6-unificado.js" onerror="console.error('[IMPOST] Motor fiscal não carregado — todos os cálculos usarão fallback simplificado'); window._motorFiscalFalhou = true; window._depFalha = (window._depFalha||[]); window._depFalha.push('motor-lucro-real-v4.6-unificado.js');"></script>
+  <script src="../scripts/calculadoras/lucro-real/motor-lucro-real-v4.6-unificado.js" onerror="console.error('[IMPOST] Motor fiscal não carregado — todos os cálculos usarão fallback simplificado'); window._motorFiscalFalhou = true; window._depFalha = (window._depFalha||[]); window._depFalha.push('motor-lucro-real-v4.6-unificado.js');"></script>
   <!-- 4. Mapeamento unificado v3.3 (ponte motor↔HTML, lê de estados.js via LR.setEstado) -->
-  <script src="../scripts/calculadoras/lucro-real-mapeamento.js" onerror="console.error('[IMPOST] Mapeamento não carregado — sistema não funcional'); window._depFalha = (window._depFalha||[]); window._depFalha.push('lucro-real-mapeamento.js');"></script>
+  <script src="../scripts/calculadoras/lucro-real/lucro-real-mapeamento.js" onerror="console.error('[IMPOST] Mapeamento não carregado — sistema não funcional'); window._depFalha = (window._depFalha||[]); window._depFalha.push('lucro-real-mapeamento.js');"></script>
   <!-- 5. Chart.js 4.4 CDN com fallback -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"
     onerror="this.onerror=null;this.src='https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.7/chart.umd.min.js';console.warn('[IMPOST] Chart.js CDN primário falhou, tentando fallback');"></script>
@@ -1527,7 +1527,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"
     onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';console.warn('[IMPOST] SheetJS CDN primário falhou, tentando fallback');window._depFalha=(window._depFalha||[]);window._depFalha.push('xlsx.js');"></script>
   <!-- 8. Motor principal do wizard (depende de TODOS acima) -->
-  <script src="../scripts/calculadoras/lucro-real-estudos.js" onerror="console.error('[IMPOST] estudos.js não carregado — wizard não funcional'); window._depFalha = (window._depFalha||[]); window._depFalha.push('lucro-real-estudos.js');"></script>
+  <script src="../scripts/calculadoras/lucro-real/lucro-real-estudos.js" onerror="console.error('[IMPOST] estudos.js não carregado — wizard não funcional'); window._depFalha = (window._depFalha||[]); window._depFalha.push('lucro-real-estudos.js');"></script>
 
   <!-- Sincronizar versão do badge com o JS -->
   <script>
