@@ -1,7 +1,7 @@
 // ═══════════════════════════════════════════════════════
 // IMPOST. — Login Controller
-// Arquivo: scripts/login.js
-// Depende de: scripts/firebase-config.js (carregado antes)
+// Arquivo: scripts/auth/login.js
+// Depende de: scripts/auth/firebase-config.js (carregado antes)
 // ═══════════════════════════════════════════════════════
 
 (function () {
@@ -13,10 +13,24 @@
   // Persistência padrão: SESSION
   auth.setPersistence(firebase.auth.Auth.Persistence.SESSION);
 
-  // ─── Se já estiver logado, redireciona ───
+  // ─── Se já estiver logado, verificar Firestore antes de redirecionar ───
   auth.onAuthStateChanged(function (user) {
     if (user) {
-      window.location.href = 'dashboard.html';
+      db.collection("users").doc(user.uid).get()
+        .then(function (docSnap) {
+          if (docSnap.exists) {
+            var dados = docSnap.data();
+            if (dados.termosAceite && dados.termosAceite.aceito === true) {
+              // Aceite válido → pode ir pro dashboard
+              window.location.href = 'dashboard.html';
+            }
+            // Sem aceite → fica no login (usuário pode ir pro cadastro manualmente)
+          }
+          // Documento não existe → fica no login
+        })
+        .catch(function () {
+          // Erro de rede → fica no login por segurança
+        });
     }
   });
 
