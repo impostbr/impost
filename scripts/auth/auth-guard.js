@@ -141,36 +141,23 @@
         return db.collection("users").doc(uid).get()
             .then(function (docSnap) {
                 if (docSnap.exists) {
-                    return docSnap.data();
+                    var dados = docSnap.data();
+
+                    // Verificar se aceite de termos é válido
+                    if (!dados.termosAceite || dados.termosAceite.aceito !== true) {
+                        console.warn("[Auth Guard] Usuário sem aceite de termos válido. Redirecionando para cadastro.");
+                        window.location.href = BASE_PATH + "pages/cadastro.html?email=" + encodeURIComponent(auth.currentUser.email || "");
+                        // Retorna promise que nunca resolve (página vai redirecionar)
+                        return new Promise(function () {});
+                    }
+
+                    return dados;
                 }
-                console.warn("[Auth Guard] Documento não encontrado. Criando perfil mínimo.");
-                var user = auth.currentUser;
-                var dadosMinimos = {
-                    nome: (user && user.displayName) || "",
-                    email: (user && user.email) || "",
-                    telefone: "",
-                    plano: "free",
-                    planoExpira: null,
-                    assinatura: {
-                        status: "inactive",
-                        gateway: "",
-                        gatewayId: "",
-                        inicioEm: null,
-                        proximaCobranca: null,
-                        valor: 0
-                    },
-                    termosAceite: { aceito: false },
-                    criadoEm: firebase.firestore.FieldValue.serverTimestamp(),
-                    ultimoLogin: firebase.firestore.FieldValue.serverTimestamp(),
-                    provider: (user && user.providerData && user.providerData[0])
-                        ? user.providerData[0].providerId.replace(".com", "")
-                        : "unknown",
-                    emailVerificado: (user && user.emailVerified) || false,
-                    totalCalculos: 0,
-                    ultimoCalculo: null
-                };
-                return db.collection("users").doc(uid).set(dadosMinimos)
-                    .then(function () { return dadosMinimos; });
+
+                // Documento NÃO existe → redirecionar para cadastro
+                console.warn("[Auth Guard] Documento não encontrado. Redirecionando para cadastro.");
+                window.location.href = BASE_PATH + "pages/cadastro.html?email=" + encodeURIComponent(auth.currentUser.email || "");
+                return new Promise(function () {});
             })
             .catch(function (err) {
                 console.error("[Auth Guard] Erro Firestore (tentativa " + tentativa + "):", err);
@@ -181,6 +168,7 @@
                         }, 1000 * tentativa);
                     });
                 }
+                // Após todas as tentativas falharem, usa dados mínimos offline
                 console.warn("[Auth Guard] Usando dados mínimos (offline).");
                 return {
                     nome: (auth.currentUser && auth.currentUser.displayName) || "",
@@ -196,10 +184,21 @@
     // 4. ATUALIZAR ÚLTIMO LOGIN
     // ══════════════════════════════════════════════════════════════
     function atualizarUltimoLogin(uid) {
+        // Evitar múltiplos writes por sessão
+        var chave = "impost_login_atualizado_" + uid;
+        try {
+            if (sessionStorage.getItem(chave)) {
+                console.log("[Auth Guard] ultimoLogin já atualizado nesta sessão.");
+                return;
+            }
+        } catch (e) { /* sessionStorage indisponível, prossegue */ }
+
         var user = auth.currentUser;
         db.collection("users").doc(uid).update({
             ultimoLogin: firebase.firestore.FieldValue.serverTimestamp(),
             emailVerificado: (user && user.emailVerified) || false
+        }).then(function () {
+            try { sessionStorage.setItem(chave, "1"); } catch (e) { }
         }).catch(function (err) {
             console.warn("[Auth Guard] Erro ao atualizar ultimoLogin:", err);
         });
@@ -235,7 +234,7 @@
 
         // CORREÇÃO: inicializar AGORA que temos certeza das dependências
         auth = IMPOST_AUTH;
-        db = firebase.firestore();
+        db = IMPOST_DB;
 
         criarOverlayCarregamento();
 
