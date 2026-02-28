@@ -8,6 +8,7 @@
 
   var auth = IMPOST_AUTH;
   var googleProvider = IMPOST_GOOGLE_PROVIDER;
+  var db = IMPOST_DB;
 
   // Persistência padrão: SESSION
   auth.setPersistence(firebase.auth.Auth.Persistence.SESSION);
@@ -177,7 +178,9 @@
     // ─── invalid-credential (Firebase v9+ combina user-not-found + wrong-password) ───
     if (code === 'auth/invalid-credential') {
       hideError();
-      showSuggestionBanner('no-account', email);
+      // Como não sabemos se é "conta não existe" ou "senha errada",
+      // mostra mensagem genérica que cobre ambos os casos
+      showError('E-mail ou senha incorretos. Verifique seus dados ou crie uma conta.');
       return;
     }
 
@@ -203,11 +206,54 @@
   }
 
   function onLoginSuccess(user) {
-    showToast('Bem-vindo, ' + (user.displayName || user.email) + '!');
+    showToast('Verificando conta...');
     console.log('Login OK:', user.email, user.uid);
-    setTimeout(function () {
-      window.location.href = 'dashboard.html';
-    }, 1200);
+
+    // Verificar se tem documento no Firestore
+    db.collection("users").doc(user.uid).get()
+      .then(function (docSnap) {
+        if (docSnap.exists) {
+          // Documento existe → verificar aceite
+          var dados = docSnap.data();
+
+          // Verificar se aceite de termos é válido
+          if (!dados.termosAceite || dados.termosAceite.aceito !== true) {
+            // Aceite inválido ou ausente → redirecionar para cadastro
+            showToast('Complete seu cadastro para continuar');
+            setTimeout(function () {
+              window.location.href = 'cadastro.html?email=' + encodeURIComponent(user.email || '');
+            }, 1200);
+            return;
+          }
+
+          // Atualizar último login (1x por sessão — ver sessão do auth-guard)
+          db.collection("users").doc(user.uid).update({
+            ultimoLogin: firebase.firestore.FieldValue.serverTimestamp(),
+            emailVerificado: user.emailVerified || false
+          }).catch(function () { /* silencioso */ });
+
+          showToast('Bem-vindo, ' + (dados.nome || user.displayName || user.email) + '!');
+          setTimeout(function () {
+            window.location.href = 'dashboard.html';
+          }, 1200);
+        } else {
+          // Documento NÃO existe → usuário nunca se cadastrou
+          // Redirecionar para cadastro para aceitar termos
+          showToast('Complete seu cadastro para continuar');
+          setTimeout(function () {
+            window.location.href = 'cadastro.html?email=' + encodeURIComponent(user.email || '');
+          }, 1200);
+        }
+      })
+      .catch(function (err) {
+        console.error('Erro ao verificar documento:', err);
+        // Em caso de erro de rede, tentar ir pro dashboard
+        // O auth-guard vai verificar novamente
+        showToast('Bem-vindo, ' + (user.displayName || user.email) + '!');
+        setTimeout(function () {
+          window.location.href = 'dashboard.html';
+        }, 1200);
+      });
   }
 
   // ═══ LOGIN — Email/Senha ═══
