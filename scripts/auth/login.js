@@ -98,8 +98,8 @@
       passInput.focus();
       return false;
     }
-    if (pw.length < 6) {
-      showError('A senha deve ter pelo menos 6 caracteres');
+    if (pw.length < 8) {
+      showError('A senha deve ter pelo menos 8 caracteres');
       passInput.focus();
       return false;
     }
