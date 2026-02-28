@@ -348,8 +348,7 @@
     // 10. CRIAR DOCUMENTO FIRESTORE
     // ══════════════════════════════════════════════════════════════
     function criarDocumentoUsuario(uid, dados) {
-        var db = firebase.firestore();
-        return db.collection("users").doc(uid).set({
+        return IMPOST_DB.collection("users").doc(uid).set({
             nome: dados.nome || "",
             email: dados.email || "",
             telefone: "",
@@ -397,8 +396,7 @@
     async function cadastrarComGoogle() {
         var result = await IMPOST_AUTH.signInWithPopup(IMPOST_GOOGLE_PROVIDER);
         var user = result.user;
-        var db = firebase.firestore();
-        var docRef = db.collection("users").doc(user.uid);
+        var docRef = IMPOST_DB.collection("users").doc(user.uid);
         var docSnap = await docRef.get();
         if (!docSnap.exists) {
             await criarDocumentoUsuario(user.uid, {
