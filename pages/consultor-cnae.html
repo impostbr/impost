@@ -330,13 +330,21 @@
     </div>
 </div>
 
+<!-- ═══ AUTH ═══ -->
+<script src="https://www.gstatic.com/firebasejs/11.4.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/11.4.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/11.4.0/firebase-firestore-compat.js"></script>
+<script src="../scripts/auth/firebase-config.js"></script>
+<script src="../scripts/auth/auth-guard.js"></script>
+<script src="../scripts/auth/user-service.js"></script>
+
 <!-- DATA SCRIPTS -->
-<script src="../scripts/impostos_federais.js"></script>
-<script src="../scripts/cnae-mapeamento.js"></script>
-<script src="../scripts/estados.js"></script>
-<script src="../scripts/municipios.js"></script>
+<script src="../scripts/dados/impostos_federais.js"></script>
+<script src="../scripts/cnae/cnae-mapeamento.js"></script>
+<script src="../scripts/dados/estados.js"></script>
+<script src="../scripts/dados/municipios.js"></script>
 <script type="module">
-import{BANCO_CNAE}from'../scripts/cnae.js';
+import{BANCO_CNAE}from'../scripts/cnae/cnae.js';
 window.BANCO_CNAE=BANCO_CNAE;
 window.dispatchEvent(new Event('cnae-loaded'));
 </script>

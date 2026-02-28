@@ -583,38 +583,46 @@ input::placeholder { color:var(--text-light); }
   </div>
 </div>
 
-<!-- ═══ Scripts de Estados — Base Tributária Completa (27 UFs) ═══ -->
-<script src="../scripts/acre.js"></script>
-<script src="../scripts/alagoas.js"></script>
-<script src="../scripts/amapa.js"></script>
-<script src="../scripts/amazonas.js"></script>
-<script src="../scripts/bahia.js"></script>
-<script src="../scripts/ceara.js"></script>
-<script src="../scripts/distrito_federal.js"></script>
-<script src="../scripts/espirito_santo.js"></script>
-<script src="../scripts/goias.js"></script>
-<script src="../scripts/maranhao.js"></script>
-<script src="../scripts/mato_grosso.js"></script>
-<script src="../scripts/mato_grosso_do_sul.js"></script>
-<script src="../scripts/minas_gerais.js"></script>
-<script src="../scripts/para.js"></script>
-<script src="../scripts/paraiba.js"></script>
-<script src="../scripts/parana.js"></script>
-<script src="../scripts/pernambuco.js"></script>
-<script src="../scripts/piaui.js"></script>
-<script src="../scripts/rio_de_janeiro.js"></script>
-<script src="../scripts/rio_grande_do_norte.js"></script>
-<script src="../scripts/rio_grande_do_sul.js"></script>
-<script src="../scripts/rondonia.js"></script>
-<script src="../scripts/roraima.js"></script>
-<script src="../scripts/santa_catarina.js"></script>
-<script src="../scripts/sao_paulo.js"></script>
-<script src="../scripts/sergipe.js"></script>
-<script src="../scripts/tocantins.js"></script>
-<!-- ═══ Agregador Central ═══ -->
-<script src="../scripts/estados.js"></script>
+<!-- ═══ AUTH ═══ -->
+<script src="https://www.gstatic.com/firebasejs/11.4.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/11.4.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/11.4.0/firebase-firestore-compat.js"></script>
+<script src="../scripts/auth/firebase-config.js"></script>
+<script src="../scripts/auth/auth-guard.js"></script>
+<script src="../scripts/auth/user-service.js"></script>
 
-<script src="../scripts/reforma-tributaria.js"></script>
+<!-- ═══ Scripts de Estados — Base Tributária Completa (27 UFs) ═══ -->
+<script src="../scripts/estados/acre.js"></script>
+<script src="../scripts/estados/alagoas.js"></script>
+<script src="../scripts/estados/amapa.js"></script>
+<script src="../scripts/estados/amazonas.js"></script>
+<script src="../scripts/estados/bahia.js"></script>
+<script src="../scripts/estados/ceara.js"></script>
+<script src="../scripts/estados/distrito_federal.js"></script>
+<script src="../scripts/estados/espirito_santo.js"></script>
+<script src="../scripts/estados/goias.js"></script>
+<script src="../scripts/estados/maranhao.js"></script>
+<script src="../scripts/estados/mato_grosso.js"></script>
+<script src="../scripts/estados/mato_grosso_do_sul.js"></script>
+<script src="../scripts/estados/minas_gerais.js"></script>
+<script src="../scripts/estados/para.js"></script>
+<script src="../scripts/estados/paraiba.js"></script>
+<script src="../scripts/estados/parana.js"></script>
+<script src="../scripts/estados/pernambuco.js"></script>
+<script src="../scripts/estados/piaui.js"></script>
+<script src="../scripts/estados/rio_de_janeiro.js"></script>
+<script src="../scripts/estados/rio_grande_do_norte.js"></script>
+<script src="../scripts/estados/rio_grande_do_sul.js"></script>
+<script src="../scripts/estados/rondonia.js"></script>
+<script src="../scripts/estados/roraima.js"></script>
+<script src="../scripts/estados/santa_catarina.js"></script>
+<script src="../scripts/estados/sao_paulo.js"></script>
+<script src="../scripts/estados/sergipe.js"></script>
+<script src="../scripts/estados/tocantins.js"></script>
+<!-- ═══ Agregador Central ═══ -->
+<script src="../scripts/dados/estados.js"></script>
+
+<script src="../scripts/calculadoras/reforma-tributaria.js"></script>
 
 <!-- ═══ INTEGRAÇÃO ESTADOS.JS → Painel Estadual PF ═══ -->
 <script>
