@@ -349,9 +349,9 @@ body{background:#fff}
 <div class="form-group"><label class="form-label">Outros Circulantes</label><div class="input-money"><input type="text" class="form-input money bal-a" id="bOutrosAC" placeholder="0"></div></div>
 <div class="computed" id="compAC"><span class="computed-label">Total Ativo Circulante</span><span class="computed-val">R$ 0</span></div>
 <p style="font-size:12px;font-weight:600;color:var(--txt-sec);margin:12px 0 8px">Ativo Não Circulante</p>
-<div class="form-group"><label class="form-label">Imobilizado</label><div class="input-money"><input type="text" class="form-input money bal-a" id="bImobilizado" placeholder="0"></div></div>
-<div class="form-group"><label class="form-label">Veículos</label><div class="input-money"><input type="text" class="form-input money bal-a" id="bVeiculos" placeholder="0"></div></div>
-<div class="form-group"><label class="form-label">Máquinas</label><div class="input-money"><input type="text" class="form-input money bal-a" id="bMaquinas" placeholder="0"></div></div>
+<div class="form-group"><label class="form-label">Imobilizado <span style="font-size:11px;color:var(--pri);cursor:pointer" onclick="this.parentNode.parentNode.querySelector('.vm-field').style.display=this.parentNode.parentNode.querySelector('.vm-field').style.display==='none'?'block':'none'">[Valor Mercado]</span></label><div class="input-money"><input type="text" class="form-input money bal-a" id="bImobilizado" placeholder="0"></div><div class="vm-field" style="display:none;margin-top:4px"><label class="form-label" style="font-size:11px;color:var(--pri-dk)">Valor de Mercado</label><div class="input-money"><input type="text" class="form-input money" id="bImobilizadoVM" placeholder="0"></div></div></div>
+<div class="form-group"><label class="form-label">Veículos <span style="font-size:11px;color:var(--pri);cursor:pointer" onclick="this.parentNode.parentNode.querySelector('.vm-field').style.display=this.parentNode.parentNode.querySelector('.vm-field').style.display==='none'?'block':'none'">[Valor Mercado]</span></label><div class="input-money"><input type="text" class="form-input money bal-a" id="bVeiculos" placeholder="0"></div><div class="vm-field" style="display:none;margin-top:4px"><label class="form-label" style="font-size:11px;color:var(--pri-dk)">Valor de Mercado</label><div class="input-money"><input type="text" class="form-input money" id="bVeiculosVM" placeholder="0"></div></div></div>
+<div class="form-group"><label class="form-label">Máquinas <span style="font-size:11px;color:var(--pri);cursor:pointer" onclick="this.parentNode.parentNode.querySelector('.vm-field').style.display=this.parentNode.parentNode.querySelector('.vm-field').style.display==='none'?'block':'none'">[Valor Mercado]</span></label><div class="input-money"><input type="text" class="form-input money bal-a" id="bMaquinas" placeholder="0"></div><div class="vm-field" style="display:none;margin-top:4px"><label class="form-label" style="font-size:11px;color:var(--pri-dk)">Valor de Mercado</label><div class="input-money"><input type="text" class="form-input money" id="bMaquinasVM" placeholder="0"></div></div></div>
 <div class="form-group"><label class="form-label">Intangível</label><div class="input-money"><input type="text" class="form-input money bal-a" id="bIntangivel" placeholder="0"></div></div>
 <div class="form-group"><label class="form-label">Investimentos</label><div class="input-money"><input type="text" class="form-input money bal-a" id="bInvestimentos" placeholder="0"></div></div>
 <div class="form-group"><label class="form-label">Outros Não Circulantes</label><div class="input-money"><input type="text" class="form-input money bal-a" id="bOutrosANC" placeholder="0"></div></div>
@@ -446,6 +446,24 @@ body{background:#fff}
 <div class="computed highlight" style="flex:1" id="compWACC"><span class="computed-label">WACC Calculado</span><span class="computed-val">—</span></div>
 </div>
 </div>
+<button class="collapse-toggle" onclick="toggleCollapse(this)" style="margin-top:16px">Projeção por Fases (avançado)</button>
+<div class="collapse-content">
+<p style="font-size:12px;color:var(--txt-sec);margin-bottom:12px">Defina taxas de crescimento diferentes por período. Se vazio, usa a taxa única definida acima.</p>
+<div id="fasesContainer">
+<div class="form-grid" data-fase="1">
+<div class="form-group"><label class="form-label">Fase 1 — Anos</label><div style="display:flex;gap:6px;align-items:center"><input type="number" class="form-input" id="fase1De" value="1" min="1" max="10" style="width:60px"><span>a</span><input type="number" class="form-input" id="fase1Ate" value="2" min="1" max="10" style="width:60px"></div></div>
+<div class="form-group"><label class="form-label">Crescimento (%)</label><div class="input-pct"><input type="number" class="form-input" id="fase1Taxa" placeholder="15" step="0.5"></div></div>
+</div>
+<div class="form-grid" data-fase="2">
+<div class="form-group"><label class="form-label">Fase 2 — Anos</label><div style="display:flex;gap:6px;align-items:center"><input type="number" class="form-input" id="fase2De" value="3" min="1" max="10" style="width:60px"><span>a</span><input type="number" class="form-input" id="fase2Ate" value="4" min="1" max="10" style="width:60px"></div></div>
+<div class="form-group"><label class="form-label">Crescimento (%)</label><div class="input-pct"><input type="number" class="form-input" id="fase2Taxa" placeholder="8" step="0.5"></div></div>
+</div>
+<div class="form-grid" data-fase="3">
+<div class="form-group"><label class="form-label">Fase 3 — Anos</label><div style="display:flex;gap:6px;align-items:center"><input type="number" class="form-input" id="fase3De" value="5" min="1" max="10" style="width:60px"><span>a</span><input type="number" class="form-input" id="fase3Ate" value="5" min="1" max="10" style="width:60px"></div></div>
+<div class="form-group"><label class="form-label">Crescimento (%)</label><div class="input-pct"><input type="number" class="form-input" id="fase3Taxa" placeholder="5" step="0.5"></div></div>
+</div>
+</div>
+</div>
 <!-- Contingências -->
 <button class="collapse-toggle" onclick="toggleCollapse(this)" style="margin-top:16px">Contingências (para Patrimonial)</button>
 <div class="collapse-content">
@@ -484,6 +502,8 @@ body{background:#fff}
 <div class="form-group"><label class="form-label">P/L (min - max)</label><div style="display:flex;gap:8px"><input type="number" class="form-input" id="multPLmin" placeholder="min" step="0.1" style="width:80px"><span style="align-self:center">—</span><input type="number" class="form-input" id="multPLmax" placeholder="max" step="0.1" style="width:80px"></div></div>
 <div class="form-group"><label class="form-label">EV/Receita (min - max)</label><div style="display:flex;gap:8px"><input type="number" class="form-input" id="multEVRecmin" placeholder="min" step="0.1" style="width:80px"><span style="align-self:center">—</span><input type="number" class="form-input" id="multEVRecmax" placeholder="max" step="0.1" style="width:80px"></div></div>
 <div class="form-group"><label class="form-label">P/VPA (min - max)</label><div style="display:flex;gap:8px"><input type="number" class="form-input" id="multPVPAmin" placeholder="min" step="0.1" style="width:80px"><span style="align-self:center">—</span><input type="number" class="form-input" id="multPVPAmax" placeholder="max" step="0.1" style="width:80px"></div></div>
+<div class="form-group"><label class="form-label">EV/EBIT (min - max)</label><div style="display:flex;gap:8px"><input type="number" class="form-input" id="multEVEBITmin" placeholder="min" step="0.1" style="width:80px"><span style="align-self:center">—</span><input type="number" class="form-input" id="multEVEBITmax" placeholder="max" step="0.1" style="width:80px"></div></div>
+<div class="form-group"><label class="form-label">EV/FCF (min - max)</label><div style="display:flex;gap:8px"><input type="number" class="form-input" id="multEVFCFmin" placeholder="min" step="0.1" style="width:80px"><span style="align-self:center">—</span><input type="number" class="form-input" id="multEVFCFmax" placeholder="max" step="0.1" style="width:80px"></div></div>
 </div>
 <h3 style="font-size:14px;margin:20px 0 12px">Pesos dos Métodos</h3>
 <div class="weight-row"><label>DCF</label><input type="range" id="pesoDCF" min="0" max="100" value="45" oninput="syncPesos('dcf')"><span class="weight-val" id="pesoDCFval">45%</span></div>
@@ -572,8 +592,8 @@ var STEPS = [
 // ═══════════════════════════════════════════════════════════════
 function $(id){return document.getElementById(id)}
 function parseMoney(v){if(!v)return 0;return parseFloat(String(v).replace(/[^\d,.-]/g,'').replace(/\./g,'').replace(',','.'))||0}
-function fmtMoney(v){if(v==null||isNaN(v))return'R$ 0';var neg=v<0;v=Math.abs(v);var s=Math.round(v).toString().replace(/\B(?=(\d{3})+(?!\d))/g,'.');return(neg?'-':'')+' R$ '+s}
-function fmtMoneyShort(v){if(!v||isNaN(v))return'R$ 0';var abs=Math.abs(v);if(abs>=1e9)return'R$ '+(v/1e9).toFixed(1)+'B';if(abs>=1e6)return'R$ '+(v/1e6).toFixed(1)+'M';if(abs>=1e3)return'R$ '+(v/1e3).toFixed(0)+'k';return'R$ '+Math.round(v)}
+function fmtMoney(v){if(v==null||isNaN(v))return'R$ 0';var neg=v<0;v=Math.abs(v);var s=Math.round(v).toString().replace(/\B(?=(\d{3})+(?!\d))/g,'.');return(neg?'-R$ ':'R$ ')+s}
+function fmtMoneyShort(v){if(!v||isNaN(v))return'R$ 0';var neg=v<0;var abs=Math.abs(v);var p=neg?'-R$ ':'R$ ';if(abs>=1e9)return p+(abs/1e9).toFixed(1)+'B';if(abs>=1e6)return p+(abs/1e6).toFixed(1)+'M';if(abs>=1e3)return p+(abs/1e3).toFixed(0)+'k';return p+Math.round(abs)}
 function fmtPct(v){if(v==null||isNaN(v))return'—';return(v*100).toFixed(1)+'%'}
 
 function debounce(fn,ms){var t;return function(){var a=arguments,c=this;clearTimeout(t);t=setTimeout(function(){fn.apply(c,a)},ms)}}
@@ -887,10 +907,11 @@ function removeContingencia(id){
 function renderContingencias(){
   var h='';
   S.contingencias.forEach(function(c){
+    var valFmt=c.valor?Math.round(c.valor).toString().replace(/\B(?=(\d{3})+(?!\d))/g,'.'):'';
     h+='<div class="cont-row">';
-    h+='<input class="form-input" placeholder="Descrição" value="'+(c.desc||'')+'" onchange="updateCont('+c.id+',\'desc\',this.value)">';
-    h+='<div class="input-money"><input class="form-input money" placeholder="0" onchange="updateCont('+c.id+',\'valor\',this.value)"></div>';
-    h+='<select class="form-input" onchange="updateCont('+c.id+',\'prob\',this.value)"><option value="provavel">Provável</option><option value="possivel" selected>Possível</option><option value="remoto">Remoto</option></select>';
+    h+='<input class="form-input" placeholder="Descrição" value="'+(c.desc||'').replace(/"/g,'&quot;')+'" onchange="updateCont('+c.id+',\'desc\',this.value)">';
+    h+='<div class="input-money"><input class="form-input money" placeholder="0" value="'+valFmt+'" onchange="updateCont('+c.id+',\'valor\',this.value)"></div>';
+    h+='<select class="form-input" onchange="updateCont('+c.id+',\'prob\',this.value)"><option value="provavel"'+(c.prob==='provavel'?' selected':'')+'>Provável</option><option value="possivel"'+(c.prob==='possivel'||!c.prob?' selected':'')+'>Possível</option><option value="remoto"'+(c.prob==='remoto'?' selected':'')+'>Remoto</option></select>';
     h+='<button class="btn-icon" onclick="removeContingencia('+c.id+')">&times;</button>';
     h+='</div>';
   });
@@ -1020,10 +1041,13 @@ function buildReview(){
     {label:'Regime',val:$('regimeTributario').options[$('regimeTributario').selectedIndex].text,step:1},
     {label:'Receita Bruta',val:fmtMoney(parseMoney($('receitaBruta').value)),step:2},
     {label:'EBITDA',val:S.dre?fmtMoney(S.dre.ebitda):'—',step:2},
+    {label:'Margem EBITDA',val:S.dre?fmtPct(S.dre.margemEBITDA):'—',step:2},
     {label:'Lucro Líquido',val:S.dre?fmtMoney(S.dre.lucroLiquido):'—',step:2},
     {label:'Total Ativos',val:$('totalAtivo').textContent.replace('Total Ativos: ',''),step:3},
+    {label:'Dívida Líquida',val:$('bmDivLiq').textContent,step:3},
     {label:'WACC',val:getWaccDisplay(),step:4},
-    {label:'Horizonte',val:$('horizonteAnos').value+' anos',step:4}
+    {label:'Horizonte',val:$('horizonteAnos').value+' anos',step:4},
+    {label:'Crescimento',val:$('txCresc').value+'%',step:4}
   ];
   var h='';
   items.forEach(function(it){
@@ -1078,7 +1102,11 @@ function doCalc(){
       contasReceber:parseMoney($('bContasRec').value),estoques:parseMoney($('bEstoques').value),
       outrosCirculantes:parseMoney($('bOutrosAC').value),
       imobilizado:parseMoney($('bImobilizado').value),veiculos:parseMoney($('bVeiculos').value),
-      maquinas:parseMoney($('bMaquinas').value),intangivel:parseMoney($('bIntangivel').value),
+      maquinas:parseMoney($('bMaquinas').value),
+      imobilizadoValorMercado:parseMoney($('bImobilizadoVM').value)||undefined,
+      veiculosValorMercado:parseMoney($('bVeiculosVM').value)||undefined,
+      maquinasValorMercado:parseMoney($('bMaquinasVM').value)||undefined,
+      intangivel:parseMoney($('bIntangivel').value),
       investimentos:parseMoney($('bInvestimentos').value),outrosNaoCirculantes:parseMoney($('bOutrosANC').value),
       fornecedores:parseMoney($('bFornecedores').value),emprestimosCP:parseMoney($('bEmpCP').value),
       salarios:parseMoney($('bSalarios').value),impostos:parseMoney($('bImpostos').value),
@@ -1101,6 +1129,7 @@ function doCalc(){
       setor:$('setor').value,
       porte:$('porte').value,
       tipoCapital:$('tipoCapital').value,
+      regimeTributario:$('regimeTributario').value,
       horizonteAnos:parseInt($('horizonteAnos').value),
       taxaCrescimento:parseFloat($('txCresc').value)/100,
       taxaPerpetua:parseFloat($('txPerp').value)/100,
@@ -1109,6 +1138,15 @@ function doCalc(){
       anosOperacao:parseInt($('anosOperacao').value),
       processosJudiciais:parseMoney($('processosJud').value)
     };
+    // Fases de projeção
+    var fases=[];
+    for(var fi=1;fi<=3;fi++){
+      var de=$('fase'+fi+'De'),ate=$('fase'+fi+'Ate'),tx=$('fase'+fi+'Taxa');
+      if(de&&ate&&tx&&tx.value){
+        fases.push({de:parseInt(de.value),ate:parseInt(ate.value),taxaCrescimento:parseFloat(tx.value)/100});
+      }
+    }
+    if(fases.length>0)premissas.fases=fases;
     // WACC
     if(S.waccMode==='manual'){premissas.waccManual=parseFloat($('waccManualVal').value)/100}
     else if(S.waccMode==='capm'){
@@ -1133,6 +1171,14 @@ function doCalc(){
       if(eMin>0&&eMax>0)mc['EV/EBITDA']={min:eMin,max:eMax};
       var plMin=parseFloat($('multPLmin').value);var plMax=parseFloat($('multPLmax').value);
       if(plMin>0&&plMax>0)mc['P/L']={min:plMin,max:plMax};
+      var ebMin=parseFloat($('multEVEBITmin').value);var ebMax=parseFloat($('multEVEBITmax').value);
+      if(ebMin>0&&ebMax>0)mc['EV/EBIT']={min:ebMin,max:ebMax};
+      var evRecMin=parseFloat($('multEVRecmin').value);var evRecMax=parseFloat($('multEVRecmax').value);
+      if(evRecMin>0&&evRecMax>0)mc['EV/Receita']={min:evRecMin,max:evRecMax};
+      var pvpaMin=parseFloat($('multPVPAmin').value);var pvpaMax=parseFloat($('multPVPAmax').value);
+      if(pvpaMin>0&&pvpaMax>0)mc['P/VPA']={min:pvpaMin,max:pvpaMax};
+      var fcfMin=parseFloat($('multEVFCFmin').value);var fcfMax=parseFloat($('multEVFCFmax').value);
+      if(fcfMin>0&&fcfMax>0)mc['EV/FCF']={min:fcfMin,max:fcfMax};
       premissas.multiplosCustom=mc;
       var d=parseInt($('pesoDCF').value);var m=parseInt($('pesoMult').value);var p=parseInt($('pesoPatr').value);
       if(d+m+p===100)premissas.pesosMetodos={dcf:d/100,multiplos:m/100,patrimonial:p/100};
@@ -1372,7 +1418,9 @@ function renderGlossario(){
   var h='';
   Object.keys(g).forEach(function(k){
     var t=g[k];
-    h+='<div class="glossary-item"><span class="glossary-term">'+k+'</span><span class="glossary-sigla">('+t.sigla+')</span><div class="glossary-exp">'+t.explicacao+'</div></div>';
+    h+='<div class="glossary-item"><span class="glossary-term">'+(t.sigla||k)+'</span>';
+    if(t.nome)h+=' — <span style="font-weight:600;color:var(--txt)">'+t.nome+'</span>';
+    h+='<div class="glossary-exp">'+t.explicacao+'</div></div>';
   });
   $('glossarioList').innerHTML=h;
 }
