@@ -1,6 +1,6 @@
 // ═══════════════════════════════════════════════════════
 // IMPOST. — Firebase Config (centralizado)
-// Arquivo: scripts/firebase-config.js
+// Arquivo: scripts/auth/firebase-config.js
 //
 // Todas as páginas importam este arquivo antes de usar
 // qualquer serviço Firebase (Auth, Firestore, etc.)
@@ -29,5 +29,6 @@ if (!firebase.apps.length) {
 // Exporta referências globais para uso em qualquer página
 var IMPOST_AUTH = firebase.auth();
 var IMPOST_GOOGLE_PROVIDER = new firebase.auth.GoogleAuthProvider();
+var IMPOST_DB = firebase.firestore();
 
 console.log('[IMPOST] Firebase inicializado — projeto:', firebaseConfig.projectId);
