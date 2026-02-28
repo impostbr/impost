@@ -469,6 +469,14 @@
         <div class="header-right">
             <div class="badge badge-version">v1.0 · Fev/2026</div>
             <div class="badge badge-status"><span class="badge-dot"></span> Brasil</div>
+            <span id="user-nome" style="font-size:0.85rem;color:#2e7d32;font-weight:600;margin-left:8px;"></span>
+            <button id="btn-sair" onclick="IMPOST_LOGOUT()" style="
+                background:#fff;border:1.5px solid #c8e6c9;border-radius:8px;
+                padding:6px 16px;font-size:0.82rem;font-weight:600;color:#e53935;
+                cursor:pointer;transition:all 0.2s;margin-left:4px;
+            " onmouseover="this.style.background='#ffebee';this.style.borderColor='#e53935'" onmouseout="this.style.background='#fff';this.style.borderColor='#c8e6c9'">
+                Sair
+            </button>
         </div>
     </header>
 
@@ -672,6 +680,15 @@
 <script src="../scripts/auth/firebase-config.js"></script>
 <script src="../scripts/auth/auth-guard.js"></script>
 <script src="../scripts/auth/user-service.js"></script>
+<script>
+    // Mostrar nome do usuário no header
+    document.addEventListener('impost-user-ready', function(e) {
+        var el = document.getElementById('user-nome');
+        if (el && e.detail && e.detail.dados) {
+            el.textContent = e.detail.dados.nome || e.detail.user.displayName || '';
+        }
+    });
+</script>
 
 <script>
 setTimeout(() => {
