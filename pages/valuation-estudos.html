@@ -1,0 +1,1526 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Valuation — IMPOST. Inteligência Tributária</title>
+<meta name="description" content="Calculadora profissional de Valuation: DCF, Múltiplos e Patrimonial com análise completa.">
+<meta name="robots" content="index,follow">
+<meta property="og:title" content="Valuation — IMPOST.">
+<meta property="og:description" content="Precificação de empresas com 3 métodos integrados.">
+<link rel="canonical" href="https://impost.app/pages/valuation-estudos.html">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="../valuation-engine.js"></script>
+<script src="../valuation-engine-exportar.js"></script>
+<style>
+/* ═══ RESET & BASE ═══ */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+--pri:#22C55E;--pri-dk:#15803D;--pri-lt:#F0FDF4;--pri-10:#ECFDF5;
+--sec:#1E3A5F;--gold:#CA8A04;
+--txt:#1F2937;--txt-sec:#6B7280;--txt-lt:#9CA3AF;
+--bg:#FFFFFF;--bg-gray:#F9FAFB;--bg-zebra:#F3F4F6;--brd:#E5E7EB;
+--err:#DC2626;--warn:#F59E0B;--info:#3B82F6;--ok:#22C55E;
+--dcf:#1E40AF;--mult:#047857;--patr:#B45309;--cons:#7C3AED;
+--radius:12px;--radius-sm:8px;--shadow:0 1px 3px rgba(0,0,0,.1),0 1px 2px rgba(0,0,0,.06);
+--shadow-md:0 4px 6px rgba(0,0,0,.07),0 2px 4px rgba(0,0,0,.06);
+--shadow-lg:0 10px 15px rgba(0,0,0,.1),0 4px 6px rgba(0,0,0,.05);
+}
+html{scroll-behavior:smooth}
+body{font-family:'Inter',system-ui,-apple-system,sans-serif;color:var(--txt);background:var(--bg-gray);line-height:1.5;-webkit-font-smoothing:antialiased}
+h1,h2,h3,h4{font-weight:700;line-height:1.2}
+
+/* ═══ HEADER ═══ */
+.header{background:var(--bg);border-bottom:1px solid var(--brd);padding:12px 24px;display:flex;align-items:center;gap:16px;position:sticky;top:0;z-index:100;box-shadow:var(--shadow)}
+.header-logo{font-size:22px;font-weight:900;letter-spacing:-0.5px;color:var(--txt)}
+.header-logo span{color:var(--pri)}
+.header-title{font-size:15px;color:var(--txt-sec);margin-left:8px;padding-left:16px;border-left:2px solid var(--brd)}
+.header-badge{background:var(--pri-10);color:var(--pri-dk);font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px}
+.header-spacer{flex:1}
+.header-actions{display:flex;gap:8px;align-items:center}
+
+/* ═══ BUTTONS ═══ */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:var(--radius-sm);font-size:13px;font-weight:600;cursor:pointer;border:1px solid transparent;transition:all .15s ease}
+.btn-pri{background:var(--pri);color:#fff;border-color:var(--pri)}.btn-pri:hover{background:var(--pri-dk)}
+.btn-out{background:transparent;color:var(--txt-sec);border-color:var(--brd)}.btn-out:hover{background:var(--bg-gray)}
+.btn-sm{padding:6px 12px;font-size:12px}
+.btn-lg{padding:12px 24px;font-size:15px}
+.btn-danger{background:var(--err);color:#fff}.btn-danger:hover{background:#B91C1C}
+.btn-icon{padding:6px;border-radius:6px;background:transparent;border:1px solid var(--brd);cursor:pointer;color:var(--txt-sec);font-size:16px}.btn-icon:hover{background:var(--bg-gray)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+
+/* ═══ CONTAINER ═══ */
+.container{max-width:1100px;margin:0 auto;padding:24px 16px 80px}
+
+/* ═══ STEPPER ═══ */
+.stepper{display:flex;align-items:center;justify-content:center;gap:0;margin-bottom:32px;padding:20px;background:var(--bg);border-radius:var(--radius);box-shadow:var(--shadow);overflow-x:auto}
+.step-item{display:flex;align-items:center;gap:0;flex-shrink:0}
+.step-circle{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;border:2px solid var(--brd);color:var(--txt-lt);background:var(--bg);cursor:pointer;transition:all .2s}
+.step-circle:hover{border-color:var(--txt-sec)}
+.step-item.active .step-circle{background:var(--pri);color:#fff;border-color:var(--pri)}
+.step-item.done .step-circle{background:var(--pri-10);color:var(--pri-dk);border-color:var(--pri)}
+.step-item.done .step-circle::after{content:'\2713'}
+.step-item.done .step-circle .step-num{display:none}
+.step-label{font-size:10px;color:var(--txt-lt);position:absolute;bottom:-18px;white-space:nowrap;left:50%;transform:translateX(-50%)}
+.step-item.active .step-label{color:var(--pri-dk);font-weight:600}
+.step-item{position:relative}
+.step-line{width:40px;height:2px;background:var(--brd);flex-shrink:0}
+.step-item.done+.step-line,.step-item.active+.step-line{background:var(--pri)}
+
+/* ═══ CARDS ═══ */
+.card{background:var(--bg);border-radius:var(--radius);box-shadow:var(--shadow);padding:24px;margin-bottom:20px}
+.card-header{display:flex;align-items:center;gap:12px;margin-bottom:20px;padding-bottom:16px;border-bottom:1px solid var(--brd)}
+.card-header h2{font-size:18px}.card-header h3{font-size:16px}
+.card-icon{font-size:24px}
+.card-sub{font-size:13px;color:var(--txt-sec);margin-top:2px}
+
+/* ═══ FORM ═══ */
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.form-grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px}
+.form-group{display:flex;flex-direction:column;gap:4px}
+.form-group.full{grid-column:1/-1}
+.form-label{font-size:12px;font-weight:600;color:var(--txt-sec);display:flex;align-items:center;gap:4px}
+.form-label .tip{cursor:help;color:var(--info);font-size:14px;position:relative}
+.form-label .tip:hover .tip-text{display:block}
+.tip-text{display:none;position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:var(--sec);color:#fff;padding:8px 12px;border-radius:6px;font-size:11px;font-weight:400;white-space:normal;width:260px;z-index:50;line-height:1.4;box-shadow:var(--shadow-md)}
+.tip-text::after{content:'';position:absolute;top:100%;left:50%;transform:translateX(-50%);border:5px solid transparent;border-top-color:var(--sec)}
+.form-input{padding:8px 12px;border:1px solid var(--brd);border-radius:var(--radius-sm);font-size:14px;font-family:inherit;color:var(--txt);background:var(--bg);transition:border-color .15s}
+.form-input:focus{outline:none;border-color:var(--pri);box-shadow:0 0 0 3px rgba(34,197,94,.15)}
+.form-input::placeholder{color:var(--txt-lt)}
+select.form-input{cursor:pointer}
+.input-money{position:relative}
+.input-money::before{content:'R$';position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:13px;font-weight:600;color:var(--txt-sec);pointer-events:none}
+.input-money .form-input{padding-left:36px}
+.input-pct{position:relative}
+.input-pct::after{content:'%';position:absolute;right:10px;top:50%;transform:translateY(-50%);font-size:13px;font-weight:600;color:var(--txt-sec);pointer-events:none}
+.input-pct .form-input{padding-right:30px}
+
+/* ═══ COMPUTED VALUES ═══ */
+.computed{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;background:var(--bg-zebra);border-radius:var(--radius-sm);border-left:3px solid var(--pri);margin:6px 0}
+.computed-label{font-size:12px;font-weight:600;color:var(--txt-sec)}
+.computed-val{font-size:15px;font-weight:700;color:var(--txt)}
+.computed.highlight{background:var(--pri-10);border-left-color:var(--pri-dk)}
+.computed.highlight .computed-val{color:var(--pri-dk);font-size:17px}
+.computed.negative .computed-val{color:var(--err)}
+
+/* ═══ MINI CARDS (margins etc) ═══ */
+.mini-cards{display:flex;gap:12px;flex-wrap:wrap;margin-top:12px}
+.mini-card{flex:1;min-width:120px;padding:10px;background:var(--bg-zebra);border-radius:var(--radius-sm);text-align:center}
+.mini-card-label{font-size:10px;font-weight:600;color:var(--txt-sec);text-transform:uppercase;letter-spacing:.5px}
+.mini-card-val{font-size:18px;font-weight:700;margin-top:2px}
+
+/* ═══ INFO PANEL ═══ */
+.info-panel{background:var(--pri-10);border:1px solid #BBF7D0;border-radius:var(--radius-sm);padding:14px;font-size:13px}
+.info-panel h4{font-size:13px;color:var(--pri-dk);margin-bottom:8px}
+.info-row{display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px dashed #D1FAE5}
+.info-row:last-child{border:none}
+.info-key{color:var(--txt-sec)}
+.info-val{font-weight:600;color:var(--pri-dk)}
+
+/* ═══ BALANCE SHEET LAYOUT ═══ */
+.bal-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px}
+.bal-section h4{font-size:13px;font-weight:700;color:var(--sec);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px;padding-bottom:6px;border-bottom:2px solid var(--sec)}
+.bal-total{padding:8px 12px;background:var(--sec);color:#fff;border-radius:var(--radius-sm);font-weight:700;text-align:right;margin-top:8px;font-size:14px}
+.bal-check{display:flex;align-items:center;gap:8px;padding:12px;border-radius:var(--radius-sm);font-weight:600;font-size:14px;margin-top:12px}
+.bal-check.ok{background:#D1FAE5;color:#065F46}
+.bal-check.warn{background:#FEF3C7;color:#92400E}
+
+/* ═══ WACC TOGGLE ═══ */
+.toggle-group{display:flex;gap:0;border-radius:var(--radius-sm);overflow:hidden;border:1px solid var(--brd);margin-bottom:16px}
+.toggle-btn{flex:1;padding:8px 12px;font-size:12px;font-weight:600;text-align:center;cursor:pointer;border:none;background:var(--bg);color:var(--txt-sec);transition:all .15s}
+.toggle-btn.active{background:var(--pri);color:#fff}
+
+/* ═══ COLLAPSIBLE ═══ */
+.collapse-toggle{display:flex;align-items:center;gap:8px;padding:10px 0;cursor:pointer;font-size:13px;font-weight:600;color:var(--txt-sec);border:none;background:none;width:100%}
+.collapse-toggle::before{content:'\25B6';font-size:10px;transition:transform .2s}
+.collapse-toggle.open::before{transform:rotate(90deg)}
+.collapse-content{display:none;padding:12px 0}
+.collapse-content.open{display:block}
+
+/* ═══ TABS ═══ */
+.tabs{display:flex;gap:0;border-bottom:2px solid var(--brd);margin-bottom:16px}
+.tab-btn{padding:10px 16px;font-size:13px;font-weight:600;color:var(--txt-sec);cursor:pointer;border:none;background:none;border-bottom:2px solid transparent;margin-bottom:-2px;transition:all .15s}
+.tab-btn.active{color:var(--pri-dk);border-bottom-color:var(--pri)}
+.tab-content{display:none}.tab-content.active{display:block}
+
+/* ═══ RESULTS HERO ═══ */
+.hero-result{background:linear-gradient(135deg,var(--sec) 0%,var(--cons) 100%);color:#fff;border-radius:var(--radius);padding:32px;text-align:center;margin-bottom:24px}
+.hero-result .value{font-size:36px;font-weight:900;margin:8px 0}
+.hero-result .range{font-size:14px;opacity:.85}
+.hero-result .badge{display:inline-block;background:rgba(255,255,255,.2);padding:4px 12px;border-radius:20px;font-size:12px;font-weight:600;margin-top:8px}
+.hero-result .pesos{display:flex;justify-content:center;gap:16px;margin-top:16px;font-size:12px;opacity:.85}
+
+/* ═══ CHART CONTAINERS ═══ */
+.chart-wrap{position:relative;width:100%;max-height:400px;margin:16px 0}
+.chart-wrap canvas{width:100%!important}
+
+/* ═══ SENSITIVITY HEATMAP ═══ */
+.sense-table{width:100%;border-collapse:collapse;font-size:12px;margin:12px 0}
+.sense-table th{padding:8px;background:var(--bg-zebra);font-weight:600;text-align:center;border:1px solid var(--brd)}
+.sense-table td{padding:8px;text-align:center;border:1px solid var(--brd);font-weight:500;transition:background .2s}
+.sense-table .central{font-weight:800;border:2px solid var(--pri)}
+
+/* ═══ ALERTS ═══ */
+.alert{padding:12px 16px;border-radius:var(--radius-sm);font-size:13px;margin-bottom:8px;display:flex;gap:10px;align-items:flex-start}
+.alert-err{background:#FEF2F2;color:#991B1B;border-left:3px solid var(--err)}
+.alert-warn{background:#FFFBEB;color:#92400E;border-left:3px solid var(--warn)}
+.alert-info{background:#EFF6FF;color:#1E40AF;border-left:3px solid var(--info)}
+.alert-ok{background:#F0FDF4;color:#065F46;border-left:3px solid var(--ok)}
+
+/* ═══ GLOSSARY ═══ */
+.glossary-item{padding:10px 0;border-bottom:1px solid var(--brd)}
+.glossary-term{font-weight:700;color:var(--sec)}
+.glossary-sigla{font-size:11px;color:var(--txt-lt);margin-left:4px}
+.glossary-exp{font-size:13px;color:var(--txt-sec);margin-top:2px}
+
+/* ═══ NAV FOOTER ═══ */
+.nav-footer{display:flex;justify-content:space-between;align-items:center;margin-top:24px;padding-top:16px;border-top:1px solid var(--brd)}
+
+/* ═══ LOADING ═══ */
+.loading{display:none;flex-direction:column;align-items:center;gap:12px;padding:40px}
+.loading.show{display:flex}
+.spinner{width:40px;height:40px;border:4px solid var(--brd);border-top-color:var(--pri);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ═══ STEP SECTIONS ═══ */
+.step-section{display:none}
+.step-section.active{display:block;animation:fadeIn .3s ease}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+
+/* ═══ SLIDER ═══ */
+input[type=range]{-webkit-appearance:none;width:100%;height:6px;border-radius:3px;background:var(--brd);outline:none}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;border-radius:50%;background:var(--pri);cursor:pointer;border:2px solid #fff;box-shadow:var(--shadow)}
+
+/* ═══ TABLE ═══ */
+.data-table{width:100%;border-collapse:collapse;font-size:13px}
+.data-table th{padding:10px;background:var(--bg-zebra);font-weight:600;text-align:left;border-bottom:2px solid var(--brd);font-size:12px;color:var(--txt-sec);text-transform:uppercase;letter-spacing:.3px}
+.data-table td{padding:8px 10px;border-bottom:1px solid var(--brd)}
+.data-table tr:hover td{background:var(--bg-gray)}
+
+/* ═══ REVIEW CARDS ═══ */
+.review-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
+.review-card{background:var(--bg-gray);border-radius:var(--radius-sm);padding:14px;position:relative}
+.review-card h4{font-size:11px;color:var(--txt-lt);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
+.review-card .val{font-size:16px;font-weight:700}
+.review-card .edit-link{position:absolute;top:10px;right:10px;font-size:11px;color:var(--pri);cursor:pointer;text-decoration:underline}
+
+/* ═══ EXPORT BAR ═══ */
+.export-bar{display:flex;gap:10px;flex-wrap:wrap;padding:16px;background:var(--bg);border-radius:var(--radius);box-shadow:var(--shadow);margin-top:20px}
+
+/* ═══ WEIGHT SLIDER ═══ */
+.weight-row{display:flex;align-items:center;gap:12px;margin-bottom:8px}
+.weight-row label{width:100px;font-size:12px;font-weight:600}
+.weight-row input[type=range]{flex:1}
+.weight-row .weight-val{width:40px;text-align:right;font-weight:700;font-size:13px}
+
+/* ═══ CONTINGENCY TABLE ═══ */
+.cont-row{display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:8px;margin-bottom:8px;align-items:center}
+
+/* ═══ RESPONSIVE ═══ */
+@media(max-width:768px){
+.form-grid,.form-grid-3{grid-template-columns:1fr}
+.bal-grid{grid-template-columns:1fr}
+.stepper{gap:0;padding:12px 8px}
+.step-line{width:20px}
+.step-label{display:none}
+.header{flex-wrap:wrap;gap:8px}
+.header-title{border:none;padding:0;margin:0}
+.hero-result .value{font-size:26px}
+.review-grid{grid-template-columns:1fr}
+.cont-row{grid-template-columns:1fr}
+.export-bar{flex-direction:column}
+}
+@media(max-width:480px){
+.container{padding:12px 8px 60px}
+.card{padding:16px}
+.step-circle{width:30px;height:30px;font-size:11px}
+}
+
+/* ═══ PRINT ═══ */
+@media print{
+.header,.stepper,.nav-footer,.export-bar,.btn,.toggle-group,.collapse-toggle,#step1,#step2,#step3,#step4,#step5,#step6{display:none!important}
+.step-section,.tab-content{display:block!important}
+.card{box-shadow:none;border:1px solid #ddd;break-inside:avoid}
+body{background:#fff}
+.hero-result{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+}
+</style>
+</head>
+<body>
+<!-- ═══ HEADER ═══ -->
+<header class="header">
+<div class="header-logo">IMPOST<span>.</span></div>
+<div class="header-title">Valuation — Precificação de Empresas</div>
+<span class="header-badge">v2.0.0</span>
+<div class="header-spacer"></div>
+<div class="header-actions">
+<button class="btn btn-sm btn-out" onclick="carregarDemo()">Carregar Exemplo</button>
+<button class="btn btn-sm btn-out" onclick="limparTudo()">Limpar Tudo</button>
+<a class="btn btn-sm btn-out" href="../index.html">&larr; Dashboard</a>
+</div>
+</header>
+
+<main class="container">
+<!-- ═══ STEPPER ═══ -->
+<nav class="stepper" id="stepper"></nav>
+
+<!-- ═══ STEP 1: EMPRESA ═══ -->
+<section class="step-section active" id="step1">
+<div class="card">
+<div class="card-header"><span class="card-icon">&#127970;</span><div><h2>Dados da Empresa e Regime</h2><div class="card-sub">Identificação e perfil tributário da empresa</div></div></div>
+<div class="form-grid">
+<div class="form-group"><label class="form-label">Nome da Empresa *</label><input type="text" class="form-input" id="nomeEmpresa" placeholder="Ex: TechBrasil Ltda"></div>
+<div class="form-group"><label class="form-label">Setor *</label><select class="form-input" id="setor"><option value="">Selecione o setor...</option></select></div>
+<div class="form-group"><label class="form-label">Porte</label><select class="form-input" id="porte"></select></div>
+<div class="form-group"><label class="form-label">Regime Tributário</label><select class="form-input" id="regimeTributario"><option value="simples">Simples Nacional</option><option value="presumido">Lucro Presumido</option><option value="real">Lucro Real</option></select></div>
+<div class="form-group"><label class="form-label">Tipo de Capital</label><select class="form-input" id="tipoCapital"><option value="fechado">Capital Fechado (desconto 20%)</option><option value="aberto">Capital Aberto (sem desconto)</option></select></div>
+<div class="form-group"><label class="form-label">Anos de Operação</label><input type="number" class="form-input" id="anosOperacao" value="5" min="1" max="100"></div>
+</div>
+<div class="info-panel" id="infoStep1" style="margin-top:16px">
+<h4>Parâmetros Setoriais</h4>
+<div class="info-row"><span class="info-key">Beta Setorial</span><span class="info-val" id="infoBeta">—</span></div>
+<div class="info-row"><span class="info-key">WACC Sugerido</span><span class="info-val" id="infoWacc">—</span></div>
+<div class="info-row"><span class="info-key">Alíquota Típica</span><span class="info-val" id="infoAliq">—</span></div>
+<div class="info-row"><span class="info-key">Desconto Iliquidez</span><span class="info-val" id="infoIliq">—</span></div>
+</div>
+</div>
+</section>
+
+<!-- ═══ STEP 2: DRE ═══ -->
+<section class="step-section" id="step2">
+<div class="card">
+<div class="card-header"><span class="card-icon">&#128202;</span><div><h2>DRE — Demonstração do Resultado</h2><div class="card-sub">Receitas, custos e resultado do exercício</div></div></div>
+<div class="form-grid">
+<div class="form-group"><label class="form-label">Receita Bruta Anual * <span class="tip">&#9432;<span class="tip-text">Faturamento total antes de deduções.</span></span></label><div class="input-money"><input type="text" class="form-input money" id="receitaBruta" placeholder="0"></div></div>
+<div class="form-group"><label class="form-label">Deduções da Receita <span class="tip">&#9432;<span class="tip-text">Impostos sobre vendas, devoluções, abatimentos.</span></span></label><div class="input-money"><input type="text" class="form-input money" id="deducoesReceita" placeholder="0"></div></div>
+</div>
+<div class="computed" id="compRecLiq"><span class="computed-label">= Receita Líquida</span><span class="computed-val">R$ 0</span></div>
+<div class="form-grid" style="margin-top:12px">
+<div class="form-group"><label class="form-label">CMV / CPV <span class="tip">&#9432;<span class="tip-text">Custo da Mercadoria Vendida ou Custo dos Produtos Vendidos.</span></span></label><div class="input-money"><input type="text" class="form-input money" id="cmv" placeholder="0"></div></div>
+<div class="form-group"><label class="form-label">Ou Margem Bruta (%)</label><div class="input-pct"><input type="number" class="form-input" id="margemBruta" placeholder="Ex: 60" min="0" max="100" step="0.1"></div></div>
+</div>
+<div class="computed highlight" id="compLucroBruto"><span class="computed-label">= Lucro Bruto</span><span class="computed-val">R$ 0</span></div>
+<div class="form-grid" style="margin-top:12px">
+<div class="form-group"><label class="form-label">Despesas Administrativas</label><div class="input-money"><input type="text" class="form-input money" id="despAdm" placeholder="0"></div></div>
+<div class="form-group"><label class="form-label">Despesas Comerciais</label><div class="input-money"><input type="text" class="form-input money" id="despCom" placeholder="0"></div></div>
+<div class="form-group"><label class="form-label">Despesas Gerais</label><div class="input-money"><input type="text" class="form-input money" id="despGer" placeholder="0"></div></div>
+<div class="form-group"><label class="form-label">Outras Receitas/Despesas</label><div class="input-money"><input type="text" class="form-input money" id="outrasRD" placeholder="0"></div></div>
+<div class="form-group"><label class="form-label">Depreciação e Amortização <span class="tip">&#9432;<span class="tip-text">D&A: perda de valor dos bens. Não é saída real de caixa.</span></span></label><div class="input-money"><input type="text" class="form-input money" id="deprAmort" placeholder="0"></div></div>
+</div>
+<div style="display:flex;gap:12px;flex-wrap:wrap">
+<div class="computed" id="compEBIT" style="flex:1"><span class="computed-label">EBIT</span><span class="computed-val">R$ 0</span></div>
+<div class="computed highlight" id="compEBITDA" style="flex:1"><span class="computed-label">EBITDA</span><span class="computed-val">R$ 0</span></div>
+</div>
+<div class="form-grid" style="margin-top:12px">
+<div class="form-group"><label class="form-label">Despesas Financeiras</label><div class="input-money"><input type="text" class="form-input money" id="despFin" placeholder="0"></div></div>
+<div class="form-group"><label class="form-label">Receitas Financeiras</label><div class="input-money"><input type="text" class="form-input money" id="recFin" placeholder="0"></div></div>
+</div>
+<div class="computed" id="compLAIR"><span class="computed-label">= LAIR (Lucro Antes do IR)</span><span class="computed-val">R$ 0</span></div>
+<div class="form-grid" style="margin-top:12px">
+<div class="form-group"><label class="form-label">Alíquota Efetiva de IR+CSLL (%)</label><div class="input-pct"><input type="number" class="form-input" id="aliqEfetiva" value="34" min="0" max="50" step="0.5"></div></div>
+</div>
+<div class="computed highlight" id="compLL"><span class="computed-label">= Lucro Líquido</span><span class="computed-val">R$ 0</span></div>
+<div class="computed" id="compNOPAT"><span class="computed-label">NOPAT</span><span class="computed-val">R$ 0</span></div>
+<div class="mini-cards" id="dreMargins">
+<div class="mini-card"><div class="mini-card-label">Margem Bruta</div><div class="mini-card-val" id="mmBruta">—</div></div>
+<div class="mini-card"><div class="mini-card-label">Margem EBITDA</div><div class="mini-card-val" id="mmEBITDA">—</div></div>
+<div class="mini-card"><div class="mini-card-label">Margem Líquida</div><div class="mini-card-val" id="mmLiq">—</div></div>
+</div>
+</div>
+</section>
+
+<!-- ═══ STEP 3: BALANÇO ═══ -->
+<section class="step-section" id="step3">
+<div class="card">
+<div class="card-header"><span class="card-icon">&#9878;&#65039;</span><div><h2>Balanço Patrimonial</h2><div class="card-sub">Ativos, passivos e patrimônio líquido</div></div></div>
+<div class="bal-grid">
+<!-- ATIVOS -->
+<div class="bal-section">
+<h4>Ativos</h4>
+<p style="font-size:12px;font-weight:600;color:var(--txt-sec);margin-bottom:8px">Ativo Circulante</p>
+<div class="form-group"><label class="form-label">Caixa</label><div class="input-money"><input type="text" class="form-input money bal-a" id="bCaixa" placeholder="0"></div></div>
+<div class="form-group"><label class="form-label">Aplicações Financeiras</label><div class="input-money"><input type="text" class="form-input money bal-a" id="bAplicFin" placeholder="0"></div></div>
+<div class="form-group"><label class="form-label">Contas a Receber</label><div class="input-money"><input type="text" class="form-input money bal-a" id="bContasRec" placeholder="0"></div></div>
+<div class="form-group"><label class="form-label">Estoques</label><div class="input-money"><input type="text" class="form-input money bal-a" id="bEstoques" placeholder="0"></div></div>
+<div class="form-group"><label class="form-label">Outros Circulantes</label><div class="input-money"><input type="text" class="form-input money bal-a" id="bOutrosAC" placeholder="0"></div></div>
+<div class="computed" id="compAC"><span class="computed-label">Total Ativo Circulante</span><span class="computed-val">R$ 0</span></div>
+<p style="font-size:12px;font-weight:600;color:var(--txt-sec);margin:12px 0 8px">Ativo Não Circulante</p>
+<div class="form-group"><label class="form-label">Imobilizado</label><div class="input-money"><input type="text" class="form-input money bal-a" id="bImobilizado" placeholder="0"></div></div>
+<div class="form-group"><label class="form-label">Veículos</label><div class="input-money"><input type="text" class="form-input money bal-a" id="bVeiculos" placeholder="0"></div></div>
+<div class="form-group"><label class="form-label">Máquinas</label><div class="input-money"><input type="text" class="form-input money bal-a" id="bMaquinas" placeholder="0"></div></div>
+<div class="form-group"><label class="form-label">Intangível</label><div class="input-money"><input type="text" class="form-input money bal-a" id="bIntangivel" placeholder="0"></div></div>
+<div class="form-group"><label class="form-label">Investimentos</label><div class="input-money"><input type="text" class="form-input money bal-a" id="bInvestimentos" placeholder="0"></div></div>
+<div class="form-group"><label class="form-label">Outros Não Circulantes</label><div class="input-money"><input type="text" class="form-input money bal-a" id="bOutrosANC" placeholder="0"></div></div>
+<div class="computed" id="compANC"><span class="computed-label">Total Ativo Não Circulante</span><span class="computed-val">R$ 0</span></div>
+<div class="bal-total" id="totalAtivo">Total Ativos: R$ 0</div>
+</div>
+<!-- PASSIVOS + PL -->
+<div class="bal-section">
+<h4>Passivos + Patrimônio Líquido</h4>
+<p style="font-size:12px;font-weight:600;color:var(--txt-sec);margin-bottom:8px">Passivo Circulante</p>
+<div class="form-group"><label class="form-label">Fornecedores</label><div class="input-money"><input type="text" class="form-input money bal-p" id="bFornecedores" placeholder="0"></div></div>
+<div class="form-group"><label class="form-label">Empréstimos CP</label><div class="input-money"><input type="text" class="form-input money bal-p" id="bEmpCP" placeholder="0"></div></div>
+<div class="form-group"><label class="form-label">Salários a Pagar</label><div class="input-money"><input type="text" class="form-input money bal-p" id="bSalarios" placeholder="0"></div></div>
+<div class="form-group"><label class="form-label">Impostos a Pagar</label><div class="input-money"><input type="text" class="form-input money bal-p" id="bImpostos" placeholder="0"></div></div>
+<div class="form-group"><label class="form-label">Outros Passivos Circ.</label><div class="input-money"><input type="text" class="form-input money bal-p" id="bOutrosPC" placeholder="0"></div></div>
+<div class="computed" id="compPC"><span class="computed-label">Total Passivo Circulante</span><span class="computed-val">R$ 0</span></div>
+<p style="font-size:12px;font-weight:600;color:var(--txt-sec);margin:12px 0 8px">Passivo Não Circulante</p>
+<div class="form-group"><label class="form-label">Empréstimos LP</label><div class="input-money"><input type="text" class="form-input money bal-p" id="bEmpLP" placeholder="0"></div></div>
+<div class="form-group"><label class="form-label">Provisões</label><div class="input-money"><input type="text" class="form-input money bal-p" id="bProvisoes" placeholder="0"></div></div>
+<div class="form-group"><label class="form-label">Outros Passivos Não Circ.</label><div class="input-money"><input type="text" class="form-input money bal-p" id="bOutrosPNC" placeholder="0"></div></div>
+<div class="computed" id="compPNC"><span class="computed-label">Total Passivo Não Circulante</span><span class="computed-val">R$ 0</span></div>
+<div class="bal-total" id="totalPassivo">Total Passivos: R$ 0</div>
+<p style="font-size:12px;font-weight:600;color:var(--txt-sec);margin:12px 0 8px">Patrimônio Líquido</p>
+<div class="form-group"><label class="form-label">Patrimônio Líquido</label><div class="input-money"><input type="text" class="form-input money" id="bPL" placeholder="0"></div></div>
+<div class="bal-total" id="totalPassivoPL">Total Passivo + PL: R$ 0</div>
+</div>
+</div>
+<div class="bal-check" id="balCheck"><span>&#9989;</span> Balanço balanceado</div>
+<div class="mini-cards" id="balMetrics" style="margin-top:12px">
+<div class="mini-card"><div class="mini-card-label">Dívida Bruta</div><div class="mini-card-val" id="bmDivBruta">R$ 0</div></div>
+<div class="mini-card"><div class="mini-card-label">Dívida Líquida</div><div class="mini-card-val" id="bmDivLiq">R$ 0</div></div>
+<div class="mini-card"><div class="mini-card-label">Capital de Giro</div><div class="mini-card-val" id="bmCapGiro">R$ 0</div></div>
+</div>
+<!-- Intangíveis colapsável -->
+<button class="collapse-toggle" onclick="toggleCollapse(this)">Intangíveis Detalhados (opcional)</button>
+<div class="collapse-content">
+<div class="form-grid">
+<div class="form-group"><label class="form-label">Marca</label><div class="input-money"><input type="text" class="form-input money" id="bMarca" placeholder="0"></div></div>
+<div class="form-group"><label class="form-label">Carteira de Clientes</label><div class="input-money"><input type="text" class="form-input money" id="bCarteira" placeholder="0"></div></div>
+<div class="form-group"><label class="form-label">Contratos</label><div class="input-money"><input type="text" class="form-input money" id="bContratos" placeholder="0"></div></div>
+<div class="form-group"><label class="form-label">Licenças</label><div class="input-money"><input type="text" class="form-input money" id="bLicencas" placeholder="0"></div></div>
+<div class="form-group"><label class="form-label">Know-How</label><div class="input-money"><input type="text" class="form-input money" id="bKnowHow" placeholder="0"></div></div>
+<div class="form-group"><label class="form-label">Goodwill</label><div class="input-money"><input type="text" class="form-input money" id="bGoodwill" placeholder="0"></div></div>
+</div>
+</div>
+<!-- Ajustes -->
+<button class="collapse-toggle" onclick="toggleCollapse(this)">Ajustes de Risco (PDD / Obsolescência)</button>
+<div class="collapse-content">
+<div class="form-grid">
+<div class="form-group"><label class="form-label">Inadimplência (PDD %)</label><div class="input-pct"><input type="number" class="form-input" id="bInadimplencia" value="5" min="0" max="100" step="0.5"></div></div>
+<div class="form-group"><label class="form-label">Obsolescência Estoques (%)</label><div class="input-pct"><input type="number" class="form-input" id="bObsolescencia" value="10" min="0" max="100" step="0.5"></div></div>
+</div>
+</div>
+</div>
+</section>
+
+<!-- ═══ STEP 4: PREMISSAS ═══ -->
+<section class="step-section" id="step4">
+<div class="card">
+<div class="card-header"><span class="card-icon">&#9881;&#65039;</span><div><h2>Premissas de Projeção e WACC</h2><div class="card-sub">Parâmetros para o Fluxo de Caixa Descontado</div></div></div>
+<h3 style="font-size:14px;margin-bottom:12px">Projeção</h3>
+<div class="form-grid">
+<div class="form-group"><label class="form-label">Horizonte (anos)</label><div style="display:flex;align-items:center;gap:8px"><input type="range" id="horizonteSlider" min="3" max="10" value="5" oninput="document.getElementById('horizonteAnos').value=this.value"><input type="number" class="form-input" id="horizonteAnos" value="5" min="3" max="10" style="width:60px" oninput="document.getElementById('horizonteSlider').value=this.value"></div></div>
+<div class="form-group"><label class="form-label">Taxa de Crescimento (%)</label><div style="display:flex;align-items:center;gap:8px"><input type="range" id="txCrescSlider" min="0" max="30" value="5" step="0.5" oninput="document.getElementById('txCresc').value=this.value"><div class="input-pct"><input type="number" class="form-input" id="txCresc" value="5" min="0" max="50" step="0.5" style="width:80px" oninput="document.getElementById('txCrescSlider').value=this.value"></div></div></div>
+<div class="form-group"><label class="form-label">Taxa Perpétua (g) (%) <span class="tip">&#9432;<span class="tip-text">Crescimento constante após projeção. Conservador: 2-3%. Deve ser menor que WACC.</span></span></label><div style="display:flex;align-items:center;gap:8px"><input type="range" id="txPerpSlider" min="0" max="6" value="3" step="0.5" oninput="document.getElementById('txPerp').value=this.value"><div class="input-pct"><input type="number" class="form-input" id="txPerp" value="3" min="0" max="6" step="0.5" style="width:80px" oninput="document.getElementById('txPerpSlider').value=this.value"></div></div><div class="alert alert-warn" id="alertPerp" style="display:none;margin-top:4px">Taxa perpétua acima de 4% é considerada agressiva.</div></div>
+<div class="form-group"><label class="form-label">CAPEX Anual</label><div class="input-money"><input type="text" class="form-input money" id="capex" placeholder="= D&A informada"></div></div>
+<div class="form-group"><label class="form-label">Variação Capital de Giro</label><div class="input-money"><input type="text" class="form-input money" id="varCapGiro" placeholder="0"></div></div>
+</div>
+<h3 style="font-size:14px;margin:20px 0 12px">WACC — Custo de Capital</h3>
+<div class="toggle-group" id="waccToggle">
+<button class="toggle-btn active" data-mode="auto" onclick="setWaccMode('auto')">Automático</button>
+<button class="toggle-btn" data-mode="manual" onclick="setWaccMode('manual')">Manual</button>
+<button class="toggle-btn" data-mode="capm" onclick="setWaccMode('capm')">Assistido (CAPM)</button>
+</div>
+<div id="waccAuto">
+<div class="info-panel"><h4>WACC Sugerido por Porte</h4><div class="info-row"><span class="info-key">Mínimo</span><span class="info-val" id="waccMin">—</span></div><div class="info-row"><span class="info-key">Sugerido</span><span class="info-val" id="waccSug">—</span></div><div class="info-row"><span class="info-key">Máximo</span><span class="info-val" id="waccMax">—</span></div></div>
+</div>
+<div id="waccManual" style="display:none">
+<div class="form-group"><label class="form-label">WACC Manual (%)</label><div class="input-pct"><input type="number" class="form-input" id="waccManualVal" value="15" min="1" max="50" step="0.5"></div></div>
+</div>
+<div id="waccCapm" style="display:none">
+<div class="form-grid">
+<div class="form-group"><label class="form-label">Taxa Livre de Risco (Selic) %</label><div class="input-pct"><input type="number" class="form-input" id="capmRf" value="10.75" step="0.25"></div></div>
+<div class="form-group"><label class="form-label">Prêmio de Risco Mercado %</label><div class="input-pct"><input type="number" class="form-input" id="capmPrm" value="6" step="0.5"></div></div>
+<div class="form-group"><label class="form-label">Beta do Setor</label><input type="number" class="form-input" id="capmBeta" value="1.0" step="0.05" min="0.1" max="3"></div>
+<div class="form-group"><label class="form-label">Prêmio Risco País %</label><div class="input-pct"><input type="number" class="form-input" id="capmCRP" value="3" step="0.5"></div></div>
+<div class="form-group"><label class="form-label">Custo da Dívida (Kd) %</label><div class="input-pct"><input type="number" class="form-input" id="capmKd" value="14" step="0.5"></div></div>
+<div class="form-group"><label class="form-label">Proporção Dívida %</label><div class="input-pct"><input type="number" class="form-input" id="capmPropDiv" value="30" min="0" max="100" step="1"></div></div>
+</div>
+<div style="display:flex;gap:12px;margin-top:8px">
+<div class="computed" style="flex:1" id="compKe"><span class="computed-label">Ke (CAPM)</span><span class="computed-val">—</span></div>
+<div class="computed highlight" style="flex:1" id="compWACC"><span class="computed-label">WACC Calculado</span><span class="computed-val">—</span></div>
+</div>
+</div>
+<!-- Contingências -->
+<button class="collapse-toggle" onclick="toggleCollapse(this)" style="margin-top:16px">Contingências (para Patrimonial)</button>
+<div class="collapse-content">
+<div id="contingencias"></div>
+<button class="btn btn-sm btn-out" onclick="addContingencia()">+ Adicionar Contingência</button>
+<div class="form-group" style="margin-top:12px"><label class="form-label">Processos Judiciais (R$)</label><div class="input-money"><input type="text" class="form-input money" id="processosJud" placeholder="0"></div></div>
+</div>
+</div>
+</section>
+
+<!-- ═══ STEP 5: HISTÓRICO ═══ -->
+<section class="step-section" id="step5">
+<div class="card">
+<div class="card-header"><span class="card-icon">&#128200;</span><div><h2>Histórico (Opcional)</h2><div class="card-sub">Dados de exercícios anteriores para análise de tendência</div></div></div>
+<label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:16px"><input type="checkbox" id="enableHist" onchange="toggleHistorico()"><span style="font-size:14px;font-weight:600">Incluir dados históricos (recomendado)</span></label>
+<div id="histContent" style="display:none">
+<div class="tabs" id="histTabs"></div>
+<div id="histForms"></div>
+<div class="chart-wrap" style="max-height:250px"><canvas id="chartHistReceita"></canvas></div>
+<div class="mini-cards" id="histMetrics" style="display:none">
+<div class="mini-card"><div class="mini-card-label">CAGR Receita</div><div class="mini-card-val" id="hmCagr">—</div></div>
+<div class="mini-card"><div class="mini-card-label">Tendência</div><div class="mini-card-val" id="hmTrend">—</div></div>
+</div>
+</div>
+</div>
+</section>
+
+<!-- ═══ STEP 6: MÚLTIPLOS ═══ -->
+<section class="step-section" id="step6">
+<div class="card">
+<div class="card-header"><span class="card-icon">&#128290;</span><div><h2>Múltiplos Customizados (Opcional)</h2><div class="card-sub">Ajuste fino de múltiplos setoriais</div></div></div>
+<label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:16px"><input type="checkbox" id="enableMult" onchange="toggleMultCustom()"><span style="font-size:14px;font-weight:600">Usar múltiplos customizados</span></label>
+<div id="multContent" style="display:none">
+<div class="form-grid">
+<div class="form-group"><label class="form-label">EV/EBITDA (min - max)</label><div style="display:flex;gap:8px"><input type="number" class="form-input" id="multEVEBITDAmin" placeholder="min" step="0.1" style="width:80px"><span style="align-self:center">—</span><input type="number" class="form-input" id="multEVEBITDAmax" placeholder="max" step="0.1" style="width:80px"><span class="info-val" id="refEVEBITDA" style="font-size:11px;align-self:center;margin-left:4px"></span></div></div>
+<div class="form-group"><label class="form-label">P/L (min - max)</label><div style="display:flex;gap:8px"><input type="number" class="form-input" id="multPLmin" placeholder="min" step="0.1" style="width:80px"><span style="align-self:center">—</span><input type="number" class="form-input" id="multPLmax" placeholder="max" step="0.1" style="width:80px"></div></div>
+<div class="form-group"><label class="form-label">EV/Receita (min - max)</label><div style="display:flex;gap:8px"><input type="number" class="form-input" id="multEVRecmin" placeholder="min" step="0.1" style="width:80px"><span style="align-self:center">—</span><input type="number" class="form-input" id="multEVRecmax" placeholder="max" step="0.1" style="width:80px"></div></div>
+<div class="form-group"><label class="form-label">P/VPA (min - max)</label><div style="display:flex;gap:8px"><input type="number" class="form-input" id="multPVPAmin" placeholder="min" step="0.1" style="width:80px"><span style="align-self:center">—</span><input type="number" class="form-input" id="multPVPAmax" placeholder="max" step="0.1" style="width:80px"></div></div>
+</div>
+<h3 style="font-size:14px;margin:20px 0 12px">Pesos dos Métodos</h3>
+<div class="weight-row"><label>DCF</label><input type="range" id="pesoDCF" min="0" max="100" value="45" oninput="syncPesos('dcf')"><span class="weight-val" id="pesoDCFval">45%</span></div>
+<div class="weight-row"><label>Múltiplos</label><input type="range" id="pesoMult" min="0" max="100" value="35" oninput="syncPesos('mult')"><span class="weight-val" id="pesoMultval">35%</span></div>
+<div class="weight-row"><label>Patrimonial</label><input type="range" id="pesoPatr" min="0" max="100" value="20" oninput="syncPesos('patr')"><span class="weight-val" id="pesoPatrval">20%</span></div>
+<div class="alert alert-info" id="pesoAlert" style="display:none">Os pesos devem somar 100%.</div>
+</div>
+</div>
+</section>
+
+<!-- ═══ STEP 7: RESULTADOS ═══ -->
+<section class="step-section" id="step7">
+<!-- REVISÃO -->
+<div class="card" id="reviewCard">
+<div class="card-header"><span class="card-icon">&#127919;</span><div><h2>Revisão e Resultados</h2><div class="card-sub">Conferência final, cálculo e resultados completos</div></div></div>
+<div class="review-grid" id="reviewGrid"></div>
+<div style="text-align:center;margin:24px 0">
+<button class="btn btn-pri btn-lg" id="btnCalc" onclick="calcular()">&#128640; Calcular Valuation Completo</button>
+</div>
+</div>
+<!-- LOADING -->
+<div class="loading" id="loading"><div class="spinner"></div><span style="font-size:14px;color:var(--txt-sec)">Calculando valuation...</span></div>
+<!-- RESULTADOS -->
+<div id="resultados" style="display:none">
+<!-- C1 Hero -->
+<div class="hero-result" id="heroResult"></div>
+<!-- C2 Football Field -->
+<div class="card"><div class="card-header"><h3>Football Field Chart</h3></div><div class="chart-wrap"><canvas id="chartFootball"></canvas></div></div>
+<!-- C3 Métodos (tabs) -->
+<div class="card">
+<div class="tabs"><button class="tab-btn active" onclick="showTab('tabDCF',this)">DCF</button><button class="tab-btn" onclick="showTab('tabMult',this)">Múltiplos</button><button class="tab-btn" onclick="showTab('tabPatr',this)">Patrimonial</button></div>
+<div class="tab-content active" id="tabDCF">
+<div id="dcfProjecao"></div>
+<div style="display:flex;gap:16px;flex-wrap:wrap"><div class="chart-wrap" style="flex:1;min-width:300px"><canvas id="chartCenarios"></canvas></div><div class="chart-wrap" style="flex:1;min-width:300px"><canvas id="chartWaterfall"></canvas></div></div>
+<h4 style="margin:16px 0 8px">Matriz de Sensibilidade (WACC x g)</h4>
+<div id="sensTable"></div>
+</div>
+<div class="tab-content" id="tabMult"><div id="multResult"></div></div>
+<div class="tab-content" id="tabPatr"><div id="patrResult"></div></div>
+</div>
+<!-- C4 Indicadores -->
+<div class="card"><div class="card-header"><h3>Indicadores Financeiros</h3></div><div class="chart-wrap" style="max-height:300px"><canvas id="chartRadar"></canvas></div><div id="scorecardDetail"></div><div id="dupontDetail" style="margin-top:16px"></div></div>
+<!-- C5 Alertas -->
+<div class="card" id="alertasCard" style="display:none"><div class="card-header"><h3>Alertas e Observações</h3></div><div id="alertasList"></div></div>
+<!-- C6 Glossário -->
+<div class="card"><button class="collapse-toggle" onclick="toggleCollapse(this)" style="font-size:15px;font-weight:700">Glossário de Termos (44 termos)</button><div class="collapse-content" id="glossarioList"></div></div>
+<!-- C7 Export -->
+<div class="export-bar" id="exportBar">
+<button class="btn btn-pri" onclick="exportPDF()">&#128196; Exportar PDF</button>
+<button class="btn btn-out" onclick="exportExcel()">&#128202; Exportar Excel</button>
+<button class="btn btn-out" onclick="window.print()">&#128424; Imprimir</button>
+</div>
+</div>
+</section>
+
+<!-- NAV FOOTER -->
+<div class="nav-footer" id="navFooter">
+<button class="btn btn-out" id="btnPrev" onclick="prevStep()" disabled>&larr; Anterior</button>
+<span id="stepIndicator" style="font-size:13px;color:var(--txt-sec)">Etapa 1 de 7</span>
+<button class="btn btn-pri" id="btnNext" onclick="nextStep()">Próximo &rarr;</button>
+</div>
+</main>
+<script>
+// ═══════════════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════════════
+var S = {
+  step: 1, totalSteps: 7,
+  resultado: null, dre: null, balanco: null, historico: null,
+  charts: {},
+  waccMode: 'auto',
+  contingencias: []
+};
+var STEPS = [
+  {n:1,label:'Empresa',icon:'&#127970;'},
+  {n:2,label:'DRE',icon:'&#128202;'},
+  {n:3,label:'Balanço',icon:'&#9878;'},
+  {n:4,label:'Premissas',icon:'&#9881;'},
+  {n:5,label:'Histórico',icon:'&#128200;'},
+  {n:6,label:'Múltiplos',icon:'&#128290;'},
+  {n:7,label:'Resultados',icon:'&#127919;'}
+];
+
+// ═══════════════════════════════════════════════════════════════
+// UTILS
+// ═══════════════════════════════════════════════════════════════
+function $(id){return document.getElementById(id)}
+function parseMoney(v){if(!v)return 0;return parseFloat(String(v).replace(/[^\d,.-]/g,'').replace(/\./g,'').replace(',','.'))||0}
+function fmtMoney(v){if(v==null||isNaN(v))return'R$ 0';var neg=v<0;v=Math.abs(v);var s=Math.round(v).toString().replace(/\B(?=(\d{3})+(?!\d))/g,'.');return(neg?'-':'')+' R$ '+s}
+function fmtMoneyShort(v){if(!v||isNaN(v))return'R$ 0';var abs=Math.abs(v);if(abs>=1e9)return'R$ '+(v/1e9).toFixed(1)+'B';if(abs>=1e6)return'R$ '+(v/1e6).toFixed(1)+'M';if(abs>=1e3)return'R$ '+(v/1e3).toFixed(0)+'k';return'R$ '+Math.round(v)}
+function fmtPct(v){if(v==null||isNaN(v))return'—';return(v*100).toFixed(1)+'%'}
+
+function debounce(fn,ms){var t;return function(){var a=arguments,c=this;clearTimeout(t);t=setTimeout(function(){fn.apply(c,a)},ms)}}
+
+function formatMoneyInput(el){
+  el.addEventListener('input',function(){
+    var v=this.value.replace(/[^\d]/g,'');
+    if(!v){this.value='';return}
+    this.value=parseInt(v).toString().replace(/\B(?=(\d{3})+(?!\d))/g,'.');
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════════════
+document.addEventListener('DOMContentLoaded',function(){
+  buildStepper();
+  populateSelects();
+  initMoneyInputs();
+  initListeners();
+  restoreFromStorage();
+  updateInfoPanel();
+  updateWaccInfo();
+  goToStep(S.step);
+});
+
+function buildStepper(){
+  var html='';
+  STEPS.forEach(function(s,i){
+    html+='<div class="step-item'+(s.n===S.step?' active':'')+'" data-step="'+s.n+'">';
+    html+='<button class="step-circle" onclick="goToStep('+s.n+')"><span class="step-num">'+s.n+'</span></button>';
+    html+='<span class="step-label">'+s.label+'</span>';
+    html+='</div>';
+    if(i<STEPS.length-1)html+='<div class="step-line"></div>';
+  });
+  $('stepper').innerHTML=html;
+}
+
+function populateSelects(){
+  if(typeof ValuationEngine==='undefined')return;
+  var selSetor=$('setor');
+  var keys=ValuationEngine.SETORES_KEYS||[];
+  var labels=ValuationEngine.SETORES_LABEL||{};
+  keys.forEach(function(k){
+    var o=document.createElement('option');o.value=k;o.textContent=labels[k]||k;
+    selSetor.appendChild(o);
+  });
+  var selPorte=$('porte');
+  selPorte.innerHTML='';
+  var portes=ValuationEngine.PORTES||{};
+  Object.keys(portes).forEach(function(k){
+    var o=document.createElement('option');o.value=k;o.textContent=portes[k].label;
+    selPorte.appendChild(o);
+  });
+  // Histórico tabs
+  buildHistTabs(3);
+}
+
+function initMoneyInputs(){
+  document.querySelectorAll('.money').forEach(function(el){formatMoneyInput(el)});
+}
+
+function initListeners(){
+  // Step 1 info update
+  ['setor','porte','regimeTributario','tipoCapital'].forEach(function(id){
+    $(id).addEventListener('change',function(){updateInfoPanel();saveToStorage()});
+  });
+  // DRE real-time
+  var dreFields=['receitaBruta','deducoesReceita','cmv','margemBruta','despAdm','despCom','despGer','outrasRD','deprAmort','despFin','recFin','aliqEfetiva'];
+  var debouncedDRE=debounce(calcDRERealtime,300);
+  dreFields.forEach(function(id){
+    var el=$(id);if(el)el.addEventListener('input',debouncedDRE);
+  });
+  // Balanço real-time
+  var debouncedBal=debounce(calcBalancoRealtime,300);
+  document.querySelectorAll('.bal-a,.bal-p,#bPL').forEach(function(el){
+    el.addEventListener('input',debouncedBal);
+  });
+  // WACC CAPM real-time
+  var capmFields=['capmRf','capmPrm','capmBeta','capmCRP','capmKd','capmPropDiv'];
+  capmFields.forEach(function(id){
+    $(id).addEventListener('input',calcCAPM);
+  });
+  // Taxa perpétua warning
+  $('txPerp').addEventListener('input',function(){
+    $('alertPerp').style.display=parseFloat(this.value)>4?'block':'none';
+  });
+  // Alíquota por regime
+  $('regimeTributario').addEventListener('change',function(){
+    var al=ValuationEngine.ALIQUOTAS_REGIME||{};
+    var r=al[this.value];
+    if(r)$('aliqEfetiva').value=(r.tipica*100);
+  });
+  // Beta CAPM from setor
+  $('setor').addEventListener('change',function(){
+    var b=(ValuationEngine.BETAS_SETORIAIS||{})[this.value];
+    if(b)$('capmBeta').value=b;
+  });
+  // Save on input
+  document.addEventListener('input',debounce(saveToStorage,1000));
+}
+
+// ═══════════════════════════════════════════════════════════════
+// STEPPER NAVIGATION
+// ═══════════════════════════════════════════════════════════════
+function goToStep(n){
+  if(n<1||n>S.totalSteps)return;
+  S.step=n;
+  // Sections
+  document.querySelectorAll('.step-section').forEach(function(el,i){
+    el.classList.toggle('active',i+1===n);
+  });
+  // Stepper visual
+  document.querySelectorAll('.step-item').forEach(function(el){
+    var sn=parseInt(el.dataset.step);
+    el.classList.remove('active','done');
+    if(sn===n)el.classList.add('active');
+    else if(sn<n)el.classList.add('done');
+  });
+  // Lines
+  var lines=document.querySelectorAll('.step-line');
+  lines.forEach(function(l,i){
+    l.style.background=i<n-1?'var(--pri)':'var(--brd)';
+  });
+  // Nav buttons
+  $('btnPrev').disabled=n===1;
+  $('btnNext').textContent=n===S.totalSteps?'Calcular':'Próximo \u2192';
+  $('stepIndicator').textContent='Etapa '+n+' de '+S.totalSteps;
+  // Step-specific
+  if(n===4)updateWaccInfo();
+  if(n===7)buildReview();
+  // Scroll
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+function nextStep(){
+  var err=validateStep(S.step);
+  if(err){alert(err);return}
+  if(S.step<S.totalSteps)goToStep(S.step+1);
+  else calcular();
+}
+function prevStep(){if(S.step>1)goToStep(S.step-1)}
+
+function validateStep(n){
+  if(n===1){
+    if(!$('nomeEmpresa').value.trim())return'Informe o nome da empresa.';
+    if(!$('setor').value)return'Selecione o setor.';
+  }
+  if(n===2){
+    if(parseMoney($('receitaBruta').value)<=0)return'Informe a receita bruta (> 0).';
+  }
+  return null;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// INFO PANEL (Step 1)
+// ═══════════════════════════════════════════════════════════════
+function updateInfoPanel(){
+  if(typeof ValuationEngine==='undefined')return;
+  var setor=$('setor').value;
+  var porte=$('porte').value;
+  var regime=$('regimeTributario').value;
+  var tipo=$('tipoCapital').value;
+  var betas=ValuationEngine.BETAS_SETORIAIS||{};
+  $('infoBeta').textContent=betas[setor]!=null?betas[setor].toFixed(2):'—';
+  var wacc=(ValuationEngine.WACC_SUGERIDO||{})[porte];
+  $('infoWacc').textContent=wacc?fmtPct(wacc.min)+' ~ '+fmtPct(wacc.max):'—';
+  var al=(ValuationEngine.ALIQUOTAS_REGIME||{})[regime];
+  $('infoAliq').textContent=al?al.faixa+' (típica '+fmtPct(al.tipica)+')':'—';
+  $('infoIliq').textContent=tipo==='fechado'?'20% (capital fechado)':'0% (capital aberto)';
+}
+
+// ═══════════════════════════════════════════════════════════════
+// DRE REAL-TIME
+// ═══════════════════════════════════════════════════════════════
+function calcDRERealtime(){
+  var rb=parseMoney($('receitaBruta').value);
+  var ded=parseMoney($('deducoesReceita').value);
+  var cmvVal=parseMoney($('cmv').value);
+  var mb=parseFloat($('margemBruta').value);
+  var inp={receitaBruta:rb};
+  if(ded>0)inp.deducoesReceita=ded;
+  if(cmvVal>0)inp.cmv=cmvVal;
+  else if(mb>0&&mb<=100)inp.margemBruta=mb/100;
+  inp.despesasAdministrativas=parseMoney($('despAdm').value);
+  inp.despesasComerciais=parseMoney($('despCom').value);
+  inp.despesasGerais=parseMoney($('despGer').value);
+  inp.outrasReceitasDespesas=parseMoney($('outrasRD').value);
+  inp.depreciacaoAmortizacao=parseMoney($('deprAmort').value);
+  var df=parseMoney($('despFin').value);
+  var rf=parseMoney($('recFin').value);
+  inp.resultadoFinanceiro=rf-df;
+  inp.despesasFinanceiras=df;
+  var ae=parseFloat($('aliqEfetiva').value);
+  if(ae>0)inp.aliquotaEfetiva=ae/100;
+  if(rb<=0){clearDREDisplay();return}
+  try{
+    var d=ValuationEngine.criarDRE(inp);
+    S.dre=d;
+    setComp('compRecLiq',d.receitaLiquida);
+    setComp('compLucroBruto',d.lucroBruto);
+    setComp('compEBIT',d.ebit,'EBIT');
+    setComp('compEBITDA',d.ebitda,'EBITDA');
+    setComp('compLAIR',d.lair,'LAIR');
+    setComp('compLL',d.lucroLiquido,'Lucro Líquido');
+    setComp('compNOPAT',d.nopat,'NOPAT');
+    $('compLL').classList.toggle('negative',d.lucroLiquido<0);
+    $('mmBruta').textContent=fmtPct(d.margemBruta);
+    $('mmEBITDA').textContent=fmtPct(d.margemEBITDA);
+    $('mmLiq').textContent=fmtPct(d.margemLiquida);
+  }catch(e){console.error('DRE:',e)}
+}
+function setComp(id,val,label){
+  var el=$(id);if(!el)return;
+  var v=el.querySelector('.computed-val');
+  if(v)v.textContent=fmtMoney(val);
+}
+function clearDREDisplay(){
+  ['compRecLiq','compLucroBruto','compEBIT','compEBITDA','compLAIR','compLL','compNOPAT'].forEach(function(id){
+    var v=$(id);if(v)v.querySelector('.computed-val').textContent='R$ 0';
+  });
+  ['mmBruta','mmEBITDA','mmLiq'].forEach(function(id){$(id).textContent='—'});
+}
+
+// ═══════════════════════════════════════════════════════════════
+// BALANÇO REAL-TIME
+// ═══════════════════════════════════════════════════════════════
+function calcBalancoRealtime(){
+  var ac=['bCaixa','bAplicFin','bContasRec','bEstoques','bOutrosAC'].reduce(function(s,id){return s+parseMoney($(id).value)},0);
+  var anc=['bImobilizado','bVeiculos','bMaquinas','bIntangivel','bInvestimentos','bOutrosANC'].reduce(function(s,id){return s+parseMoney($(id).value)},0);
+  var pc=['bFornecedores','bEmpCP','bSalarios','bImpostos','bOutrosPC'].reduce(function(s,id){return s+parseMoney($(id).value)},0);
+  var pnc=['bEmpLP','bProvisoes','bOutrosPNC'].reduce(function(s,id){return s+parseMoney($(id).value)},0);
+  var pl=parseMoney($('bPL').value);
+  var tAtivo=ac+anc;
+  var tPassivo=pc+pnc;
+  var tPassivoPL=tPassivo+pl;
+  $('compAC').querySelector('.computed-val').textContent=fmtMoney(ac);
+  $('compANC').querySelector('.computed-val').textContent=fmtMoney(anc);
+  $('totalAtivo').textContent='Total Ativos: '+fmtMoney(tAtivo);
+  $('compPC').querySelector('.computed-val').textContent=fmtMoney(pc);
+  $('compPNC').querySelector('.computed-val').textContent=fmtMoney(pnc);
+  $('totalPassivo').textContent='Total Passivos: '+fmtMoney(tPassivo);
+  $('totalPassivoPL').textContent='Total Passivo + PL: '+fmtMoney(tPassivoPL);
+  // Balance check
+  var diff=Math.abs(tAtivo-tPassivoPL);
+  var threshold=Math.max(tAtivo,tPassivoPL)*0.01;
+  var ok=diff<=threshold||tAtivo===0;
+  var bc=$('balCheck');
+  bc.className='bal-check '+(ok?'ok':'warn');
+  bc.innerHTML=ok?'<span>&#9989;</span> Balanço balanceado':'<span>&#9888;</span> Diferença: '+fmtMoney(diff);
+  // Metrics
+  var divBruta=parseMoney($('bEmpCP').value)+parseMoney($('bEmpLP').value);
+  var divLiq=divBruta-parseMoney($('bCaixa').value)-parseMoney($('bAplicFin').value);
+  var capGiro=ac-pc;
+  $('bmDivBruta').textContent=fmtMoney(divBruta);
+  $('bmDivLiq').textContent=fmtMoney(divLiq);
+  $('bmCapGiro').textContent=fmtMoney(capGiro);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// WACC
+// ═══════════════════════════════════════════════════════════════
+function setWaccMode(mode){
+  S.waccMode=mode;
+  document.querySelectorAll('#waccToggle .toggle-btn').forEach(function(b){
+    b.classList.toggle('active',b.dataset.mode===mode);
+  });
+  $('waccAuto').style.display=mode==='auto'?'block':'none';
+  $('waccManual').style.display=mode==='manual'?'block':'none';
+  $('waccCapm').style.display=mode==='capm'?'block':'none';
+  if(mode==='capm')calcCAPM();
+}
+
+function updateWaccInfo(){
+  if(typeof ValuationEngine==='undefined')return;
+  var porte=$('porte').value;
+  var w=(ValuationEngine.WACC_SUGERIDO||{})[porte];
+  if(w){
+    $('waccMin').textContent=fmtPct(w.min);
+    $('waccSug').textContent=fmtPct(w.sugerido);
+    $('waccMax').textContent=fmtPct(w.max);
+  }
+}
+
+function calcCAPM(){
+  var rf=parseFloat($('capmRf').value)/100||0;
+  var prm=parseFloat($('capmPrm').value)/100||0;
+  var beta=parseFloat($('capmBeta').value)||1;
+  var crp=parseFloat($('capmCRP').value)/100||0;
+  var kd=parseFloat($('capmKd').value)/100||0;
+  var propDiv=parseFloat($('capmPropDiv').value)/100||0;
+  var aliq=parseFloat($('aliqEfetiva').value)/100||0.34;
+  var ke=rf+beta*prm+crp;
+  var wacc=ke*(1-propDiv)+kd*(1-aliq)*propDiv;
+  $('compKe').querySelector('.computed-val').textContent=fmtPct(ke);
+  $('compWACC').querySelector('.computed-val').textContent=fmtPct(wacc);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CONTINGÊNCIAS
+// ═══════════════════════════════════════════════════════════════
+function addContingencia(){
+  var id=Date.now();
+  S.contingencias.push({id:id,desc:'',valor:0,prob:'possivel'});
+  renderContingencias();
+}
+function removeContingencia(id){
+  S.contingencias=S.contingencias.filter(function(c){return c.id!==id});
+  renderContingencias();
+}
+function renderContingencias(){
+  var h='';
+  S.contingencias.forEach(function(c){
+    h+='<div class="cont-row">';
+    h+='<input class="form-input" placeholder="Descrição" value="'+(c.desc||'')+'" onchange="updateCont('+c.id+',\'desc\',this.value)">';
+    h+='<div class="input-money"><input class="form-input money" placeholder="0" onchange="updateCont('+c.id+',\'valor\',this.value)"></div>';
+    h+='<select class="form-input" onchange="updateCont('+c.id+',\'prob\',this.value)"><option value="provavel">Provável</option><option value="possivel" selected>Possível</option><option value="remoto">Remoto</option></select>';
+    h+='<button class="btn-icon" onclick="removeContingencia('+c.id+')">&times;</button>';
+    h+='</div>';
+  });
+  $('contingencias').innerHTML=h;
+  $('contingencias').querySelectorAll('.money').forEach(formatMoneyInput);
+}
+function updateCont(id,field,val){
+  S.contingencias.forEach(function(c){if(c.id===id)c[field]=field==='valor'?parseMoney(val):val});
+}
+
+// ═══════════════════════════════════════════════════════════════
+// HISTÓRICO
+// ═══════════════════════════════════════════════════════════════
+function toggleHistorico(){
+  $('histContent').style.display=$('enableHist').checked?'block':'none';
+}
+function buildHistTabs(n){
+  var curYear=new Date().getFullYear();
+  var tabsH='',formsH='';
+  for(var i=0;i<n;i++){
+    var yr=curYear-n+i;
+    tabsH+='<button class="tab-btn'+(i===0?' active':'')+'" onclick="showHistTab('+i+',this)">'+yr+'</button>';
+    formsH+='<div class="tab-content hist-tab'+(i===0?' active':'')+'" id="histTab'+i+'">';
+    formsH+='<div class="form-grid" style="margin-top:8px">';
+    formsH+='<div class="form-group"><label class="form-label">Receita Bruta</label><div class="input-money"><input type="text" class="form-input money hist-in" data-yr="'+yr+'" data-f="rb" placeholder="0"></div></div>';
+    formsH+='<div class="form-group"><label class="form-label">CMV</label><div class="input-money"><input type="text" class="form-input money hist-in" data-yr="'+yr+'" data-f="cmv" placeholder="0"></div></div>';
+    formsH+='<div class="form-group"><label class="form-label">Despesas Operacionais</label><div class="input-money"><input type="text" class="form-input money hist-in" data-yr="'+yr+'" data-f="desp" placeholder="0"></div></div>';
+    formsH+='<div class="form-group"><label class="form-label">Depreciação</label><div class="input-money"><input type="text" class="form-input money hist-in" data-yr="'+yr+'" data-f="da" placeholder="0"></div></div>';
+    formsH+='<div class="form-group"><label class="form-label">Caixa</label><div class="input-money"><input type="text" class="form-input money hist-in" data-yr="'+yr+'" data-f="caixa" placeholder="0"></div></div>';
+    formsH+='<div class="form-group"><label class="form-label">Patrimônio Líquido</label><div class="input-money"><input type="text" class="form-input money hist-in" data-yr="'+yr+'" data-f="pl" placeholder="0"></div></div>';
+    formsH+='</div></div>';
+  }
+  $('histTabs').innerHTML=tabsH;
+  $('histForms').innerHTML=formsH;
+  $('histForms').querySelectorAll('.money').forEach(formatMoneyInput);
+  // Listen for hist changes
+  document.querySelectorAll('.hist-in').forEach(function(el){
+    el.addEventListener('input',debounce(calcHistorico,500));
+  });
+}
+function showHistTab(idx,btn){
+  document.querySelectorAll('.hist-tab').forEach(function(el,i){el.classList.toggle('active',i===idx)});
+  btn.parentNode.querySelectorAll('.tab-btn').forEach(function(b){b.classList.remove('active')});
+  btn.classList.add('active');
+}
+function calcHistorico(){
+  try{
+    var periodos=[];
+    var years={};
+    document.querySelectorAll('.hist-in').forEach(function(el){
+      var yr=el.dataset.yr;var f=el.dataset.f;
+      if(!years[yr])years[yr]={};
+      years[yr][f]=parseMoney(el.value);
+    });
+    Object.keys(years).sort().forEach(function(yr){
+      var d=years[yr];
+      if(d.rb>0){
+        var dre=ValuationEngine.criarDRE({receitaBruta:d.rb,cmv:d.cmv||0,despesasAdministrativas:d.desp||0,depreciacaoAmortizacao:d.da||0,aliquotaEfetiva:parseFloat($('aliqEfetiva').value)/100||0.34});
+        var bal=ValuationEngine.criarBalanco({caixa:d.caixa||0,patrimonioLiquido:d.pl||0});
+        periodos.push({ano:parseInt(yr),dre:dre,balanco:bal});
+      }
+    });
+    if(periodos.length>=2){
+      var hist=ValuationEngine.criarHistorico(periodos);
+      S.historico=hist;
+      $('histMetrics').style.display='flex';
+      $('hmCagr').textContent=hist.cagr&&hist.cagr.receita!=null?fmtPct(hist.cagr.receita):'—';
+      $('hmTrend').textContent=hist.tendencias&&hist.tendencias.receita?hist.tendencias.receita.classificacao:'—';
+      renderHistChart(periodos);
+    }
+  }catch(e){console.error('Hist:',e)}
+}
+function renderHistChart(periodos){
+  destroyChart('chartHistReceita');
+  var ctx=$('chartHistReceita');if(!ctx)return;
+  S.charts.chartHistReceita=new Chart(ctx,{
+    type:'line',
+    data:{labels:periodos.map(function(p){return p.ano}),datasets:[{label:'Receita Bruta',data:periodos.map(function(p){return p.dre.receitaBruta}),borderColor:'#22C55E',backgroundColor:'rgba(34,197,94,.1)',fill:true,tension:.3}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{ticks:{callback:function(v){return fmtMoneyShort(v)}}}}}
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════
+// MÚLTIPLOS CUSTOM
+// ═══════════════════════════════════════════════════════════════
+function toggleMultCustom(){
+  $('multContent').style.display=$('enableMult').checked?'block':'none';
+}
+function syncPesos(changed){
+  var d=parseInt($('pesoDCF').value);
+  var m=parseInt($('pesoMult').value);
+  var p=parseInt($('pesoPatr').value);
+  $('pesoDCFval').textContent=d+'%';
+  $('pesoMultval').textContent=m+'%';
+  $('pesoPatrval').textContent=p+'%';
+  var sum=d+m+p;
+  $('pesoAlert').style.display=sum!==100?'block':'none';
+}
+
+// ═══════════════════════════════════════════════════════════════
+// COLLAPSE & TABS
+// ═══════════════════════════════════════════════════════════════
+function toggleCollapse(btn){
+  btn.classList.toggle('open');
+  var content=btn.nextElementSibling;
+  content.classList.toggle('open');
+}
+function showTab(id,btn){
+  var parent=btn.parentNode;
+  parent.querySelectorAll('.tab-btn').forEach(function(b){b.classList.remove('active')});
+  btn.classList.add('active');
+  var card=parent.parentNode;
+  card.querySelectorAll('.tab-content').forEach(function(t){t.classList.remove('active')});
+  $(id).classList.add('active');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// REVIEW (Step 7)
+// ═══════════════════════════════════════════════════════════════
+function buildReview(){
+  calcDRERealtime();
+  calcBalancoRealtime();
+  var items=[
+    {label:'Empresa',val:$('nomeEmpresa').value||'—',step:1},
+    {label:'Setor',val:$('setor').options[$('setor').selectedIndex]?$('setor').options[$('setor').selectedIndex].text:'—',step:1},
+    {label:'Porte',val:$('porte').options[$('porte').selectedIndex]?$('porte').options[$('porte').selectedIndex].text:'—',step:1},
+    {label:'Regime',val:$('regimeTributario').options[$('regimeTributario').selectedIndex].text,step:1},
+    {label:'Receita Bruta',val:fmtMoney(parseMoney($('receitaBruta').value)),step:2},
+    {label:'EBITDA',val:S.dre?fmtMoney(S.dre.ebitda):'—',step:2},
+    {label:'Lucro Líquido',val:S.dre?fmtMoney(S.dre.lucroLiquido):'—',step:2},
+    {label:'Total Ativos',val:$('totalAtivo').textContent.replace('Total Ativos: ',''),step:3},
+    {label:'WACC',val:getWaccDisplay(),step:4},
+    {label:'Horizonte',val:$('horizonteAnos').value+' anos',step:4}
+  ];
+  var h='';
+  items.forEach(function(it){
+    h+='<div class="review-card"><h4>'+it.label+'</h4><div class="val">'+it.val+'</div><span class="edit-link" onclick="goToStep('+it.step+')">Editar</span></div>';
+  });
+  $('reviewGrid').innerHTML=h;
+}
+
+function getWaccDisplay(){
+  if(S.waccMode==='manual')return fmtPct(parseFloat($('waccManualVal').value)/100);
+  if(S.waccMode==='capm'){
+    var el=$('compWACC');
+    return el?el.querySelector('.computed-val').textContent:'—';
+  }
+  var porte=$('porte').value;
+  var w=(ValuationEngine.WACC_SUGERIDO||{})[porte];
+  return w?fmtPct(w.sugerido):'—';
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CALCULATE
+// ═══════════════════════════════════════════════════════════════
+function calcular(){
+  $('loading').classList.add('show');
+  $('resultados').style.display='none';
+  setTimeout(doCalc,100);
+}
+
+function doCalc(){
+  try{
+    // Build DRE
+    var rb=parseMoney($('receitaBruta').value);
+    var dreInp={receitaBruta:rb};
+    var ded=parseMoney($('deducoesReceita').value);if(ded>0)dreInp.deducoesReceita=ded;
+    var cmvV=parseMoney($('cmv').value);var mbV=parseFloat($('margemBruta').value);
+    if(cmvV>0)dreInp.cmv=cmvV;else if(mbV>0)dreInp.margemBruta=mbV/100;
+    dreInp.despesasAdministrativas=parseMoney($('despAdm').value);
+    dreInp.despesasComerciais=parseMoney($('despCom').value);
+    dreInp.despesasGerais=parseMoney($('despGer').value);
+    dreInp.outrasReceitasDespesas=parseMoney($('outrasRD').value);
+    dreInp.depreciacaoAmortizacao=parseMoney($('deprAmort').value);
+    var df=parseMoney($('despFin').value);var rfn=parseMoney($('recFin').value);
+    dreInp.resultadoFinanceiro=rfn-df;dreInp.despesasFinanceiras=df;
+    dreInp.aliquotaEfetiva=parseFloat($('aliqEfetiva').value)/100;
+    var dre=ValuationEngine.criarDRE(dreInp);
+    if(!dre.valido){alert('DRE inválida: verifique os dados.');$('loading').classList.remove('show');return}
+    S.dre=dre;
+
+    // Build Balanço
+    var balInp={
+      caixa:parseMoney($('bCaixa').value),aplicacoesFinanceiras:parseMoney($('bAplicFin').value),
+      contasReceber:parseMoney($('bContasRec').value),estoques:parseMoney($('bEstoques').value),
+      outrosCirculantes:parseMoney($('bOutrosAC').value),
+      imobilizado:parseMoney($('bImobilizado').value),veiculos:parseMoney($('bVeiculos').value),
+      maquinas:parseMoney($('bMaquinas').value),intangivel:parseMoney($('bIntangivel').value),
+      investimentos:parseMoney($('bInvestimentos').value),outrosNaoCirculantes:parseMoney($('bOutrosANC').value),
+      fornecedores:parseMoney($('bFornecedores').value),emprestimosCP:parseMoney($('bEmpCP').value),
+      salarios:parseMoney($('bSalarios').value),impostos:parseMoney($('bImpostos').value),
+      outrosPassivosCirculantes:parseMoney($('bOutrosPC').value),
+      emprestimosLP:parseMoney($('bEmpLP').value),provisoes:parseMoney($('bProvisoes').value),
+      outrosPassivosNaoCirculantes:parseMoney($('bOutrosPNC').value),
+      patrimonioLiquido:parseMoney($('bPL').value),
+      marca:parseMoney($('bMarca').value),carteiraClientes:parseMoney($('bCarteira').value),
+      contratos:parseMoney($('bContratos').value),licencas:parseMoney($('bLicencas').value),
+      knowHow:parseMoney($('bKnowHow').value),goodwill:parseMoney($('bGoodwill').value),
+      inadimplencia:parseFloat($('bInadimplencia').value)/100,
+      obsolescencia:parseFloat($('bObsolescencia').value)/100
+    };
+    var balanco=ValuationEngine.criarBalanco(balInp);
+    S.balanco=balanco;
+
+    // Premissas
+    var premissas={
+      nomeEmpresa:$('nomeEmpresa').value,
+      setor:$('setor').value,
+      porte:$('porte').value,
+      tipoCapital:$('tipoCapital').value,
+      horizonteAnos:parseInt($('horizonteAnos').value),
+      taxaCrescimento:parseFloat($('txCresc').value)/100,
+      taxaPerpetua:parseFloat($('txPerp').value)/100,
+      capex:parseMoney($('capex').value)||dre.depreciacaoAmortizacao,
+      variacaoCapitalGiro:parseMoney($('varCapGiro').value),
+      anosOperacao:parseInt($('anosOperacao').value),
+      processosJudiciais:parseMoney($('processosJud').value)
+    };
+    // WACC
+    if(S.waccMode==='manual'){premissas.waccManual=parseFloat($('waccManualVal').value)/100}
+    else if(S.waccMode==='capm'){
+      premissas.waccAssistido={
+        taxaLivreRisco:parseFloat($('capmRf').value)/100,
+        premioRiscoMercado:parseFloat($('capmPrm').value)/100,
+        betaSetor:parseFloat($('capmBeta').value),
+        premioRiscoPais:parseFloat($('capmCRP').value)/100,
+        custoDivida:parseFloat($('capmKd').value)/100,
+        proporcaoDivida:parseFloat($('capmPropDiv').value)/100,
+        aliquotaImposto:parseFloat($('aliqEfetiva').value)/100
+      };
+    }
+    // Contingências
+    if(S.contingencias.length>0){
+      premissas.contingencias=S.contingencias.map(function(c){return{descricao:c.desc,valor:parseMoney(c.valor),probabilidade:c.prob}});
+    }
+    // Múltiplos custom
+    if($('enableMult').checked){
+      var mc={};
+      var eMin=parseFloat($('multEVEBITDAmin').value);var eMax=parseFloat($('multEVEBITDAmax').value);
+      if(eMin>0&&eMax>0)mc['EV/EBITDA']={min:eMin,max:eMax};
+      var plMin=parseFloat($('multPLmin').value);var plMax=parseFloat($('multPLmax').value);
+      if(plMin>0&&plMax>0)mc['P/L']={min:plMin,max:plMax};
+      premissas.multiplosCustom=mc;
+      var d=parseInt($('pesoDCF').value);var m=parseInt($('pesoMult').value);var p=parseInt($('pesoPatr').value);
+      if(d+m+p===100)premissas.pesosMetodos={dcf:d/100,multiplos:m/100,patrimonial:p/100};
+    }
+
+    // Histórico
+    var histObj=$('enableHist').checked&&S.historico?S.historico:null;
+
+    // Execute
+    var inputs={dre:dre,balanco:balanco,premissas:premissas};
+    if(histObj)inputs.historico=histObj;
+    var opts=premissas.pesosMetodos?{pesos:premissas.pesosMetodos}:{};
+    var resultado=ValuationEngine.executarPrecificacao(inputs,opts);
+
+    if(resultado.erro){
+      alert('Erro: '+(resultado.mensagem||'Verifique os dados.'));
+      $('loading').classList.remove('show');
+      return;
+    }
+    S.resultado=resultado;
+    renderResults(resultado);
+  }catch(e){
+    alert('Erro no cálculo: '+e.message);
+    console.error(e);
+  }
+  $('loading').classList.remove('show');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// RENDER RESULTS
+// ═══════════════════════════════════════════════════════════════
+function renderResults(r){
+  $('resultados').style.display='block';
+  var cons=r.resultados.consolidado||{};
+  // Hero
+  $('heroResult').innerHTML='<div style="font-size:14px;opacity:.8">Valor Recomendado (Equity Value)</div>'
+    +'<div class="value">'+fmtMoney(cons.valorRecomendado||cons.valorMediano)+'</div>'
+    +'<div class="range">Faixa: '+fmtMoney(cons.faixaNegociacao?cons.faixaNegociacao.minimo:cons.valorMinimo)+' a '+fmtMoney(cons.faixaNegociacao?cons.faixaNegociacao.maximo:cons.valorMaximo)+'</div>'
+    +'<div class="badge">'+(cons.resumo?cons.resumo.substring(0,60)+'...':'Consolidado')+'</div>'
+    +'<div class="pesos">'
+    +(cons.pesos?'<span>DCF: '+Math.round((cons.pesos.dcf||0)*100)+'%</span><span>Múltiplos: '+Math.round((cons.pesos.multiplos||0)*100)+'%</span><span>Patrimonial: '+Math.round((cons.pesos.patrimonial||0)*100)+'%</span>':'')
+    +'</div>';
+
+  renderFootballField(cons);
+  renderDCF(r.resultados.dcf);
+  renderMultiplos(r.resultados.multiplos);
+  renderPatrimonial(r.resultados.patrimonial);
+  renderIndicadores(r.resultados.indicadores);
+  renderAlertas(r.alertas,cons.alertas);
+  renderGlossario();
+  setTimeout(function(){$('resultados').scrollIntoView({behavior:'smooth'})},200);
+}
+
+// ═══ FOOTBALL FIELD ═══
+function renderFootballField(cons){
+  destroyChart('chartFootball');
+  var ff=cons.footballField;
+  if(!ff||!ff.barras)return;
+  var labels=ff.barras.map(function(b){return b.label});
+  var mins=ff.barras.map(function(b){return b.min});
+  var meds=ff.barras.map(function(b){return b.mediana});
+  var maxs=ff.barras.map(function(b){return b.max});
+  var colors=ff.barras.map(function(b){return b.cor});
+  S.charts.chartFootball=new Chart($('chartFootball'),{
+    type:'bar',
+    data:{
+      labels:labels,
+      datasets:[
+        {label:'Mínimo',data:mins,backgroundColor:colors.map(function(c){return c+'44'}),borderColor:colors,borderWidth:1},
+        {label:'Mediana',data:meds,backgroundColor:colors,borderColor:colors,borderWidth:1},
+        {label:'Máximo',data:maxs,backgroundColor:colors.map(function(c){return c+'88'}),borderColor:colors,borderWidth:1}
+      ]
+    },
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font:{size:11}}}},scales:{x:{ticks:{callback:function(v){return fmtMoneyShort(v)}}}}}
+  });
+}
+
+// ═══ DCF ═══
+function renderDCF(dcf){
+  if(!dcf||dcf.erro)return;
+  var det=dcf.detalhes||{};
+  // Projeção
+  var proj=det.projecaoAnual||[];
+  if(proj.length>0){
+    var h='<h4 style="margin-bottom:8px">Projeção Ano a Ano</h4><table class="data-table"><thead><tr><th>Ano</th><th>Receita</th><th>FCF</th><th>VP(FCF)</th></tr></thead><tbody>';
+    proj.forEach(function(a){
+      h+='<tr><td>'+(a.ano||a.anoLabel||'')+'</td><td>'+fmtMoneyShort(a.receita||0)+'</td><td>'+fmtMoneyShort(a.fcf||0)+'</td><td>'+fmtMoneyShort(a.vpFcf||0)+'</td></tr>';
+    });
+    h+='</tbody></table>';
+    h+='<div class="mini-cards" style="margin:12px 0"><div class="mini-card"><div class="mini-card-label">Enterprise Value</div><div class="mini-card-val">'+fmtMoney(dcf.enterpriseValue||det.enterpriseValue)+'</div></div>';
+    h+='<div class="mini-card"><div class="mini-card-label">Equity Value (DCF)</div><div class="mini-card-val" style="color:var(--dcf)">'+fmtMoney(dcf.equityValue)+'</div></div></div>';
+    $('dcfProjecao').innerHTML=h;
+  }
+  // Cenários
+  renderCenarios(det.cenarios);
+  // Waterfall
+  renderWaterfall(dcf);
+  // Sensibilidade
+  renderSensibilidade(det.sensibilidade);
+}
+
+function renderCenarios(cen){
+  destroyChart('chartCenarios');
+  if(!cen)return;
+  var labels=['Pessimista','Base','Otimista'];
+  var vals=[cen.pessimista?cen.pessimista.equityValue:0,cen.base?cen.base.equityValue:0,cen.otimista?cen.otimista.equityValue:0];
+  S.charts.chartCenarios=new Chart($('chartCenarios'),{
+    type:'bar',
+    data:{labels:labels,datasets:[{label:'Equity Value',data:vals,backgroundColor:['#EF4444','#3B82F6','#22C55E'],borderRadius:6}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{ticks:{callback:function(v){return fmtMoneyShort(v)}}}}}
+  });
+}
+
+function renderWaterfall(dcf){
+  destroyChart('chartWaterfall');
+  var wf=(S.resultado.resultados.consolidado||{}).waterfall;
+  if(!wf||!wf.etapas)return;
+  var labels=wf.etapas.map(function(e){return e.label});
+  var vals=wf.etapas.map(function(e){return e.valor});
+  var colors=wf.etapas.map(function(e){return e.tipo==='subtrai'?'#EF4444':e.tipo==='resultado'?'#7C3AED':'#22C55E'});
+  S.charts.chartWaterfall=new Chart($('chartWaterfall'),{
+    type:'bar',
+    data:{labels:labels,datasets:[{data:vals,backgroundColor:colors,borderRadius:4}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{ticks:{callback:function(v){return fmtMoneyShort(v)}}}}}
+  });
+}
+
+function renderSensibilidade(sens){
+  if(!sens||!sens.valores)return;
+  var h='<table class="sense-table"><thead><tr><th>WACC \\ g</th>';
+  sens.colunas.forEach(function(c){h+='<th>'+fmtPct(c)+'</th>'});
+  h+='</tr></thead><tbody>';
+  sens.valores.forEach(function(row,i){
+    h+='<tr><th>'+fmtPct(sens.linhas[i])+'</th>';
+    row.forEach(function(v,j){
+      var isCentral=i===2&&j===2;
+      var ratio=v/(sens.central?sens.central.valor:v);
+      var bg=ratio>1.1?'#D1FAE5':ratio<0.9?'#FEE2E2':'#fff';
+      h+='<td style="background:'+bg+'"'+(isCentral?' class="central"':'')+'>'+fmtMoneyShort(v)+'</td>';
+    });
+    h+='</tr>';
+  });
+  h+='</tbody></table>';
+  $('sensTable').innerHTML=h;
+}
+
+// ═══ MÚLTIPLOS ═══
+function renderMultiplos(mult){
+  if(!mult||mult.erro){$('multResult').innerHTML='<div class="alert alert-warn">Método de Múltiplos indisponível.</div>';return}
+  var h='<div class="mini-cards"><div class="mini-card"><div class="mini-card-label">Equity Value</div><div class="mini-card-val" style="color:var(--mult)">'+fmtMoney(mult.equityValue)+'</div></div></div>';
+  if(mult.detalhes&&mult.detalhes.multiplosAplicados){
+    h+='<h4 style="margin:16px 0 8px">Múltiplos Aplicados</h4><table class="data-table"><thead><tr><th>Múltiplo</th><th>Valor</th><th>EV Estimado</th></tr></thead><tbody>';
+    var ma=mult.detalhes.multiplosAplicados;
+    if(Array.isArray(ma)){
+      ma.forEach(function(m){h+='<tr><td>'+m.nome+'</td><td>'+(m.multiplo?m.multiplo.toFixed(1)+'x':'—')+'</td><td>'+fmtMoney(m.ev||m.valor||0)+'</td></tr>'});
+    }else{
+      Object.keys(ma).forEach(function(k){var m=ma[k];h+='<tr><td>'+k+'</td><td>'+(m.multiplo?m.multiplo.toFixed(1)+'x':typeof m==='number'?m.toFixed(1)+'x':'—')+'</td><td>'+fmtMoney(m.ev||m.valor||0)+'</td></tr>'});
+    }
+    h+='</tbody></table>';
+  }
+  $('multResult').innerHTML=h;
+}
+
+// ═══ PATRIMONIAL ═══
+function renderPatrimonial(patr){
+  if(!patr||patr.erro){$('patrResult').innerHTML='<div class="alert alert-warn">Método Patrimonial indisponível.</div>';return}
+  var h='<div class="mini-cards">';
+  h+='<div class="mini-card"><div class="mini-card-label">Valor Mínimo</div><div class="mini-card-val">'+fmtMoney(patr.valorMinimo)+'</div></div>';
+  h+='<div class="mini-card"><div class="mini-card-label">Valor Mediano</div><div class="mini-card-val" style="color:var(--patr)">'+fmtMoney(patr.equityValue||patr.valorMediano)+'</div></div>';
+  h+='<div class="mini-card"><div class="mini-card-label">Valor Máximo</div><div class="mini-card-val">'+fmtMoney(patr.valorMaximo)+'</div></div>';
+  h+='</div>';
+  if(patr.detalhes){
+    var det=patr.detalhes;
+    if(det.cenarios){
+      h+='<h4 style="margin:16px 0 8px">Cenários Patrimoniais</h4><table class="data-table"><thead><tr><th>Cenário</th><th>Valor</th></tr></thead><tbody>';
+      Object.keys(det.cenarios).forEach(function(k){
+        var c=det.cenarios[k];
+        h+='<tr><td style="text-transform:capitalize">'+k+'</td><td>'+fmtMoney(c.equityValue||c.valor||c)+'</td></tr>';
+      });
+      h+='</tbody></table>';
+    }
+  }
+  $('patrResult').innerHTML=h;
+}
+
+// ═══ INDICADORES ═══
+function renderIndicadores(ind){
+  if(!ind||ind.erro)return;
+  // Radar
+  var sc=ind.scorecard;
+  if(sc&&sc.grupos){
+    destroyChart('chartRadar');
+    var grps=sc.grupos;
+    var labels=['Rentabilidade','Margens','Liquidez','Eficiência'];
+    var vals=[grps.rentabilidade.nota,grps.margens.nota,grps.liquidez.nota,grps.eficiencia.nota];
+    S.charts.chartRadar=new Chart($('chartRadar'),{
+      type:'radar',
+      data:{labels:labels,datasets:[{label:'Nota (0-10)',data:vals,backgroundColor:'rgba(34,197,94,.2)',borderColor:'#22C55E',pointBackgroundColor:'#22C55E'}]},
+      options:{responsive:true,maintainAspectRatio:false,scales:{r:{min:0,max:10,ticks:{stepSize:2}}},plugins:{legend:{display:false}}}
+    });
+    // Scorecard detail
+    var classIcon={'excelente':'&#11088;','bom':'&#9989;','regular':'&#9888;','ruim':'&#10060;'};
+    var h='<div style="text-align:center;margin:12px 0"><span style="font-size:28px;font-weight:900">'+sc.notaGeral.toFixed(1)+'</span><span style="font-size:14px;color:var(--txt-sec)"> / 10</span>';
+    h+='<div style="font-size:13px;margin-top:4px">'+(classIcon[sc.classificacaoGeral]||'')+' '+sc.classificacaoGeral.charAt(0).toUpperCase()+sc.classificacaoGeral.slice(1)+'</div></div>';
+    $('scorecardDetail').innerHTML=h;
+  }
+  // DuPont
+  if(ind.dupont){
+    var dp=ind.dupont;
+    var h2='<h4>Análise DuPont</h4><div class="mini-cards">';
+    h2+='<div class="mini-card"><div class="mini-card-label">Margem Líq.</div><div class="mini-card-val">'+fmtPct(dp.margemLiquida)+'</div></div>';
+    h2+='<div class="mini-card"><div class="mini-card-label">Giro Ativo</div><div class="mini-card-val">'+(dp.giroAtivo?dp.giroAtivo.toFixed(2)+'x':'—')+'</div></div>';
+    h2+='<div class="mini-card"><div class="mini-card-label">Alavancagem</div><div class="mini-card-val">'+(dp.multiplicadorPL?dp.multiplicadorPL.toFixed(2)+'x':'—')+'</div></div>';
+    h2+='<div class="mini-card"><div class="mini-card-label">ROE DuPont</div><div class="mini-card-val" style="color:var(--pri)">'+fmtPct(dp.roe)+'</div></div>';
+    h2+='</div>';
+    $('dupontDetail').innerHTML=h2;
+  }
+}
+
+// ═══ ALERTAS ═══
+function renderAlertas(alertasGerais,alertasCons){
+  var all=(alertasGerais||[]).concat(alertasCons||[]);
+  if(!all.length){$('alertasCard').style.display='none';return}
+  $('alertasCard').style.display='block';
+  var h='';
+  all.forEach(function(a){
+    var cls=a.tipo==='erro'?'alert-err':a.tipo==='aviso'?'alert-warn':'alert-info';
+    h+='<div class="alert '+cls+'"><span>'+(a.tipo==='erro'?'&#10060;':a.tipo==='aviso'?'&#9888;':'&#8505;')+'</span><div><strong>'+(a.modulo||'')+'</strong> '+(a.mensagem||'')+'</div></div>';
+  });
+  $('alertasList').innerHTML=h;
+}
+
+// ═══ GLOSSÁRIO ═══
+function renderGlossario(){
+  if(typeof ValuationEngine==='undefined')return;
+  var g=ValuationEngine.GLOSSARIO||{};
+  var h='';
+  Object.keys(g).forEach(function(k){
+    var t=g[k];
+    h+='<div class="glossary-item"><span class="glossary-term">'+k+'</span><span class="glossary-sigla">('+t.sigla+')</span><div class="glossary-exp">'+t.explicacao+'</div></div>';
+  });
+  $('glossarioList').innerHTML=h;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// EXPORT
+// ═══════════════════════════════════════════════════════════════
+function exportPDF(){
+  if(!S.resultado||typeof ValuationExportar==='undefined'){alert('Calcule o valuation primeiro.');return}
+  var nome=$('nomeEmpresa').value||'Empresa';
+  var hoje=new Date().toISOString().slice(0,10);
+  ValuationExportar.exportarPDF(S.resultado,{
+    nomeEmpresa:nome,dre:S.dre,balanco:S.balanco,historico:S.historico,
+    incluirCapa:true,incluirGlossario:true
+  }).then(function(blob){
+    ValuationExportar.download(blob,'Valuation_'+nome.replace(/\s+/g,'_')+'_'+hoje+'.pdf');
+  }).catch(function(e){alert('Erro ao gerar PDF: '+e.message)});
+}
+
+function exportExcel(){
+  if(!S.resultado||typeof ValuationExportar==='undefined'){alert('Calcule o valuation primeiro.');return}
+  var nome=$('nomeEmpresa').value||'Empresa';
+  var hoje=new Date().toISOString().slice(0,10);
+  ValuationExportar.exportarExcel(S.resultado,{
+    nomeEmpresa:nome,dre:S.dre,balanco:S.balanco,historico:S.historico,
+    incluirGlossario:true
+  }).then(function(blob){
+    ValuationExportar.download(blob,'Valuation_'+nome.replace(/\s+/g,'_')+'_'+hoje+'.xlsx');
+  }).catch(function(e){alert('Erro ao gerar Excel: '+e.message)});
+}
+
+// ═══════════════════════════════════════════════════════════════
+// LOCAL STORAGE
+// ═══════════════════════════════════════════════════════════════
+var STORAGE_KEY='impost_valuation_v2';
+function saveToStorage(){
+  try{
+    var data={
+      step:S.step,waccMode:S.waccMode,contingencias:S.contingencias,
+      fields:{}
+    };
+    document.querySelectorAll('.form-input').forEach(function(el){
+      if(el.id)data.fields[el.id]=el.type==='checkbox'?el.checked:el.value;
+    });
+    localStorage.setItem(STORAGE_KEY,JSON.stringify(data));
+  }catch(e){}
+}
+function restoreFromStorage(){
+  try{
+    var raw=localStorage.getItem(STORAGE_KEY);
+    if(!raw)return;
+    var data=JSON.parse(raw);
+    if(data.fields){
+      Object.keys(data.fields).forEach(function(id){
+        var el=$(id);if(!el)return;
+        if(el.type==='checkbox')el.checked=data.fields[id];
+        else el.value=data.fields[id];
+      });
+    }
+    if(data.waccMode)setWaccMode(data.waccMode);
+    if(data.contingencias){S.contingencias=data.contingencias;renderContingencias()}
+    if(data.step)S.step=data.step;
+    // Trigger calculations
+    setTimeout(function(){calcDRERealtime();calcBalancoRealtime();updateInfoPanel()},100);
+  }catch(e){}
+}
+
+// ═══════════════════════════════════════════════════════════════
+// DEMO DATA
+// ═══════════════════════════════════════════════════════════════
+function carregarDemo(){
+  if(!confirm('Isso substituirá os dados atuais. Continuar?'))return;
+  $('nomeEmpresa').value='TechBrasil Ltda';
+  $('setor').value='tecnologia';
+  $('porte').value='media';
+  $('regimeTributario').value='real';
+  $('tipoCapital').value='fechado';
+  $('anosOperacao').value='10';
+  // DRE
+  setMoneyField('receitaBruta',5000000);
+  setMoneyField('deducoesReceita',500000);
+  setMoneyField('cmv',1500000);
+  $('margemBruta').value='';
+  setMoneyField('despAdm',600000);
+  setMoneyField('despCom',400000);
+  setMoneyField('despGer',200000);
+  setMoneyField('outrasRD',50000);
+  setMoneyField('deprAmort',300000);
+  setMoneyField('despFin',150000);
+  setMoneyField('recFin',0);
+  $('aliqEfetiva').value='34';
+  // Balanço
+  setMoneyField('bCaixa',500000);setMoneyField('bAplicFin',200000);
+  setMoneyField('bContasRec',800000);setMoneyField('bEstoques',600000);
+  setMoneyField('bOutrosAC',100000);
+  setMoneyField('bImobilizado',2000000);setMoneyField('bVeiculos',400000);
+  setMoneyField('bMaquinas',500000);setMoneyField('bIntangivel',300000);
+  setMoneyField('bInvestimentos',100000);setMoneyField('bOutrosANC',50000);
+  setMoneyField('bFornecedores',400000);setMoneyField('bEmpCP',300000);
+  setMoneyField('bSalarios',200000);setMoneyField('bImpostos',150000);
+  setMoneyField('bOutrosPC',50000);
+  setMoneyField('bEmpLP',1000000);setMoneyField('bProvisoes',200000);
+  setMoneyField('bOutrosPNC',50000);
+  setMoneyField('bPL',3200000);
+  setMoneyField('bMarca',500000);setMoneyField('bCarteira',300000);
+  setMoneyField('bContratos',100000);setMoneyField('bLicencas',50000);
+  setMoneyField('bKnowHow',200000);setMoneyField('bGoodwill',150000);
+  // Premissas
+  $('horizonteAnos').value='5';$('horizonteSlider').value='5';
+  $('txCresc').value='10';$('txCrescSlider').value='10';
+  $('txPerp').value='3';$('txPerpSlider').value='3';
+  setMoneyField('capex',300000);
+  setMoneyField('varCapGiro',100000);
+  // Trigger calcs
+  updateInfoPanel();
+  calcDRERealtime();
+  calcBalancoRealtime();
+  if(S.waccMode==='capm')calcCAPM();
+  saveToStorage();
+  goToStep(1);
+}
+
+function setMoneyField(id,val){
+  var el=$(id);if(!el)return;
+  el.value=Math.round(val).toString().replace(/\B(?=(\d{3})+(?!\d))/g,'.');
+}
+
+function limparTudo(){
+  if(!confirm('Limpar todos os dados preenchidos?'))return;
+  localStorage.removeItem(STORAGE_KEY);
+  document.querySelectorAll('.form-input').forEach(function(el){
+    if(el.type==='checkbox')el.checked=false;
+    else if(el.type==='number')el.value=el.defaultValue||'';
+    else el.value='';
+  });
+  S.resultado=null;S.dre=null;S.balanco=null;S.historico=null;S.contingencias=[];
+  $('resultados').style.display='none';
+  renderContingencias();
+  clearDREDisplay();
+  goToStep(1);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CHART UTILS
+// ═══════════════════════════════════════════════════════════════
+function destroyChart(id){
+  if(S.charts[id]){S.charts[id].destroy();delete S.charts[id]}
+}
+</script>
+</body>
+</html>
