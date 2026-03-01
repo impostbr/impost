@@ -1,6 +1,6 @@
 // ============================================================================
 // valuation-engine.js — Motor de Precificação de Empresas (Unificado)
-// Versão 2.0.0 — Self-contained
+// Versão 2.0.1 — Self-contained (fix: normalização aliquotaEfetiva)
 // ============================================================================
 // Integra 6 módulos: Core, Indicadores, DCF, Múltiplos, Patrimonial,
 //                     Comparativo.
@@ -24,7 +24,7 @@
   // ╚═══════════════════════════════════════════════════════════════════════════╝
 
 
-  var VERSION = '2.0.0';
+  var VERSION = '2.0.1';
 
   // ═══════════════════════════════════════════════════════════════════════════
   // GLOSSÁRIO — 44 termos financeiros explicados
@@ -462,6 +462,12 @@
       aliquotaEfetiva = lair > 0 ? dividirSeguro(ircsll, lair) : 0;
     } else if (inputs.aliquotaEfetiva !== undefined) {
       aliquotaEfetiva = validarNumero(inputs.aliquotaEfetiva);
+      // Normalizar: se passou 34 em vez de 0.34, converter para decimal
+      if (aliquotaEfetiva > 1) {
+        aliquotaEfetiva = aliquotaEfetiva / 100;
+      }
+      // Clamp entre 0 e 1 para evitar valores absurdos
+      aliquotaEfetiva = Math.max(0, Math.min(1, aliquotaEfetiva));
       ircsll = Math.max(0, lair * aliquotaEfetiva);
     } else {
       aliquotaEfetiva = 0.34;
@@ -3487,7 +3493,7 @@
   // ═══════════════════════════════════════════════════════════════════════════
 
   var API = {
-    VERSION: '2.0.0',
+    VERSION: '2.0.1',
 
     // Referências setoriais
     REFERENCIAS_SETORIAIS: REFERENCIAS_SETORIAIS,
@@ -3575,7 +3581,7 @@
   // CONSTANTES
   // ═══════════════════════════════════════════════════════════════════════════
 
-  var VERSION = '2.0.0';
+  var VERSION = '2.0.1';
 
   // Limiar para alerta sobre proporção do valor terminal
   var PERCENTUAL_TERMINAL_ALERTA = 0.80;
@@ -6242,7 +6248,7 @@
   // ═══════════════════════════════════════════════════════════════════════════
 
   var API = {
-    VERSION: '2.0.0',
+    VERSION: '2.0.1',
 
     // Dados de referência
     MULTIPLOS_SETORIAIS:    MULTIPLOS_SETORIAIS,
@@ -7527,7 +7533,7 @@
   // =========================================================================
 
   var API = {
-    VERSION: '2.0.0',
+    VERSION: '2.0.1',
 
     // Constantes
     DESCONTO_LIQUIDACAO: DESCONTO_LIQUIDACAO,
@@ -8732,7 +8738,7 @@
   // ═══════════════════════════════════════════════════════════════════════════
 
   var API = {
-    VERSION: '2.0.0',
+    VERSION: '2.0.1',
 
     // Constantes
     PESOS_POR_TIPO: PESOS_POR_TIPO,
