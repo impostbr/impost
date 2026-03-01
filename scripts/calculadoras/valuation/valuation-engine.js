@@ -427,13 +427,13 @@
     // Outras receitas/despesas operacionais
     var outrasRD = validarNumero(inputs.outrasReceitasDespesas);
 
-    // EBIT
-    var ebit = lucroBruto - totalDespOp + outrasRD;
-
     // Depreciação e Amortização
     var da = validarNumero(inputs.depreciacaoAmortizacao);
 
-    // EBITDA (EBIT + D&A, pois D&A já foi subtraída no cálculo do EBIT)
+    // EBIT = Lucro Bruto - Despesas Operacionais + Outras Receitas/Despesas - D&A
+    var ebit = lucroBruto - totalDespOp + outrasRD - da;
+
+    // EBITDA = EBIT + D&A (add-back de item não-caixa)
     var ebitda = ebit + da;
 
     // Resultado financeiro
@@ -595,6 +595,13 @@
     var knowHow         = validarNumero(inputs.knowHow);
     var goodwill        = validarNumero(inputs.goodwill);
     var totalIntangiveis = marca + carteiraClientes + contratosInt + licencas + knowHow + goodwill;
+    // Se detalhados foram preenchidos, prevalecem sobre o total genérico
+    if (totalIntangiveis > 0 && totalIntangiveis > intangivel) {
+      var diffIntang = totalIntangiveis - intangivel;
+      intangivel = totalIntangiveis;
+      totalANC += diffIntang;
+      totalAtivo += diffIntang;
+    }
 
     // Valores de mercado (se informados)
     var imobilizadoVM   = validarNumero(inputs.imobilizadoValorMercado, imobilizado);
@@ -704,7 +711,7 @@
       setor: setor,
       porte: porte,
       receita: dre.receitaLiquida,
-      custos: dre.cmv + dre.totalDespesasOperacionais,
+      custos: dre.cmv + dre.totalDespesasOperacionais + dre.depreciacaoAmortizacao,
       depreciacaoAmortizacao: dre.depreciacaoAmortizacao,
       aliquotaImposto: dre.aliquotaEfetiva,
       capex: validarNumero(p.capex, dre.depreciacaoAmortizacao),
@@ -1177,10 +1184,10 @@
         'esperado 4500000, obtido ' + dre.receitaLiquida);
       _assert(dre.lucroBruto === 3000000, 'DRE: lucroBruto = 3M',
         'esperado 3000000, obtido ' + dre.lucroBruto);
-      _assert(dre.ebit === 1850000, 'DRE: ebit = 1.85M',
-        'esperado 1850000, obtido ' + dre.ebit);
-      _assert(dre.ebitda === 2150000, 'DRE: ebitda = 2.15M',
-        'esperado 2150000, obtido ' + dre.ebitda);
+      _assert(dre.ebit === 1550000, 'DRE: ebit = 1.55M',
+        'esperado 1550000, obtido ' + dre.ebit);
+      _assert(dre.ebitda === 1850000, 'DRE: ebitda = 1.85M',
+        'esperado 1850000, obtido ' + dre.ebitda);
       _assert(dre.lucroLiquido > 0, 'DRE: lucroLiquido positivo');
       _assert(dre.nopat > 0, 'DRE: nopat positivo');
       _assert(dre.margemBruta > 0 && dre.margemBruta < 1, 'DRE: margemBruta entre 0-1');
@@ -1235,10 +1242,10 @@
       _assert(bal.valido, 'Balanço: válido');
       _assert(bal.ativo.circulante.totalCirculante === 2200000, 'Balanço: AC = 2.2M',
         'esperado 2200000, obtido ' + bal.ativo.circulante.totalCirculante);
-      _assert(bal.ativo.naoCirculante.totalNaoCirculante === 3350000, 'Balanço: ANC = 3.35M',
-        'esperado 3350000, obtido ' + bal.ativo.naoCirculante.totalNaoCirculante);
-      _assert(bal.ativo.totalAtivo === 5550000, 'Balanço: totalAtivo = 5.55M',
-        'esperado 5550000, obtido ' + bal.ativo.totalAtivo);
+      _assert(bal.ativo.naoCirculante.totalNaoCirculante === 4350000, 'Balanço: ANC = 4.35M',
+        'esperado 4350000, obtido ' + bal.ativo.naoCirculante.totalNaoCirculante);
+      _assert(bal.ativo.totalAtivo === 6550000, 'Balanço: totalAtivo = 6.55M',
+        'esperado 6550000, obtido ' + bal.ativo.totalAtivo);
       _assert(bal.dividaLiquida === 600000, 'Balanço: dividaLiquida = 600k',
         'esperado 600000, obtido ' + bal.dividaLiquida);
       _assert(bal.intangiveis.total === 1300000, 'Balanço: intangíveis = 1.3M',
@@ -1428,9 +1435,9 @@
           porte: 'media',
           tipoCapital: 'fechado',
           receita: 4500000,
-          ebitda: 2150000,
-          ebit: 1850000,
-          lucroLiquido: 1122000,
+          ebitda: 1850000,
+          ebit: 1550000,
+          lucroLiquido: 924000,
           fcf: 770000,
           patrimonioLiquido: 3200000,
           dividaLiquida: 600000,
@@ -6835,19 +6842,20 @@
    * @returns {Object} { valor, descricao, componentes }
    */
   function cenarioConservador(totalTangiveis, totalPassivos, contingenciasProvaveis) {
-    var tangiveisLiquidacao = arredondar(totalTangiveis * (1 - DESCONTO_LIQUIDACAO));
     var contProv = validarNumero(contingenciasProvaveis);
-    var valor = arredondar(tangiveisLiquidacao - totalPassivos - contProv);
+    var plTangivel = totalTangiveis - totalPassivos;
+    var valor = arredondar(plTangivel * (1 - DESCONTO_LIQUIDACAO) - contProv);
 
     return {
       valor: valor,
-      descricao: 'Liquidacao forcada: ativos tangiveis com desconto de ' +
+      descricao: 'Liquidacao forcada: PL tangivel com desconto de ' +
                  (DESCONTO_LIQUIDACAO * 100) + '%, sem intangiveis, contingencias provaveis deduzidas.',
       componentes: {
-        ativosTangiveisAjustados: totalTangiveis,
-        descontoLiquidacao: DESCONTO_LIQUIDACAO,
-        tangiveisAposDesconto: tangiveisLiquidacao,
+        ativosTangiveis: totalTangiveis,
         passivos: totalPassivos,
+        plTangivel: plTangivel,
+        descontoLiquidacao: DESCONTO_LIQUIDACAO,
+        plAposDesconto: arredondar(plTangivel * (1 - DESCONTO_LIQUIDACAO)),
         contingenciasProvaveis: contProv,
         intangiveis: 0
       }
