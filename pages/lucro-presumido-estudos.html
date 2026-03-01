@@ -12,7 +12,9 @@
 <link rel="canonical" href="https://impost.com.br/pages/lucro-presumido-estudos.html">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='28' font-size='28'>📊</text></svg>" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" integrity="sha512-DTOQO9RWCH3ppGqcWaEA1BIZOC6xxalwEsw9c2QQeAIftl+Vegovlnee1c9QX4TctnWMn13TZye+giMm8e2LwA==" crossorigin="anonymous" referrerpolicy="no-referrer">
 <style>
 :root {
   --bg:#0f172a;--bg2:#1e293b;--bg-card:#1e293b;--bg-card-h:#334155;--surface:#334155;
@@ -24,7 +26,7 @@
   --danger:#ef4444;--danger-l:rgba(239,68,68,.12);--danger-b:rgba(239,68,68,.25);
   --info:#3b82f6;--info-l:rgba(59,130,246,.12);--info-b:rgba(59,130,246,.25);
   --simples:#8b5cf6;--presumido:#f59e0b;--real:#3b82f6;--sudam:#10b981;
-  --r:8px;--rl:12px;--font:'DM Sans',sans-serif;--mono:'Space Mono',monospace;
+  --r:8px;--rl:12px;--font:'Inter',sans-serif;--mono:'JetBrains Mono',monospace;
   --t:.2s ease;
 }
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -62,7 +64,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);line-height:
 /* SIDEBAR */
 .sidebar{width:260px;background:var(--bg2);border-right:1px solid var(--border-l);padding:20px 16px;position:sticky;top:56px;height:calc(100vh - 56px);overflow-y:auto;flex-shrink:0}
 .sb-title{font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:12px;font-weight:600}
-.sb-card{background:var(--surface);border-radius:var(--r);padding:14px;margin-bottom:10px}
+.sb-card{background:rgba(51,65,85,.6);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border-radius:var(--r);padding:14px;margin-bottom:10px}
 .sb-label{font-size:11px;color:var(--text3);margin-bottom:2px}
 .sb-value{font-size:16px;font-weight:700;font-family:var(--mono);color:var(--text)}
 .sb-value.accent{color:var(--accent)}
@@ -90,7 +92,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);line-height:
 .wz-panel{display:none;animation:fadeUp .3s ease-out}
 .wz-panel.active{display:block}
 @keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
-.wz-card{background:var(--bg-card);border:1px solid var(--border-l);border-radius:var(--rl);padding:28px 32px;margin-bottom:20px}
+.wz-card{background:rgba(30,41,59,.75);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid rgba(100,116,139,.15);border-radius:var(--rl);padding:28px 32px;margin-bottom:20px}
 .wz-header{display:flex;align-items:center;gap:14px;margin-bottom:24px;padding-bottom:16px;border-bottom:1px solid var(--border-l)}
 .wz-icon{font-size:28px}
 .wz-title{font-size:18px;font-weight:700}
@@ -168,7 +170,7 @@ select.fm-input{cursor:pointer;appearance:none;background-image:url("data:image/
 
 /* KPI CARDS */
 .kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:20px}
-.kpi{background:var(--surface);border-radius:var(--r);padding:16px;text-align:center}
+.kpi{background:rgba(51,65,85,.5);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border:1px solid rgba(100,116,139,.1);border-radius:var(--r);padding:16px;text-align:center}
 .kpi-label{font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
 .kpi-value{font-size:22px;font-weight:800;font-family:var(--mono)}
 .kpi-sub{font-size:11px;color:var(--text3);margin-top:2px}
@@ -213,7 +215,7 @@ select.fm-input{cursor:pointer;appearance:none;background-image:url("data:image/
 .obl-detail{font-size:11px;color:var(--text3);margin-top:2px}
 
 /* CHART */
-.chart-wrap{background:var(--surface);border-radius:var(--r);padding:16px;margin-bottom:16px;position:relative}
+.chart-wrap{background:rgba(51,65,85,.5);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border:1px solid rgba(100,116,139,.1);border-radius:var(--r);padding:16px;margin-bottom:16px;position:relative}
 .chart-wrap canvas{max-height:320px}
 .chart-title{font-size:13px;font-weight:700;color:var(--text2);margin-bottom:10px}
 
@@ -234,11 +236,21 @@ select.fm-input{cursor:pointer;appearance:none;background-image:url("data:image/
 /* EXPORT SECTION */
 .export-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px}
 button.export-card{font-family:var(--font);font-size:inherit;color:var(--text)}
-.export-card{background:var(--surface);border-radius:var(--rl);padding:24px;text-align:center;cursor:pointer;transition:var(--t);border:1px solid var(--border-l)}
+.export-card{background:rgba(51,65,85,.5);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border-radius:var(--rl);padding:24px;text-align:center;cursor:pointer;transition:all .25s ease;border:1px solid rgba(100,116,139,.15)}
+.export-card.pro{border-color:rgba(245,158,11,.3);background:rgba(245,158,11,.08)}
+.export-card.pro:hover{border-color:var(--accent);box-shadow:0 8px 32px rgba(245,158,11,.2)}
 .export-card:hover{border-color:var(--accent);transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,0,0,.3)}
 .export-icon{font-size:32px;margin-bottom:8px}
+.export-icon i{font-size:28px}
 .export-label{font-size:14px;font-weight:700}
 .export-desc{font-size:11px;color:var(--text3);margin-top:4px}
+.export-badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;background:var(--accent);color:#000;margin-left:6px;vertical-align:middle}
+.export-opts{margin-top:20px;padding:20px;background:rgba(51,65,85,.4);border-radius:var(--r);border:1px solid var(--border-l)}
+.export-opts-title{font-size:13px;font-weight:700;color:var(--accent);margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.export-opts-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+@media(max-width:600px){.export-opts-grid{grid-template-columns:1fr}}
+.export-opt{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2);cursor:pointer}
+.export-opt input[type=checkbox]{accent-color:var(--accent);width:16px;height:16px}
 
 /* NAV FOOTER */
 .wz-nav{display:flex;justify-content:space-between;margin-top:24px;padding-top:20px;border-top:1px solid var(--border-l)}
@@ -329,8 +341,8 @@ button.export-card{font-family:var(--font);font-size:inherit;color:var(--text)}
     <div class="tb-page">Estudo Lucro Presumido</div>
   </div>
   <div class="tb-right">
-    <button class="tb-btn" onclick="carregarEstudo()">Carregar Estudo</button>
-    <button class="tb-btn tb-btn-p" onclick="salvarEstudo()">Salvar</button>
+    <button class="tb-btn" onclick="carregarEstudo()"><i class="fa-solid fa-folder-open"></i> Carregar Estudo</button>
+    <button class="tb-btn tb-btn-p" onclick="salvarEstudo()"><i class="fa-solid fa-floppy-disk"></i> Salvar</button>
   </div>
 </header>
 
@@ -397,7 +409,7 @@ button.export-card{font-family:var(--font);font-size:inherit;color:var(--text)}
 <section class="wz-panel active" id="step1">
 <div class="wz-card">
   <div class="wz-header">
-    <div class="wz-icon">&#127970;</div>
+    <div class="wz-icon"><i class="fa-solid fa-building"></i></div>
     <div><div class="wz-title">Identificação da Empresa</div><div class="wz-sub">Dados cadastrais e localização</div></div>
   </div>
 
@@ -472,7 +484,7 @@ button.export-card{font-family:var(--font);font-size:inherit;color:var(--text)}
 <section class="wz-panel" id="step2">
 <div class="wz-card">
   <div class="wz-header">
-    <div class="wz-icon">&#9989;</div>
+    <div class="wz-icon"><i class="fa-solid fa-clipboard-check"></i></div>
     <div><div class="wz-title">Verificação de Elegibilidade</div><div class="wz-sub">Verificação automática dos requisitos para Lucro Presumido</div></div>
   </div>
 
@@ -515,7 +527,7 @@ button.export-card{font-family:var(--font);font-size:inherit;color:var(--text)}
 <section class="wz-panel" id="step3">
 <div class="wz-card">
   <div class="wz-header">
-    <div class="wz-icon">&#128200;</div>
+    <div class="wz-icon"><i class="fa-solid fa-chart-line"></i></div>
     <div><div class="wz-title">Dados Financeiros Detalhados</div><div class="wz-sub">Receitas, deduções e retenções para cálculo preciso</div></div>
   </div>
 
@@ -581,7 +593,7 @@ button.export-card{font-family:var(--font);font-size:inherit;color:var(--text)}
 <section class="wz-panel" id="step4">
 <div class="wz-card">
   <div class="wz-header">
-    <div class="wz-icon">&#128202;</div>
+    <div class="wz-icon"><i class="fa-solid fa-sliders"></i></div>
     <div><div class="wz-title">Dados Complementares para Comparação</div><div class="wz-sub">Informações adicionais para comparativo entre regimes tributários</div></div>
   </div>
 
@@ -638,7 +650,7 @@ button.export-card{font-family:var(--font);font-size:inherit;color:var(--text)}
 <section class="wz-panel" id="step5">
 <div class="wz-card" style="padding:20px">
   <div class="wz-header" style="margin-bottom:16px;padding-bottom:12px">
-    <div class="wz-icon">&#128640;</div>
+    <div class="wz-icon"><i class="fa-solid fa-chart-pie"></i></div>
     <div><div class="wz-title">Resultados e Análise Completa</div><div class="wz-sub">Cálculos detalhados, comparativos e recomendações</div></div>
   </div>
 
@@ -690,43 +702,60 @@ button.export-card{font-family:var(--font);font-size:inherit;color:var(--text)}
 <section class="wz-panel" id="step6">
 <div class="wz-card">
   <div class="wz-header">
-    <div class="wz-icon">&#128230;</div>
+    <div class="wz-icon"><i class="fa-solid fa-file-export"></i></div>
     <div><div class="wz-title">Exportação e Relatório</div><div class="wz-sub">Salve, exporte ou imprima seu estudo tributário</div></div>
   </div>
   <div class="export-grid">
-    <button type="button" class="export-card" id="btnExportPDF" onclick="exportPDF()">
-      <div class="export-icon">&#128196;</div>
-      <div class="export-label">Exportar PDF</div>
-      <div class="export-desc">Relatório profissional completo</div>
+    <button type="button" class="export-card pro" id="btnExportPDF" onclick="exportPDF()">
+      <div class="export-icon"><i class="fa-solid fa-file-pdf" style="color:var(--accent)"></i></div>
+      <div class="export-label">Exportar PDF<span class="export-badge">Pro</span></div>
+      <div class="export-desc">Relatório profissional com 23 seções, gráficos e base legal</div>
+    </button>
+    <button type="button" class="export-card pro" id="btnExportExcel" onclick="exportExcelProfissional()">
+      <div class="export-icon"><i class="fa-solid fa-file-excel" style="color:var(--success)"></i></div>
+      <div class="export-label">Exportar Excel<span class="export-badge">Pro</span></div>
+      <div class="export-desc">Planilha XLSX com 15 abas de dados estruturados</div>
     </button>
     <button type="button" class="export-card" onclick="exportCSV()">
-      <div class="export-icon">&#128202;</div>
+      <div class="export-icon"><i class="fa-solid fa-file-csv"></i></div>
       <div class="export-label">Exportar CSV</div>
       <div class="export-desc">Planilha CSV compatível com Excel</div>
     </button>
     <button type="button" class="export-card" onclick="window.print()">
-      <div class="export-icon">&#128424;</div>
+      <div class="export-icon"><i class="fa-solid fa-print"></i></div>
       <div class="export-label">Imprimir</div>
       <div class="export-desc">Layout otimizado para impressão</div>
     </button>
     <button type="button" class="export-card" onclick="salvarEstudo()">
-      <div class="export-icon">&#128190;</div>
+      <div class="export-icon"><i class="fa-solid fa-floppy-disk"></i></div>
       <div class="export-label">Salvar Estudo</div>
       <div class="export-desc">Salvar no navegador (localStorage)</div>
     </button>
     <button type="button" class="export-card" onclick="novoEstudo()">
-      <div class="export-icon">&#128260;</div>
+      <div class="export-icon"><i class="fa-solid fa-rotate-right"></i></div>
       <div class="export-label">Novo Estudo</div>
       <div class="export-desc">Limpar tudo e recomeçar</div>
     </button>
+  </div>
+
+  <div class="export-opts">
+    <div class="export-opts-title"><i class="fa-solid fa-gear"></i> Opções de Exportação</div>
+    <div class="export-opts-grid">
+      <label class="export-opt"><input type="checkbox" id="optCapa" checked> Página de capa</label>
+      <label class="export-opt"><input type="checkbox" id="optSumario" checked> Sumário</label>
+      <label class="export-opt"><input type="checkbox" id="optGraficos" checked> Gráficos e charts</label>
+      <label class="export-opt"><input type="checkbox" id="optAnexoLegal" checked> Anexo com base legal</label>
+      <label class="export-opt"><input type="checkbox" id="optDisclaimer" checked> Disclaimer jurídico</label>
+      <label class="export-opt"><input type="checkbox" id="optMarcaDagua"> Marca d'água RASCUNHO</label>
+    </div>
   </div>
 </div>
 </section>
 
 <!-- NAV FOOTER -->
 <div class="wz-nav" id="wzNav">
-  <button class="wz-btn wz-btn-back" id="btnPrev" onclick="prevStep()" disabled>&larr; Anterior</button>
-  <button class="wz-btn wz-btn-next" id="btnNext" onclick="nextStep()">Próximo &rarr;</button>
+  <button class="wz-btn wz-btn-back" id="btnPrev" onclick="prevStep()" disabled><i class="fa-solid fa-arrow-left"></i> Anterior</button>
+  <button class="wz-btn wz-btn-next" id="btnNext" onclick="nextStep()">Próximo <i class="fa-solid fa-arrow-right"></i></button>
 </div>
 
 </div><!-- /main-area -->
@@ -776,7 +805,9 @@ button.export-card{font-family:var(--font);font-size:inherit;color:var(--text)}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.4/jspdf.plugin.autotable.min.js"></script>
 <script src="../scripts/calculadoras/lucro-presumido/lucro_presumido.js"></script>
 <script src="../scripts/calculadoras/lucro-presumido/lucro-presumido-estudos.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<script src="../scripts/calculadoras/lucro-presumido/lucro-presumido-exportar.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.7/chart.umd.min.js"></script>
 
 <!-- CNAE DB (ES6 module) -->
 <script type="module">
@@ -3100,7 +3131,7 @@ function chartOptions(title) {
   return {
     responsive: true,
     plugins: {
-      title: title ? { display: true, text: title, color: '#e2e8f0', font: { size: 14, family: 'DM Sans' } } : { display: false },
+      title: title ? { display: true, text: title, color: '#e2e8f0', font: { size: 14, family: 'Inter' } } : { display: false },
       legend: { labels: { color: '#94a3b8', font: { size: 11 } } },
       tooltip: { callbacks: { label: ctx => formatMoney(ctx.raw) } }
     },
@@ -3432,6 +3463,18 @@ function carregarEstudo() {
   }
 }
 
+function getExportOpcoes() {
+  return {
+    incluirCapa: document.getElementById('optCapa') ? document.getElementById('optCapa').checked : true,
+    incluirSumario: document.getElementById('optSumario') ? document.getElementById('optSumario').checked : true,
+    incluirGraficos: document.getElementById('optGraficos') ? document.getElementById('optGraficos').checked : true,
+    incluirAnexoLegal: document.getElementById('optAnexoLegal') ? document.getElementById('optAnexoLegal').checked : true,
+    incluirDisclaimer: document.getElementById('optDisclaimer') ? document.getElementById('optDisclaimer').checked : true,
+    incluirMarcaDagua: document.getElementById('optMarcaDagua') ? document.getElementById('optMarcaDagua').checked : false,
+    qualidadeGraficos: 2
+  };
+}
+
 function exportPDF() {
   try {
     gatherFormData();
@@ -3440,8 +3483,12 @@ function exportPDF() {
       alert('Calcule os resultados primeiro (etapa 5) antes de exportar o PDF.');
       return;
     }
-    // Tenta usar o gerador de PDF profissional do motor
-    if (typeof LucroPresumido !== 'undefined' && typeof LucroPresumido.exportPDF === 'function') {
+    // Tenta ExportadorLP profissional primeiro
+    if (typeof ExportadorLP !== 'undefined' && typeof ExportadorLP.gerarPDF === 'function') {
+      var opcoes = getExportOpcoes();
+      opcoes.nomeArquivoPDF = 'estudo_lp_' + (d.razaoSocial || 'empresa').replace(/\s+/g, '_') + '.pdf';
+      ExportadorLP.gerarPDF(App, opcoes);
+    } else if (typeof LucroPresumido !== 'undefined' && typeof LucroPresumido.exportPDF === 'function') {
       LucroPresumido.exportPDF(App);
     } else if (typeof LucroPresumido !== 'undefined' && typeof LucroPresumido.gerarRelatorioPDF === 'function') {
       LucroPresumido.gerarRelatorioPDF(App);
@@ -3449,13 +3496,12 @@ function exportPDF() {
       // Fallback: impressao do navegador com estilo otimizado
       var style = document.createElement('style');
       style.id = 'printStyle';
-      style.textContent = '@media print { .topbar, .sidebar, .stepper, .wz-nav, .res-tabs, .tb-btn, .export-grid { display: none !important; } .layout { display: block; } .main-area { max-width: 100%; padding: 0; } .wz-panel { display: block !important; } .tab-panel { display: block !important; page-break-inside: avoid; margin-bottom: 20px; } body { background: #fff; color: #000; } .wz-card, .kpi, .regime-card, .risk-card, .adv-card, .tip-card { background: #f8f8f8; border: 1px solid #ddd; color: #000; } .sb-value, .kpi-value, .rc-total { color: #000; } .print-disclaimer { display: block !important; } }';
+      style.textContent = '@media print { .topbar, .sidebar, .stepper, .wz-nav, .res-tabs, .tb-btn, .export-grid, .export-opts { display: none !important; } .layout { display: block; } .main-area { max-width: 100%; padding: 0; } .wz-panel { display: block !important; } .tab-panel { display: block !important; page-break-inside: avoid; margin-bottom: 20px; } body { background: #fff; color: #000; } .wz-card, .kpi, .regime-card, .risk-card, .adv-card, .tip-card { background: #f8f8f8; border: 1px solid #ddd; color: #000; } .sb-value, .kpi-value, .rc-total { color: #000; } .print-disclaimer { display: block !important; } }';
       document.head.appendChild(style);
-      // Adicionar disclaimer no rodape para impressao
       var disclaimer = document.createElement('div');
       disclaimer.className = 'print-disclaimer';
       disclaimer.style.cssText = 'display:none;margin-top:40px;padding:16px;border-top:2px solid #ccc;font-size:9px;color:#666;line-height:1.5';
-      disclaimer.innerHTML = '<strong>AVISO LEGAL:</strong> Este relatorio foi gerado pelo sistema IMPOST e contem estimativas baseadas na legislação vigente (RIR/2018, IN RFB 1.700/2017, LC 224/2025) e nos dados informados pelo usuario. NAO constitui parecer contabil ou juridico. Os resultados devem ser validados por contador ou advogado tributarista habilitado antes de qualquer tomada de decisao fiscal. Gerado em: ' + new Date().toLocaleString('pt-BR');
+      disclaimer.innerHTML = '<strong>AVISO LEGAL:</strong> Este relatorio foi gerado pelo sistema IMPOST e contem estimativas baseadas na legislacao vigente (RIR/2018, IN RFB 1.700/2017, LC 224/2025) e nos dados informados pelo usuario. NAO constitui parecer contabil ou juridico. Os resultados devem ser validados por contador ou advogado tributarista habilitado antes de qualquer tomada de decisao fiscal. Gerado em: ' + new Date().toLocaleString('pt-BR');
       document.body.appendChild(disclaimer);
       window.print();
       setTimeout(function() { var ps = document.getElementById('printStyle'); if (ps) ps.remove(); if (disclaimer.parentNode) disclaimer.remove(); }, 1000);
@@ -3465,6 +3511,28 @@ function exportPDF() {
     if (confirm('Erro ao gerar o PDF.\n\nDeseja usar a impressao do navegador como alternativa?')) {
       window.print();
     }
+  }
+}
+
+function exportExcelProfissional() {
+  try {
+    gatherFormData();
+    var d = App.formData;
+    if (!d.receitaBrutaAnual || d.receitaBrutaAnual <= 0) {
+      alert('Calcule os resultados primeiro (etapa 5) antes de exportar o Excel.');
+      return;
+    }
+    if (typeof ExportadorLP !== 'undefined' && typeof ExportadorLP.gerarExcel === 'function') {
+      var opcoes = getExportOpcoes();
+      opcoes.nomeArquivoExcel = 'estudo_lp_' + (d.razaoSocial || 'empresa').replace(/\s+/g, '_') + '.xlsx';
+      ExportadorLP.gerarExcel(App, opcoes);
+    } else {
+      alert('Modulo de exportacao Excel nao carregado. Verifique sua conexao ou use a opcao CSV.');
+      exportCSV();
+    }
+  } catch(e) {
+    console.error('[IMPOST] Erro Excel:', e);
+    alert('Erro ao gerar o Excel. Tente novamente ou exporte como CSV.');
   }
 }
 
@@ -3528,7 +3596,7 @@ function exportCSV() {
   }
 }
 
-var exportExcel = exportCSV; // backward-compatible alias
+var exportExcel = typeof ExportadorLP !== 'undefined' ? exportExcelProfissional : exportCSV; // backward-compatible alias
 
 function novoEstudo() {
   if (!confirm('Tem certeza que deseja limpar todos os dados e iniciar um novo estudo?')) return;
@@ -3600,7 +3668,7 @@ if (_originalExportPDF) {
     const btn = document.getElementById('btnExportPDF');
     if (btn) {
       const orig = btn.innerHTML;
-      btn.innerHTML = '<div class="export-icon">&#9203;</div><div class="export-label">Gerando PDF...</div><div class="export-desc">Aguarde alguns segundos</div>';
+      btn.innerHTML = '<div class="export-icon"><i class="fa-solid fa-spinner fa-spin" style="color:var(--accent)"></i></div><div class="export-label">Gerando PDF...</div><div class="export-desc">Aguarde alguns segundos</div>';
       btn.style.opacity = '0.6';
       btn.style.pointerEvents = 'none';
       setTimeout(() => {
@@ -3616,6 +3684,33 @@ if (_originalExportPDF) {
       }, 100);
     } else {
       _originalExportPDF();
+    }
+  };
+}
+
+// Wrapper com loading feedback para exportExcelProfissional
+const _originalExportExcel = window.exportExcelProfissional;
+if (_originalExportExcel) {
+  window.exportExcelProfissional = function() {
+    const btn = document.getElementById('btnExportExcel');
+    if (btn) {
+      const orig = btn.innerHTML;
+      btn.innerHTML = '<div class="export-icon"><i class="fa-solid fa-spinner fa-spin" style="color:var(--success)"></i></div><div class="export-label">Gerando Excel...</div><div class="export-desc">Aguarde alguns segundos</div>';
+      btn.style.opacity = '0.6';
+      btn.style.pointerEvents = 'none';
+      setTimeout(() => {
+        try { _originalExportExcel(); }
+        catch(e) { console.error('[IMPOST] Erro Excel:', e); alert('Erro ao gerar o Excel. Tente novamente ou exporte como CSV.'); }
+        finally {
+          setTimeout(() => {
+            btn.innerHTML = orig;
+            btn.style.opacity = '1';
+            btn.style.pointerEvents = 'auto';
+          }, 500);
+        }
+      }, 100);
+    } else {
+      _originalExportExcel();
     }
   };
 }
