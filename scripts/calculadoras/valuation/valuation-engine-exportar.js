@@ -3230,9 +3230,9 @@
     d.push(['(-) Despesas Comerciais',        _n(dre.despesasComerciais),       pctRL(dre.despesasComerciais)]);
     d.push(['(-) Despesas Gerais',            _n(dre.despesasGerais),           pctRL(dre.despesasGerais)]);
     d.push(['(+/-) Outras Receitas/Despesas', _n(dre.outrasReceitasDespesas),   pctRL(dre.outrasReceitasDespesas)]);
-    d.push(['= EBIT (Lucro Operacional)',     _n(dre.ebit),                     _n(dre.margemEBIT)]);
-    d.push(['(+) Depreciação/Amortização',    _n(dre.depreciacaoAmortizacao),   pctRL(dre.depreciacaoAmortizacao)]);
-    d.push(['= EBITDA',                       _n(dre.ebitda),                   _n(dre.margemEBITDA)]);
+    d.push(['= EBITDA',                        _n(dre.ebitda),                   _n(dre.margemEBITDA)]);
+    d.push(['(-) Depreciação/Amortização',     _n(dre.depreciacaoAmortizacao),   pctRL(dre.depreciacaoAmortizacao)]);
+    d.push(['= EBIT (Lucro Operacional)',      _n(dre.ebit),                     _n(dre.margemEBIT)]);
     d.push(['(+/-) Resultado Financeiro',     _n(dre.resultadoFinanceiro),      pctRL(dre.resultadoFinanceiro)]);
     d.push(['= LAIR',                         _n(dre.lair),                     pctRL(dre.lair)]);
     d.push(['(-) IR/CSLL',                    _n(dre.irCsll),                   pctRL(dre.irCsll)]);
