@@ -1,22 +1,26 @@
 // ═══════════════════════════════════════════════════════════════════════
-// IMPOST. — User Service (v3 — 4 planos + controle PDF)
-// Arquivo: scripts/user-service.js
+// IMPOST. — User Service (v3 — 4 planos)
+// Arquivo: scripts/auth/user-service.js
 // Depende de: auth-guard.js (carregado antes)
 // ═══════════════════════════════════════════════════════════════════════
+//
+// Planos: free | pessoal (R$14,90) | pro (R$69,90) | escritorio (R$199,90) | trial
 //
 // Funções disponíveis globalmente via IMPOST_PLANO:
 //
 //   IMPOST_PLANO.temAcessoPro()
-//     → boolean — true se plano é "pf", "pro", "escritorio" ou "trial" válido
-//
-//   IMPOST_PLANO.temAcessoPDF()
 //     → boolean — true se plano é "pro", "escritorio" ou "trial" válido
+//     → Acesso aos estudos PJ (Lucro Real, Presumido, Simples Nacional)
+//
+//   IMPOST_PLANO.temAcessoPessoal()
+//     → boolean — true se qualquer plano pago ou "trial" válido
+//     → Acesso ao Estudo Pessoa Física
 //
 //   IMPOST_PLANO.verificarAcessoOuUpgrade(mensagem?)
 //     → boolean — retorna true se tem acesso Pro, ou mostra modal upgrade
 //
-//   IMPOST_PLANO.verificarPDFOuUpgrade(mensagem?)
-//     → boolean — retorna true se tem acesso PDF, ou mostra modal upgrade
+//   IMPOST_PLANO.verificarPessoalOuUpgrade(mensagem?)
+//     → boolean — retorna true se tem acesso Pessoal, ou mostra modal upgrade
 //
 //   IMPOST_PLANO.mostrarModalUpgrade(mensagem?)
 //     → void — abre modal de upgrade com CTA para planos.html
@@ -25,34 +29,31 @@
 //     → void — fecha o modal de upgrade
 //
 //   IMPOST_PLANO.getPlano()
-//     → string — "free" | "pf" | "pro" | "escritorio" | "trial"
+//     → string — "free" | "pessoal" | "pro" | "escritorio" | "trial"
 //
 //   IMPOST_PLANO.getNomeUsuario()
 //     → string — nome do usuário ou e-mail como fallback
 //
+//   IMPOST_PLANO.getLimitePDF()
+//     → number — limite mensal de PDFs (5, 15 ou Infinity)
+//
 //   IMPOST_PLANO.aplicarBloqueiosPro()
 //     → void — escaneia [data-pro] no DOM e aplica cadeados
 //
-// HIERARQUIA DE PLANOS:
-//   free       → Bloqueado em estudos/calculadoras e PDF
-//   pf         → Liberado em estudos/calculadoras, Bloqueado em PDF
-//   pro        → Tudo liberado
-//   escritorio → Tudo liberado
-//   trial      → Tudo liberado (temporário, 7 dias)
+//   IMPOST_PLANO.aplicarBloqueiosPessoal()
+//     → void — escaneia [data-pessoal] no DOM e aplica cadeados
 //
-// USO NO HTML para bloquear elementos Pro (estudos/calculadoras):
-//   <button data-pro="true" data-pro-msg="Comparador detalhado">
-//       Comparar regimes
-//   </button>
+// USO NO HTML para bloquear elementos:
 //
-//   <a href="lucro-real-estudos.html" data-pro="true">
-//       Estudo de Lucro Real 🔒
+//   <!-- Bloqueia para Free (libera no Pessoal em diante) -->
+//   <a href="pessoa-fisica-estudos.html" data-pessoal="true" data-pessoal-msg="Estudo Pessoa Física">
+//       Estudo PF
 //   </a>
 //
-// USO FUTURO para bloquear elementos PDF:
-//   <button data-pdf="true" data-pro-msg="Relatório em PDF">
-//       Gerar PDF
-//   </button>
+//   <!-- Bloqueia para Free E Pessoal (libera no Pro em diante) -->
+//   <a href="lucro-real-estudos.html" data-pro="true" data-pro-msg="Estudo Lucro Real">
+//       Estudo Lucro Real 🔒
+//   </a>
 // ═══════════════════════════════════════════════════════════════════════
 
 (function () {
@@ -94,10 +95,11 @@
     }
 
     /**
-     * Verifica se o trial ainda está ativo (não expirou).
-     * Reutilizado por temAcessoPro() e temAcessoPDF().
+     * Verifica se o trial do usuário ainda está ativo.
+     * Reutilizável por todas as funções de acesso.
      */
-    function trialValido(dados) {
+    function trialValido() {
+        var dados = getDadosUsuario();
         if (!dados.planoExpira) return true; // trial sem data = ativo
 
         var expira;
@@ -113,49 +115,70 @@
     }
 
     /**
-     * Verifica se o usuário tem acesso Pro ativo (estudos e calculadoras).
-     * - plano "pf"         → true
-     * - plano "pro"        → true
-     * - plano "escritorio"  → true
-     * - plano "trial"      → true se não expirou
-     * - plano "free"       → false
+     * Verifica se o usuário tem acesso Pro ativo.
+     * Acesso aos estudos PJ: Lucro Real, Presumido, Simples Nacional.
+     * - plano "pro" → sempre true
+     * - plano "escritorio" → sempre true
+     * - plano "trial" → true se não expirou
+     * - plano "pessoal" → false
+     * - plano "free" → false
      */
     function temAcessoPro() {
         var dados = getDadosUsuario();
         var plano = dados.plano || "free";
 
-        if (plano === "pf") return true;
-        if (plano === "pro") return true;
-        if (plano === "escritorio") return true;
+        if (plano === "pro" || plano === "escritorio") return true;
 
         if (plano === "trial") {
-            return trialValido(dados);
+            return trialValido();
+        }
+
+        return false; // "free" e "pessoal" não têm acesso aos estudos PJ
+    }
+
+    /**
+     * Verifica se o usuário tem acesso ao Estudo Pessoa Física.
+     * Retorna true para qualquer plano pago ativo.
+     * - plano "pessoal" → true
+     * - plano "pro" → true
+     * - plano "escritorio" → true
+     * - plano "trial" → true se não expirou
+     * - plano "free" → false
+     */
+    function temAcessoPessoal() {
+        var dados = getDadosUsuario();
+        var plano = dados.plano || "free";
+
+        if (plano === "pessoal" || plano === "pro" || plano === "escritorio") return true;
+
+        if (plano === "trial") {
+            return trialValido();
         }
 
         return false;
     }
 
     /**
-     * Verifica se o usuário tem acesso a relatórios em PDF.
-     * Mais restritivo que temAcessoPro() — plano "pf" NÃO tem PDF.
-     * - plano "pro"        → true
-     * - plano "escritorio"  → true
-     * - plano "trial"      → true se não expirou
-     * - plano "pf"         → false
-     * - plano "free"       → false
+     * Retorna o limite de PDFs mensais do plano do usuário.
+     * - pro / escritorio → Infinity
+     * - trial (válido) → Infinity
+     * - pessoal → 15
+     * - free / trial expirado → 5
      */
-    function temAcessoPDF() {
+    function getLimitePDF() {
         var dados = getDadosUsuario();
         var plano = dados.plano || "free";
 
-        if (plano === "pro") return true;
-        if (plano === "escritorio") return true;
+        if (plano === "pro" || plano === "escritorio") return Infinity;
 
         if (plano === "trial") {
-            return trialValido(dados);
+            if (trialValido()) return Infinity;
+            return 5; // trial expirado = free
         }
 
-        return false;
+        if (plano === "pessoal") return 15;
+
+        return 5; // free
     }
 
     /**
@@ -169,13 +192,12 @@
     }
 
     /**
-     * Verifica acesso a PDF. Se não tiver, mostra o modal de upgrade.
+     * Verifica acesso Pessoal. Se não tiver, mostra o modal de upgrade.
      * Retorna true se tem acesso, false se bloqueou.
      */
-    function verificarPDFOuUpgrade(mensagem) {
-        if (temAcessoPDF()) return true;
-        var msg = mensagem || "Relatórios em PDF estão disponíveis a partir do plano Pro";
-        mostrarModalUpgrade(msg);
+    function verificarPessoalOuUpgrade(mensagem) {
+        if (temAcessoPessoal()) return true;
+        mostrarModalUpgrade(mensagem);
         return false;
     }
 
@@ -299,7 +321,34 @@
                 "letter-spacing:0.3px;pointer-events:auto;cursor:pointer;" +
                 "font-family:'Inter','DM Sans',sans-serif;" +
             "}" +
-            ".impost-pro-inline:hover { background:#c8e6c9; }";
+            ".impost-pro-inline:hover { background:#c8e6c9; }" +
+
+            /* ─── Badge Pessoal (cadeado nos elementos data-pessoal) ─── */
+            "[data-pessoal-bloqueado] {" +
+                "position:relative;pointer-events:none;opacity:0.55;" +
+                "filter:grayscale(30%);user-select:none;" +
+            "}" +
+            ".impost-pessoal-badge {" +
+                "position:absolute;top:8px;right:8px;z-index:10;" +
+                "display:inline-flex;align-items:center;gap:4px;" +
+                "padding:4px 10px;border-radius:20px;" +
+                "background:linear-gradient(135deg,#1b5e20,#388e3c);" +
+                "color:#fff;font-size:0.7rem;font-weight:700;letter-spacing:0.5px;" +
+                "font-family:'Inter','DM Sans',sans-serif;" +
+                "box-shadow:0 2px 8px rgba(27,94,32,0.3);" +
+                "pointer-events:auto;cursor:pointer;" +
+            "}" +
+            ".impost-pessoal-badge:hover { transform:scale(1.05); }" +
+
+            /* ─── Badge Pessoal inline (para links/botões) ─── */
+            ".impost-pessoal-inline {" +
+                "display:inline-flex;align-items:center;gap:4px;" +
+                "margin-left:6px;padding:2px 8px;border-radius:12px;" +
+                "background:#e8f5e9;color:#1b5e20;font-size:0.7rem;font-weight:700;" +
+                "letter-spacing:0.3px;pointer-events:auto;cursor:pointer;" +
+                "font-family:'Inter','DM Sans',sans-serif;" +
+            "}" +
+            ".impost-pessoal-inline:hover { background:#c8e6c9; }";
 
         document.head.appendChild(style);
     }
@@ -325,14 +374,14 @@
                             '<path d="M2 12l10 5 10-5"/>' +
                         '</svg>' +
                     '</div>' +
-                    '<h2>Recurso exclusivo Pro</h2>' +
+                    '<h2>Recurso exclusivo</h2>' +
                     '<p>Desbloqueie todo o potencial do IMPOST.</p>' +
                 '</div>' +
 
                 /* Body */
                 '<div class="impost-upgrade-body">' +
                     '<p class="impost-upgrade-msg" id="impost-upgrade-msg">' +
-                        'Este recurso faz parte do plano <strong>IMPOST. Pro</strong>.' +
+                        'Este recurso faz parte de um plano pago do <strong>IMPOST.</strong>' +
                     '</p>' +
                     '<ul class="impost-upgrade-features">' +
                         '<li>' +
@@ -341,7 +390,7 @@
                         '</li>' +
                         '<li>' +
                             '<svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 3L6 11l-3-3"/></svg>' +
-                            'Comparador detalhado com break-even' +
+                            'Estudo Pessoa Física com simulações CLT, RPA, MEI, PJ' +
                         '</li>' +
                         '<li>' +
                             '<svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 3L6 11l-3-3"/></svg>' +
@@ -396,11 +445,10 @@
         var msgEl = document.getElementById("impost-upgrade-msg");
         if (msgEl && mensagem) {
             msgEl.innerHTML =
-                'O recurso <strong>"' + mensagem + '"</strong> faz parte do plano <strong>IMPOST. Pro</strong>.';
+                'O recurso <strong>"' + mensagem + '"</strong> faz parte de um plano pago do <strong>IMPOST.</strong>';
         } else if (msgEl && !mensagem) {
             // CORREÇÃO: resetar mensagem padrão se não passou mensagem
-            // (evita mensagem antiga persistir de chamada anterior)
-            msgEl.innerHTML = 'Este recurso faz parte do plano <strong>IMPOST. Pro</strong>.';
+            msgEl.innerHTML = 'Este recurso faz parte de um plano pago do <strong>IMPOST.</strong>';
         }
 
         // CORREÇÃO: adicionar listener de Escape apenas ao abrir,
@@ -437,7 +485,7 @@
     }
 
     // ══════════════════════════════════════════════════════════════
-    // 4. BLOQUEIO AUTOMÁTICO DE ELEMENTOS [data-pro]
+    // 4. BLOQUEIO AUTOMÁTICO DE ELEMENTOS [data-pro] e [data-pessoal]
     // ══════════════════════════════════════════════════════════════
 
     /**
@@ -516,20 +564,107 @@
         }
     }
 
+    /**
+     * Escaneia todos os elementos com [data-pessoal="true"] no DOM.
+     * Se o usuário NÃO tem acesso Pessoal (é free):
+     *   - Bloqueia o elemento (pointer-events: none, opacidade)
+     *   - Adiciona badge "PESSOAL 🔒"
+     *   - Clique no badge abre modal de upgrade
+     */
+    function aplicarBloqueiosPessoal() {
+        if (temAcessoPessoal()) return; // Nada a fazer
+
+        injetarCSS();
+
+        var elementos = document.querySelectorAll('[data-pessoal="true"]');
+        for (var i = 0; i < elementos.length; i++) {
+            (function (el) {
+                // Evita aplicar duas vezes
+                if (el.hasAttribute("data-pessoal-bloqueado")) return;
+                el.setAttribute("data-pessoal-bloqueado", "true");
+
+                var tagName = el.tagName.toLowerCase();
+                var isInline = (tagName === "a" || tagName === "button" || tagName === "span");
+                var msgFeature = el.getAttribute("data-pessoal-msg") || "Estudo Pessoa Física";
+
+                var svgCadeado =
+                    '<svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">' +
+                        '<rect x="2" y="5" width="6" height="5" rx="1"/>' +
+                        '<path d="M3 5V3.5a2 2 0 0 1 4 0V5"/>' +
+                    '</svg> PESSOAL';
+
+                if (isInline) {
+                    var badgeInline = document.createElement("span");
+                    badgeInline.className = "impost-pessoal-inline";
+                    badgeInline.innerHTML = svgCadeado;
+                    el.appendChild(badgeInline);
+
+                    badgeInline.addEventListener("click", function (e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        mostrarModalUpgrade(msgFeature);
+                    });
+
+                    el.addEventListener("click", function (e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        mostrarModalUpgrade(msgFeature);
+                    });
+                } else {
+                    var computedPos = window.getComputedStyle(el).position;
+                    if (computedPos === "static") el.style.position = "relative";
+
+                    var badge = document.createElement("div");
+                    badge.className = "impost-pessoal-badge";
+                    badge.innerHTML = svgCadeado;
+                    el.appendChild(badge);
+
+                    badge.addEventListener("click", function (e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        mostrarModalUpgrade(msgFeature);
+                    });
+
+                    el.addEventListener("click", function (e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        mostrarModalUpgrade(msgFeature);
+                    });
+                }
+            })(elementos[i]);
+        }
+
+        var total = elementos.length;
+        if (total > 0) {
+            console.log("[User Service] " + total + " elemento(s) bloqueado(s) como Pessoal.");
+        }
+    }
+
     // ══════════════════════════════════════════════════════════════
     // 5. API PÚBLICA
     // ══════════════════════════════════════════════════════════════
 
     window.IMPOST_PLANO = {
+        // Verificações de acesso
         temAcessoPro: temAcessoPro,
-        temAcessoPDF: temAcessoPDF,
+        temAcessoPessoal: temAcessoPessoal,
+
+        // Verificar ou mostrar upgrade
         verificarAcessoOuUpgrade: verificarAcessoOuUpgrade,
-        verificarPDFOuUpgrade: verificarPDFOuUpgrade,
+        verificarPessoalOuUpgrade: verificarPessoalOuUpgrade,
+
+        // Modal
         mostrarModalUpgrade: mostrarModalUpgrade,
         fecharModalUpgrade: fecharModalUpgrade,
+
+        // Dados do usuário
         getPlano: getPlano,
         getNomeUsuario: getNomeUsuario,
-        aplicarBloqueiosPro: aplicarBloqueiosPro
+        getLimitePDF: getLimitePDF,
+
+        // Bloqueios no DOM
+        aplicarBloqueiosPro: aplicarBloqueiosPro,
+        aplicarBloqueiosPessoal: aplicarBloqueiosPessoal
     };
 
     // ══════════════════════════════════════════════════════════════
@@ -538,8 +673,9 @@
 
     document.addEventListener("impost-user-ready", function () {
         aplicarBloqueiosPro();
+        aplicarBloqueiosPessoal();
     });
 
-    console.log("[User Service] v3 inicializado. Aguardando impost-user-ready...");
+    console.log("[User Service] Inicializado (v3 — 4 planos). Aguardando impost-user-ready...");
 
 })();
